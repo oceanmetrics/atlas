@@ -525,8 +525,7 @@
   const placesMap = createPlacesMapStore({
     selStore,
     mapHandle: () => mapHandle,
-    // the "Place layers" list lives in the Collections lens' Layers panel
-    overlaysEnabled: () => selStore.sel.lens === "collection",
+    // the "Place layers" list is mounted in the Layers panel of BOTH lenses, so `?ov=` works in either
   });
 
   // atlas-5: the species lens' reactive core. A plain call, not a component -- state.svelte.ts's
@@ -1775,6 +1774,7 @@
             {expandedRow}
             onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
             part={activeTool === "details" ? "details" : "layers"}
+            overlays={placesMap.overlays}
           />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>

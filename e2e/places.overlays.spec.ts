@@ -115,3 +115,20 @@ test("a ?ov= link reproduces its overlays", async ({ page }) => {
   ).not.toBeChecked();
   await expect(page.getByTestId("map-attribution-gazetteer")).toContainText("MPA credit");
 });
+
+test("the Species lens lists the same place layers, and ?ov= works there too (WP11)", async ({
+  page,
+}) => {
+  await page.goto("./?tour=off&lens=species&ov=mpa_inventory");
+  const list = page.getByTestId("place-layers");
+  await expect(list.getByRole("checkbox")).toHaveCount(3);
+  await expect(list.getByRole("checkbox", { name: /protected areas inventory/ })).toBeChecked();
+  await expect(
+    list.getByRole("checkbox", { name: /national marine sanctuaries/ }),
+  ).not.toBeChecked();
+  await expect(page.getByTestId("map-attribution-gazetteer")).toContainText("MPA credit");
+  await list.getByRole("checkbox", { name: /national marine sanctuaries/ }).check();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("ov"))
+    .toBe("mpa_inventory,noaa_sanctuaries");
+});

@@ -101,6 +101,8 @@ and hex painting follow.
   Stellwagen Bank over the Arctic Tern density), labelled "display-grid statistics". A multi-band COG is
   summarised on the band the map draws (`bidx`: coefficient of variation no longer shows the density's
   numbers), and titiler's coverage-weighted pixel count is rounded to whole pixels.
+- **Place layers in both lenses (WP11).** The Species lens' Layers panel now carries the same "Place layers"
+  list, and `?ov=` works in either lens (the overlays were Collections-only).
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

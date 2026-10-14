@@ -94,9 +94,9 @@ A failed fetch never removes the token: the place stays in the link and the list
   click, "Add <name> to Places"). The manifest is read with a plain `fetch`
   (`src/lib/gazetteer/manifest.ts`), never through the parquet client, so the overlay list adds nothing
   to the static graph beyond a few KB. `?ov=` grammar: `src/lib/gazetteer/overlayUrl.ts`. The overlays are
-  drawn in the Collections lens only (its Layers panel hosts the list); to show them in another lens,
-  mount `PlaceLayerList` in its Layers panel through `LayersPanel`'s `placeLayers` snippet and drop the
-  `overlaysEnabled` condition in `Shell.svelte`.
+  drawn in both lenses (WP11): `SpeciesLens.svelte` mounts `PlaceLayerList` through `LayersPanel`'s
+  `placeLayers` snippet like the Collections lens, and `Shell.svelte` no longer conditions the overlays on
+  the lens, so `?ov=` works in either.
 - **Search.** `searchGazetteer()` (`resolve.ts`, lazy) wraps the vendored client's `search()`: areas only,
   one hit per place_id. A `p.` token carries the id alone, so an id that lives in two collections
   resolves to the first by authority order (the same lease in both BOEM layers: the same polygon).
