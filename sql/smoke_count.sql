@@ -1,0 +1,11 @@
+-- atlas-2 Step 3 (Sonnet half): the ONE trivial SQL template this half of the step ships -- NOT a
+-- twin of any msens function. It exists only to prove curly-brace placeholder substitution, lit()
+-- escaping and the fixed RAW allow-list end to end against a real DuckDB-WASM connection (see
+-- tests/fixtures/engine-e2e). {{from}} is an app-built RAW fragment (normally a TableStore ref's
+-- `.from`, e.g. read_parquet('taxon')); {{probe}} is an ordinary lit()'d value round-tripped as a
+-- column -- the injection-safety gate feeds an injection string through this exact slot and asserts
+-- it comes back as inert data, never as a second statement.
+--
+-- (The MarineSensitivity SQL twins were removed with the scores lens; this smoke template stays
+-- because the engine e2e harness runs it.)
+SELECT count(*) AS n, {{probe}} AS probe FROM {{from}}

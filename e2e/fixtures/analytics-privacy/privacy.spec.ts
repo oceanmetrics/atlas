@@ -81,6 +81,9 @@ test("no request, and no gtag() call, ever carries the URL fragment's place/repo
   // the config call: explicit page_location, send_page_view: false (fix round 1's two named faults).
   const configCall = (gtagCalls as unknown[][]).find((c) => c[0] === "config");
   expect(configCall, "gtag('config', ...) must have been called").toBeDefined();
+  expect(configCall?.[1], "the config call carries the configured measurement id").toBe(
+    "G-TEST000000",
+  );
   const configParams = configCall?.[2] as Record<string, unknown>;
   expect(configParams.send_page_view).toBe(false);
   expect(configParams.page_location).toBeTruthy();
