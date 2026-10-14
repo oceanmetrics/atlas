@@ -29,7 +29,7 @@ Cumulative uncertainty is the sum of per-species standard deviations of the occu
 
 def credits_block(restricted: bool = False) -> str:
   contacts = "\n".join(
-    f"- {c['name']}, {c['roles'][0]}, {c['organization']} ({c['emails'][0]['value']})" for c in stac.CONTACTS)
+    f"  - {c['name']}, {c['roles'][0]}, {c['organization']} ({c['emails'][0]['value']})" for c in stac.CONTACTS)
   lic = (f"{stac.LICENSE_PLACEHOLDER} (PLACEHOLDER, pending confirmation from Neil Hammerschlag; do not rely on it "
          "until confirmed)")
   if restricted:
@@ -84,7 +84,7 @@ grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported
 - `hex_h3.parquet`: FID to H3 resolution 7 crosswalk (`FID`, `h3`, `weight`, `overlap_km2`); `weight` is the share
   of the hexagon's area inside the H3 cell and sums to 1 per FID.
 - `values_h3.parquet`: the numeric value columns aggregated to H3 res 7 (area-weighted mean over the overlapping
-  hexagons; cells with no data are skipped).
+  hexagons; cells with no data are skipped; rounded to 4 decimals).
 - `items/`: 24 STAC Items `{{group}}_{{season}}_{{metric}}`, each pointing at a column of `values.parquet` and
   `values_h3.parquet` through `atlas:value_column`.
 - `styles/default.json`: MapLibre fill layer, Spectral reversed, 0..1.
@@ -140,6 +140,13 @@ and is staged under an unlisted prefix. Do not share the link or redistribute.
 
 {METHODS}
 
+## Provenance
+
+Source: T. Couto's `Indicators_AllProducts_may2025` (Indicator_SpPresence_Prob / Class csv per season, and the
+Species sheet of Metadata_new-2025-05-16.xlsx), received on Google Drive. Species names were matched to WoRMS
+(AphiaRecordsByMatchNames); `species.parquet` records the match status. Checksums of the source files are in the
+`provenance.json` of `biotrack_indicators`.
+
 ## Files
 
 - `prob_summer.parquet`, `prob_winter.parquet`: `FID` plus one probability column per species, `aphia_<id>`
@@ -170,3 +177,40 @@ def style_default() -> dict:
     "metadata": {"atlas:value_range": [0, 1], "atlas:palette": "Spectral (reversed), 11 classes",
                  "atlas:promote_id": "FID"},
   }
+
+
+def species_agents() -> str:
+  return f"""\
+# AGENTS.md: biotrack_species (RESTRICTED)
+
+Restricted: do not link, mirror or republish without permission from Neil Hammerschlag.
+
+1. `collection.json`: `sdm:response_type` probability, `sdm:method` occupancy_model. Items `{{aphia_id}}_{{season}}`
+   carry `sdm:taxon` (accepted WoRMS name, `authorities.worms`, group, `redlist_code`).
+2. `prob_{{season}}.parquet` and `class_{{season}}.parquet`: `FID` plus one column per species `aphia_<id>`; the Item
+   assets name the column in `atlas:value_column`. Classes: Unlikely (< 0.6), Likely (0.6-0.8), Very likely (>= 0.8).
+3. `cell_species.parquet`: long table (FID, season, aphia_id, prob, class), Likely and Very likely only; join
+   `species.parquet` on `aphia_id` for names, groups and IUCN codes.
+4. `FID` joins to `hex.pmtiles` of the public `biotrack_indicators` collection.
+"""
+
+
+def catalog_readme() -> str:
+  return """\
+# OceanMetrics Atlas catalog
+
+Root STAC catalog of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by BOEM and MBON.
+Children: `biotrack_indicators` (MBON BioTrack richness and uncertainty) and, by reference, the MarineSensitivity
+SDM collections (v7, v8 gm and nc) at https://file.marinesensitivity.org/stac/. Each collection README holds its
+credits (citation, license, contacts, funders) and methods. Prototype.
+"""
+
+
+def catalog_agents() -> str:
+  return """\
+# AGENTS.md: OceanMetrics Atlas catalog
+
+Start at `catalog.json`; follow `child` links to collections, then `item` links. Collections declare
+`cube:dimensions`; each Item has `atlas:dims` (one value per dimension) and assets pointing at Parquet columns
+(`atlas:value_column`) or PMTiles (`atlas:id_field`). External children are MarineSensitivity STAC collections.
+"""

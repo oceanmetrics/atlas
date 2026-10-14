@@ -24,6 +24,7 @@ RAW_DIR    = Path("~/My Drive/projects/oceanmetrics/data/raw/couto.thiagoba@gmai
 STAGING    = REPO_DIR / "catalog" / "staging"
 COLLECTIONS = ["biotrack_indicators", "biotrack_species", "catalog"]
 CROCKFORD  = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+H3_DECIMALS = 4
 
 
 # ---- helpers ----
@@ -94,19 +95,21 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
   write_parquet(xw, dest / "hex_h3.parquet")
   num_cols = [c for c in vcols if not c.endswith(tuple(bt.CLASS_SUFFIXES))]
   vh3 = grid.aggregate_to_h3(values, xw, num_cols)
+  vh3[num_cols] = vh3[num_cols].round(H3_DECIMALS)   # 4 dp: 166 MB -> ~70 MB, far below the models' precision
   write_parquet(vh3, dest / "values_h3.parquet")
   log(f"hex_h3.parquet {len(xw)} rows; values_h3.parquet {len(vh3)} cells")
 
   # stac
   bbox = [round(float(x), 6) for x in hexg.total_bounds]
   dtypes = {k: ("string" if v == "string" or v.startswith("large_string") else "double") for k, v in pa_types(dest / "values.parquet").items()}
+  stac.write_json(dest / "styles" / "default.json", docs.style_default())
+  fcache: dict = {}
   coll = stac.indicators_collection(bbox, vcols, dtypes, num_cols, len(values), len(vh3), hex_info)
-  stac.write_json(dest / "collection.json", coll)
+  stac.write_json(dest / "collection.json", stac.add_file_info(coll, dest, fcache))
   ranges = {c: (float(values[c].min()), float(values[c].max())) for c in num_cols}
   items = stac.indicator_items(bbox, ranges)
   for iid, item in items.items():
-    stac.write_json(dest / "items" / f"{iid}.json", item)
-  stac.write_json(dest / "styles" / "default.json", docs.style_default())
+    stac.write_json(dest / "items" / f"{iid}.json", stac.add_file_info(item, dest / "items", fcache))
 
   fields = bt.read_fields_sheet(rp["xlsx"])
   counts = {"n_hex": len(values), "n_values_cols": len(vcols),
@@ -189,11 +192,14 @@ def build_species(raw: Path = RAW_DIR, out: Path = STAGING) -> dict:
   rows = taxa_df.assign(aphia_id=taxa_df["aphia_id"].astype(int)).to_dict("records")
   nhex = len(prob)
   coll = stac.species_collection(hexg_bbox, rows, nhex, len(cell), tables)
-  stac.write_json(dest / "collection.json", coll)
+  fcache: dict = {}
+  stac.write_json(dest / "collection.json", stac.add_file_info(coll, dest, fcache))
   items = stac.species_items(hexg_bbox, rows, ranges)
   for iid, item in items.items():
-    stac.write_json(dest / "items" / f"{iid}.json", item)
+    stac.write_json(dest / "items" / f"{iid}.json", stac.add_file_info(item, dest / "items", fcache))
   (dest / "README.md").write_text(docs.species_readme({"n_hex": nhex, "cell_rows": len(cell)}))
+  (dest / "AGENTS.md").write_text(docs.species_agents())
+  restricted_prefix()   # create the unlisted prefix once (pipeline/restricted_prefix.txt, git-ignored)
   return {"dest": dest, "items": len(items), "species": len(taxa_df), "cell_rows": len(cell),
           "cell_bytes": (dest / "cell_species.parquet").stat().st_size, "taxa": taxa_df}
 
@@ -219,6 +225,8 @@ def build_catalog(out: Path = STAGING, fetch_titles: bool = True) -> Path:
   children = fetch_external_titles(stac.EXTERNAL_CHILDREN) if fetch_titles else stac.EXTERNAL_CHILDREN
   path = out / "catalog.json"
   stac.write_json(path, stac.root_catalog(children))
+  (out / "README.md").write_text(docs.catalog_readme())
+  (out / "AGENTS.md").write_text(docs.catalog_agents())
   return path
 
 
@@ -290,7 +298,7 @@ def validate_stac(out: Path = STAGING) -> list[str]:
         bad.append(f"{p.relative_to(out)}: sdm schema: {e.message[:200]}")
     try:
       cls = {"Collection": pystac.Collection, "Feature": pystac.Item, "Catalog": pystac.Catalog}[obj["type"]]
-      cls.from_dict(obj).validate() if obj["type"] != "Catalog" else None
+      cls.from_file(str(p)).validate()
     except Exception as e:
       bad.append(f"{p.relative_to(out)}: pystac: {str(e)[:300]}")
   return bad

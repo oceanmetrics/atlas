@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,7 +19,10 @@ EXT = {
   "web_map":    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
   "contacts":   "https://stac-extensions.github.io/contacts/v0.1.1/schema.json",
   "version":    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+  "file":       "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+  "portolan":   "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
 }
+SOURCE_URL = "https://marinebon.org/"   # producer's public page; the raw files came from T. Couto by Google Drive
 
 # ---- credits (placeholders pending Neil Hammerschlag's confirmation) ----
 
@@ -59,6 +64,7 @@ GROUP_TITLES = {"all": "all species", "fish": "fish", "ray": "rays", "redlisted"
 PARQUET = "application/vnd.apache.parquet"
 PMTILES = "application/vnd.pmtiles"
 JSON_T  = "application/json"
+STYLE_T = "application/vnd.mapbox.style+json"
 MD_T    = "text/markdown"
 
 
@@ -125,8 +131,9 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
     "type": "Collection",
     "stac_version": STAC_VERSION,
     "stac_extensions": [EXT["sdm"], EXT["scientific"], EXT["table"], EXT["datacube"], EXT["web_map"],
-                        EXT["contacts"], EXT["version"]],
+                        EXT["contacts"], EXT["version"], EXT["file"], EXT["portolan"]],
     "id": "biotrack_indicators",
+    "updated": now_rfc3339(),
     "title": "MBON BioTrack biodiversity indicators",
     "description": (
       "Ecoregion-weighted species richness and cumulative uncertainty for the US Atlantic and Gulf of Mexico, "
@@ -189,7 +196,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
           {"name": c, "type": "double", "description": indicator_column_description(c)} for c in values_h3_columns],
       },
       "style": {
-        "href": "./styles/default.json", "type": JSON_T, "roles": ["style"],
+        "href": "./styles/default.json", "type": STYLE_T, "roles": ["style"],
         "title": "MapLibre fill layer, Spectral reversed on feature-state value (0..1)",
       },
     },
@@ -197,14 +204,24 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
       {"rel": "root",   "href": "../catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},
       {"rel": "parent", "href": "../catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},
       {"rel": "self",   "href": "./collection.json", "type": JSON_T},
-      *[{"rel": "item", "href": f"./items/{i}.json", "type": "application/geo+json"} for i in indicator_item_ids()],
+      *[{"rel": "item", "href": f"./items/{i}.json", "type": "application/geo+json", "title": indicator_item_title(*i.split("_"))}
+        for i in indicator_item_ids()],
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods, field dictionary and credits"},
       {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
       {"rel": "pmtiles", "href": "./hex.pmtiles", "type": PMTILES, "pmtiles:layers": ["hex"]},
+      {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
        "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},
     ],
   }
+
+
+def now_rfc3339() -> str:
+  return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def indicator_item_title(group: str, season: str, metric: str) -> str:
+  return f"{metric.capitalize()} of {GROUP_TITLES[group]}, {season}"
 
 
 def bt_h3_res() -> int:
@@ -232,7 +249,7 @@ def indicator_items(bbox: list[float], value_ranges: dict[str, tuple[float, floa
           "bbox": bbox,
           "geometry": bbox_polygon(bbox),
           "properties": {
-            "title": f"{m.capitalize()} of {GROUP_TITLES[g]}, {s}",
+            "title": indicator_item_title(g, s, m),
             "description": (f"Ecoregion-weighted {m} (0-1) for {GROUP_TITLES[g]} in {s} "
                             f"({'warm, May-Aug' if s == 'summer' else 'cold, Nov-Feb'}), per 10-km hexagon."),
             "datetime": None,
@@ -292,6 +309,8 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
   assets = {
     "hex": {"href": HEX_PUBLIC_HREF, "type": PMTILES, "roles": ["data"], "title": "10 km hexagon grid",
             "pmtiles:layers": ["hex"], "atlas:id_field": "FID"},
+    "style": {"href": HEX_PUBLIC_HREF.replace("hex.pmtiles", "styles/default.json"), "type": STYLE_T, "roles": ["style"],
+              "title": "MapLibre fill layer shared with biotrack_indicators"},
     "species": {"href": "./species.parquet", "type": PARQUET, "roles": ["metadata"],
                 "title": "species lookup (AphiaID, names, IUCN, groups, WoRMS match status)"},
     "cell_species": {"href": "./cell_species.parquet", "type": PARQUET, "roles": ["data"],
@@ -308,8 +327,10 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
   return {
     "type": "Collection",
     "stac_version": STAC_VERSION,
-    "stac_extensions": [EXT["sdm"], EXT["scientific"], EXT["table"], EXT["datacube"], EXT["contacts"], EXT["version"]],
+    "stac_extensions": [EXT["sdm"], EXT["scientific"], EXT["table"], EXT["datacube"], EXT["web_map"],
+                        EXT["contacts"], EXT["version"], EXT["file"], EXT["portolan"]],
     "id": "biotrack_species",
+    "updated": now_rfc3339(),
     "title": "MBON BioTrack per-species occupancy (restricted)",
     "description": (
       "Per-species probability of occurrence and probability class (Unlikely / Likely 0.6-0.8 / Very likely "
@@ -341,9 +362,12 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
     "links": [
       {"rel": "root", "href": "./collection.json", "type": JSON_T},
       {"rel": "self", "href": "./collection.json", "type": JSON_T},
-      *[{"rel": "item", "href": f"./items/{t['aphia_id']}_{s}.json", "type": "application/geo+json"}
-        for t in taxa_rows for s in bt.SEASONS],
+      *[{"rel": "item", "href": f"./items/{t['aphia_id']}_{s}.json", "type": "application/geo+json",
+         "title": f"{t['scientific_name']}, {s}"} for t in taxa_rows for s in bt.SEASONS],
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods and access notes"},
+      {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
+      {"rel": "pmtiles", "href": HEX_PUBLIC_HREF, "type": PMTILES, "pmtiles:layers": ["hex"]},
+      {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
        "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},
     ],
@@ -416,7 +440,9 @@ def root_catalog(external_children: list[dict]) -> dict:
   return {
     "type": "Catalog",
     "stac_version": STAC_VERSION,
+    "stac_extensions": [EXT["portolan"]],
     "id": "oceanmetrics-atlas",
+    "updated": now_rfc3339(),
     "title": "OceanMetrics Atlas",
     "description": (
       "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty "
@@ -425,6 +451,8 @@ def root_catalog(external_children: list[dict]) -> dict:
     "links": [
       {"rel": "root", "href": "./catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},
       {"rel": "self", "href": "./catalog.json", "type": JSON_T},
+      {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Human-readable documentation"},
+      {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
       {"rel": "child", "href": "./biotrack_indicators/collection.json", "type": JSON_T,
        "title": "MBON BioTrack biodiversity indicators"},
       *[{"rel": "child", "href": c["href"], "type": JSON_T, "title": c["title"]} for c in external_children],
@@ -468,3 +496,34 @@ def check_stac_required(obj: dict) -> list[str]:
     if EXT["sdm"] not in obj.get("stac_extensions", []):
       bad.append("stac-sdm extension not declared")
   return bad
+
+
+# ---- file:size and file:checksum on local assets ----
+
+def multihash_sha256(path: Path, cache: dict | None = None) -> str:
+  """sha256 as a multihash hex string (0x12 0x20 prefix), as the file extension asks."""
+  key = str(path)
+  if cache is not None and key in cache:
+    return cache[key]
+  h = hashlib.sha256()
+  with open(path, "rb") as f:
+    while block := f.read(1 << 20):
+      h.update(block)
+  out = "1220" + h.hexdigest()
+  if cache is not None:
+    cache[key] = out
+  return out
+
+
+def add_file_info(obj: dict, base_dir: Path, cache: dict | None = None) -> dict:
+  """add file:size and file:checksum to every asset whose href is a relative path that exists."""
+  for a in obj.get("assets", {}).values():
+    if a["href"].startswith("http"):
+      continue
+    p = (Path(base_dir) / a["href"]).resolve()
+    if p.exists():
+      a["file:size"] = p.stat().st_size
+      a["file:checksum"] = multihash_sha256(p, cache)
+  if any("file:size" in a for a in obj.get("assets", {}).values()) and EXT["file"] not in obj["stac_extensions"]:
+    obj["stac_extensions"].append(EXT["file"])
+  return obj
