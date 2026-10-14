@@ -183,7 +183,7 @@ test.describe("WP13: fits land in the open area, padded once", () => {
           __atlasMap: {
             handle: {
               map: {
-                project(ll: [number, number]): { x: number; y: number };
+                project(ll: { lng: number; lat: number }): { x: number; y: number };
                 getCenter(): { lng: number; lat: number };
                 getCanvas(): HTMLCanvasElement;
               };

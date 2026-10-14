@@ -94,11 +94,10 @@ export interface MapHandle {
    * number — this method's own type signature used to be narrower than what it needed to pass
    * through, so the species lens had no way to hand one through.
    *
-   * V4 fix (owner phone report, 2026-09-24): the implementation now calls MapLibre's OWN
-   * `cameraForBounds()` (see this file's own `flyToBounds` for why — the antimeridian rule this
-   * module exists for is preserved, `boundsToCameraView`'s hand math is kept as the fallback, and
-   * this is deliberately NOT `fitBounds` — see docs/map.md and no-fitbounds.test.ts's own header
-   * for why that native method is still never called).
+   * V4 fix (owner phone report, 2026-09-24): the camera is computed through the projection the
+   * renderer itself uses (mercator or globe). WP13: that is now `solveFit` below (it projects the
+   * extent's outline with the live padding in place); `cameraForBounds` + `boundsToCameraView` remain
+   * only as the zero-size fallback. Deliberately NOT `fitBounds` (docs/map.md, no-fitbounds.test.ts).
    *
    * WP13: `padding` as a {@link ChromePadding} is the chrome reserve measured from the viewport edge;
    * the live padding the map already carries (`setPadding`) covers part of it, and MapLibre's
