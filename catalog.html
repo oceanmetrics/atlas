@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>OceanMetrics Atlas catalog</title>
+    <meta
+      name="description"
+      content="Every collection in the OceanMetrics Atlas, with its citation, license, people, providers, funders, methods and data assets."
+    />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!--
+      pre-paint theme (same `?theme=` vocabulary as index.html): dark|navy -> navy, light|paper ->
+      paper. Unlike the map (dark by default) this reading page follows the OS when `?theme=` is
+      absent or `auto`, and falls back to paper. Reads only `location.search` and `matchMedia`,
+      writes only `data-theme` on <html>.
+    -->
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search).get("theme");
+        var theme;
+        if (q === "dark" || q === "navy") theme = "navy";
+        else if (q === "light" || q === "paper") theme = "paper";
+        else {
+          var dark = false;
+          try {
+            dark = matchMedia("(prefers-color-scheme: dark)").matches;
+          } catch (e) {}
+          theme = dark ? "navy" : "paper";
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/catalog-F14tdXEN.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/load-B-JVZOWy.js">
+    <link rel="modulepreload" crossorigin href="./assets/about-ixwrIjVH.js">
+    <link rel="stylesheet" crossorigin href="./assets/catalog-BZv3ajbP.css">
+  </head>
+  <body>
+    <div id="catalog"></div>
+    <noscript>The catalog page needs JavaScript to list the collections.</noscript>
+  </body>
+</html>

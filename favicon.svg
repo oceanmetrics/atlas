@@ -1,20 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Marine Sensitivity Atlas">
-  <!-- R5 (docs/usability.md §7): the wave-in-hexagon mark, replacing the placeholder plain hexagon.
-       Same path data as src/lib/brand/WaveHexMark.svelte / public/brand/mark-wavehex.svg -- traced
-       from the wave motif server/branding/make_branding.py draws for every other product mark,
-       reshaped to a pointy-top hexagon clip per the R5 decision. Literal colours (never CSS custom
-       properties: a favicon is not part of the app's `data-theme` cascade), matching the R5
-       candidate docs/design/candidates/mark-wave-hex.svg -- navy #001a57, gold #e8c24a, white. The
-       ring alone answers `prefers-color-scheme` (the OS/browser chrome's own signal, not the app's
-       theme toggle) so the navy hexagon separates from a dark tab strip. -->
-  <title>Marine Sensitivity Atlas</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OceanMetrics Atlas">
+  <!-- the OceanMetrics mark: a pointy-top hexagon (the atlas' grid cell) holding a wave. Literal colours
+       (a favicon is outside the app's data-theme cascade): navy #05294d, teal #2fc7b8, sand #e9dcb4.
+       The ring alone answers prefers-color-scheme so the navy hexagon separates from a dark tab strip. -->
+  <title>OceanMetrics Atlas</title>
   <style>
-    .bg { fill: #001a57; }
-    .wave { fill: #e8c24a; }
-    .crest { fill: none; stroke: #ffffff; stroke-width: 3.5; stroke-linecap: round; }
-    .ring { fill: none; stroke: #001a57; stroke-width: 3.5; stroke-linejoin: round; }
+    .bg { fill: #05294d; }
+    .wave { fill: #2fc7b8; }
+    .crest { fill: none; stroke: #e9dcb4; stroke-width: 3.5; stroke-linecap: round; }
+    .ring { fill: none; stroke: #05294d; stroke-width: 3.5; stroke-linejoin: round; }
     @media (prefers-color-scheme: dark) {
-      .ring { stroke: #e8c24a; }
+      .ring { stroke: #2fc7b8; }
     }
   </style>
   <path class="bg" d="M32 3 57.1 17.5v29L32 61 6.9 46.5v-29Z" />
