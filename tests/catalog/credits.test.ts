@@ -39,6 +39,7 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
       pis: [{ name: "Pat Investigator", organization: "Org A" }],
       contacts: [{ name: "Alex Author" }],
       funders: ["BOEM", "NOAA IOOS MBON"],
+      note: null,
       methodsUrl: "https://atlas.test/atlas/c/README.md",
     });
   });
@@ -91,6 +92,7 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
       contacts: [],
       funders: [],
       methodsUrl: null,
+      note: null,
     };
     expect(creditsOf(base({}))).toEqual(empty);
     expect(creditsOf(null)).toEqual(empty);

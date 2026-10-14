@@ -5,7 +5,10 @@
 // strip shows names and organisations only).
 import { assetUrl } from "./load";
 import { licenseModelOf, type LicenseModel } from "./licenses";
+import { noteOf, type CollectionNote } from "./note";
 import type { StacCollection, StacContact } from "./types";
+
+export { noteOf, type CollectionNote };
 
 export interface PersonCredit {
   name: string;
@@ -29,6 +32,8 @@ export interface Credits {
   /** the remaining contacts (authors, data managers, ...), when no PI is named they are shown instead. */
   contacts: PersonCredit[];
   funders: string[];
+  /** the collection's `atlas:note` (shown prominently); `null` when it has none. */
+  note: CollectionNote | null;
   /** the collection's `describedby` README (methods + field dictionary), absolute. */
   methodsUrl: string | null;
 }
@@ -63,6 +68,7 @@ export function creditsOf(collection: StacCollection | null): Credits {
       pis: [],
       contacts: [],
       funders: [],
+      note: null,
       methodsUrl: null,
     };
   }
@@ -95,6 +101,7 @@ export function creditsOf(collection: StacCollection | null): Credits {
           (f): f is string => typeof f === "string" && f.trim() !== "",
         )
       : [],
+    note: noteOf(collection),
     methodsUrl: methods ? assetUrl(collection, methods) : null,
   };
 }

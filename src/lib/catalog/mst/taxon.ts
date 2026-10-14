@@ -209,12 +209,33 @@ const AUTHORITY_LABEL: Record<string, string> = {
   gbif: "GBIF id",
 };
 
+/** the `sdm:taxon` of an Item as the Details rows need it, from either shape the atlas builds: the v7
+ * shard's (`sp_cat`, `ids`, `redlist`) or a registry row's, which follows `atlas:item_template`
+ * (`group`, `authorities`, `redlist_code`). */
+function readTaxon(raw: Record<string, unknown>): Partial<SdmTaxon> {
+  const t = raw as Partial<SdmTaxon> & {
+    group?: string;
+    authorities?: Record<string, unknown>;
+    redlist_code?: string;
+  };
+  const ids: Record<string, string> = { ...(t.ids ?? {}) };
+  for (const [authority, id] of Object.entries(t.authorities ?? {})) {
+    if (id !== null && id !== undefined && String(id) !== "") ids[authority] = String(id);
+  }
+  return {
+    ...t,
+    sp_cat: t.sp_cat ?? t.group,
+    ids,
+    redlist: t.redlist ?? t.redlist_code,
+  };
+}
+
 /** the identifiers of an Item's `sdm:taxon`, as labelled rows (WoRMS links to its taxon page). Total:
  * an Item with no `sdm:taxon` yields none. */
 export function taxonFacts(item: StacItem | null): TaxonFact[] {
   const raw = item?.properties?.["sdm:taxon"];
   if (!raw || typeof raw !== "object") return [];
-  const t = raw as Partial<SdmTaxon>;
+  const t = readTaxon(raw as Record<string, unknown>);
   const facts: TaxonFact[] = [];
   if (t.scientific_name) facts.push({ label: "Scientific name", value: t.scientific_name });
   if (t.common_name) facts.push({ label: "Common name", value: t.common_name });

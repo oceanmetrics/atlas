@@ -307,6 +307,17 @@ export function sourceBoundsOf(raw: unknown): [number, number, number, number] |
   return [west, south, east, north];
 }
 
+/**
+ * The MapLibre source `bounds` of an Item that states its own `bbox` (a registry row's box): the same
+ * clamping as {@link sourceBoundsOf}, no tile-server request. `null` when the Item has no usable `bbox`
+ * (the lens then reads the COG's footprint from `/cog/info.geojson`, once).
+ */
+export function itemSourceBounds(
+  item: { bbox?: unknown } | null | undefined,
+): [number, number, number, number] | null {
+  return sourceBoundsOf({ bbox: item?.bbox });
+}
+
 export interface CogExtentCache {
   /** the COG's footprint (`/cog/info.geojson`), read once per COG; `null` when it cannot be read. */
   get(cogUrl: string): Promise<[number, number, number, number] | null>;

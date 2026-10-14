@@ -3,6 +3,8 @@
   // own license link(s) and the attribution to copy (with a Copy button). The content is the view model
   // `lib/catalog/licenses.ts#licenseModelOf` builds; this only presents it.
   import Modal from "./Modal.svelte";
+  import NoteChip from "./NoteChip.svelte";
+  import { noteFromText } from "../catalog/note";
   import type { LicenseModel } from "../catalog/licenses";
 
   interface Props {
@@ -14,6 +16,7 @@
   }
   let { open, title, model, onclose }: Props = $props();
 
+  const note = $derived(noteFromText(model.note));
   let copied = $state<"idle" | "done" | "failed">("idle");
   async function copy(): Promise<void> {
     try {
@@ -35,6 +38,9 @@
       {#if model.info.name !== model.info.id}<span class="name"> · {model.info.name}</span>{/if}
     </p>
     <p class="summary">{model.info.summary}</p>
+    {#if note}
+      <NoteChip {note} testid="license-note" />
+    {/if}
 
     {#if model.info.url || model.links.length > 0}
       <h3>License text</h3>

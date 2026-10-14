@@ -48,10 +48,21 @@ import {
 } from "../../lib/catalog/species";
 import type { ChromePadding } from "../../lib/map/camera";
 import { mstRefOf } from "../../lib/catalog/mst/kinds";
+import { registryRefOf } from "../../lib/catalog/registry/ref";
+import { registryFacts } from "../../lib/catalog/registry/item";
+import {
+  DOWNSCALED_TITLE,
+  downscaledCredits,
+  registryAttribution,
+} from "../../lib/catalog/registry/credits";
 import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
 import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
 import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
-import { createCogExtentCache, type CogExtentCache } from "../../lib/raster/bounds";
+import {
+  createCogExtentCache,
+  itemSourceBounds,
+  type CogExtentCache,
+} from "../../lib/raster/bounds";
 import {
   loadCatalog,
   loadItems,
@@ -74,6 +85,11 @@ import {
 import type { MapHandle } from "../../lib/map/map";
 import type { SelStore } from "../../lib/state/sel.svelte";
 import { createMstSource, type MstSource } from "./mst.svelte";
+import {
+  createRegistrySource,
+  type RegistrySource,
+  type RegistrySourceDeps,
+} from "./registry.svelte";
 import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
@@ -103,6 +119,8 @@ export interface CollectionLensDeps {
   chromePadding?: () => ChromePadding;
   /** MarineSensitivity collections (nc / gm manifests, v7 taxon shards): overrides for tests. */
   mst?: { items?: MstItemOptions; taxon?: import("../../lib/catalog/mst/items").TaxonLoadOptions };
+  /** registry-backed taxon collections (AquaMaps native): overrides for tests. */
+  registry?: Pick<RegistrySourceDeps, "readRows" | "fetchJson" | "whenIdle">;
   /** the display-rescale reader (titiler `/cog/statistics`, cached); default the module cache. */
   rescale?: RescaleCache;
   /** the COG footprint reader (titiler `/cog/info`, cached); default the module cache. */
@@ -172,6 +190,11 @@ export interface CollectionLens {
   readonly siblings: SiblingValue[];
   /** the MarineSensitivity side of the active collection (taxon search, identifiers, notices). */
   readonly mst: MstSource;
+  /** the registry side of the active collection (AquaMaps native: taxon search, representation switch). */
+  readonly registry: RegistrySource;
+  /** the credit line the map attribution adds while this lens draws a layer that needs one
+   * (AquaMaps' CC BY-NC); `null` otherwise. */
+  readonly attribution: string | null;
   /** the active item's taxon identifiers (WoRMS / BOTW / GBIF ids, Red List, ESA), as rows. */
   readonly taxonFacts: TaxonFact[];
   /** a sentence to show instead of the layer (an MST taxon with no model here, a failed lookup). */
@@ -293,9 +316,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     taxonOptions: deps.mst?.taxon,
   });
   const isTaxon = $derived(mst.ref?.kind === "taxon");
-  const items = $derived(isTaxon ? mst.items : loadedItems);
-  const itemsPhase = $derived(isTaxon ? mst.phase : loadedPhase);
-  const itemsError = $derived(isTaxon ? mst.error : loadedError);
+  // registry-backed taxon collections (a collection with `atlas:taxa_registry`: AquaMaps native 0.5
+  // degree) also draw one taxon at a time, its Item built from a registry row
+  const registry = createRegistrySource({
+    selStore,
+    entry: () => entry,
+    entries: () => entries,
+    ...deps.registry,
+  });
+  const isRegistry = $derived(registry.ref !== null);
+  const items = $derived(isTaxon ? mst.items : isRegistry ? registry.items : loadedItems);
+  const itemsPhase = $derived(isTaxon ? mst.phase : isRegistry ? registry.phase : loadedPhase);
+  const itemsError = $derived(isTaxon ? mst.error : isRegistry ? registry.error : loadedError);
   // an MST cube's selectors are labelled and ordered by the manifest's `cube:dimensions`
   const collection = $derived.by((): StacCollection | null => {
     const c = entry?.collection ?? null;
@@ -309,13 +341,14 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     void reloadTick;
     const token = ++itemsToken;
     const ref = mstRefOf(e);
+    const byRow = registryRefOf(e?.collection) !== null;
     untrack(() => {
       loadedItems = [];
       loadedCube = null;
       loadedError = null;
-      loadedPhase = e && ref?.kind !== "taxon" ? "loading" : "idle";
+      loadedPhase = e && ref?.kind !== "taxon" && !byRow ? "loading" : "idle";
     });
-    if (!e || ref?.kind === "taxon") return;
+    if (!e || ref?.kind === "taxon" || byRow) return;
     if (ref) {
       void loadMstItems(e, deps.mst?.items).then((res) => {
         if (token !== itemsToken) return;
@@ -382,15 +415,17 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   );
   const rangeFailed = $derived(rangeKey !== null && rangeFailedKey === rangeKey);
 
-  // --- a raster's footprint (`/cog/info`, once per COG): the source `bounds`, so a regional COG is never
-  // asked for tiles outside it (each would 404). The raster waits for the answer (one small request);
-  // an unreadable footprint draws unbounded rather than not at all. ------------------------------
+  // --- a raster's footprint: the source `bounds`, so a regional COG is never asked for tiles outside it
+  // (each would 404). An Item that states its `bbox` (a registry row's) needs no request at all; any other
+  // reads `/cog/info.geojson` once per COG. The raster waits for that answer (one small request); an
+  // unreadable footprint draws unbounded rather than not at all. -----------------------------------
+  const bboxBounds = $derived(itemSourceBounds(item));
   const extentCache = deps.cogExtent ?? createCogExtentCache(defaultFetchJson);
   let extent = $state.raw<{
     url: string;
     bounds: [number, number, number, number] | null;
   } | null>(null);
-  const extentUrl = $derived(rasterAssetOf(item)?.url ?? null);
+  const extentUrl = $derived(bboxBounds ? null : (rasterAssetOf(item)?.url ?? null));
   $effect(() => {
     const url = extentUrl;
     if (!url) return;
@@ -609,13 +644,16 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
     const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
+    // the legend names the surface on screen: the downscaled one is not the collection's own native one
+    const legendEntry =
+      entry && isRegistry && registry.rep === "005" ? { ...entry, title: DOWNSCALED_TITLE } : entry;
     const inputs = collectionMapInputs({
-      entry,
+      entry: legendEntry,
       item: drawItem,
       style: styleJson,
       values,
       marker,
-      cogBounds: extent && extent.url === extentUrl ? extent.bounds : null,
+      cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
     });
     // a raster is held back until its footprint is known (the legend and the summaries stay)
     return extentPending && inputs.raster ? { ...inputs, raster: null } : inputs;
@@ -678,10 +716,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const taxon = mstRefOf(e)?.kind === "taxon";
     if (mstRefOf(entry)?.kind === "taxon") mst.remember(selStore.sel.sp ?? mst.remembered);
     const patch = selPatchFor(entries, e, [], null);
+    // a registry collection keys its taxa by its own registry (an AquaMaps key, not a v7 merged key), so
+    // the taxon neither travels into it nor out of it; `rep=005` belongs to it alone
+    const rep = selStore.sel.rep === "005" ? { rep: "native" as const } : {};
     selStore.set(
       taxon
-        ? { ...patch, c: e.id, sp: selStore.sel.sp ?? mst.remembered }
-        : { ...patch, sp: undefined },
+        ? {
+            ...patch,
+            ...rep,
+            c: e.id,
+            sp: isRegistry ? mst.remembered : (selStore.sel.sp ?? mst.remembered),
+          }
+        : { ...patch, ...rep, sp: undefined },
     );
   }
 
@@ -720,7 +766,17 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return item;
     },
     get credits() {
-      return creditsOf(entry?.collection ?? null);
+      const c = entry?.collection ?? null;
+      // the downscaled surface on screen is MarineSensitivity's: its citation and license
+      return isRegistry && registry.downscaled && c
+        ? creditsOf(downscaledCredits(registry.downscaled, c))
+        : creditsOf(c);
+    },
+    get attribution() {
+      return registryAttribution(isRegistry && mapInputs.raster !== null);
+    },
+    get registry() {
+      return registry;
     },
     get mapInputs() {
       return mapInputs;
@@ -769,10 +825,10 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return mst;
     },
     get taxonFacts() {
-      return taxonFacts(item);
+      return isRegistry ? registryFacts(item) : taxonFacts(item);
     },
     get notice() {
-      return isTaxon ? mst.notice : null;
+      return isTaxon ? mst.notice : isRegistry ? registry.notice : null;
     },
     get rangeLoading() {
       return rangeLoading;

@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- **AquaMaps native 0.5 degree in the map (WP7).** A collection that carries `atlas:taxa_registry` is a taxon collection: pick a taxon by scientific or common name (the Species picker's search and ranking, grouped by category, taxa with no category under "other") and the lens builds its COG Item from the registry row per `atlas:item_template`, drawn through titiler at rescale 1-100 (no-data 0) with the row's `bbox` as the source bounds, so no `/cog/info` request is made. The registry (`registry.parquet`, ~1 MB) is read once when the collection opens; the search index (`registry_index.json`, ~1.1 MB as served) loads at idle or when the search box is focused, never on the static path. URL: `?c=aquamaps_native&sp=<sp_key>`; with no `sp`, the leatherback (else the first row).
+- **Native 0.5 degree | Downscaled 0.05 degree (MST v7) switch.** For a taxon whose row has `cog_url_005`, a switch swaps the drawn COG without moving the camera (`rep=005`; `native` is the default and is never written; a taxon with no downscaled surface falls back to native). Credits then show the MarineSensitivity v7 `am_0.05` citation, with the license shown as CC BY-NC 3.0 as that citation says (its STAC `license` field says CC-BY-4.0).
+- **Non-commercial note.** A collection's `atlas:note` ("Non-commercial use only ...") shows as an amber chip in the credits strip, on the catalog card and in the License modal, and the map attribution adds "AquaMaps (Kaschner et al. 2019), CC BY-NC 3.0" while an AquaMaps layer is on.
+- **Catalog page.** A registry collection's card shows its taxa count (from `summaries`) instead of "0 items", and "Open in map" opens it on the default taxon.
+- Details for a registry taxon lists the WoRMS / BOTW ids, Red List code, category and a link to the AquaMaps species page (`preMap.php`; the `receive.php` URL in the plan renders an empty frame on its own).
+
 - **No place layer on by default.** The sanctuaries and BOEM wind leases used to load on first view; now nothing does until you tick a layer or a link carries `ov=`. `ov=` (empty) reads as none and is no longer written.
 
 - **Feedback reaches the sheet.** The dialog now sends `app: "oceanmetrics-atlas"`, the key the shared Ocean Metrics Apps Script registers, and reads the script's JSON verdict: a 200 `{ok:false}` (unknown app, honeypot, rate cap) now shows the failed state with the GitHub-issue fallback instead of "Thanks".

@@ -20,6 +20,7 @@ import type {
 } from "../lib/catalog/types";
 import { openInMapHref } from "../lib/brand/brand";
 import { licenseModelOf, type LicenseModel } from "../lib/catalog/licenses";
+import { noteOf, type CollectionNote } from "../lib/catalog/note";
 
 // --- small formatters ---------------------------------------------------------------------------
 
@@ -243,7 +244,9 @@ export function dimViews(collection: StacCollection): DimView[] {
   const summaries = collection["summaries"];
   if (summaries && typeof summaries === "object") {
     for (const [key, v] of Object.entries(summaries as Record<string, unknown>)) {
-      if (key.startsWith("sdm:") || !Array.isArray(v) || v.length === 0) continue;
+      // `atlas:taxa` is the registry's size: the card prints it as "Taxa", not as a dimension
+      if (key.startsWith("sdm:") || key === "atlas:taxa" || !Array.isArray(v) || v.length === 0)
+        continue;
       if (!v.every((x) => typeof x === "string" || typeof x === "number")) continue;
       out.push(cap(key, v.map(String)));
     }
@@ -331,6 +334,8 @@ export interface CreditsView {
   providers: ProviderView[];
   funders: string[];
   version: string | null;
+  /** the collection's `atlas:note` (AquaMaps: "Non-commercial use only ..."); `null` when it has none. */
+  note: CollectionNote | null;
 }
 
 /** whether a card link is a markdown document, shown rendered in a dialog (Methods, README) rather
@@ -362,6 +367,9 @@ export interface CatalogCard {
   temporal: string | null;
   dims: DimView[];
   itemCount: number;
+  /** how many taxa a registry-backed collection holds (its `summaries["atlas:taxa"]`, else the registry's
+   * `row_count`): such a collection publishes no Item files, so this is its size; `null` otherwise. */
+  taxaCount: number | null;
   bbox: BBox | null;
   credits: CreditsView | null;
   links: LinkView[];
@@ -388,6 +396,24 @@ function linkViews(entry: CollectionEntry, c: StacCollection): LinkView[] {
   return out;
 }
 
+/** the number of taxa a registry-backed collection holds: `summaries["atlas:taxa"]` (a one-element
+ * array of the count), else `atlas:taxa_registry.row_count`; `null` for any other collection. */
+export function taxaCountOf(c: StacCollection): number | null {
+  const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  const summaries = c["summaries"];
+  const taxa =
+    summaries && typeof summaries === "object"
+      ? (summaries as Record<string, unknown>)["atlas:taxa"]
+      : undefined;
+  if (Array.isArray(taxa) && taxa.length === 1 && ok(taxa[0])) return taxa[0];
+  const registry = c["atlas:taxa_registry"];
+  const rows =
+    registry && typeof registry === "object"
+      ? (registry as Record<string, unknown>).row_count
+      : undefined;
+  return ok(rows) ? rows : null;
+}
+
 /** the printable model of one catalog entry. */
 export function buildCard(entry: CollectionEntry): CatalogCard {
   const base = {
@@ -408,6 +434,7 @@ export function buildCard(entry: CollectionEntry): CatalogCard {
       temporal: null,
       dims: [],
       itemCount: 0,
+      taxaCount: null,
       bbox: null,
       credits: null,
       links: [{ label: "collection.json (STAC)", href: entry.href }],
@@ -426,6 +453,7 @@ export function buildCard(entry: CollectionEntry): CatalogCard {
     temporal: temporalLabel(c),
     dims: dimViews(c),
     itemCount: c.links.filter((l) => l.rel === "item").length,
+    taxaCount: taxaCountOf(c),
     bbox: bboxOf(c),
     credits: {
       citation: str(c["sci:citation"]),
@@ -437,6 +465,7 @@ export function buildCard(entry: CollectionEntry): CatalogCard {
       providers: providerViews(c),
       funders: strings(c["atlas:funders"]),
       version: str(c.version),
+      note: noteOf(c),
     },
     links: linkViews(entry, c),
     assets: assetViews(c),

@@ -21,7 +21,10 @@ export type { LayerStackEntry } from "../map/layerStack";
 export type Lens = "collection" | "species";
 export type Palette = "spectral_r" | "viridis" | "cividis" | "magma";
 export type Projection = "globe" | "mercator";
-export type Representation = "native" | "model";
+/** `native` / `model` are the species lens' representations; `005` is the registry collections' (AquaMaps
+ * native 0.5 degree) switch to the downscaled 0.05 degree surface. The species lens ignores it (its
+ * `pickAsset` falls back to native). */
+export type Representation = "native" | "model" | "005";
 /** tri-state (fix round 1, atlas-3): `"auto"` is the default — never written to the URL — and
  * follows `prefers-color-scheme` at render time (`resolveTheme`, below); `"light"`/`"dark"` are
  * explicit OVERRIDES, and BOTH must round-trip (before this fix, `theme=light` was silently dropped
@@ -128,7 +131,7 @@ export const HASH_KEYS = ["pl", "t"] as const;
 
 export const PALETTES: readonly Palette[] = ["spectral_r", "viridis", "cividis", "magma"];
 export const PROJECTIONS: readonly Projection[] = ["globe", "mercator"];
-export const REPRESENTATIONS: readonly Representation[] = ["native", "model"];
+export const REPRESENTATIONS: readonly Representation[] = ["native", "model", "005"];
 /** every value `theme=` may parse from, including `"auto"` (the default, read back identically to
  * an absent key — see `parseSel`). */
 export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
