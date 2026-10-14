@@ -196,6 +196,7 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
     else map.setPadding(wanted, { ...PROGRAMMATIC_EVENT_DATA });
   }
   const onFlightEnd = () => {
+    if (solving) return;
     flying = false;
     applyWanted(true);
   };
@@ -205,6 +206,114 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
   function settlePadding() {
     if (!paddingEqual(readPadding(), wanted))
       map.setPadding(wanted, { ...PROGRAMMATIC_EVENT_DATA });
+  }
+
+  // WP13: the fit solver. Frames `bounds` inside the region the chrome leaves free, using the
+  // map's own projection (mercator or globe) with the live padding in place: the extent's outline is
+  // projected at a candidate camera, and the camera is corrected until the outline's screen box fills
+  // the region and is centred in it. `jumpTo` moves the camera synchronously (nothing is drawn
+  // between) and the original camera is restored before returning; every move is marked
+  // programmatic, and `solving` keeps `onFlightEnd` out of it. Returns undefined when the stage has
+  // no size or the solve does not converge to something finite (the caller falls back).
+  let solving = false;
+  function outline(bounds: CameraBoundsInput): [number, number][] {
+    const [[w, s], [e, n]] = bounds;
+    const pts: [number, number][] = [];
+    const STEPS = 12;
+    for (let i = 0; i <= STEPS; i++) {
+      const t = i / STEPS;
+      const x = w + t * (e - w);
+      const y = s + t * (n - s);
+      pts.push([x, s], [x, n], [w, y], [e, y]);
+    }
+    return pts;
+  }
+  function solveFit(
+    bounds: CameraBoundsInput,
+    request: number | ChromePadding | undefined,
+  ): { center: [number, number]; zoom: number } | undefined {
+    const W = map.getCanvas().clientWidth;
+    const H = map.getCanvas().clientHeight;
+    if (!(W > 0 && H > 0)) return undefined;
+    const L = wanted;
+    // the free region, in canvas px: a ChromePadding is the chrome reserve from the stage edge, a
+    // bare number is breathing room inside the open area, and nothing is the open area itself
+    const edge = (want: number | undefined, have: number, bare: number) =>
+      typeof request === "number" ? have + bare : Math.max(have, want ?? 0);
+    const c = typeof request === "object" ? request : undefined;
+    const region = {
+      l: edge(c?.left, L.left, request as number),
+      r: W - edge(c?.right, L.right, request as number),
+      t: edge(c?.top, L.top, request as number),
+      b: H - edge(c?.bottom, L.bottom, request as number),
+    };
+    if (!(region.r - region.l > 1 && region.b - region.t > 1)) return undefined;
+    const pts = outline(bounds);
+    const before = {
+      center: map.getCenter(),
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+    };
+    const rect = { width: W, height: H };
+    const start = boundsToCameraView(bounds, rect, {
+      padding: {
+        top: region.t,
+        right: W - region.r,
+        bottom: H - region.b,
+        left: region.l,
+      },
+      maxZoom: map.getMaxZoom(),
+    });
+    let center: [number, number] = [
+      (bounds[0][0] + bounds[1][0]) / 2,
+      (bounds[0][1] + bounds[1][1]) / 2,
+    ];
+    let zoom = start.zoom;
+    const maxZoom = map.getMaxZoom();
+    solving = true;
+    try {
+      for (let i = 0; i < 14; i++) {
+        map.jumpTo({ center, zoom }, { ...PROGRAMMATIC_EVENT_DATA });
+        let x0 = Infinity;
+        let x1 = -Infinity;
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        for (const pt of pts) {
+          const q = map.project(pt);
+          if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) return undefined;
+          x0 = Math.min(x0, q.x);
+          x1 = Math.max(x1, q.x);
+          y0 = Math.min(y0, q.y);
+          y1 = Math.max(y1, q.y);
+        }
+        const dx = (region.l + region.r) / 2 - (x0 + x1) / 2;
+        const dy = (region.t + region.b) / 2 - (y0 + y1) / 2;
+        const scale = Math.min(
+          (region.r - region.l) / (x1 - x0),
+          (region.b - region.t) / (y1 - y0),
+        );
+        const settled =
+          Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(Math.log2(scale)) < 0.002;
+        if (settled) break;
+        if (!Number.isFinite(scale) || scale <= 0) return undefined;
+        // move the box by (dx, dy): the camera's centre is the point now drawn at (dx, dy) away
+        const cp = map.project(map.getCenter());
+        const next = map.unproject([cp.x - dx, cp.y - dy]);
+        if (!Number.isFinite(next.lng) || !Number.isFinite(next.lat)) return undefined;
+        // keep the longitude continuous with the bounds (east may exceed 180)
+        const mid = (bounds[0][0] + bounds[1][0]) / 2;
+        let lng = next.lng;
+        while (lng - mid > 180) lng -= 360;
+        while (lng - mid < -180) lng += 360;
+        center = [lng, next.lat];
+        zoom = Math.min(maxZoom, Math.max(0, zoom + Math.log2(scale)));
+      }
+      return Number.isFinite(zoom) ? { center, zoom } : undefined;
+    } finally {
+      map.jumpTo(before, { ...PROGRAMMATIC_EVENT_DATA });
+      solving = false;
+    }
   }
 
   const applyQueuedStyle = createStyleApplier(map, (s) => applyStyle(map, s));
@@ -248,40 +357,26 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
     flyToBounds(bounds: CameraBoundsInput, opts?: { padding?: number | ChromePadding }) {
       writer?.cancel();
       settlePadding();
-      // WP13: only what the live padding does not already cover (header on `MapHandle.flyToBounds`)
-      const fitPadding =
-        opts?.padding === undefined ? undefined : residualFitPadding(opts.padding, wanted);
-      // V4 fix (owner phone report, 2026-09-24, phone-17/18): `boundsToCameraView`'s shift
-      // (camera.ts#shiftForPadding) is EXACT only for FLAT Mercator rendering. On the phone a wide
-      // species range fits at a low zoom (the sheet's own padding shrinks the "available" area
-      // further still) — exactly the ~<5 zoom band where MapLibre's GLOBE projection renders a
-      // true sphere (camera.ts's own PHONE_STUDY_AREA_ZOOM_BOOST header). The SAME center/zoom
-      // numbers, read by the globe renderer instead of a flat one, do not land on the same screen
-      // pixels the flat math predicted: content bunched near one edge of the frame, most of it
-      // empty space (measured live: the leatherback default view and the walrus model view both
-      // squeezed into the bottom of the free area). `map.cameraForBounds()` computes the camera
-      // through the SAME transform the renderer itself uses (mercator or globe, whichever is
-      // live), so it frames correctly under either — this is NOT `fitBounds` (see
-      // no-fitbounds.test.ts's own header: it only COMPUTES a camera, it never moves the map), and
-      // its own antimeridian handling (`adjustAntiMeridian`) re-wraps only when west > east
-      // numerically; this module's bounds are always re-expressed continuous
-      // (`data/camera.ts#minimalFrame`: west < east, east possibly > 180), so it is a no-op there
-      // and the antimeridian-safe frame this module exists for is preserved.
-      const mutableBounds: [[number, number], [number, number]] = [
-        [bounds[0][0], bounds[0][1]],
-        [bounds[1][0], bounds[1][1]],
-      ];
-      const native = map.cameraForBounds(
-        mutableBounds,
-        fitPadding !== undefined ? { padding: fitPadding } : undefined,
-      );
-      if (native?.center !== undefined && native.zoom !== undefined) {
-        map.flyTo({ center: native.center, zoom: native.zoom }, { ...PROGRAMMATIC_EVENT_DATA });
+      // WP13: solved against the REAL transform, with the live padding in place (`solveFit` below).
+      // MapLibre's own `cameraForBounds` ADDS an option padding to `transform.padding` (6.10 source:
+      // availableWidth = width - (transform.padding + padding)), which would be right for a flat map,
+      // but its globe branch tests the extent against clip-space limits built from the option padding
+      // ALONE while projecting with the padded transform, so with a standing padding the globe fit
+      // lands off (measured: the phone's BioTrack extent clipped at the left edge and tucked under
+      // the legend chip, zoom 2.01 vs the unpadded 2.33). Solving the fit here, by projecting the
+      // extent's own outline, is exact for both projections and cannot pad twice. It is still not
+      // `fitBounds`, and the bounds stay continuous (east may exceed 180), never wrapped.
+      const solved = solveFit(bounds, opts?.padding);
+      if (solved) {
+        map.flyTo({ center: solved.center, zoom: solved.zoom }, { ...PROGRAMMATIC_EVENT_DATA });
         flying = true;
         return;
       }
-      // fallback: a zero-size container (a test, a not-yet-laid-out map) is the one case
-      // `cameraForBounds` can return `undefined` for — the old hand math still holds for it.
+      // WP13: only what the live padding does not already cover (header on `MapHandle.flyToBounds`)
+      const fitPadding =
+        opts?.padding === undefined ? undefined : residualFitPadding(opts.padding, wanted);
+      // fallback: a zero-size container (a test, a not-yet-laid-out map) is the one case the solve
+      // cannot run in — the old hand math still holds for it (with only the padding not yet applied).
       const rect = map.getContainer().getBoundingClientRect();
       const view = boundsToCameraView(
         bounds,

@@ -777,7 +777,12 @@
   }
   function chromeReserve(): ChromePadding {
     if (isPhone) {
-      const chipShowing = !!phoneLegend && legendChipMode(sheetGeom.detent) === "floating";
+      // WP13: the collection lens always ends up with a legend, but its first fit runs BEFORE the
+      // legend is known (measured: the extent landed 5-12 px under the chip), so a collection fit
+      // reserves the chip band from the start
+      const chipShowing =
+        (!!phoneLegend || sel.lens === "collection") &&
+        legendChipMode(sheetGeom.detent) === "floating";
       return phoneLiveChromePadding(
         sheetGeom.height,
         sheetGeom.detent,
