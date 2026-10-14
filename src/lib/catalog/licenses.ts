@@ -3,6 +3,7 @@
 // use, the collection's own `license` links, and the attribution text to copy. Pure and total: any
 // string is accepted, an id we have no wording for says "see the license link", never an error. The
 // summaries are orientation, not legal advice; the linked license text is what binds.
+import { noteOf } from "./note";
 import { assetUrl } from "./load";
 import type { StacCollection } from "./types";
 
@@ -95,6 +96,9 @@ export interface LicenseModel {
   links: LicenseLink[];
   /** the attribution / citation to copy. */
   attribution: string;
+  /** the collection's `atlas:note` ("Non-commercial use only ..."), repeated here so the terms are
+   * never one click away from the license text; `null` when it has none. */
+  note: string | null;
 }
 
 /** the attribution to copy: the collection's own citation (with its DOI) when it has one, else a
@@ -141,5 +145,6 @@ export function licenseModelOf(collection: StacCollection | null): LicenseModel 
     },
     links,
     attribution: attributionOf(collection),
+    note: noteOf(collection)?.text ?? null,
   };
 }

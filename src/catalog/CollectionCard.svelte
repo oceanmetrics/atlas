@@ -5,6 +5,7 @@
   import ExtentSketch from "./ExtentSketch.svelte";
   import DocModal from "../lib/ui/DocModal.svelte";
   import LicenseModal from "../lib/ui/LicenseModal.svelte";
+  import NoteChip from "../lib/ui/NoteChip.svelte";
 
   interface Props {
     card: CatalogCard;
@@ -42,6 +43,9 @@
     {#if card.description}
       <p class="desc">{card.description}</p>
     {/if}
+    {#if card.credits?.note}
+      <NoteChip note={card.credits.note} testid="card-note" />
+    {/if}
 
     <div class="facts">
       <dl class="meta">
@@ -62,8 +66,16 @@
             {d.values.join(", ")}{#if d.more > 0}<span class="sub"> and {d.more} more</span>{/if}
           </dd>
         {/each}
-        <dt>Items</dt>
-        <dd>{card.itemCount}</dd>
+        {#if card.taxaCount !== null}
+          <dt>Taxa</dt>
+          <dd data-testid="card-taxa">
+            {card.taxaCount.toLocaleString("en-US")}
+            <span class="sub">&nbsp;&middot; one map per taxon, built from a registry</span>
+          </dd>
+        {:else}
+          <dt>Items</dt>
+          <dd>{card.itemCount}</dd>
+        {/if}
         {#if bboxText}
           <dt>Extent</dt>
           <dd class="bbox">{bboxText} <span class="sub">(W, S, E, N)</span></dd>

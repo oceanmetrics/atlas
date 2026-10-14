@@ -9,6 +9,7 @@
     type LayersProjectionControl,
     type LayersRowState,
   } from "../../lib/ui/LayersPanel.svelte";
+  import Segmented from "../../lib/ui/Segmented.svelte";
   import Select, { type SelectOptionGroup } from "../../lib/ui/Select.svelte";
   import { GROUP_LABEL, GROUP_ORDER } from "../../lib/catalog/load";
   import type { LayerStackEntry, Sel } from "../../lib/state/types";
@@ -94,6 +95,15 @@
   // MarineSensitivity: the taxon collections pick a taxon by search; the rest show the collection's
   // own `sdm:source_authority` under the identifiers
   const isTaxonCollection = $derived(lens.mst.ref?.kind === "taxon");
+  // a registry-backed taxon collection (AquaMaps native 0.5 degree): the same search, its own index
+  const isRegistry = $derived(lens.registry.ref !== null);
+  const registryLabel = $derived(
+    lens.registry.row
+      ? lens.registry.row.commonName
+        ? `${lens.registry.row.scientificName} (${lens.registry.row.commonName})`
+        : lens.registry.row.scientificName
+      : null,
+  );
   const sourceAuthority = $derived.by(() => {
     const a = lens.entry?.collection?.["sdm:source_authority"];
     return typeof a === "string" && a.trim() ? a.trim() : null;
@@ -151,7 +161,7 @@
     {#if lens.itemDescription}
       <p class="description">{lens.itemDescription}</p>
     {/if}
-    {#if lens.mst.ref}
+    {#if lens.mst.ref || isRegistry}
       <MstDetails
         facts={lens.taxonFacts}
         source={sourceAuthority}
@@ -202,7 +212,32 @@
           </label>
 
           {#if isTaxonCollection}
-            <TaxonField mst={lens.mst} />
+            <TaxonField source={lens.mst} />
+          {:else if isRegistry}
+            <TaxonField source={lens.registry} currentLabel={registryLabel} showUsFilter={false} />
+            {#if lens.registry.canSwitchRep}
+              <div class="field" data-testid="registry-rep">
+                <span class="field-label">Surface</span>
+                <Segmented
+                  ariaLabel="Surface: native or downscaled"
+                  value={lens.registry.rep}
+                  options={[
+                    {
+                      value: "native",
+                      label: "Native 0.5°",
+                      title: "AquaMaps' own 0.5 degree grid",
+                    },
+                    {
+                      value: "005",
+                      label: "Downscaled 0.05° (MST v7)",
+                      title:
+                        "The same model downscaled to 0.05 degrees by MarineSensitivity (release v7)",
+                    },
+                  ]}
+                  onchange={(v) => lens.registry.setRep(v === "005" ? "005" : "native")}
+                />
+              </div>
+            {/if}
           {/if}
 
           {#if lens.itemsPhase === "loading"}

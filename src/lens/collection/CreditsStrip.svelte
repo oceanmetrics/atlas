@@ -6,6 +6,7 @@
   import type { Credits } from "../../lib/catalog/credits";
   import DocModal from "../../lib/ui/DocModal.svelte";
   import LicenseModal from "../../lib/ui/LicenseModal.svelte";
+  import NoteChip from "../../lib/ui/NoteChip.svelte";
 
   interface Props {
     credits: Credits;
@@ -20,7 +21,8 @@
   const people = $derived(credits.pis.length > 0 ? credits.pis : credits.contacts);
   const peopleLabel = $derived(credits.pis.length > 0 ? "PI" : "Contact");
   const hasAny = $derived(
-    !!credits.citation ||
+    !!credits.note ||
+      !!credits.citation ||
       !!credits.license ||
       people.length > 0 ||
       credits.funders.length > 0 ||
@@ -29,6 +31,9 @@
 </script>
 
 {#if hasAny}
+  {#if credits.note}
+    <NoteChip note={credits.note} testid="credits-note" />
+  {/if}
   <dl class="credits" data-testid="credits-strip" aria-label="Credits">
     {#if credits.citation}
       <div class="row">

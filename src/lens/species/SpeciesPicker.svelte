@@ -39,10 +39,21 @@
      * gate and the no-repeats rule — this fires only once all three have already passed. */
     onSearchLogged: (query: string) => void;
     onFocusIndex: () => void;
+    /** show the "Only species in US waters" box (default). A global registry (the AquaMaps native
+     * collection) has no such notion: it passes `false`, and every taxon is offered. */
+    showUsFilter?: boolean;
   }
 
-  let { index, selected, usOnly, onSelect, onSetUsOnly, onSearchLogged, onFocusIndex }: Props =
-    $props();
+  let {
+    index,
+    selected,
+    usOnly,
+    onSelect,
+    onSetUsOnly,
+    onSearchLogged,
+    onFocusIndex,
+    showUsFilter = true,
+  }: Props = $props();
 
   let query = $state("");
   let open = $state(false);
@@ -235,14 +246,16 @@
 
   {#if dropdownVisible}
     <div class="picker-dropdown">
-      <label class="us-only">
-        <input
-          type="checkbox"
-          checked={usOnly}
-          onchange={(e) => toggleUsOnly(e.currentTarget.checked)}
-        />
-        Only species in US waters
-      </label>
+      {#if showUsFilter}
+        <label class="us-only">
+          <input
+            type="checkbox"
+            checked={usOnly}
+            onchange={(e) => toggleUsOnly(e.currentTarget.checked)}
+          />
+          Only species in US waters
+        </label>
+      {/if}
       <div
         class="picker-list"
         id={listId}

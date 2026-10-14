@@ -1652,6 +1652,12 @@
       <span aria-hidden="true">|</span>
       <span data-testid="map-attribution-gazetteer">{placesMap.credits}</span>
     {/if}
+    <!-- WP7: a layer with terms of its own (AquaMaps native, CC BY-NC) is credited here while it is on
+         the map; `collectionLens.attribution` is null for every other layer. -->
+    {#if sel.lens === "collection" && collectionLens.attribution}
+      <span aria-hidden="true">|</span>
+      <span data-testid="map-attribution-layer">{collectionLens.attribution}</span>
+    {/if}
   </div>
 
   <!-- fix list #6 (SC 2.4.1), FIREFOX: `tabindex="-1"` on the skip targets -- without it,
