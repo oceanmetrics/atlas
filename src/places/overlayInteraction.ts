@@ -75,13 +75,20 @@ export function overlayFeatureAt(
   if (!layers.length) return null;
   let features: ReturnType<OverlayMapLike["queryRenderedFeatures"]>;
   try {
-    features = map.queryRenderedFeatures(
-      [
-        [point.x - slack, point.y - slack],
-        [point.x + slack, point.y + slack],
-      ],
-      { layers },
-    );
+    // the exact point first (a polygon fill is hit anywhere inside it; MapLibre's box query can miss a
+    // polygon that contains the whole box), then a small box for a 1-px line or a point marker. A
+    // plain `{x, y}`: measured on MapLibre 6.10, an event's own `Point` instance answers 0 where the
+    // same coordinates as a plain object answer the feature.
+    features = map.queryRenderedFeatures({ x: point.x, y: point.y }, { layers });
+    if (!features.length && slack > 0) {
+      features = map.queryRenderedFeatures(
+        [
+          [point.x - slack, point.y - slack],
+          [point.x + slack, point.y + slack],
+        ],
+        { layers },
+      );
+    }
   } catch {
     return null; // a click racing a style swap
   }

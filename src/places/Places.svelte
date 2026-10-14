@@ -665,7 +665,7 @@
 
   <h3 class="flow-heading flow-heading--add">Add a place</h3>
 
-  <section class="search-bar" aria-label="Search the gazetteer">
+  <section class="search-bar" aria-label="Find a place in the gazetteer">
     <input
       type="search"
       class="search-input"
@@ -690,9 +690,13 @@
             <span class="hit-text">
               <span class="hit-name">{hit.name}</span>
               <span class="hit-meta">
-                {hit.placeType.replace(/_/g, " ")} · {hit.collection}{hit.areaKm2 !== null
-                  ? ` · ${fmt(hit.areaKm2)} km²`
-                  : ""}
+                {[
+                  hit.placeType.replace(/_/g, " "),
+                  hit.collection,
+                  hit.areaKm2 !== null ? `${fmt(hit.areaKm2)} km²` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             </span>
             <button

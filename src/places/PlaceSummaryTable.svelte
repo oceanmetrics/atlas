@@ -64,9 +64,10 @@
 
   const problems = $derived(summaries.rows.filter((r) => r.status === "error"));
 
-  function exportCsv(): void {
+  // the grid's own "Export CSV" hands back the filtered + sorted rows; the file holds the raw numbers
+  function exportCsv(rows: SummaryRow[]): void {
     downloadCsv(
-      summaryCsv(summaries.rows, summaries.subject ?? ""),
+      summaryCsv(rows, summaries.subject ?? ""),
       slugStem(summaries.subject ?? "places-summary", "places-summary"),
     );
   }
@@ -88,14 +89,12 @@
       rows={[...summaries.rows]}
       getRowId={(r: SummaryRow) => r.index}
       height={Math.min(360, 40 + summaries.rows.length * 32)}
+      onExport={exportCsv}
     />
     {#each problems as r (r.index)}
       <p class="problem" role="status">{r.name}: {r.message ?? "no summary"}.</p>
     {/each}
     {#if summaries.caveat}<p class="caveat">{summaries.caveat}</p>{/if}
-    <div class="actions">
-      <button type="button" onclick={exportCsv}>Download CSV</button>
-    </div>
   {/if}
 </div>
 
@@ -113,16 +112,5 @@
   .problem {
     font-size: var(--text-xs);
     color: var(--text-secondary);
-  }
-  .actions button {
-    height: var(--size-touch);
-    padding: 0 var(--space-3);
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-control);
-    background: none;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
   }
 </style>

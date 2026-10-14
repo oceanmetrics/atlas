@@ -40,24 +40,34 @@ describe("what an overlay feature says", () => {
 
 describe("overlayFeatureAt: only layers that exist, with a little slack", () => {
   const feature = { properties: { place_id: "A:1", name: "A" }, geometry: { type: "Polygon" } };
-  it("asks only about layers that are in the style, over a small box around the point", () => {
+  it("asks only about layers that are in the style, at the exact point first", () => {
     const calls: unknown[] = [];
     const map = {
       getLayer: (id: string) => (id === "ov-a-fill" ? {} : undefined),
-      queryRenderedFeatures: (box: unknown, o: { layers: string[] }) => {
-        calls.push([box, o.layers]);
+      queryRenderedFeatures: (geometry: unknown, o: { layers: string[] }) => {
+        calls.push([geometry, o.layers]);
         return [feature];
       },
     };
     const info = overlayFeatureAt(map, { x: 10, y: 20 }, ["ov-a-fill", "ov-gone-fill"], 3);
     expect(info).toMatchObject({ name: "A", placeId: "A:1", isArea: true });
+    expect(calls).toEqual([[{ x: 10, y: 20 }, ["ov-a-fill"]]]);
+  });
+  it("nothing at the point: a small box around it catches a 1-px line", () => {
+    const calls: unknown[] = [];
+    const map = {
+      getLayer: () => ({}),
+      queryRenderedFeatures: (geometry: unknown) => {
+        calls.push(geometry);
+        return Array.isArray(geometry) ? [feature] : [];
+      },
+    };
+    expect(overlayFeatureAt(map, { x: 10, y: 20 }, ["ov-a-line"], 3)).toMatchObject({ name: "A" });
     expect(calls).toEqual([
+      { x: 10, y: 20 },
       [
-        [
-          [7, 17],
-          [13, 23],
-        ],
-        ["ov-a-fill"],
+        [7, 17],
+        [13, 23],
       ],
     ]);
   });
