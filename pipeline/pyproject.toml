@@ -1,0 +1,33 @@
+# the oceanmetrics atlas build pipeline (build.py + atlas_pipeline/): `uv run --group dev pytest -q`
+
+[project]
+name = "atlas-pipeline"
+version = "0.1.0"
+description = "turn BioTrack indicator products into a STAC catalog of GeoParquet + PMTiles (oceanmetrics atlas)"
+requires-python = ">=3.11"
+dependencies = [
+  "geopandas>=1.0",
+  "shapely>=2.1",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "h3>=4.1",
+  "openpyxl>=3.1",
+  "requests>=2.31",
+  "pmtiles>=3.4",
+  "numpy>=1.26",
+  "pandas>=2.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pystac>=1.10", "jsonschema>=4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+  "network: hits a live service (deselect with -m 'not network')",
+  "tippecanoe: needs the tippecanoe binary",
+]
+
+[tool.uv]
+package = false

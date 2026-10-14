@@ -43,3 +43,11 @@ coverage
 docs/status.html
 docs/status_files/
 docs/*_files/
+
+# atlas pipeline (pipeline/): staged catalog, caches, the unlisted prefix of the restricted collection
+/catalog/staging/
+/pipeline/cache/
+/pipeline/restricted_prefix.txt
+/pipeline/.venv/
+__pycache__/
+.pytest_cache/
