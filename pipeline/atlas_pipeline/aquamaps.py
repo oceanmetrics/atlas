@@ -1,17 +1,23 @@
-"""aquamaps_native: AquaMaps native 0.5-degree habitat suitability, by reference to the COGs MarineSensitivity v7 publishes.
+"""aquamaps_native: AquaMaps habitat suitability, native 0.5 degree and the global 0.05 degree downscale, by reference to
+the COGs MarineSensitivity release v8 publishes.
 
-No raster is copied and no per-taxon Item is written. The pipeline reads five public v7 tables over HTTP (DuckDB
-httpfs) and writes a registry (one row per AquaMaps model that has a native COG) plus the collection that describes
-how an Item is built from a registry row, client-side:
+No raster is copied and no per-taxon Item is written. The pipeline reads four public v8 tables (and the v7 `model`
+table, for old links) over HTTP (DuckDB httpfs) and writes a registry (one row per AquaMaps model that has BOTH a
+native 0.5 degree COG and a global 0.05 degree COG) plus the collection that describes how an Item is built from a
+registry row, client-side:
 
-  fetch_v7_tables -> build_registry -> write_registry / search_index -> stac collection -> README, AGENTS, thumbnail
+  fetch_tables -> build_registry -> write_registry / search_index -> stac collection -> README, AGENTS, thumbnail
 
-Join keys in the v7 tables (checked 2026-10-14):
-  model.parquet          ds_key 'am_0.05'; mdl_seq; taxa = AquaMaps sp_key; description 'AquaMaps suitability for <name>, ...'
-  taxon_model.parquet    ds_key 'am_0.05'; taxon_id -> mdl_seq
-  taxon.parquet          taxon_id; taxon_authority worms|botw; scientific_name, common_name, sp_cat, redlist_code
-  native_asset.parquet   ds_key 'am', representation 'native', asset_type 'cog'; mdl_key = str(mdl_seq); asset_url; xmin..ymax
-  model_asset.parquet    ds_key 'am'; mdl_seq; cog_url (the 0.05 degree COG, grid usa05); n_cells (0.05 degree cells)
+Join keys in the v8 tables (checked 2026-10-15):
+  model.parquet          ds_key 'am'; mdl_key 'am|<SpeciesID>'; sp_id = the AquaMaps SpeciesID (Rep-3437, Fis-49220,
+                         ITS-..., W-Hex-..., SLB-..., Chn-<uuid>); sci_name; sp_cat and common_name are empty here
+  taxon_model.parquet    ds_key 'am'; mdl_key -> (taxon_authority worms|botw, taxon_id)
+  taxon.parquet          (taxon_authority, taxon_id); scientific_name, common_name, sp_cat, iucn_code
+  native_asset.parquet   ds_key 'am', asset_type 'cog'; representation 'native' = the 0.5 degree COG
+                         (marine-atlas/native/am/), representation 'model' = the global 0.05 degree COG
+                         (marine-atlas/cog/global05/); asset_url, rescale_min/max, colormap, xmin..ymax per COG
+  v7 model.parquet       ds_key 'am_0.05'; taxa = the v7 registry key (an old `?sp=` link), description names the species
+There is no model_asset.parquet in v8.
 """
 
 from __future__ import annotations
@@ -29,11 +35,16 @@ import pyarrow.parquet as pq
 from . import docs, stac, thumbs
 
 COLLECTION_ID = "aquamaps_native"
-TITLE         = "AquaMaps habitat suitability, native 0.5 degree"
+TITLE         = "AquaMaps habitat suitability (native 0.5° and global 0.05°)"
+V8_TABLES     = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v8/tables"
 V7_TABLES     = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v7/tables"
-TABLE_NAMES   = ["model", "taxon_model", "taxon", "native_asset", "model_asset"]
-V7_COLLECTION = "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json"
+TABLE_NAMES   = ["model", "taxon_model", "taxon", "native_asset"]   # v8, in the order they are read
+V8_COLLECTION = "https://file.marinesensitivity.org/stac/v8/am/collection.json"
+V8_COLLECTION_TITLE = "MarineSensitivity v8 AquaMaps, 0.05 degree global downscale"
 AQUAMAPS_URL  = "https://www.aquamaps.org"
+# the v8 `am` STAC collection says license CC-BY-4.0 while its own sci:citation says Creative Commons
+# Attribution-NonCommercial 3.0 (om TODO: "msens: fix msens-v7-am_0.05 STAC license (CC-BY-4.0 vs CC-BY-NC 3.0
+# citation)", the same defect in v8). AquaMaps' terms are the NonCommercial ones, so that is what is shown.
 LICENSE       = "CC-BY-NC-3.0"
 LICENSE_URL   = "https://creativecommons.org/licenses/by-nc/3.0/"
 LICENSE_TITLE = "CC BY-NC 3.0 Unported (non-commercial use only)"
@@ -43,6 +54,7 @@ CITATION = ("Kaschner, K., Kesner-Reyes, K., Garilao, C., Segschneider, J., Rius
 NOTE = ("Non-commercial use only (CC BY-NC 3.0). Maps and numbers come from AquaMaps; link back to aquamaps.org "
         "when you reuse them.")
 VERSION       = "2019.10"
+SOURCE_RELEASE = "MarineSensitivity v8"
 PREDICTORS    = ["depth", "temperature", "salinity", "primary_production", "sea_ice_concentration", "distance_to_land"]
 VALUE_RANGE   = [1, 100]
 COLORMAP      = "spectral_r"
@@ -53,44 +65,54 @@ COG_TYPE      = "image/tiff; application=geotiff; profile=cloud-optimized"
 INDEX_MIN_BYTES = 1_000_000   # registry_index.json is written only when registry.parquet is larger than this
 THUMB_SPECIES = ["Dermochelys coriacea", "Thunnus thynnus", "Carcharodon carcharias", "Megaptera novaeangliae"]
 
-REGISTRY_COLUMNS = ["sp_key", "mdl_seq", "aphia_id", "botw_id", "scientific_name", "common_name", "sp_cat",
-                    "redlist_code", "cog_url", "cog_url_005", "bbox", "n_cells_005"]
+REGISTRY_COLUMNS = ["sp_key", "mdl_key", "aphia_id", "botw_id", "scientific_name", "common_name", "sp_cat",
+                    "redlist_code", "cog_url", "bbox_native", "cog_url_005", "bbox_005", "rescale_min",
+                    "rescale_max", "colormap", "sp_key_v7"]
 REGISTRY_FIELDS = [
-  ("sp_key",          "string", "AquaMaps species key (model.taxa); the Item id"),
-  ("mdl_seq",         "int32",  "MarineSensitivity v7 model number (model.parquet, ds_key am_0.05)"),
+  ("sp_key",          "string", "AquaMaps SpeciesID (v8 model.sp_id, e.g. Rep-3437); the Item id and the `?sp=` key"),
+  ("mdl_key",         "string", "MarineSensitivity v8 model key `am|<sp_key>` (model.parquet, ds_key am)"),
   ("aphia_id",        "int32",  "accepted WoRMS AphiaID; null when the model has no WoRMS match"),
-  ("botw_id",         "int32",  "BirdLife BOTW id for the one bird model; null otherwise"),
-  ("scientific_name", "string", "accepted scientific name; falls back to the name in the model description when unmatched"),
+  ("botw_id",         "int32",  "BirdLife BOTW id for a bird model; null otherwise"),
+  ("scientific_name", "string", "accepted scientific name; falls back to the model's own name when unmatched"),
   ("common_name",     "string", "English common name; null when none"),
-  ("sp_cat",          "string", "category: fish, invertebrate, mammal, turtle, reptile, bird, coral, other; null when unmatched"),
+  ("sp_cat",          "string", "category: fish, invertebrate, mammal, turtle, reptile, bird, coral, ...; null when unmatched"),
   ("redlist_code",    "string", "IUCN Red List category (EX, EW, CR, EN, VU, NT, LC, DD, NE); null when none"),
-  ("cog_url",         "string", "native 0.5 degree COG (Byte, 1-100, nodata 0), the surface this collection draws"),
-  ("cog_url_005",     "string", "the 0.05 degree COG of the same model on the MST analysis grid (usa05), for comparison"),
-  ("bbox",            "list<double>", "[west, south, east, north]: extent of the native surface's cells, from native_asset"),
-  ("n_cells_005",     "int32",  "number of 0.05 degree cells in the model's MST surface (model_asset.n_cells); null when unknown"),
+  ("cog_url",         "string", "native 0.5 degree COG (Byte, 1-100, nodata 0), the collection's own surface"),
+  ("bbox_native",     "list<double>", "[west, south, east, north]: extent of the native COG, from native_asset"),
+  ("cog_url_005",     "string", "global 0.05 degree COG of the same model: the v8 downscale of the native surface"),
+  ("bbox_005",        "list<double>", "[west, south, east, north]: extent of the 0.05 degree COG, from native_asset"),
+  ("rescale_min",     "int32",  "display rescale minimum of the COGs (native_asset.rescale_min, 1)"),
+  ("rescale_max",     "int32",  "display rescale maximum of the COGs (native_asset.rescale_max, 100)"),
+  ("colormap",        "string", "titiler colormap name of the COGs (native_asset.colormap, spectral_r)"),
+  ("sp_key_v7",       "string", "the v7 registry key (v7 model.taxa, ds_key am_0.05) of the same species, to map an old "
+                                "`?sp=` link; null when v7 had no model of it"),
 ]
 
 _NAME_RE = re.compile(r"^AquaMaps suitability for (.+?), interpolated")
 
 
-# ---- reading the v7 tables ----
+# ---- reading the tables ----
 
-def fetch_v7_tables(base: str = V7_TABLES, con=None) -> dict[str, pd.DataFrame]:
-  """the five v7 tables, filtered to the AquaMaps rows and the columns the registry needs (httpfs, no download)."""
+def fetch_tables(base: str = V8_TABLES, v7_base: str | None = V7_TABLES, con=None) -> dict[str, pd.DataFrame]:
+  """the four v8 tables filtered to the AquaMaps rows and the columns the registry needs, plus the v7 `model` table
+  (`model_v7`, only when `v7_base` is not None) for the old-key mapping (httpfs, no download)."""
   import duckdb
   if con is None:
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs")
   rd = lambda t: f"read_parquet('{base}/{t}.parquet')"
   q = {
-    "model": f"select mdl_seq, taxa, description from {rd('model')} where ds_key = 'am_0.05'",
-    "taxon_model": f"select taxon_id, mdl_seq from {rd('taxon_model')} where ds_key = 'am_0.05'",
-    "taxon": (f"select taxon_id, taxon_authority, sp_cat, scientific_name, common_name, worms_id, redlist_code "
+    "model": f"select mdl_key, sp_id, sci_name, common_name from {rd('model')} where ds_key = 'am'",
+    "taxon_model": f"select mdl_key, taxon_authority, taxon_id from {rd('taxon_model')} where ds_key = 'am'",
+    "taxon": (f"select taxon_authority, taxon_id, sp_cat, scientific_name, common_name, iucn_code "
               f"from {rd('taxon')}"),
-    "native_asset": (f"select mdl_key, asset_url, xmin, ymin, xmax, ymax from {rd('native_asset')} "
-                     f"where ds_key = 'am' and representation = 'native' and asset_type = 'cog'"),
-    "model_asset": f"select mdl_seq, cog_url, n_cells from {rd('model_asset')} where ds_key = 'am'",
+    "native_asset": (f"select mdl_key, representation, asset_url, rescale_min, rescale_max, colormap, xmin, ymin, "
+                     f"xmax, ymax from {rd('native_asset')} where ds_key = 'am' and asset_type = 'cog' "
+                     f"and representation in ('native', 'model')"),
   }
+  if v7_base:
+    q["model_v7"] = (f"select taxa, description from read_parquet('{v7_base}/model.parquet') "
+                     f"where ds_key = 'am_0.05'")
   return {k: con.execute(v).df() for k, v in q.items()}
 
 
@@ -106,70 +128,110 @@ def _none_if_na(s: pd.Series) -> pd.Series:
   return s.astype(object).where(s.notna(), None)
 
 
+def _box(r) -> list[float] | None:
+  return None if pd.isna(r.xmin) else [float(r.xmin), float(r.ymin), float(r.xmax), float(r.ymax)]
+
+
+def map_v7_keys(sp_keys: pd.Series, names: pd.Series, model_v7: pd.DataFrame | None) -> pd.Series:
+  """the v7 registry key (v7 model.taxa) of each v8 species, or None. Two rules, best effort:
+  1. the v8 SpeciesID is itself a v7 `taxa` value (the AquaMaps ids did not change): the same key;
+  2. else the case-insensitive scientific name equals the name in exactly one unclaimed v7 description."""
+  if model_v7 is None or len(model_v7) == 0:
+    return pd.Series([None] * len(sp_keys), index=sp_keys.index, dtype=object)
+  v7 = model_v7.drop_duplicates("taxa")
+  v7_keys = set(v7["taxa"].astype(str))
+  taken = set(sp_keys.astype(str)) & v7_keys
+  by_name: dict[str, list[str]] = {}
+  for taxa, desc in zip(v7["taxa"].astype(str), v7["description"]):
+    nm = name_from_description(desc)
+    if nm and taxa not in taken:
+      by_name.setdefault(nm.casefold(), []).append(taxa)
+  out = []
+  for k, nm in zip(sp_keys.astype(str), names.astype(str)):
+    if k in v7_keys:
+      out.append(k)
+    else:
+      cand = by_name.get(nm.casefold(), [])
+      out.append(cand[0] if len(cand) == 1 else None)
+  return pd.Series(out, index=sp_keys.index, dtype=object)
+
+
 def build_registry(tables: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, dict]:
-  """one row per am_0.05 model that has a native COG, sorted by scientific name. Models without a native COG are
-  excluded and counted in stats['excluded_no_native']; models without a taxon match keep the name from the model
-  description (stats['n_unmatched'])."""
-  model = tables["model"].drop_duplicates("mdl_seq")
-  native = tables["native_asset"].assign(mdl_seq=lambda d: pd.to_numeric(d["mdl_key"], errors="coerce")).dropna(subset=["mdl_seq"])
-  native = native.assign(mdl_seq=native["mdl_seq"].astype(int)).drop_duplicates("mdl_seq")
-  d = model.merge(native[["mdl_seq", "asset_url", "xmin", "ymin", "xmax", "ymax"]], on="mdl_seq", how="left")
-  has_native = d["asset_url"].notna()
-  excluded = d.loc[~has_native, ["mdl_seq", "taxa"]]
-  d = d[has_native].copy()
+  """one row per am model that has BOTH a native 0.5 degree COG and a global 0.05 degree COG, sorted by scientific
+  name. A model with only one of the two is excluded and counted (stats['native_only'], stats['only_005'],
+  listed in stats['one_rep_sp_keys']); a model with neither is counted in stats['no_cog']. A model without a taxon
+  match keeps the name from the model table and null ids (stats['n_unmatched'])."""
+  model = tables["model"].drop_duplicates("mdl_key")
+  na = tables["native_asset"]
+  cols = ["mdl_key", "asset_url", "rescale_min", "rescale_max", "colormap", "xmin", "ymin", "xmax", "ymax"]
+  nat = na[na["representation"] == "native"].drop_duplicates("mdl_key")[cols]
+  dwn = na[na["representation"] == "model"].drop_duplicates("mdl_key")[cols]
+  has_nat, has_005 = model["mdl_key"].isin(nat["mdl_key"]), model["mdl_key"].isin(dwn["mdl_key"])
+  one_rep = model.loc[has_nat ^ has_005, "sp_id"].astype(str)
+  d = model[has_nat & has_005].copy()
+  d = d.merge(nat.add_prefix("n_").rename(columns={"n_mdl_key": "mdl_key"}), on="mdl_key", how="left")
+  d = d.merge(dwn.add_prefix("d_").rename(columns={"d_mdl_key": "mdl_key"}), on="mdl_key", how="left")
 
-  tm = tables["taxon_model"].drop_duplicates("mdl_seq")
-  tx = tables["taxon"].drop_duplicates("taxon_id")
-  d = d.merge(tm, on="mdl_seq", how="left").merge(tx, on="taxon_id", how="left")
-  d = d.merge(tables["model_asset"].drop_duplicates("mdl_seq")[["mdl_seq", "cog_url", "n_cells"]], on="mdl_seq", how="left")
+  tm = tables["taxon_model"].drop_duplicates("mdl_key")
+  tx = tables["taxon"].drop_duplicates(["taxon_authority", "taxon_id"]).rename(
+    columns={"scientific_name": "tx_name", "common_name": "tx_common"})
+  d = d.merge(tm, on="mdl_key", how="left").merge(tx, on=["taxon_authority", "taxon_id"], how="left")
 
-  worms, botw = d["taxon_authority"].eq("worms"), d["taxon_authority"].eq("botw")
-  aphia = d["worms_id"].where(worms & d["worms_id"].notna(), d["taxon_id"].where(worms))
-  sci = d["scientific_name"].where(d["scientific_name"].notna(), d["description"].map(name_from_description))
-  sci = sci.where(sci.notna(), d["taxa"])   # last resort: the sp_key itself
-  bbox = [
-    None if pd.isna(r.xmin) else [float(r.xmin), float(r.ymin), float(r.xmax), float(r.ymax)]
-    for r in d.itertuples()
-  ]
+  tid = pd.to_numeric(d["taxon_id"], errors="coerce")
+  worms, botw = d["taxon_authority"].eq("worms") & d["tx_name"].notna(), d["taxon_authority"].eq("botw") & d["tx_name"].notna()
+  sci = d["tx_name"].where(d["tx_name"].notna(), d["sci_name"])
+  sci = sci.where(sci.notna(), d["sp_id"])   # last resort: the SpeciesID itself
+  common = d["tx_common"].replace("", np.nan)
+  common = common.where(common.notna(), d["common_name"].replace("", np.nan))
+  nbox = [_box(r) for r in d.rename(columns={"n_xmin": "xmin", "n_ymin": "ymin", "n_xmax": "xmax", "n_ymax": "ymax"}).itertuples()]
+  dbox = [_box(r) for r in d.rename(columns={"d_xmin": "xmin", "d_ymin": "ymin", "d_xmax": "xmax", "d_ymax": "ymax"}).itertuples()]
   reg = pd.DataFrame({
-    "sp_key":          d["taxa"].astype(str).to_numpy(),
-    "mdl_seq":         d["mdl_seq"].astype("int32").to_numpy(),
-    "aphia_id":        pd.array(aphia.to_numpy(), dtype="Int32"),
-    "botw_id":         pd.array(d["taxon_id"].where(botw).to_numpy(), dtype="Int32"),
+    "sp_key":          d["sp_id"].astype(str).to_numpy(),
+    "mdl_key":         d["mdl_key"].astype(str).to_numpy(),
+    "aphia_id":        pd.array(tid.where(worms).to_numpy(), dtype="Int32"),
+    "botw_id":         pd.array(tid.where(botw).to_numpy(), dtype="Int32"),
     "scientific_name": sci.astype(str).to_numpy(),
-    "common_name":     _none_if_na(d["common_name"].replace("", np.nan)).to_numpy(),
-    "sp_cat":          _none_if_na(d["sp_cat"]).to_numpy(),
-    "redlist_code":    _none_if_na(d["redlist_code"]).to_numpy(),
-    "cog_url":         d["asset_url"].astype(str).to_numpy(),
-    "cog_url_005":     _none_if_na(d["cog_url"]).to_numpy(),
-    "bbox":            bbox,
-    "n_cells_005":     pd.array(d["n_cells"].to_numpy(), dtype="Int32"),
+    "common_name":     _none_if_na(common).to_numpy(),
+    "sp_cat":          _none_if_na(d["sp_cat"].where(d["tx_name"].notna())).to_numpy(),
+    "redlist_code":    _none_if_na(d["iucn_code"].where(d["tx_name"].notna())).to_numpy(),
+    "cog_url":         d["n_asset_url"].astype(str).to_numpy(),
+    "bbox_native":     nbox,
+    "cog_url_005":     d["d_asset_url"].astype(str).to_numpy(),
+    "bbox_005":        dbox,
+    "rescale_min":     pd.array(d["n_rescale_min"].to_numpy(), dtype="Int32"),
+    "rescale_max":     pd.array(d["n_rescale_max"].to_numpy(), dtype="Int32"),
+    "colormap":        _none_if_na(d["n_colormap"]).to_numpy(),
+    "sp_key_v7":       map_v7_keys(d["sp_id"], sci, tables.get("model_v7")).to_numpy(),
   })[REGISTRY_COLUMNS]
   key = reg["scientific_name"].str.casefold()
   reg = reg.assign(_k=key).sort_values(["_k", "sp_key"], kind="stable").drop(columns="_k").reset_index(drop=True)
   stats = {
     "n_models": int(len(model)),
     "n_taxa": int(len(reg)),
-    "excluded_no_native": int(len(excluded)),
-    "excluded_sp_keys": sorted(excluded["taxa"].astype(str)),
+    "native_only": int((has_nat & ~has_005).sum()),
+    "only_005": int((~has_nat & has_005).sum()),
+    "no_cog": int((~has_nat & ~has_005).sum()),
+    "one_rep_sp_keys": sorted(one_rep),
     "n_unmatched": int((reg["aphia_id"].isna() & reg["botw_id"].isna()).sum()),
     "n_no_common_name": int(reg["common_name"].isna().sum()),
-    "n_no_cog_005": int(reg["cog_url_005"].isna().sum()),
+    "n_sp_key_v7": int(reg["sp_key_v7"].notna().sum()),
+    "n_sp_key_v7_renamed": int((reg["sp_key_v7"].notna() & (reg["sp_key_v7"] != reg["sp_key"])).sum()),
     "by_sp_cat": {str(k): int(v) for k, v in reg["sp_cat"].fillna("unmatched").value_counts().sort_index().items()},
   }
   return reg, stats
 
 
 REGISTRY_SCHEMA = pa.schema([
-  ("sp_key", pa.string()), ("mdl_seq", pa.int32()), ("aphia_id", pa.int32()), ("botw_id", pa.int32()),
+  ("sp_key", pa.string()), ("mdl_key", pa.string()), ("aphia_id", pa.int32()), ("botw_id", pa.int32()),
   ("scientific_name", pa.string()), ("common_name", pa.string()), ("sp_cat", pa.string()),
-  ("redlist_code", pa.string()), ("cog_url", pa.string()), ("cog_url_005", pa.string()),
-  ("bbox", pa.list_(pa.float64())), ("n_cells_005", pa.int32()),
+  ("redlist_code", pa.string()), ("cog_url", pa.string()), ("bbox_native", pa.list_(pa.float64())),
+  ("cog_url_005", pa.string()), ("bbox_005", pa.list_(pa.float64())), ("rescale_min", pa.int32()),
+  ("rescale_max", pa.int32()), ("colormap", pa.string()), ("sp_key_v7", pa.string()),
 ])
 
 
 def registry_table(reg: pd.DataFrame) -> pa.Table:
-  """registry frame -> Arrow table with the fixed schema (nullable ints, bbox as list<double>)."""
+  """registry frame -> Arrow table with the fixed schema (nullable ints, boxes as list<double>)."""
   cols = {f.name: pa.array(reg[f.name].astype(object).where(reg[f.name].notna(), None).tolist(), type=f.type)
           for f in REGISTRY_SCHEMA}
   return pa.table(cols, schema=REGISTRY_SCHEMA)
@@ -197,17 +259,19 @@ def write_search_index(reg: pd.DataFrame, path: Path) -> Path:
 
 def item_template() -> dict:
   """how an app builds the STAC Item of one taxon from its registry row: every `{column_name}` placeholder is
-  substituted from the row; keys whose value is null are omitted."""
+  substituted from the row; keys whose value is null are omitted. The Item's bbox and geometry are those of the
+  surface drawn (`atlas:bbox` of the asset that plays the `data` role)."""
   return {
     "description": ("Build one Item per registry row, client-side; no Item files are published. Substitute each "
                     "placeholder in braces with the row's value of the column of that name; omit keys whose "
-                    "value is null."),
+                    "value is null. Both assets are listed; `atlas:representation` says which one plays the "
+                    "`data` role (native by default). The Item bbox and geometry are the `atlas:bbox` of that asset."),
     "registry_asset": "registry",
     "key_column": "sp_key",
     "id": "{sp_key}",
     "collection": COLLECTION_ID,
-    "bbox": "{bbox}",
-    "geometry": "Polygon of {bbox} (west, south, east, north)",
+    "bbox": "{bbox_native}",
+    "geometry": "Polygon of the bbox (west, south, east, north)",
     "properties": {
       "title": "{scientific_name} ({common_name})",
       "title_without_common_name": "{scientific_name}",
@@ -229,6 +293,7 @@ def item_template() -> dict:
         "roles": ["data"],
         "title": "AquaMaps native 0.5 degree habitat suitability (percent)",
         "bands": BANDS,
+        "atlas:bbox": "{bbox_native}",
         "atlas:rescale": VALUE_RANGE,
         "atlas:colormap": COLORMAP,
         "atlas:bidx": 1,
@@ -236,14 +301,16 @@ def item_template() -> dict:
       "cog_005": {
         "href": "{cog_url_005}",
         "type": COG_TYPE,
-        "roles": ["data"],
-        "title": "MarineSensitivity 0.05 degree surface of the same model (usa05 grid), for comparison",
-        "atlas:optional": True,
+        "roles": ["reference"],
+        "title": "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8)",
+        "bands": BANDS,
+        "atlas:bbox": "{bbox_005}",
         "atlas:rescale": VALUE_RANGE,
         "atlas:colormap": COLORMAP,
+        "atlas:bidx": 1,
       },
     },
-    "point_value": "titiler /cog/point on the `cog` asset (value 1-100; 0 or no data = outside the model's range)",
+    "point_value": "titiler /cog/point on the drawn asset (value 1-100; 0 or no data = outside the model's range)",
   }
 
 
@@ -252,7 +319,8 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
   assets = {
     "registry": {
       "href": "./registry.parquet", "type": stac.PARQUET, "roles": ["metadata"],
-      "title": "Taxa registry: one row per AquaMaps model with a native COG (names, ids, COG urls, bbox)",
+      "title": "Taxa registry: one row per AquaMaps model with both a native 0.5 degree and a global 0.05 degree "
+               "COG (names, ids, COG urls, bboxes)",
       "atlas:key_column": "sp_key", "table:row_count": n,
       "table:columns": [{"name": c, "type": t, "description": desc} for c, t, desc in REGISTRY_FIELDS],
     },
@@ -265,7 +333,8 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
     }
   assets["thumbnail"] = stac.thumbnail_asset("Thumbnail: 2x2 panel of four native AquaMaps surfaces")
   registry = {"asset": "registry", "key_column": "sp_key", "row_count": n,
-              "search_columns": ["scientific_name", "common_name"], "group_column": "sp_cat"}
+              "search_columns": ["scientific_name", "common_name"], "group_column": "sp_cat",
+              "legacy_key_column": "sp_key_v7"}
   if index_bytes:
     registry["index_asset"] = "registry_index"
   by_cat = stats["by_sp_cat"]
@@ -278,11 +347,11 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
     "updated": stac.now_rfc3339(),
     "title": TITLE,
     "description": (
-      f"AquaMaps relative environmental suitability (1-100 percent) for {n:,} aquatic species on the original "
-      "global 0.5 degree grid, drawn from the native COGs that MarineSensitivity release v7 publishes. The COGs are "
-      "referenced, not copied; one registry row per species lets an app build a per-taxon COG Item without 17,000 "
-      "Item files. Distinct from the 0.05 degree downscaled AquaMaps in the MarineSensitivity v7 collection. "
-      "Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md."),
+      f"AquaMaps relative environmental suitability (1-100 percent) for {n:,} aquatic species in two "
+      "representations, both from MarineSensitivity release v8: the original global 0.5 degree grid (native) and "
+      "the global 0.05 degree downscale (not the USA-clipped surface of release v7). The COGs are referenced, not "
+      "copied; one registry row per species lets an app build a per-taxon Item with both COGs without "
+      f"{n:,} Item files. Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md."),
     "license": LICENSE,
     "version": VERSION,
     "deprecated": False,
@@ -291,13 +360,14 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
       {"name": "AquaMaps", "roles": ["producer", "licensor"], "url": AQUAMAPS_URL,
        "description": "Kaschner et al. 2019; relative environmental suitability models (www.aquamaps.org)"},
       {"name": "MarineSensitivity", "roles": ["processor"], "url": "https://marinesensitivity.org",
-       "description": "published the native 0.5 degree COGs in release v7"},
+       "description": "published the native 0.5 degree COGs and downscaled the surfaces to a global 0.05 degree "
+                      "grid in release v8"},
       {"name": "OceanMetrics", "roles": ["host"], "url": "https://oceanmetrics.io"},
     ],
     "atlas:funders": [],
     "atlas:status": "prototype",
     "atlas:note": NOTE,
-    "atlas:source_release": "MarineSensitivity v7",
+    "atlas:source_release": SOURCE_RELEASE,
     "extent": {
       "spatial": {"bbox": [[-180.0, -90.0, 180.0, 90.0]]},
       "temporal": {"interval": [[None, None]]},
@@ -308,23 +378,33 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
     "sdm:method": "env_envelope",
     "sdm:method_detail": ("AquaMaps relative environmental suitability: per species, an envelope of the cell values "
                           "of six predictors, fitted to occurrence records and expert-checked; published to 0.01 and "
-                          "stored here as Byte 1-100 (0 = no data) on the 0.5 degree HCAF grid."),
+                          "stored here as Byte 1-100 (0 = no data) on the 0.5 degree HCAF grid (native) and "
+                          "downscaled by MarineSensitivity to a global 0.05 degree grid (release v8)."),
     "sdm:source_authority": "AquaMaps",
     "sdm:temporal_interval": "static",
     "sdm:predictors": PREDICTORS,
     "atlas:taxa_registry": registry,
     "atlas:item_template": item_template(),
-    "atlas:registry_stats": {k: stats[k] for k in ("n_models", "n_taxa", "excluded_no_native", "n_unmatched")},
+    "atlas:registry_stats": {k: stats[k] for k in ("n_models", "n_taxa", "native_only", "only_005", "no_cog",
+                                                    "n_unmatched", "n_sp_key_v7")},
     "summaries": {
       "sdm:taxon.group": by_cat,
       "atlas:taxa": [n],   # summaries hold arrays, ranges or schemas, not scalars
       "sdm:response_type": ["suitability"],
+      "atlas:representation": ["native", "005"],
     },
     "assets": assets,
     "item_assets": {
       "cog": {
         "type": COG_TYPE, "roles": ["data"],
         "title": "AquaMaps native 0.5 degree habitat suitability (percent)",
+        "bands": BANDS,
+        "sdm:value_unit": "percent", "sdm:value_range": VALUE_RANGE,
+        "atlas:rescale": VALUE_RANGE, "atlas:colormap": COLORMAP,
+      },
+      "cog_005": {
+        "type": COG_TYPE, "roles": ["reference"],
+        "title": "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8)",
         "bands": BANDS,
         "sdm:value_unit": "percent", "sdm:value_range": VALUE_RANGE,
         "atlas:rescale": VALUE_RANGE, "atlas:colormap": COLORMAP,
@@ -338,8 +418,7 @@ def collection(stats: dict, registry_bytes: int | None = None, index_bytes: int 
       {"rel": "agents", "href": "./AGENTS.md", "type": stac.MD_T, "title": "Agent/LLM usage guide"},
       stac.PREVIEW_LINK,
       {"rel": "via", "href": AQUAMAPS_URL, "type": "text/html", "title": "AquaMaps (producer)"},
-      {"rel": "related", "href": V7_COLLECTION, "type": stac.JSON_T,
-       "title": "MarineSensitivity v7 AquaMaps, 0.05 degree downscale"},
+      {"rel": "related", "href": V8_COLLECTION, "type": stac.JSON_T, "title": V8_COLLECTION_TITLE},
       {"rel": "license", "href": LICENSE_URL, "type": "text/html", "title": LICENSE_TITLE},
     ],
   }
@@ -391,23 +470,24 @@ def read_cog_panel(url: str):
 
 
 def thumbnail_names(reg: pd.DataFrame, names: list[str] = THUMB_SPECIES) -> dict[str, str]:
-  """{scientific_name: cog_url} for the wanted names present in the registry (order kept)."""
+  """{scientific_name: cog_url} (native COG) for the wanted names present in the registry (order kept)."""
   by = dict(zip(reg["scientific_name"][::-1], reg["cog_url"][::-1]))
   return {n: by[n] for n in names if n in by}
 
 
 # ---- build ----
 
-def build(out: Path, tables: dict[str, pd.DataFrame] | None = None, base: str = V7_TABLES,
-          use_thumbnail: bool = True, log=print) -> dict:
+def build(out: Path, tables: dict[str, pd.DataFrame] | None = None, base: str = V8_TABLES,
+          v7_base: str | None = V7_TABLES, use_thumbnail: bool = True, log=print) -> dict:
   dest = Path(out) / COLLECTION_ID
   dest.mkdir(parents=True, exist_ok=True)
-  tables = tables or fetch_v7_tables(base)
+  tables = tables or fetch_tables(base, v7_base)
   reg, stats = build_registry(tables)
   rpath = write_registry(reg, dest / "registry.parquet")
   rbytes = rpath.stat().st_size
-  log(f"registry.parquet: {len(reg):,} rows, {rbytes:,} B; excluded (no native COG): {stats['excluded_no_native']}; "
-      f"unmatched to a taxon: {stats['n_unmatched']}")
+  log(f"registry.parquet: {len(reg):,} rows, {rbytes:,} B; only one representation (excluded): "
+      f"{stats['native_only']} native-only + {stats['only_005']} 0.05-only; no COG at all: {stats['no_cog']}; "
+      f"unmatched to a taxon: {stats['n_unmatched']}; sp_key_v7 set: {stats['n_sp_key_v7']}")
   index_bytes = None
   idx = dest / "registry_index.json"
   if rbytes > INDEX_MIN_BYTES:
@@ -425,21 +505,26 @@ def build(out: Path, tables: dict[str, pd.DataFrame] | None = None, base: str = 
   (dest / "AGENTS.md").write_text(docs.aquamaps_agents(counts))
   stac.write_json(dest / "collection.json", stac.add_file_info(coll, dest, {}))
   today = dt.date.today().isoformat()
+  sources = [{"table": f"v8/{t}", "url": f"{base}/{t}.parquet", "rows_read": int(len(tables[t]))} for t in TABLE_NAMES]
+  if "model_v7" in tables:
+    sources.append({"table": "v7/model", "url": f"{v7_base}/model.parquet", "rows_read": int(len(tables["model_v7"]))})
   prov = {
     "collection": COLLECTION_ID,
     "retrieved": today,
     "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-    "sources": [{"table": t, "url": f"{base}/{t}.parquet", "rows_read": int(len(tables[t]))} for t in TABLE_NAMES],
-    "filters": {"model": "ds_key = 'am_0.05'", "taxon_model": "ds_key = 'am_0.05'",
-                "native_asset": "ds_key = 'am' and representation = 'native' and asset_type = 'cog'",
-                "model_asset": "ds_key = 'am'"},
-    "record_counts": {k: stats[k] for k in ("n_models", "n_taxa", "excluded_no_native", "n_unmatched",
-                                              "n_no_common_name", "n_no_cog_005")},
+    "sources": sources,
+    "filters": {"v8/model": "ds_key = 'am'", "v8/taxon_model": "ds_key = 'am'",
+                "v8/native_asset": "ds_key = 'am' and asset_type = 'cog' and representation in ('native', 'model')",
+                "v7/model": "ds_key = 'am_0.05' (taxa + description, for sp_key_v7 only)"},
+    "registry_rule": "models with BOTH a native (0.5 degree) and a model (global 0.05 degree) COG",
+    "record_counts": {k: stats[k] for k in ("n_models", "n_taxa", "native_only", "only_005", "no_cog", "n_unmatched",
+                                              "n_no_common_name", "n_sp_key_v7", "n_sp_key_v7_renamed")},
     "registry_bytes": rbytes,
     "registry_index_bytes": index_bytes,
-    "excluded_sp_keys": stats["excluded_sp_keys"],
+    "one_rep_sp_keys": stats["one_rep_sp_keys"],
     "thumbnail_species": THUMB_SPECIES if use_thumbnail else [],
-    "rasters": "referenced, not copied: native COGs stay at marine-atlas/native/am/ on the public bucket",
+    "rasters": ("referenced, not copied: native COGs stay at marine-atlas/native/am/ and the global 0.05 degree "
+                "COGs at marine-atlas/cog/global05/ on the public bucket"),
   }
   stac.write_json(dest / "provenance.json", prov)
   return {"dest": dest, "stats": stats, "registry_bytes": rbytes, "index_bytes": index_bytes, "registry": reg}

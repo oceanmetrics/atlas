@@ -511,7 +511,7 @@ def root_catalog(external_children: list[dict]) -> dict:
     "title": "OceanMetrics Atlas",
     "description": (
       "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty "
-      "indicators, AquaMaps native 0.5 degree habitat suitability, plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
+      "indicators, AquaMaps habitat suitability (native 0.5 degree and global 0.05 degree), plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
       "Marine Biodiversity Observation Network (MBON). Built by OceanMetrics."),
     "links": [
       {"rel": "root", "href": "./catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},
@@ -521,16 +521,31 @@ def root_catalog(external_children: list[dict]) -> dict:
       {"rel": "child", "href": "./biotrack_indicators/collection.json", "type": JSON_T,
        "title": "MBON BioTrack biodiversity indicators"},
       {"rel": "child", "href": "./aquamaps_native/collection.json", "type": JSON_T,
-       "title": "AquaMaps habitat suitability, native 0.5 degree"},
+       "title": "AquaMaps habitat suitability (native 0.5° and global 0.05°)"},
       *[{"rel": "child", "href": c["href"], "type": JSON_T, "title": c["title"]} for c in external_children],
     ],
   }
 
 
+MST_STAC = "https://file.marinesensitivity.org/stac"
+# the v7 collections are linked one by one (ids msens-v7-<key>, titles as the MST STAC states them), not through the v7
+# parent: the parent also lists `am_0.05`, the USA-clipped AquaMaps downscale that `aquamaps_native` replaces with the
+# global v8 one. Checked against https://file.marinesensitivity.org/stac/v7/collection.json on 2026-10-15.
+MST_V7_CHILDREN = [
+  ("ms_merge", "Merged Model"),
+  ("rng_iucn", "IUCN Range"),
+  ("rng_fws", "FWS Range"),
+  ("bl", "BirdLife Range"),
+  ("ch_nmfs", "NMFS Critical Habitat"),
+  ("ch_fws", "FWS Critical Habitat"),
+  ("ca_nmfs", "NMFS Core Area"),
+  ("rng_turtle_swot_dps", "SWOT+DPS Turtle Range"),
+]
+# v8 `am` (AquaMaps) is deliberately not a child: the OceanMetrics `aquamaps_native` collection is the AquaMaps entry
 EXTERNAL_CHILDREN = [
-  {"href": "https://file.marinesensitivity.org/stac/v7/collection.json", "title": "MarineSensitivity SDMs v7"},
-  {"href": "https://file.marinesensitivity.org/stac/v8/gm/collection.json", "title": "NOAA SEFSC (density)"},
-  {"href": "https://file.marinesensitivity.org/stac/v8/nc/collection.json", "title": "NOAA NCCOS (density)"},
+  *[{"href": f"{MST_STAC}/v7/{k}/collection.json", "title": t} for k, t in MST_V7_CHILDREN],
+  {"href": f"{MST_STAC}/v8/gm/collection.json", "title": "NOAA SEFSC (density)"},
+  {"href": f"{MST_STAC}/v8/nc/collection.json", "title": "NOAA NCCOS (density)"},
 ]
 
 
