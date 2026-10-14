@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- **No place layer on by default.** The sanctuaries and BOEM wind leases used to load on first view; now nothing does until you tick a layer or a link carries `ov=`. `ov=` (empty) reads as none and is no longer written.
+
 - **Feedback reaches the sheet.** The dialog now sends `app: "oceanmetrics-atlas"`, the key the shared Ocean Metrics Apps Script registers, and reads the script's JSON verdict: a 200 `{ok:false}` (unknown app, honeypot, rate cap) now shows the failed state with the GitHub-issue fallback instead of "Thanks".
 
 OceanMetrics Atlas: forked 2026-10-14 from MarineSensitivity/atlas 0.10.88 and stripped to a core that

@@ -7,8 +7,9 @@
 // or malformed slug is dropped on read (a link to a collection the gazetteer later retires still
 // loads, minus that overlay), never thrown on.
 
-/** shown on first load: the national sanctuaries and the BOEM wind leases. */
-export const DEFAULT_OVERLAYS: readonly string[] = ["noaa_sanctuaries", "boem_wind_leases"];
+/** shown on first load: none (Ben, 2026-10-15: the sanctuaries and BOEM wind leases used to be on by
+ * default; people turn layers on from the Place layers list or a link carries `ov=`). */
+export const DEFAULT_OVERLAYS: readonly string[] = [];
 
 export const MAX_OVERLAYS = 40;
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;

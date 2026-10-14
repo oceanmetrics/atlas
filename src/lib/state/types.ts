@@ -76,7 +76,7 @@ export interface Sel {
   /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
   catalog?: string;
   /** WP4: the gazetteer collections toggled on in the "Place layers" group (`?ov=a,b`); `undefined` =
-   * the default set (noaa_sanctuaries, boem_wind_leases), never written; `[]` = none (`ov=`).
+   * the default set (none since 2026-10-15), never written; `[]` = none (`ov=`).
    * `../gazetteer/overlayUrl.ts`. */
   ov?: readonly string[];
   /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list. */
