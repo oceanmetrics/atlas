@@ -98,6 +98,48 @@ describe("a multi-band item with rescale: auto", () => {
   });
 });
 
+describe("the raster source's bounds (WP11): the COG footprint, when it is known", () => {
+  const e = entry("msens-v8-nc", "NOAA NCCOS seabird density", "n_per_km2");
+  const item: StacItem = {
+    type: "Feature",
+    id: "atlantic.ARTE.summer.n_per_km2",
+    properties: { title: "Arctic Tern", "atlas:value_range": [0, 0.008] },
+    assets: {
+      data: {
+        href: "https://file.marinesensitivity.org/cog/sdm/raw/nc_atl_birds_dens/ARTE_summer.tif",
+        type: "image/tiff; application=geotiff; profile=cloud-optimized",
+        roles: ["data"],
+      },
+    },
+    links: [],
+  };
+  it("a known footprint is the raster's `bounds` (MapLibre never asks for tiles outside it)", () => {
+    const out = collectionMapInputs({
+      entry: e,
+      item,
+      style: null,
+      values: null,
+      marker: null,
+      cogBounds: [-82.5, 24.1, -64.9, 46.3],
+    });
+    expect(out.raster?.bounds).toEqual([-82.5, 24.1, -64.9, 46.3]);
+  });
+  it("an unknown footprint draws unbounded (no `bounds` key, not a wrong one)", () => {
+    for (const cogBounds of [undefined, null]) {
+      const out = collectionMapInputs({
+        entry: e,
+        item,
+        style: null,
+        values: null,
+        marker: null,
+        cogBounds,
+      });
+      expect(out.raster).not.toBeNull();
+      expect(out.raster).not.toHaveProperty("bounds");
+    }
+  });
+});
+
 describe("a fixed rescale in the asset (gm's relative index)", () => {
   it("is used without any statistics read", () => {
     const e = entry("msens-v8-gm", "gm");

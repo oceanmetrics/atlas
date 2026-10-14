@@ -108,6 +108,11 @@ and hex painting follow.
   line ("Cell 11234: 0.76 · 7 likely species") under it; the cell is still selected (outline, legend marker,
   Details). The hover tooltip merges the same way instead of stacking two. In the Species lens a click on
   an overlay feature opens the place card only (click beside it to read the species value).
+- **No 404 tile noise for regional rasters (WP11).** A raster item reads its COG's WGS84 footprint once
+  (titiler `/cog/info.geojson`, cached per COG; `/cog/info` answers in the COG's own CRS, metres for the NOAA
+  seabird surfaces) and sets it as the MapLibre source `bounds`, so tiles outside the COG are never
+  requested (Arctic Tern density at zoom 3: 78 tile requests with 62 404s before, 4 and none after). The
+  camera's degenerate-extent handling is unchanged.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

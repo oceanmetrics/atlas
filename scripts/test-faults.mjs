@@ -461,6 +461,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
   },
   {
+    id: "raster-source-bounds-dropped",
+    patch: "tests/faults/raster-source-bounds-dropped.patch",
+    describe:
+      "a raster item's COG footprint never reaches the MapLibre source `bounds` -- every world tile " +
+      "is requested again and the regional COG 404s the ones outside it",
+    gate: ["npx", "vitest", "run", "tests/lens/collection/mstMapInputs.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

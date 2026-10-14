@@ -91,8 +91,11 @@ export function collectionMapInputs(args: {
   values: ValueColumn | null;
   /** the clicked cell's value for THIS item, else null. */
   marker: number | null;
+  /** a raster item's COG footprint (`/cog/info`), which restricts the tiles MapLibre requests to it;
+   * absent/`null` = unknown (draw unbounded, as before). */
+  cogBounds?: [number, number, number, number] | null;
 }): CollectionMapInputs {
-  const { entry, item, style, values, marker } = args;
+  const { entry, item, style, values, marker, cogBounds } = args;
   if (!entry?.collection || !item) return EMPTY_COLLECTION_INPUTS;
   const collection = entry.collection;
   const domain = valueDomain(item, collection);
@@ -163,6 +166,7 @@ export function collectionMapInputs(args: {
           }),
         ],
         opacity: COLLECTION_RASTER_OPACITY,
+        ...(cogBounds ? { bounds: cogBounds } : {}),
       },
       legend: {
         kind: "continuous",
