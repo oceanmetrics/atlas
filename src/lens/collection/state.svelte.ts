@@ -36,7 +36,7 @@ import {
   type ValuesAsset,
 } from "../../lib/catalog/assets";
 import { extentBounds } from "../../lib/catalog/extent";
-import { layerExtent } from "../../lib/catalog/layerExtent";
+import { layerExtent, worldView } from "../../lib/catalog/layerExtent";
 import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
 import {
   likelyCountIndex,
@@ -803,7 +803,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     }),
   );
   function fitTo(bounds: NonNullable<typeof layerFrame>["bounds"]): void {
-    deps.mapHandle()?.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
+    const handle = deps.mapHandle();
+    if (!handle) return;
+    // a whole-world layer (AquaMaps) has no frame to centre: look at its middle latitude, same longitude
+    const world = worldView(bounds, handle.camera().lon);
+    if (world) handle.flyTo({ key: "layer", ...world });
+    else handle.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
   }
   // the first fit of a page: with auto-zoom on it is the first layer's (below), else the collection's extent
   let fitted = false;

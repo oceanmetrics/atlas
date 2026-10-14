@@ -1,6 +1,6 @@
 // WP14: which frame "Zoom to layer" and auto-zoom fit, one case per kind of item and the fallback.
 import { describe, expect, it } from "vitest";
-import { layerExtent } from "../../src/lib/catalog/layerExtent";
+import { layerExtent, worldView } from "../../src/lib/catalog/layerExtent";
 import type { StacCollection, StacItem } from "../../src/lib/catalog/types";
 
 const COG = "image/tiff; application=geotiff; profile=cloud-optimized";
@@ -86,5 +86,28 @@ describe("layerExtent", () => {
     expect(layerExtent({ item: hexItem([-10, 10, 10, 30]), collection: bare })?.source).toBe(
       "item",
     );
+  });
+});
+
+describe("worldView: a whole-world frame is looked at, not fitted", () => {
+  it("keeps the longitude and takes the middle latitude; an ordinary frame is left to the fit", () => {
+    expect(
+      worldView(
+        [
+          [-180, -62.1],
+          [180, 79.65],
+        ],
+        -40,
+      ),
+    ).toEqual({ lon: -40, lat: expect.closeTo(8.775, 6), zoom: 1.6 });
+    expect(
+      worldView(
+        [
+          [-100, 20],
+          [-60, 50],
+        ],
+        0,
+      ),
+    ).toBeNull();
   });
 });

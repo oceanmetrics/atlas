@@ -38,3 +38,17 @@ export function layerExtent(args: {
   if (collectionBounds) return { bounds: collectionBounds, source: "collection" };
   return own ? { bounds: own, source: "item" } : null;
 }
+
+/** a frame this wide is the whole world: no fit centres it (on a globe the solver has nothing to settle
+ * on and ends up at a pole), so the camera keeps its longitude and looks at the frame's middle latitude. */
+export const WORLD_SPAN_DEG = 300;
+export const WORLD_ZOOM = 1.6;
+
+/** the camera for a world-wide frame, or `null` when the frame is an ordinary one to fit. */
+export function worldView(
+  bounds: CameraBoundsInput,
+  currentLon: number,
+): { lon: number; lat: number; zoom: number } | null {
+  if (bounds[1][0] - bounds[0][0] < WORLD_SPAN_DEG) return null;
+  return { lon: currentLon, lat: (bounds[0][1] + bounds[1][1]) / 2, zoom: WORLD_ZOOM };
+}
