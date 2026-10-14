@@ -6,9 +6,28 @@
     <title>OceanMetrics Atlas</title>
     <meta
       name="description"
-      content="OceanMetrics Atlas: species distribution model products, places and their credits, for U.S. marine areas."
+      content="OceanMetrics Atlas: a catalog of species distribution model products with explicit credits, plus places, for U.S. marine areas. Supported by BOEM and MBON."
     />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- link previews: og:image must be absolute (crawlers do not resolve it against the page); the
+         atlas is published at https://oceanmetrics.io/atlas/ (pages.yml). public/og.png is rendered
+         from public/og.svg by scripts/render-og.mjs. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OceanMetrics Atlas" />
+    <meta property="og:title" content="OceanMetrics Atlas" />
+    <meta
+      property="og:description"
+      content="A catalog of species distribution model products with explicit credits, built on STAC. Supported by BOEM and MBON."
+    />
+    <meta property="og:url" content="https://oceanmetrics.io/atlas/" />
+    <meta property="og:image" content="https://oceanmetrics.io/atlas/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="OceanMetrics Atlas: a hexagon holding a wave, beside the name."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!--
       critical CSS, inlined so the shell paints before any JavaScript bundle loads or parses (plan
@@ -125,7 +144,10 @@
     <div id="shell" class="app">
       <header class="topbar" data-tour="topbar">
         <span data-tour="brand" style="display: flex; align-items: center; gap: var(--space-2)">
-          <h1 class="brand-title" id="app-title">OceanMetrics Atlas</h1>
+          <h1 class="brand-title" id="app-title">
+            <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+            <span class="wm-atlas">Atlas</span>
+          </h1>
         </span>
 
         <div

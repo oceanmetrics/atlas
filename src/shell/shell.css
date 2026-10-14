@@ -209,6 +209,9 @@ a {
    stacking the full height here would push the credit off-screen -- unchanged "above the rail row"
    there, same as before this fix). */
 @media (max-width: 899px) {
+  .map-attribution .brand-credit {
+    display: none;
+  }
   .map-attribution {
     left: var(--space-1);
     bottom: calc(
@@ -259,6 +262,15 @@ a {
   letter-spacing: var(--tracking-display);
   white-space: nowrap;
   margin: 0;
+}
+
+/* the wordmark: "Ocean" in ink, "Metrics" in the accent, "Atlas" in regular weight. Text and CSS only
+   (no logo file); the same three spans sit in index.html's skeleton h1, so there is no shift. */
+.brand-title .wm-metrics {
+  color: var(--text-accent);
+}
+.brand-title .wm-atlas {
+  font-weight: 400;
 }
 
 .spacer {

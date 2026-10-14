@@ -24,6 +24,26 @@ and hex painting follow.
   `c` or `i` falls back to the default. Changing one selector snaps the others to the nearest item
   that exists. `VITE_CATALOG_BASE` overrides the origin at build time.
 
+- **Catalog page (`catalog.html`, new).** A second Vite entry (relative base, its own chunk, so the map's size
+  budget is untouched) listing every collection the loader returns, grouped OceanMetrics / MarineSensitivity
+  v7 / v8: title, first paragraph, response type and method (`sdm:*`), temporal interval, dimension values
+  (or the MarineSensitivity `summaries`), item count, extent (numbers plus a small bbox sketch over a coarse
+  world outline), and a credits block: citation with DOI link, license (SPDX link), people with roles and
+  e-mail as text, providers with roles, funders, source authority, links to Methods, README and the STAC
+  `collection.json`, and data assets with type and size. A collection that cannot be reached is a row that
+  says so. "Open in map" per collection (`index.html?c=<id>`); readable at phone width; follows the OS theme
+  (`?theme=dark|light`). The view model is pure (`src/catalog/model.ts`) and tested.
+- **About dialog** (`src/shell/About.svelte`, loaded on first open): what the atlas is, "Supported by BOEM and
+  MBON", links to MBON Data & Products, BioTrack, SECOORA, the gazetteer, the code and the catalog page, and
+  "How to cite this atlas" (cite each collection by its own citation).
+- **Brand.** Ocean palette (navy, teal, sand) replaces the MMA gold/steel tokens in both themes
+  (`--om-*` in `src/lib/brand/tokens.css`; contrast gate green); a CSS wordmark in the top bar, About and the
+  catalog page; an SVG favicon (hexagon with a wave) and a 1200x630 `og.png` (rendered from `og.svg` by
+  `scripts/render-og.mjs`). The map stays dark by default.
+- **Attribution and head.** The map attribution reads "... | OceanMetrics Atlas · supported by BOEM and MBON"
+  after the basemap credit (desktop; on the phone the basemap credit stays whole), the catalog footer carries
+  the same line; `index.html` gains a description and `og:`/`twitter:` meta.
+
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.
 - **Removed the Scores lens and Program Areas.** No scores map, Program Area outlines or choropleth,

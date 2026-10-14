@@ -26,7 +26,7 @@ function resolveAppSha(): string {
 // the same dist/ must run under both https://oceanmetrics.io/atlas/ and any other mount path (a
 // preview deploy, a local `vite preview`), so every asset URL has to be relative (base: "./") and
 // every piece of view state has to live in the query string or the hash, never a client router.
-// One HTML entry (index.html, the map) stands in for the app.
+// Two HTML entries: index.html (the map) and catalog.html (the credits-first catalog page).
 export default defineConfig({
   base: "./",
   // `Analytics["appVersion"]` (analytics.ts) needs SOME build-time version string. A plain
@@ -56,6 +56,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: fileURLToPath(new URL("./index.html", import.meta.url)),
+        // the catalog page: its own entry, so the map's static path (and its size budget) never
+        // carries it (`scripts/size-budget.mjs --entry index.html` walks only index's graph).
+        catalog: fileURLToPath(new URL("./catalog.html", import.meta.url)),
       },
       output: {
         // atlas-6 step 2: terra-draw/terra-draw-maplibre-gl-adapter are genuinely lazy (reached

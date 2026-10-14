@@ -24,7 +24,7 @@ This validates against the v1.0.0 schema but is not machine-readable by other cl
    - `richness`: number of taxa (or a ratio of it) per cell, derived by summing per-taxon predictions.
    - `uncertainty`: spread of a derived or modeled quantity per cell (for example the sum of per-taxon standard
      deviations), unitless or in the unit of the underlying value.
-   `mixed` stays for merged products of heterogeneous response types.
+     `mixed` stays for merged products of heterogeneous response types.
 2. `sdm:taxa` (array of Taxon Objects, same shape as `sdm:taxon`): the taxa that contribute to a multi-species
    Item or Collection. `sdm:taxon` and `sdm:taxa` are mutually exclusive on one node. For large lists the array may
    be replaced by an `sdm:taxa_href` pointing at a Parquet table of taxon objects.
@@ -44,8 +44,20 @@ This validates against the v1.0.0 schema but is not machine-readable by other cl
   "sdm:source_authority": "MBON BioTrack",
   "sdm:temporal_interval": "seasonal",
   "sdm:season": "summer",
-  "sdm:aggregation": {"level": "group", "group": "shark", "n_taxa": 16, "rule": "ecoregion_weighted"},
-  "sdm:taxa": [{"scientific_name": "Alopias vulpinus", "authorities": {"worms": 105836}, "group": "shark", "redlist_code": "VU"}]
+  "sdm:aggregation": {
+    "level": "group",
+    "group": "shark",
+    "n_taxa": 16,
+    "rule": "ecoregion_weighted"
+  },
+  "sdm:taxa": [
+    {
+      "scientific_name": "Alopias vulpinus",
+      "authorities": { "worms": 105836 },
+      "group": "shark",
+      "redlist_code": "VU"
+    }
+  ]
 }
 ```
 

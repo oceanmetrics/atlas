@@ -1,0 +1,162 @@
+/* the catalog page's own layout (the map page's shell.css is not loaded here). Tokens only: no color
+   literal outside src/lib/brand/tokens.css (scripts/check-hex-literals.mjs scans this file). */
+@import "../lib/brand/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+a {
+  color: var(--text-link);
+}
+a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* --- top bar with the wordmark ------------------------------------------------------------------ */
+.top {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--divider);
+}
+.top-inner,
+main,
+.foot-inner {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: var(--space-4);
+}
+.top-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--size-topbar);
+}
+.top nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-touch);
+}
+
+/* the wordmark: "Ocean" in ink, "Metrics" in the accent, "Atlas" lighter -- text and CSS only. */
+.wordmark {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: var(--tracking-display);
+  text-decoration: none;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.wm-metrics {
+  color: var(--text-accent);
+}
+.wm-atlas {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* --- body --------------------------------------------------------------------------------------- */
+main {
+  flex: 1;
+  padding-block: var(--space-5);
+}
+h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+}
+.lede {
+  max-width: 70ch;
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+}
+.status {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+}
+.status.error {
+  color: var(--text-danger);
+}
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.jump a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-touch);
+}
+.group {
+  margin-top: var(--space-5);
+}
+.group h2 {
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px solid var(--border-accent);
+  font-size: var(--text-xl);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* --- footer ------------------------------------------------------------------------------------- */
+.foot {
+  margin-top: var(--space-5);
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--divider);
+  background: var(--surface-raised);
+  font-size: var(--text-sm);
+}
+.foot p {
+  margin: 0 0 var(--space-2);
+}
+.foot .credit {
+  font-weight: 600;
+}
+.foot .cite,
+.foot .supporters {
+  color: var(--text-secondary);
+}
+.foot .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+@media (max-width: 520px) {
+  .top-inner,
+  main,
+  .foot-inner {
+    padding-inline: var(--space-3);
+  }
+  h1 {
+    font-size: var(--text-xl);
+  }
+}

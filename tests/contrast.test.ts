@@ -1,6 +1,6 @@
 // atlas-3: one fixture per rule of the contrast contract, plus the real tokens.css.
 // The seeded fault the subplan names — "it must fail when Gold is assigned to text on paper" —
-// is `gold on paper is a FAIL` below, so the gate can never quietly stop being able to fail.
+// is `teal on paper is a FAIL` below, so the gate can never quietly stop being able to fail.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -52,14 +52,14 @@ describe("the contrast contract", () => {
     expect(new Set(results.map((r) => r.theme))).toEqual(new Set(["navy", "paper"]));
   });
 
-  it("gold on paper is a FAIL (the seeded fault of `node scripts/contrast.mjs`)", () => {
+  it("teal on paper is a FAIL (the seeded fault of `node scripts/contrast.mjs`)", () => {
     const seeded = TOKENS.replace(
-      "--text-accent: var(--mma-steel);",
-      "--text-accent: var(--mma-gold);",
+      "--text-accent: var(--om-teal-deep);",
+      "--text-accent: var(--om-teal);",
     );
     expect(seeded).not.toEqual(TOKENS); // the seed actually applied
     const { failures } = checkContrast(seeded);
-    expect(failures.join("\n")).toMatch(/\[paper\] --text-accent .* 1\.71:1 < 4\.5:1 \(text\)/);
+    expect(failures.join("\n")).toMatch(/\[paper\] --text-accent .* 2\.10:1 < 4\.5:1 \(text\)/);
   });
 
   it("holds text to 4.5:1 and non-text to 3:1 — the same color can pass one and fail the other", () => {
@@ -144,7 +144,7 @@ describe("the manifest is the contract (it is read from tokens.css, not from the
     ]) {
       expect(subjects).toContain(`--cat-${cat}`);
     }
-    expect(exempt.has("--mma-gold")).toBe(true);
+    expect(exempt.has("--om-teal")).toBe(true);
   });
 
   it("throws when tokens.css has no manifest at all", () => {
@@ -153,8 +153,8 @@ describe("the manifest is the contract (it is read from tokens.css, not from the
 
   it("reads the navy block as the default :root and paper as the override", () => {
     const { base, navy, paper } = parseThemes(TOKENS);
-    expect(base.get("--mma-gold")).toBe("#e8c24a");
+    expect(base.get("--om-teal")).toBe("#2fc7b8");
     expect(navy.get("--text-primary")).toBe("#ffffff");
-    expect(paper.get("--text-primary")).toBe("var(--mma-navy)");
+    expect(paper.get("--text-primary")).toBe("var(--om-navy)");
   });
 });
