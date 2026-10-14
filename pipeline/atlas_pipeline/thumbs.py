@@ -2,6 +2,7 @@
 
   indicators_thumbnail: all_summer_richness on the hex grid (Spectral reversed, dark navy background)
   species_thumbnail:    2x2 panel of four species probability surfaces (summer)
+  aquamaps_thumbnail:   2x2 panel of four native 0.5 degree AquaMaps rasters (world view, 1-100)
 
 The coastline is a light outline of Natural Earth 50m land, downloaded once into pipeline/cache/ne/; when it
 cannot be had the thumbnail is drawn without it. Only matplotlib draws; the PNG is palette-quantized to stay
@@ -33,6 +34,7 @@ TEXT       = "#e8f0f8"
 SIZE       = (1200, 800)
 SMALL_W    = 400
 MAX_BYTES  = 300_000
+SMALL_MAX_BYTES = 100_000
 NE_URL     = "https://naturalearth.s3.amazonaws.com/50m_physical/ne_50m_land.zip"
 CACHE_DIR  = Path(__file__).resolve().parent.parent / "cache" / "ne"
 CMAP       = LinearSegmentedColormap.from_list("spectral_r", SPECTRAL_11_REV)
@@ -104,7 +106,10 @@ def small_copy(path: Path, width: int = SMALL_W) -> Path:
   img = Image.open(path).convert("RGB")
   h = round(img.height * width / img.width)
   out = path.with_name(path.stem + "-sm.png")
-  img.resize((width, h), Image.Resampling.LANCZOS).save(out, optimize=True)
+  small = img.resize((width, h), Image.Resampling.LANCZOS)
+  small.save(out, optimize=True)
+  if out.stat().st_size > SMALL_MAX_BYTES:   # a quantized 1200 px thumbnail resizes to a larger truecolor file
+    small.quantize(colors=128, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(out, optimize=True)
   return out
 
 
@@ -115,10 +120,11 @@ def _figure(size: tuple[int, int], nrows: int = 1, ncols: int = 1):
   return fig, axes
 
 
-def _colorbar(fig, label: str, rect=(0.03, 0.075, 0.2, 0.015)) -> None:
+def _colorbar(fig, label: str, rect=(0.03, 0.075, 0.2, 0.015), vmin: float = 0, vmax: float = 1,
+              ticks: list | None = None) -> None:
   cax = fig.add_axes(rect)
-  sm = plt.cm.ScalarMappable(cmap=CMAP, norm=plt.Normalize(0, 1))
-  cb = fig.colorbar(sm, cax=cax, orientation="horizontal", ticks=[0, 0.5, 1])
+  sm = plt.cm.ScalarMappable(cmap=CMAP, norm=plt.Normalize(vmin, vmax))
+  cb = fig.colorbar(sm, cax=cax, orientation="horizontal", ticks=ticks if ticks is not None else [0, 0.5, 1])
   cb.outline.set_visible(False)
   cb.ax.tick_params(colors=TEXT, labelsize=8, length=2)
   cb.set_label(label, color=TEXT, fontsize=9)
@@ -170,3 +176,33 @@ def species_panel_columns(species: pd.DataFrame, names: list[str] = SPECIES) -> 
   """{scientific_name: aphia_<id>} for the wanted names present in the species lookup (order kept)."""
   by_name = dict(zip(species["scientific_name"], species["aphia_id"].astype(int)))
   return {n: f"aphia_{by_name[n]}" for n in names if n in by_name}
+
+
+def aquamaps_thumbnail(panels: dict[str, tuple], out: Path, size: tuple[int, int] = SIZE,
+                       coast: gpd.GeoDataFrame | None = None, use_land: bool = True) -> tuple[Path, Path]:
+  """aquamaps_native: 2x2 world panel. `panels` maps a scientific name to (masked array, (west, south, east, north))
+  of its native COG (1-100, nodata masked), at most four. Returns (thumbnail.png, thumbnail-sm.png)."""
+  assert 1 <= len(panels) <= 4, "a 2x2 panel holds one to four species"
+  world = (-180.0, -62.0, 180.0, 85.0)   # Antarctica below -62 is left out; the surfaces end near -78
+  if coast is None and use_land:
+    coast = land((-180.0, -90.0, 180.0, 90.0))
+  fig, axes = _figure(size, 2, 2)
+  for ax in axes.flat:
+    ax.set_facecolor(BACKGROUND)
+    ax.set_axis_off()
+  for i, (ax, (name, (arr, (w, s_, e, n)))) in enumerate(zip(axes.flat, panels.items())):
+    ax.set_anchor("S" if i < 2 else "N")   # the two rows meet in the middle: one centred block of maps
+    if coast is not None and len(coast):
+      coast.plot(ax=ax, color=LAND_FILL, linewidth=0)
+    ax.imshow(arr, cmap=CMAP, vmin=1, vmax=100, extent=(w, e, s_, n), interpolation="nearest", zorder=2)
+    if coast is not None and len(coast):
+      coast.boundary.plot(ax=ax, color=LAND_EDGE, linewidth=0.4, alpha=0.8, zorder=3)
+    ax.set_xlim(world[0], world[2])
+    ax.set_ylim(world[1], world[3])
+    ax.set_aspect("equal", adjustable="box")   # undistorted world, centred in the panel
+    ax.set_axis_off()
+    ax.text(0.015, 0.975, name, transform=ax.transAxes, color=TEXT, fontsize=12, style="italic", va="top", zorder=4)
+  fig.text(0.985, 0.012, "AquaMaps native 0.5 degree habitat suitability", color=TEXT, fontsize=8, ha="right")
+  _colorbar(fig, "suitability (1-100)", rect=(0.03, 0.07, 0.16, 0.012), vmin=1, vmax=100, ticks=[1, 50, 100])
+  png = save_png(fig, out, size)
+  return png, small_copy(png)

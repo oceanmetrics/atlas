@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["geopandas>=1.0", "shapely>=2.1", "pyarrow>=17", "duckdb>=1.1", "h3>=4.1", "openpyxl>=3.1", "requests>=2.31", "pmtiles>=3.4", "numpy>=1.26", "pandas>=2.2", "matplotlib>=3.8", "pillow>=10", "pystac>=1.10", "jsonschema>=4"]
+# dependencies = ["geopandas>=1.0", "shapely>=2.1", "pyarrow>=17", "duckdb>=1.1", "h3>=4.1", "openpyxl>=3.1", "requests>=2.31", "pmtiles>=3.4", "numpy>=1.26", "pandas>=2.2", "matplotlib>=3.8", "pillow>=10", "rasterio>=1.4", "pystac>=1.10", "jsonschema>=4"]
 # ///
 """atlas pipeline entry: `uv run pipeline/build.py build --collection biotrack_indicators`, `... check`."""
 import sys

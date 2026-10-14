@@ -26,6 +26,8 @@ sync() { aws s3 sync "$1" "$2" --exclude '.DS_Store' $flag; }
 
 # public: collection(s) + root catalog (catalog.json is a single file, not a directory sync)
 sync "$stage/biotrack_indicators" "s3://$bucket/atlas/biotrack_indicators"
+# aquamaps_native: registry + collection + docs + thumbnails (the COGs it references already live under marine-atlas/native/am/)
+[ -d "$stage/aquamaps_native" ] && sync "$stage/aquamaps_native" "s3://$bucket/atlas/aquamaps_native"
 aws s3 cp "$stage/catalog.json" "s3://$bucket/atlas/catalog.json" --content-type application/json $flag
 
 # restricted: unlisted prefix, never linked from catalog.json
