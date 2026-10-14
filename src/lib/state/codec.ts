@@ -8,6 +8,7 @@
 // (`../map/layerStack.ts`), not duplicated here — this module just calls them, exactly like every
 // other field's parser.
 import { validateCatalogBase } from "../catalog/base";
+import { formatOv, parseFilter, parseOv } from "../gazetteer/overlayUrl";
 import { formatLayerStack, parseLayerStack } from "../map/layerStack";
 import { NO_ALIAS_LOOKUP, rewriteLegacyParams, type AliasLookup } from "./legacy";
 import {
@@ -154,6 +155,8 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     c: cleanString(params.get("c")),
     i: cleanString(params.get("i")),
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
+    ov: parseOv(params.get("ov")),
+    filter: parseFilter(params.get("filter")),
     pl: cleanString(hashParams.get("pl")),
     t: cleanString(hashParams.get("t")),
   };
@@ -204,6 +207,9 @@ export function formatSel(sel: Sel): { search: string; hash: string } {
   if (sel.c) params.set("c", sel.c);
   if (sel.i) params.set("i", sel.i);
   if (sel.catalog) params.set("catalog", sel.catalog);
+  const ovToken = formatOv(sel.ov);
+  if (ovToken !== null) params.set("ov", ovToken);
+  if (sel.filter === "places") params.set("filter", "places");
 
   const hashParams = new URLSearchParams();
   if (sel.pl) hashParams.set("pl", sel.pl);

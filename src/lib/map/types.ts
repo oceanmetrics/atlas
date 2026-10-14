@@ -58,6 +58,28 @@ export interface GazetteerLayerSpec {
   attribution: string;
 }
 
+/**
+ * One gazetteer collection toggled on in the Layers panel's "Place layers" group (WP4): its PMTiles
+ * drawn as a line plus a faint fill (polygons), a line (lines) or circles (points). Plain data like
+ * every other spec here; `places/overlays.ts` builds it from a `layers.json` row.
+ */
+export interface PlaceOverlaySpec {
+  /** collection slug, e.g. `noaa_sanctuaries` -- the source id suffix and the vector layer name. */
+  slug: string;
+  title: string;
+  /** absolute https PMTiles URL (the map module registers `pmtiles://` -- map.ts). */
+  pmtiles: string;
+  /** the vector layer inside the archive (equals the slug). */
+  sourceLayer: string;
+  kind: "polygon" | "line" | "point";
+  /** CSS colours from the collection's published paint (any CSS colour string). */
+  fillColor: string;
+  lineColor: string;
+  lineWidth: number;
+  /** the collection's credit; also MapLibre's own `attribution` source field. */
+  attribution: string;
+}
+
 /** the selection highlight (atlas-4 §6.6 / §7: a cell ring or a zone outline, in
  * `colors.ts`'s `SELECTION_COLOR`). */
 export interface SelectionSpec {

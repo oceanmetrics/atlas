@@ -39,7 +39,7 @@ export type BasemapGroupId = (typeof BASEMAP_GROUPS)[number];
  * (one GeoJSON source, `SELECTION_SOURCE_ID`) — there is no second source/layer pair to split them
  * across two independently-orderable rows without a deeper refactor of `places/` and the click/pick
  * wiring, which is out of R3's scope. Flagged for the Opus review, per this task's own instructions. */
-export const DATA_GROUPS = ["data-raster", "data-places"] as const;
+export const DATA_GROUPS = ["data-raster", "data-overlays", "data-places"] as const;
 export type DataGroupId = (typeof DATA_GROUPS)[number];
 
 export type LayerGroupId = BasemapGroupId | DataGroupId;
@@ -64,6 +64,10 @@ export const LAYER_GROUP_LABEL: Record<LayerGroupId, string> = {
   "basemap-roads": "Roads & buildings",
   "basemap-labels": "Place labels",
   "data-raster": "Data",
+  // WP4: the gazetteer collections toggled in the "Places" list under this row (sanctuaries, wind
+  // leases, ...). "Place layers", not "Places": the rail has a button named exactly "Places" (see the
+  // note below on why a row label must not contain that word).
+  "data-overlays": "Place layers",
   // "Selection", never a label containing the word "Places" -- the tool rail already has a
   // button named exactly "Places" (`src/shell/tools.ts`), and this row's own move buttons carry
   // its label INSIDE their aria-label ("Move {label} up/down…"); a label containing "Places" made
@@ -82,6 +86,7 @@ export const LAYER_GROUP_ENABLED: Record<LayerGroupId, boolean> = {
   "basemap-roads": true,
   "basemap-labels": true,
   "data-raster": true,
+  "data-overlays": true,
   "data-places": true,
 };
 
@@ -110,6 +115,7 @@ export const LAYER_GROUP_IN_PANEL: Record<LayerGroupId, boolean> = {
   "basemap-roads": false,
   "basemap-labels": true,
   "data-raster": true,
+  "data-overlays": true,
   "data-places": true,
 };
 
@@ -126,6 +132,7 @@ export const DEFAULT_LAYER_STACK: readonly LayerGroupId[] = [
   "basemap-roads",
   "basemap-labels",
   "data-raster",
+  "data-overlays",
   "data-places",
 ];
 

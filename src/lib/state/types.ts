@@ -75,6 +75,12 @@ export interface Sel {
   i?: string;
   /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
   catalog?: string;
+  /** WP4: the gazetteer collections toggled on in the "Place layers" group (`?ov=a,b`); `undefined` =
+   * the default set (noaa_sanctuaries, boem_wind_leases), never written; `[]` = none (`ov=`).
+   * `../gazetteer/overlayUrl.ts`. */
+  ov?: readonly string[];
+  /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list. */
+  filter?: "places";
   /** R3-W8 item 2: the species lens' "Zoom to layer on change" preference — `true` (default, never
    * written) refits the camera to whatever input/representation the viewer just picked
    * (`data/camera.ts`'s `refitOnInputChange`); `false` writes `zl=0` so the viewer can flip between
@@ -108,6 +114,8 @@ export const QUERY_KEYS = [
   "c",
   "i",
   "catalog",
+  "ov",
+  "filter",
 ] as const;
 
 /** hash keys: places and the report title only — a fragment is never sent to a server or a
@@ -189,6 +197,8 @@ export const DEFAULT_SEL: Sel = {
   c: undefined,
   i: undefined,
   catalog: undefined,
+  ov: undefined,
+  filter: undefined,
   zl: true,
   pl: undefined,
   t: undefined,
