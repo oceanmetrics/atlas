@@ -108,7 +108,9 @@
                   <li>
                     <strong>{p.name}</strong>{#if p.position}, {p.position}{/if}{#if p.organization && p.organization !== p.name}
                       ({p.organization}){/if}
-                    {#if p.roles.length > 0}<span class="sub"> &middot; {p.roles.join(", ")}</span>{/if}
+                    {#if p.roles.length > 0}<span class="sub">
+                        &middot; {p.roles.join(", ")}</span
+                      >{/if}
                     {#if p.emails.length > 0}<span class="email">{p.emails.join(", ")}</span>{/if}
                   </li>
                 {/each}
@@ -121,8 +123,11 @@
               <ul>
                 {#each cr.providers as p (p.name)}
                   <li>
-                    {#if p.url}<a href={p.url} target="_blank" rel="noopener">{p.name}</a>{:else}{p.name}{/if}
-                    {#if p.roles.length > 0}<span class="sub"> &middot; {p.roles.join(", ")}</span>{/if}
+                    {#if p.url}<a href={p.url} target="_blank" rel="noopener">{p.name}</a
+                      >{:else}{p.name}{/if}
+                    {#if p.roles.length > 0}<span class="sub">
+                        &middot; {p.roles.join(", ")}</span
+                      >{/if}
                   </li>
                 {/each}
               </ul>
@@ -149,8 +154,11 @@
       <ul>
         {#each card.assets as a (a.key)}
           <li>
-            {#if a.href}<a href={a.href} target="_blank" rel="noopener">{a.title}</a>{:else}{a.title}{/if}
-            <span class="sub"> &middot; {a.type}{#if a.size}, {a.size}{/if}</span>
+            {#if a.href}<a href={a.href} target="_blank" rel="noopener">{a.title}</a
+              >{:else}{a.title}{/if}
+            <span class="sub">
+              &middot; {a.type}{#if a.size}, {a.size}{/if}</span
+            >
           </li>
         {/each}
       </ul>

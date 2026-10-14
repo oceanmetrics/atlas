@@ -34,11 +34,9 @@
 
   <p class="support" data-testid="about-supporters">
     Supported by
-    {#each SUPPORTERS as s, i (s.href)}{#if i > 0}{i === SUPPORTERS.length - 1 ? " and " : ", "}{/if}<a
-        href={s.href}
-        target="_blank"
-        rel="noopener">{s.label}</a
-      >{/each}.
+    {#each SUPPORTERS as s, i (s.href)}{#if i > 0}{i === SUPPORTERS.length - 1
+          ? " and "
+          : ", "}{/if}<a href={s.href} target="_blank" rel="noopener">{s.label}</a>{/each}.
   </p>
 
   <h3>Related</h3>
@@ -46,7 +44,11 @@
     {#each ABOUT_LINKS as l (l.href)}
       <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>
     {/each}
-    <li><a href={CATALOG_PAGE_HREF} data-testid="about-catalog-link">Catalog of collections and credits</a></li>
+    <li>
+      <a href={CATALOG_PAGE_HREF} data-testid="about-catalog-link"
+        >Catalog of collections and credits</a
+      >
+    </li>
   </ul>
 
   <h3>How to cite this atlas</h3>

@@ -29,7 +29,10 @@
   );
   const unavailable = $derived(
     state.phase === "ready"
-      ? state.groups.reduce((n, g) => n + g.cards.filter((c) => c.status === "unavailable").length, 0)
+      ? state.groups.reduce(
+          (n, g) => n + g.cards.filter((c) => c.status === "unavailable").length,
+          0,
+        )
       : 0,
   );
 </script>
@@ -62,8 +65,8 @@
     </p>
   {:else}
     <p class="status" role="status">
-      {total} collection{total === 1 ? "" : "s"}{#if unavailable > 0}, {unavailable} not reachable
-        right now{/if}.
+      {total} collection{total === 1 ? "" : "s"}{#if unavailable > 0}, {unavailable} not reachable right
+        now{/if}.
     </p>
     {#if state.groups.length > 1}
       <nav class="jump" aria-label="Collection groups">
@@ -90,11 +93,9 @@
     <p class="credit">{BRAND_CREDIT}</p>
     <p class="supporters">
       Supported by
-      {#each SUPPORTERS as s, i (s.href)}{#if i > 0}{i === SUPPORTERS.length - 1 ? " and " : ", "}{/if}<a
-          href={s.href}
-          target="_blank"
-          rel="noopener">{s.label}</a
-        >{/each}.
+      {#each SUPPORTERS as s, i (s.href)}{#if i > 0}{i === SUPPORTERS.length - 1
+            ? " and "
+            : ", "}{/if}<a href={s.href} target="_blank" rel="noopener">{s.label}</a>{/each}.
     </p>
     <p class="cite">{CITE_ATLAS}. {CITE_COLLECTION_NOTE}</p>
     <p class="links">
