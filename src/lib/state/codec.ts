@@ -132,7 +132,8 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
   const hashParams = new URLSearchParams((loc.hash ?? "").replace(/^#/, ""));
 
   const sp = cleanString(params.get("sp"));
-  const lens: Lens = parseEnum(params.get("lens"), LENSES, defaultLens(sp));
+  const c = cleanString(params.get("c"));
+  const lens: Lens = parseEnum(params.get("lens"), LENSES, defaultLens(sp, c));
 
   return {
     lens,
@@ -151,7 +152,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     theme: parseEnum(aliasTheme(params.get("theme")), THEMES, DEFAULT_SEL.theme),
     tour: parseEnum(params.get("tour"), ["on", "off"] as const, DEFAULT_SEL.tour),
     zl: parseZoomToLayer(params.get("zl")),
-    c: cleanString(params.get("c")),
+    c,
     i: cleanString(params.get("i")),
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     pl: cleanString(hashParams.get("pl")),
@@ -183,7 +184,7 @@ export function parseSel(loc: UrlLike, alias: AliasLookup = NO_ALIAS_LOOKUP): Se
 export function formatSel(sel: Sel): { search: string; hash: string } {
   const params = new URLSearchParams();
 
-  const lensDefault = defaultLens(sel.sp);
+  const lensDefault = defaultLens(sel.sp, sel.c);
   if (sel.lens !== lensDefault) params.set("lens", sel.lens);
   if (sel.pal !== DEFAULT_SEL.pal) params.set("pal", sel.pal);
   if (sel.map) params.set("map", formatMapView(sel.map));

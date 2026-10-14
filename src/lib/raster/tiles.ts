@@ -32,6 +32,10 @@ export interface RasterTileParams {
   colormapName: string;
   rescaleMin: number;
   rescaleMax: number;
+  /** the 1-based band to draw from a multi-band COG (`&bidx=N`, appended AFTER `rescale` so a
+   * single-band URL stays byte-identical to the cached ones). Omitted = titiler's default (band 1,
+   * no `bidx` in the URL). The MST nc density COGs carry n, cv and ci90 as bands 1-3. */
+  bidx?: number;
 }
 
 /** an EXPLICIT value → RGBA colormap instead of a named ramp — `msens::cog_tile_url(color = ...)`
@@ -71,7 +75,8 @@ export function titilerTileUrl(
     `${config.host}/cog/tiles/WebMercatorQuad/${z}/${x}/${y}.png` +
     `?url=${encodeUrlReserved(params.url)}` +
     `&colormap_name=${params.colormapName}` +
-    `&rescale=${params.rescaleMin},${params.rescaleMax}`
+    `&rescale=${params.rescaleMin},${params.rescaleMax}` +
+    (params.bidx === undefined ? "" : `&bidx=${params.bidx}`)
   );
 }
 

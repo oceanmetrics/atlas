@@ -63,14 +63,49 @@ export function valuesAssetOf(item: StacItem | null): ValuesAsset | null {
   return { url, keyColumn: asset["atlas:key_column"] ?? "FID", valueColumn };
 }
 
-/** the item's cloud-optimized GeoTIFF (preferring a `data`-role asset), rendered through titiler. */
-export function rasterAssetOf(item: StacItem | null): { url: string } | null {
+export interface RasterAsset {
+  url: string;
+  /** the 1-based band of a multi-band COG (`atlas:bidx`); absent = band 1. */
+  bidx?: number;
+  /** a named titiler colormap (`atlas:colormap`); absent = the default ramp. */
+  colormap?: string;
+  /** `[min, max]` or `"auto"` (`atlas:rescale`); absent = the item's own value range. */
+  rescale?: [number, number] | "auto";
+}
+
+function rescaleOf(v: unknown): [number, number] | "auto" | undefined {
+  if (v === "auto") return "auto";
+  if (
+    Array.isArray(v) &&
+    v.length === 2 &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number" &&
+    Number.isFinite(v[0]) &&
+    Number.isFinite(v[1])
+  ) {
+    return [v[0], v[1]];
+  }
+  return undefined;
+}
+
+/** the item's cloud-optimized GeoTIFF (preferring a `data`-role asset), rendered through titiler,
+ * with the band / colormap / rescale the asset names (`atlas:bidx|colormap|rescale`). */
+export function rasterAssetOf(item: StacItem | null): RasterAsset | null {
   if (!item) return null;
   const cogs = Object.values(item.assets ?? {}).filter(isCogAsset);
   const asset = cogs.find((a) => a.roles?.includes("data")) ?? cogs[0];
   if (!asset) return null;
   const url = assetUrl(item, asset);
-  return url ? { url } : null;
+  if (!url) return null;
+  const bidx = asset["atlas:bidx"];
+  const colormap = asset["atlas:colormap"];
+  const rescale = rescaleOf(asset["atlas:rescale"]);
+  return {
+    url,
+    ...(typeof bidx === "number" && Number.isInteger(bidx) && bidx >= 1 ? { bidx } : {}),
+    ...(typeof colormap === "string" && colormap ? { colormap } : {}),
+    ...(rescale ? { rescale } : {}),
+  };
 }
 
 /** the collection's MapLibre style document (`styles/default.json`): the `style` asset, else a link

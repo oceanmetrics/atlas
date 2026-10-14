@@ -123,12 +123,15 @@ export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
 export const LENSES: readonly Lens[] = ["collection", "species"];
 
 /**
- * `lens`'s context-dependent default: `"species"` when a species key is present in the URL,
- * `"collection"` otherwise. Shared between `parseSel` and `formatSel` so a value that equals its OWN
- * default is omitted symmetrically in both directions (the URL round-trip property).
+ * `lens`'s context-dependent default: `"species"` when a species key is present in the URL and no
+ * collection is, `"collection"` otherwise. A collection id (`c`) wins because the Collections lens
+ * also uses `sp` -- the taxon picked inside an MST taxon collection (`?c=msens-v7-rng_iucn&sp=54241`,
+ * docs/mst-by-reference.md) -- and that link must open the Collections lens, not the Species lens.
+ * Shared between `parseSel` and `formatSel` so a value that equals its OWN default is omitted
+ * symmetrically in both directions (the URL round-trip property).
  */
-export function defaultLens(sp: string | undefined): Lens {
-  return sp ? "species" : "collection";
+export function defaultLens(sp: string | undefined, c?: string): Lens {
+  return sp && !c ? "species" : "collection";
 }
 
 /**

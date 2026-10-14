@@ -41,3 +41,4 @@ tests/fixtures/parity-page/sample-checklist.md
 # Generated, self-contained sign-off page (scripts/parity-page/build.mjs). Reformatting it would
 # make `npm run parity:page:check` red against a page the generator produces byte-for-byte.
 docs/parity.html
+public/mst/

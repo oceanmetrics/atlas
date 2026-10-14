@@ -1,0 +1,235 @@
+{
+ "schema": 1,
+ "ver": "v7",
+ "shard": "e1",
+ "taxa": {
+  "54241": {
+   "key": "54241",
+   "sci": "Dermochelys coriacea",
+   "common": "Leatherback Turtle",
+   "sp_cat": "turtle",
+   "taxon_id": "137209",
+   "taxon_authority": "worms",
+   "rl": "EN",
+   "esa": {
+    "code": "NMFS:EN",
+    "source": "ch_nmfs"
+   },
+   "mmpa": false,
+   "mbta": false,
+   "er_score": 100,
+   "valid_usa": true,
+   "valid_global": null,
+   "merged": {
+    "type": "cog",
+    "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/9fe6f75498affae1.tif",
+    "rescale": [
+     1,
+     100
+    ],
+    "colormap": "spectral_r",
+    "bbox": null
+   },
+   "inputs": [
+    {
+     "ds_key": "am_0.05",
+     "mdl_key": "25",
+     "is_mask": false,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/3b65e8ff84b8cf75.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/am/729c63f1d05d0515.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      }
+     ]
+    },
+    {
+     "ds_key": "ch_fws",
+     "mdl_key": "18297",
+     "is_mask": true,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/1b8ef84e4f32a797.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "pmtiles",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/ch_fws/e42d647d3b531b28.pmtiles",
+       "rescale": null,
+       "colormap": null,
+       "source_layer": "ch_fws",
+       "source_key": "ch_fws|C00F",
+       "bbox": [
+        -64.95,
+        17.65,
+        -64.85,
+        17.7
+       ]
+      }
+     ]
+    },
+    {
+     "ds_key": "ch_nmfs",
+     "mdl_key": "18245",
+     "is_mask": true,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/5816acdf55c40ed0.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "pmtiles",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/ch_nmfs/c8371f88321fc237.pmtiles",
+       "rescale": null,
+       "colormap": null,
+       "source_layer": "ch_nmfs",
+       "source_key": "ch_nmfs|Dermochelys_coriacea",
+       "bbox": [
+        -126.45,
+        17.6,
+        -64.8,
+        48.55
+       ]
+      }
+     ]
+    },
+    {
+     "ds_key": "rng_fws",
+     "mdl_key": "18350",
+     "is_mask": true,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/438fea715798110e.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "pmtiles",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/rng_fws/941bdbc18b501d7e.pmtiles",
+       "rescale": null,
+       "colormap": null,
+       "source_layer": "rng_fws",
+       "source_key": "rng_fws|C00F",
+       "bbox": [
+        -123.5,
+        17.65,
+        -64.55,
+        41.3
+       ]
+      }
+     ]
+    },
+    {
+     "ds_key": "rng_iucn",
+     "mdl_key": "19859",
+     "is_mask": true,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/d1e9e9c00edef2ed.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "pmtiles",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/rng_iucn/3a26f18f3e7cdca6.pmtiles",
+       "rescale": null,
+       "colormap": null,
+       "source_layer": "rng_iucn",
+       "source_key": "rng_iucn|6494",
+       "bbox": null
+      }
+     ]
+    },
+    {
+     "ds_key": "rng_turtle_swot_dps",
+     "mdl_key": "37571",
+     "is_mask": true,
+     "assets": [
+      {
+       "rep": "model",
+       "type": "cog",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/122812bd88bb4b51.tif",
+       "rescale": [
+        1,
+        100
+       ],
+       "colormap": "spectral_r",
+       "source_layer": null,
+       "source_key": null,
+       "bbox": null
+      },
+      {
+       "rep": "native",
+       "type": "pmtiles",
+       "url": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/rng_turtle_swot_dps/bd8f23cbeb00983b.pmtiles",
+       "rescale": null,
+       "colormap": null,
+       "source_layer": "rng_turtle_swot_dps",
+       "source_key": "rng_turtle_swot_dps|DC",
+       "bbox": null
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
