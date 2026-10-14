@@ -5,7 +5,8 @@
   // app's own `DataTable`, the CSV is `download/csv.ts`.
   import DataTable from "../lib/ui/DataTable.svelte";
   import type { DataTableColumn } from "../lib/ui/dataTableCore";
-  import { downloadCsv, slugStem } from "../lib/download/csv";
+  import { csvFilename, slugStem } from "../lib/download/csv";
+  import { saveBlob } from "../lib/download/saveBlob";
   import { formatCollectionValue } from "../lens/collection/mapInputs";
   import type { PlaceSummaries } from "./summary.svelte";
   import { formatShare, summaryCsv, type SummaryRow } from "./summary";
@@ -66,10 +67,9 @@
 
   // the grid's own "Export CSV" hands back the filtered + sorted rows; the file holds the raw numbers
   function exportCsv(rows: SummaryRow[]): void {
-    downloadCsv(
-      summaryCsv(rows, summaries.subject ?? ""),
-      slugStem(summaries.subject ?? "places-summary", "places-summary"),
-    );
+    const csv = summaryCsv(rows, summaries.subject ?? "");
+    const stem = slugStem(summaries.subject ?? "places-summary", "places-summary");
+    saveBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), csvFilename(stem));
   }
 </script>
 
@@ -88,7 +88,7 @@
       {columns}
       rows={[...summaries.rows]}
       getRowId={(r: SummaryRow) => r.index}
-      height={Math.min(360, 40 + summaries.rows.length * 32)}
+      height={Math.min(480, 130 + summaries.rows.length * 34)}
       onExport={exportCsv}
     />
     {#each problems as r (r.index)}
