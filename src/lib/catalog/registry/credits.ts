@@ -17,6 +17,10 @@ export const AM005_COLLECTION_URL =
   "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json";
 export const CC_BY_NC_3_URL = "https://creativecommons.org/licenses/by-nc/3.0/";
 
+/** what the downscaled surface is called in the legend and the credits. */
+export const DOWNSCALED_TITLE =
+  "AquaMaps habitat suitability, downscaled 0.05 degree (MarineSensitivity v7)";
+
 /** the line the map attribution carries while an AquaMaps surface is on the map. */
 export const AQUAMAPS_ATTRIBUTION = "AquaMaps (Kaschner et al. 2019), CC BY-NC 3.0";
 
@@ -60,7 +64,7 @@ export function downscaledCredits(
   const ownCitation = typeof cited["sci:citation"] === "string" && cited["sci:citation"].trim();
   return {
     ...cited,
-    title: "AquaMaps habitat suitability, downscaled 0.05 degree (MarineSensitivity v7)",
+    title: DOWNSCALED_TITLE,
     ...(typeof note === "string" && note.trim() ? { "atlas:note": note } : {}),
     ...(!ownCitation && native?.["sci:citation"] ? { "sci:citation": native["sci:citation"] } : {}),
   };

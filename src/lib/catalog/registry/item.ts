@@ -125,10 +125,12 @@ export function registryItem(
 
 // --- Details -------------------------------------------------------------------------------------
 
-/** the AquaMaps species page for a registry key (`Rep-3437`). `receive.php?...SpecID=` (the plan's
- * guess) renders an empty frame on its own; `preMap2.php` is the page that lists the species' maps. */
+/** the AquaMaps species page for a registry key (`Rep-3437`). The plan's `receive.php?type_of_map=regular&
+ * SpecID=` answers an empty frame on its own (it needs the session `preMap.php` starts); `preMap.php` with
+ * the cached-map parameters opens the species' map page (checked in a browser 2026-10-14 for Fis-49220,
+ * Thunnus thynnus). */
 export function aquamapsUrl(key: string): string {
-  return `https://www.aquamaps.org/preMap2.php?cache=1&SpecID=${encodeURIComponent(key)}`;
+  return `https://www.aquamaps.org/preMap.php?cache=1&SpecID=${encodeURIComponent(key)}&from=premap&map=cached&type_of_map=regular`;
 }
 
 /** the Details rows of a registry Item: the taxon identifiers (WoRMS linked, BOTW, Red List) and the

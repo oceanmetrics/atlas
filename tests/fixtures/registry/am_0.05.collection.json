@@ -1,0 +1,57 @@
+{
+  "type": "Collection",
+  "stac_version": "1.0.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/item-assets/v1.0.0/schema.json",
+    "https://marinesensitivity.github.io/stac-sdm/v1.0.0/schema.json"
+  ],
+  "id": "msens-v7-am_0.05",
+  "title": "AquaMaps SDM",
+  "description": "AquaMaps species distribution models downscaled from 0.5° to 0.05° cells",
+  "license": "CC-BY-4.0",
+  "extent": {
+    "spatial": {
+      "bbox": [[-180, -18, 180, 75]]
+    },
+    "temporal": {
+      "interval": [["2023-01-01T00:00:00Z", "2019-01-01T00:00:00Z"]]
+    }
+  },
+  "version": "v7",
+  "deprecated": false,
+  "sdm:response_type": "suitability",
+  "sdm:method": "env_envelope",
+  "sdm:source_authority": "AquaMaps",
+  "sdm:temporal_interval": "static",
+  "sdm:value_unit": "percent",
+  "sdm:value_range": [0, 100],
+  "sdm:env_datetime": [null, "2019-01-01T00:00:00Z"],
+  "item_assets": {
+    "data": {
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "title": "Per-taxon surfaces (GeoParquet of model_cell rows)"
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../../catalog.json"
+    },
+    {
+      "rel": "parent",
+      "href": "../collection.json"
+    },
+    {
+      "rel": "self",
+      "href": "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json"
+    },
+    {
+      "rel": "item",
+      "href": "./msens-v7-am_0.05-model_cell.json"
+    }
+  ],
+  "sci:citation": "Kaschner, K., K. Kesner-Reyes, C. Garilao, J. Segschneider, J. Rius-Barile, T. Rees, and R. Froese. 2019. AquaMaps: Predicted range maps for aquatic species. World wide web electronic publication, www.aquamaps.org, Version 10/2019. Content from AquaMaps as provided in this R package is licensed under a Creative Commons Attribution-NonCommercial 3.0 UnportedLicense, please see http://creativecommons.org/licenses/by-nc/3.0/"
+}

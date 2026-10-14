@@ -1,0 +1,323 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://marinesensitivity.github.io/stac-sdm/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
+  ],
+  "id": "aquamaps_native",
+  "updated": "2026-10-14T17:27:29Z",
+  "title": "AquaMaps habitat suitability, native 0.5 degree",
+  "description": "AquaMaps relative environmental suitability (1-100 percent) for 17,499 aquatic species on the original global 0.5 degree grid, drawn from the native COGs that MarineSensitivity release v7 publishes. The COGs are referenced, not copied; one registry row per species lets an app build a per-taxon COG Item without 17,000 Item files. Distinct from the 0.05 degree downscaled AquaMaps in the MarineSensitivity v7 collection. Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md.",
+  "license": "CC-BY-NC-3.0",
+  "version": "2019.10",
+  "deprecated": false,
+  "sci:citation": "Kaschner, K., Kesner-Reyes, K., Garilao, C., Segschneider, J., Rius-Barile, J., Rees, T., Froese, R. (2019). AquaMaps: Predicted range maps for aquatic species. World wide web electronic publication, www.aquamaps.org, Version 10/2019.",
+  "providers": [
+    {
+      "name": "AquaMaps",
+      "roles": ["producer", "licensor"],
+      "url": "https://www.aquamaps.org",
+      "description": "Kaschner et al. 2019; relative environmental suitability models (www.aquamaps.org)"
+    },
+    {
+      "name": "MarineSensitivity",
+      "roles": ["processor"],
+      "url": "https://marinesensitivity.org",
+      "description": "published the native 0.5 degree COGs in release v7"
+    },
+    {
+      "name": "OceanMetrics",
+      "roles": ["host"],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "atlas:funders": [],
+  "atlas:status": "prototype",
+  "atlas:note": "Non-commercial use only (CC BY-NC 3.0). Maps and numbers come from AquaMaps; link back to aquamaps.org when you reuse them.",
+  "atlas:source_release": "MarineSensitivity v7",
+  "extent": {
+    "spatial": {
+      "bbox": [[-180.0, -90.0, 180.0, 90.0]]
+    },
+    "temporal": {
+      "interval": [[null, null]]
+    }
+  },
+  "sdm:response_type": "suitability",
+  "sdm:value_unit": "percent",
+  "sdm:value_range": [1, 100],
+  "sdm:method": "env_envelope",
+  "sdm:method_detail": "AquaMaps relative environmental suitability: per species, an envelope of the cell values of six predictors, fitted to occurrence records and expert-checked; published to 0.01 and stored here as Byte 1-100 (0 = no data) on the 0.5 degree HCAF grid.",
+  "sdm:source_authority": "AquaMaps",
+  "sdm:temporal_interval": "static",
+  "sdm:predictors": [
+    "depth",
+    "temperature",
+    "salinity",
+    "primary_production",
+    "sea_ice_concentration",
+    "distance_to_land"
+  ],
+  "atlas:taxa_registry": {
+    "asset": "registry",
+    "key_column": "sp_key",
+    "row_count": 17499,
+    "search_columns": ["scientific_name", "common_name"],
+    "group_column": "sp_cat",
+    "index_asset": "registry_index"
+  },
+  "atlas:item_template": {
+    "description": "Build one Item per registry row, client-side; no Item files are published. Substitute each placeholder in braces with the row's value of the column of that name; omit keys whose value is null.",
+    "registry_asset": "registry",
+    "key_column": "sp_key",
+    "id": "{sp_key}",
+    "collection": "aquamaps_native",
+    "bbox": "{bbox}",
+    "geometry": "Polygon of {bbox} (west, south, east, north)",
+    "properties": {
+      "title": "{scientific_name} ({common_name})",
+      "title_without_common_name": "{scientific_name}",
+      "datetime": null,
+      "atlas:value_range": [1, 100],
+      "atlas:representation": "native",
+      "sdm:taxon": {
+        "scientific_name": "{scientific_name}",
+        "common_name": "{common_name}",
+        "group": "{sp_cat}",
+        "authorities": {
+          "worms": "{aphia_id}",
+          "botw": "{botw_id}"
+        },
+        "redlist_code": "{redlist_code}"
+      }
+    },
+    "assets": {
+      "cog": {
+        "href": "{cog_url}",
+        "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+        "roles": ["data"],
+        "title": "AquaMaps native 0.5 degree habitat suitability (percent)",
+        "bands": [
+          {
+            "name": "suitability",
+            "data_type": "uint8",
+            "nodata": 0,
+            "unit": "percent",
+            "statistics": {
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "atlas:rescale": [1, 100],
+        "atlas:colormap": "spectral_r",
+        "atlas:bidx": 1
+      },
+      "cog_005": {
+        "href": "{cog_url_005}",
+        "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+        "roles": ["data"],
+        "title": "MarineSensitivity 0.05 degree surface of the same model (usa05 grid), for comparison",
+        "atlas:optional": true,
+        "atlas:rescale": [1, 100],
+        "atlas:colormap": "spectral_r"
+      }
+    },
+    "point_value": "titiler /cog/point on the `cog` asset (value 1-100; 0 or no data = outside the model's range)"
+  },
+  "atlas:registry_stats": {
+    "n_models": 17550,
+    "n_taxa": 17499,
+    "excluded_no_native": 51,
+    "n_unmatched": 595
+  },
+  "summaries": {
+    "sdm:taxon.group": {
+      "bird": 1,
+      "coral": 773,
+      "fish": 6667,
+      "invertebrate": 8224,
+      "mammal": 84,
+      "other": 1126,
+      "reptile": 23,
+      "turtle": 6,
+      "unmatched": 595
+    },
+    "atlas:taxa": [17499],
+    "sdm:response_type": ["suitability"]
+  },
+  "assets": {
+    "registry": {
+      "href": "./registry.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["metadata"],
+      "title": "Taxa registry: one row per AquaMaps model with a native COG (names, ids, COG urls, bbox)",
+      "atlas:key_column": "sp_key",
+      "table:row_count": 17499,
+      "table:columns": [
+        {
+          "name": "sp_key",
+          "type": "string",
+          "description": "AquaMaps species key (model.taxa); the Item id"
+        },
+        {
+          "name": "mdl_seq",
+          "type": "int32",
+          "description": "MarineSensitivity v7 model number (model.parquet, ds_key am_0.05)"
+        },
+        {
+          "name": "aphia_id",
+          "type": "int32",
+          "description": "accepted WoRMS AphiaID; null when the model has no WoRMS match"
+        },
+        {
+          "name": "botw_id",
+          "type": "int32",
+          "description": "BirdLife BOTW id for the one bird model; null otherwise"
+        },
+        {
+          "name": "scientific_name",
+          "type": "string",
+          "description": "accepted scientific name; falls back to the name in the model description when unmatched"
+        },
+        {
+          "name": "common_name",
+          "type": "string",
+          "description": "English common name; null when none"
+        },
+        {
+          "name": "sp_cat",
+          "type": "string",
+          "description": "category: fish, invertebrate, mammal, turtle, reptile, bird, coral, other; null when unmatched"
+        },
+        {
+          "name": "redlist_code",
+          "type": "string",
+          "description": "IUCN Red List category (EX, EW, CR, EN, VU, NT, LC, DD, NE); null when none"
+        },
+        {
+          "name": "cog_url",
+          "type": "string",
+          "description": "native 0.5 degree COG (Byte, 1-100, nodata 0), the surface this collection draws"
+        },
+        {
+          "name": "cog_url_005",
+          "type": "string",
+          "description": "the 0.05 degree COG of the same model on the MST analysis grid (usa05), for comparison"
+        },
+        {
+          "name": "bbox",
+          "type": "list<double>",
+          "description": "[west, south, east, north]: extent of the native surface's cells, from native_asset"
+        },
+        {
+          "name": "n_cells_005",
+          "type": "int32",
+          "description": "number of 0.05 degree cells in the model's MST surface (model_asset.n_cells); null when unknown"
+        }
+      ],
+      "file:size": 1057459,
+      "file:checksum": "122079c831b5f373715cac30244f5a2435c0a8eb79ee16191fc7322e92c24d62d4d3"
+    },
+    "registry_index": {
+      "href": "./registry_index.json",
+      "type": "application/json",
+      "roles": ["metadata"],
+      "title": "Compact search index of the registry: [sp_key, scientific_name, common_name, sp_cat]",
+      "atlas:row_count": 17499,
+      "file:size": 1089368,
+      "file:checksum": "122013985c9e191a591b2f470290f8e8b069150fc06d700caf04fffe6813ed39bdb9"
+    },
+    "thumbnail": {
+      "href": "./thumbnail.png",
+      "type": "image/png",
+      "roles": ["thumbnail"],
+      "title": "Thumbnail: 2x2 panel of four native AquaMaps surfaces",
+      "file:size": 153963,
+      "file:checksum": "1220825b643ce403a4bacfef279b9ba9edf84861ca60914532a0660bcf3837ac1f47"
+    }
+  },
+  "item_assets": {
+    "cog": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "roles": ["data"],
+      "title": "AquaMaps native 0.5 degree habitat suitability (percent)",
+      "bands": [
+        {
+          "name": "suitability",
+          "data_type": "uint8",
+          "nodata": 0,
+          "unit": "percent",
+          "statistics": {
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "sdm:value_unit": "percent",
+      "sdm:value_range": [1, 100],
+      "atlas:rescale": [1, 100],
+      "atlas:colormap": "spectral_r"
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "OceanMetrics Atlas"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "OceanMetrics Atlas"
+    },
+    {
+      "rel": "self",
+      "href": "./collection.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Methods, registry columns and credits"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Agent/LLM usage guide"
+    },
+    {
+      "rel": "preview",
+      "href": "./thumbnail.png",
+      "type": "image/png",
+      "title": "Thumbnail"
+    },
+    {
+      "rel": "via",
+      "href": "https://www.aquamaps.org",
+      "type": "text/html",
+      "title": "AquaMaps (producer)"
+    },
+    {
+      "rel": "related",
+      "href": "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json",
+      "type": "application/json",
+      "title": "MarineSensitivity v7 AquaMaps, 0.05 degree downscale"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by-nc/3.0/",
+      "type": "text/html",
+      "title": "CC BY-NC 3.0 Unported (non-commercial use only)"
+    }
+  ]
+}

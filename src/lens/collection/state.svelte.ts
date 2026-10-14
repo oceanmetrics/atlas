@@ -50,11 +50,19 @@ import type { ChromePadding } from "../../lib/map/camera";
 import { mstRefOf } from "../../lib/catalog/mst/kinds";
 import { registryRefOf } from "../../lib/catalog/registry/ref";
 import { registryFacts } from "../../lib/catalog/registry/item";
-import { downscaledCredits, registryAttribution } from "../../lib/catalog/registry/credits";
+import {
+  DOWNSCALED_TITLE,
+  downscaledCredits,
+  registryAttribution,
+} from "../../lib/catalog/registry/credits";
 import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
 import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
 import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
-import { createCogExtentCache, sourceBoundsOf, type CogExtentCache } from "../../lib/raster/bounds";
+import {
+  createCogExtentCache,
+  itemSourceBounds,
+  type CogExtentCache,
+} from "../../lib/raster/bounds";
 import {
   loadCatalog,
   loadItems,
@@ -411,7 +419,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   // (each would 404). An Item that states its `bbox` (a registry row's) needs no request at all; any other
   // reads `/cog/info.geojson` once per COG. The raster waits for that answer (one small request); an
   // unreadable footprint draws unbounded rather than not at all. -----------------------------------
-  const bboxBounds = $derived(sourceBoundsOf({ bbox: item?.bbox }));
+  const bboxBounds = $derived(itemSourceBounds(item));
   const extentCache = deps.cogExtent ?? createCogExtentCache(defaultFetchJson);
   let extent = $state.raw<{
     url: string;
@@ -636,8 +644,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
     const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
+    // the legend names the surface on screen: the downscaled one is not the collection's own native one
+    const legendEntry =
+      entry && isRegistry && registry.rep === "005" ? { ...entry, title: DOWNSCALED_TITLE } : entry;
     const inputs = collectionMapInputs({
-      entry,
+      entry: legendEntry,
       item: drawItem,
       style: styleJson,
       values,
