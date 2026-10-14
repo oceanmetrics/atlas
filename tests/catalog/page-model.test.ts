@@ -272,7 +272,9 @@ describe("dimensions, time and extent", () => {
       -98, 12, -44, 56,
     ]);
     expect(bboxOf(coll({ extent: { spatial: { bbox: [[1, 2, 3]] } } }))).toBeNull();
-    expect(bboxOf(coll({ extent: { spatial: { bbox: [["a", 2, 3, 4]] as unknown as number[][] } } }))).toBeNull();
+    expect(
+      bboxOf(coll({ extent: { spatial: { bbox: [["a", 2, 3, 4]] as unknown as number[][] } } })),
+    ).toBeNull();
     expect(bboxOf(coll())).toBeNull();
   });
   it("maps a bbox into the 360 x 180 sketch (x = lon + 180, y = 90 - lat)", () => {
