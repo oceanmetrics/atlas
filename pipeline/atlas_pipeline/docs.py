@@ -67,7 +67,7 @@ def indicators_readme(fields: list[dict], counts: dict) -> str:
 Prototype (`atlas:status: prototype`). Ecoregion-weighted species richness and cumulative uncertainty for the US
 Atlantic and Gulf of Mexico, by species group (all, fish, ray, redlisted, shark, turtle) and season (summer,
 winter), in {counts['n_hex']:,} 10-km hexagonal cells, as GeoParquet-style tables plus a geometry-only PMTiles
-grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by MMA and MBON.
+grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), funded by NOAA IOOS MBON.
 
 {credits_block()}
 
@@ -75,29 +75,29 @@ grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported
 
 {METHODS}
 
-## Files
+## Assets
 
-- `hex.pmtiles`: the hex grid, layer `hex`, attribute `FID` only (integer). Paint values with MapLibre
-  feature-state and `promoteId: "FID"`.
-- `values.parquet`: one row per FID, columns `{{group}}_{{season}}_{{suffix}}` ({counts['n_values_cols']} value
-  columns). Public metrics are `richness` and `uncertainty`.
-- `hex_centroids.parquet`: `FID`, `lon`, `lat` of each hexagon's centroid (EPSG:4326). The atlas app tests these
-  points against a place's polygon to summarise a layer over places.
-- `hex_h3.parquet`: FID to H3 resolution 7 crosswalk (`FID`, `h3`, `weight`, `overlap_km2`); `weight` is the share
-  of the hexagon's area inside the H3 cell and sums to 1 per FID.
-- `values_h3.parquet`: the numeric value columns aggregated to H3 res 7 (area-weighted mean over the overlapping
-  hexagons; cells with no data are skipped; rounded to 4 decimals).
-- `cell_species.parquet`: the public species list, long table (`FID`, `season`, `aphia_id`, `prob`, `class`) of the
-  species that are Likely (0.6-0.8) or Very likely (0.8-1.0) in each cell and season ({counts.get('n_cell_species', 0):,}
-  rows; Unlikely rows are not kept). Click a cell, filter by `FID` and `season`.
-- `species.parquet`: the lookup for `aphia_id` ({counts.get('n_species', 0)} species): `scientific_name`,
-  `abbreviation`, `iucn_code`, `redlisted`, `group1`, `group2` and `common_name` (English vernacular from WoRMS
-  `AphiaVernacularsByAphiaID`, blank when none). A group's list is `lower(group2) == group` (group2 is Fish, Ray, Shark, Turtle, Seal or Invertebrate);
-  `all` is every species and `redlisted` is `redlisted == true`. The per-species probability MAPS stay restricted; only this list is public.
-- `items/`: 24 STAC Items `{{group}}_{{season}}_{{metric}}`, each pointing at a column of `values.parquet` and
-  `values_h3.parquet` through `atlas:value_column`.
-- `styles/default.json`: MapLibre fill layer, Spectral reversed, 0..1.
-- `provenance.json`: source files, checksums, record counts.
+One row per asset of `collection.json` (asset key, file, content):
+
+| Asset | File | What it holds |
+|---|---|---|
+| `hex` | `hex.pmtiles` | hex grid, layer `hex`, attribute `FID` only; paint with MapLibre feature-state and `promoteId: "FID"` |
+| `values` | `values.parquet` | one row per FID, columns `{{group}}_{{season}}_{{suffix}}` ({counts['n_values_cols']} value columns); public metrics are `richness` and `uncertainty` |
+| `hex_h3` | `hex_h3.parquet` | FID to H3 res 7 crosswalk (`FID`, `h3`, `weight`, `overlap_km2`); `weight` sums to 1 per FID |
+| `values_h3` | `values_h3.parquet` | numeric value columns aggregated to H3 res 7 (area-weighted mean, 4 decimals, empty cells skipped) |
+| `cell_species` | `cell_species.parquet` | public species list, long table (`FID`, `season`, `aphia_id`, `prob`, `class`) of Likely (0.6-0.8) and Very likely (0.8-1.0) species, {counts.get('n_cell_species', 0):,} rows |
+| `species` | `species.parquet` | lookup for `aphia_id` ({counts.get('n_species', 0)} species): names, `abbreviation`, `iucn_code`, `redlisted`, `group1`, `group2`, `common_name` |
+| `hex_centroids` | `hex_centroids.parquet` | `FID`, `lon`, `lat` of each hexagon centroid (EPSG:4326), for point-in-polygon summaries over places |
+| `thumbnail` | `thumbnail.png` | 1200x800 preview of summer richness, all species (`thumbnail-sm.png` is the 400 px copy) |
+| `style` | `styles/default.json` | MapLibre fill layer, Spectral reversed, 0..1 |
+
+Other files: `items/` (24 STAC Items `{{group}}_{{season}}_{{metric}}`, each pointing at a column of `values.parquet`
+and `values_h3.parquet` through `atlas:value_column`) and `provenance.json` (source files, checksums, record counts).
+
+Notes. A group's species list is `lower(group2) == group` (`group2` is Fish, Ray, Shark, Turtle, Seal or
+Invertebrate); `all` is every species and `redlisted` is `redlisted == true`. `common_name` is the English
+vernacular from WoRMS (`AphiaVernacularsByAphiaID`), blank when none. The per-species probability MAPS stay
+restricted; only this list is public.
 
 ## Column suffixes
 
@@ -142,6 +142,8 @@ How to read this collection programmatically.
    where c.FID = 100 and c.season = 'summer' order by c.prob desc;
    ```
 7. The per-species probability surfaces (maps) are not in this collection; they are restricted.
+8. `thumbnail.png` (1200x800) and `thumbnail-sm.png` (400 px wide) preview summer richness for all species; the
+   `thumbnail` asset and the `preview` link point at the large one.
 """
 
 
@@ -176,6 +178,7 @@ Species sheet of Metadata_new-2025-05-16.xlsx), received on Google Drive. Specie
 - `cell_species.parquet`: long table (FID, season, aphia_id, prob, class) of Likely and Very likely species only
   ({counts['cell_rows']:,} rows), for a cell-click species list.
 - `items/`: 132 Items `{{aphia_id}}_{{season}}`.
+- `thumbnail.png`, `thumbnail-sm.png`: 1200x800 and 400 px previews, a 2x2 panel of four summer probability surfaces.
 """
 
 

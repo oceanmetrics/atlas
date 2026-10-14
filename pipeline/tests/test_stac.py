@@ -25,7 +25,7 @@ def test_indicator_collection_required_fields_and_extensions():
     assert stac.EXT[k] in c["stac_extensions"]
   assert c["sdm:response_type"] == "mixed" and c["sdm:method"] == "derived_merge"
   assert c["sdm:source_authority"] == "MBON BioTrack" and c["sdm:climatological"] is True
-  assert c["atlas:funders"] == ["NOAA IOOS MBON", "MMA"] and c["atlas:status"] == "prototype"
+  assert c["atlas:funders"] == ["NOAA IOOS MBON"] and c["atlas:status"] == "prototype"
   assert c["cube:dimensions"]["group"]["values"] == ["all", "fish", "ray", "redlisted", "shark", "turtle"]
   assert c["cube:dimensions"]["season"]["values"] == ["summer", "winter"]
   assert c["cube:dimensions"]["metric"]["values"] == ["richness", "uncertainty"]
@@ -170,3 +170,19 @@ def test_readme_and_agents_mention_the_species_list():
   readme, agents = docs.indicators_readme([], counts), docs.indicators_agents(counts)
   for text in (readme, agents):
     assert "cell_species.parquet" in text and "species.parquet" in text and "common_name" in text and "1,234" in text
+
+
+def test_readme_lists_every_collection_asset_and_the_credits_funders():
+  # regression: the live README predated hex_centroids; every asset key must be named, funders match the JSON
+  cols = list(ranges())
+  c = stac.indicators_collection(BBOX, cols, {}, cols, 3, 10, {"bytes": 1}, species_rows={"cell_species": 7, "species": 2})
+  readme = docs.indicators_readme([], {"n_hex": 3, "n_values_cols": 2, "n_null_richness": 0, "n_cell_species": 7, "n_species": 2})
+  assert set(c["assets"]) == {"hex", "values", "hex_h3", "values_h3", "cell_species", "species", "hex_centroids", "thumbnail", "style"}
+  for key in c["assets"]:
+    assert f"| `{key}` |" in readme, key
+  assert c["atlas:funders"] == ["NOAA IOOS MBON"]
+  # funders: MBON only for Neil's collections; MMA wording lives on the root catalog alone
+  assert "Funders: NOAA IOOS MBON\n" in readme and "MMA" not in readme and "MMA" not in c["description"]
+  sp = stac.species_collection(BBOX, [{"scientific_name": "A b", "aphia_id": 1}], 3, 0, {})
+  assert sp["atlas:funders"] == ["NOAA IOOS MBON"] and "MMA" not in sp["description"]
+  assert "MMA" not in docs.species_readme({"n_hex": 3, "cell_rows": 0}) + docs.species_agents()
