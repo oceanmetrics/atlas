@@ -67,7 +67,7 @@ def indicators_readme(fields: list[dict], counts: dict) -> str:
 Prototype (`atlas:status: prototype`). Ecoregion-weighted species richness and cumulative uncertainty for the US
 Atlantic and Gulf of Mexico, by species group (all, fish, ray, redlisted, shark, turtle) and season (summer,
 winter), in {counts['n_hex']:,} 10-km hexagonal cells, as GeoParquet-style tables plus a geometry-only PMTiles
-grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by MMA and MBON.
+grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), funded by NOAA IOOS MBON.
 
 {credits_block()}
 

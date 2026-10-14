@@ -25,7 +25,7 @@ def test_indicator_collection_required_fields_and_extensions():
     assert stac.EXT[k] in c["stac_extensions"]
   assert c["sdm:response_type"] == "mixed" and c["sdm:method"] == "derived_merge"
   assert c["sdm:source_authority"] == "MBON BioTrack" and c["sdm:climatological"] is True
-  assert c["atlas:funders"] == ["NOAA IOOS MBON", "MMA"] and c["atlas:status"] == "prototype"
+  assert c["atlas:funders"] == ["NOAA IOOS MBON"] and c["atlas:status"] == "prototype"
   assert c["cube:dimensions"]["group"]["values"] == ["all", "fish", "ray", "redlisted", "shark", "turtle"]
   assert c["cube:dimensions"]["season"]["values"] == ["summer", "winter"]
   assert c["cube:dimensions"]["metric"]["values"] == ["richness", "uncertainty"]
@@ -180,5 +180,9 @@ def test_readme_lists_every_collection_asset_and_the_credits_funders():
   assert set(c["assets"]) == {"hex", "values", "hex_h3", "values_h3", "cell_species", "species", "hex_centroids", "thumbnail", "style"}
   for key in c["assets"]:
     assert f"| `{key}` |" in readme, key
-  assert c["atlas:funders"] == ["NOAA IOOS MBON", "MMA"]
-  assert "Funders: NOAA IOOS MBON, MMA" in readme and "supported by MMA and MBON" in readme
+  assert c["atlas:funders"] == ["NOAA IOOS MBON"]
+  # funders: MBON only for Neil's collections; MMA wording lives on the root catalog alone
+  assert "Funders: NOAA IOOS MBON\n" in readme and "MMA" not in readme and "MMA" not in c["description"]
+  sp = stac.species_collection(BBOX, [{"scientific_name": "A b", "aphia_id": 1}], 3, 0, {})
+  assert sp["atlas:funders"] == ["NOAA IOOS MBON"] and "MMA" not in sp["description"]
+  assert "MMA" not in docs.species_readme({"n_hex": 3, "cell_rows": 0}) + docs.species_agents()

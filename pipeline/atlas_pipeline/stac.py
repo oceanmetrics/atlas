@@ -30,7 +30,7 @@ LICENSE_PLACEHOLDER = "CC-BY-4.0"
 CITATION = ("Couto, T.B.A., Hammerschlag, N., et al. (in prep). Multi-species biodiversity indicators from "
             "integrated occupancy models of acoustic telemetry and OBIS records, US Atlantic and Gulf of Mexico. "
             "MBON BioTrack.")
-FUNDERS = ["NOAA IOOS MBON", "MMA"]
+FUNDERS = ["NOAA IOOS MBON"]
 VERSION = "2025.05"
 OBS_START, OBS_END = "2000-01-01T00:00:00Z", "2023-12-31T23:59:59Z"
 
