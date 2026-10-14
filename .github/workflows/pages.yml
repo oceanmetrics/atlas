@@ -14,6 +14,7 @@ on:
       - "feedback/**"
       - "pipeline/**"
   pull_request:
+  workflow_dispatch:  
 
 # scoped per ref, not a single global "pages" group: a global group would let any push to a
 # feature branch or PR cancel an in-flight run FROM MAIN, including one that's mid-publish. Each
