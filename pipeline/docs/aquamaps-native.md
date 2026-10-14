@@ -9,13 +9,13 @@ the app builds a taxon's Item client-side, as it does for the v7 taxa shards (`d
 
 `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v7/tables/`
 
-| table | filter | columns used |
-| ----- | ------ | ------------ |
-| `model.parquet` | `ds_key = 'am_0.05'` (17,550 rows) | `mdl_seq`, `taxa` (= AquaMaps `sp_key`), `description` |
-| `taxon_model.parquet` | `ds_key = 'am_0.05'` (16,935) | `taxon_id`, `mdl_seq` |
-| `taxon.parquet` | all (17,561) | `taxon_id`, `taxon_authority` (worms, botw), `sp_cat`, `scientific_name`, `common_name`, `worms_id`, `redlist_code` |
-| `native_asset.parquet` | `ds_key = 'am'`, `representation = 'native'`, `asset_type = 'cog'` (17,499) | `mdl_key` (= `str(mdl_seq)`), `asset_url`, `xmin ymin xmax ymax` |
-| `model_asset.parquet` | `ds_key = 'am'` (17,544) | `mdl_seq`, `cog_url` (0.05 degree, grid `usa05`), `n_cells` |
+| table                  | filter                                                                      | columns used                                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `model.parquet`        | `ds_key = 'am_0.05'` (17,550 rows)                                          | `mdl_seq`, `taxa` (= AquaMaps `sp_key`), `description`                                                              |
+| `taxon_model.parquet`  | `ds_key = 'am_0.05'` (16,935)                                               | `taxon_id`, `mdl_seq`                                                                                               |
+| `taxon.parquet`        | all (17,561)                                                                | `taxon_id`, `taxon_authority` (worms, botw), `sp_cat`, `scientific_name`, `common_name`, `worms_id`, `redlist_code` |
+| `native_asset.parquet` | `ds_key = 'am'`, `representation = 'native'`, `asset_type = 'cog'` (17,499) | `mdl_key` (= `str(mdl_seq)`), `asset_url`, `xmin ymin xmax ymax`                                                    |
+| `model_asset.parquet`  | `ds_key = 'am'` (17,544)                                                    | `mdl_seq`, `cog_url` (0.05 degree, grid `usa05`), `n_cells`                                                         |
 
 Native COG (checked with `gdalinfo`): Byte, values 1-100, nodata 0, EPSG:4326, 0.5 degree cells, 720 columns,
 cropped to the species' latitude window (rows vary), internal overviews, DEFLATE.
