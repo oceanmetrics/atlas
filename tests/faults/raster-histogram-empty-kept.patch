@@ -1,0 +1,15 @@
+diff --git a/src/lib/raster/histogram.ts b/src/lib/raster/histogram.ts
+index df9ac23..3e6d244 100644
+--- a/src/lib/raster/histogram.ts
++++ b/src/lib/raster/histogram.ts
+@@ -95,7 +95,9 @@ export function parseTitilerStatistics(raw: unknown): Histogram | null {
+     (v): v is number => typeof v === "number" && Number.isFinite(v),
+   );
+   // no counted pixel at all (every pixel outside the range, or nodata): nothing to draw
+-  if (counts.length === 0 || counts.every((c) => c <= 0)) return null;
++  // SEEDED FAULT (tests/faults/raster-histogram-empty-kept.patch): a histogram with no counted pixel is
++  // kept, so a layer whose pixels all fall outside the range draws an empty (all-zero) chart.
++  if (counts.length === 0) return null;
+   // with `histogram_range` the bin edges (`hist[1]`, n+1 of them) span the REQUESTED range, not the
+   // band's own min/max -- the edges are what line the bars up with the ramp, so they win.
+   const edges = Array.isArray(hist[1])

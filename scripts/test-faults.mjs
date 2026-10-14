@@ -438,6 +438,37 @@ export const FAULTS = [
       "(Ben: it must represent the whole layer; only the marker follows a click)",
     gate: ["npx", "vitest", "run", "tests/lib/map/distribution.test.ts"],
   },
+  // --- WP14 (the legend histogram of raster items) -----------------------------------------------
+  {
+    id: "raster-histogram-empty-kept",
+    patch: "tests/faults/raster-histogram-empty-kept.patch",
+    describe:
+      "parseTitilerStatistics() keeps a histogram whose counts are all zero -- a raster layer with no " +
+      "pixel inside the legend range draws an empty chart instead of none",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/raster/histogram.test.ts",
+      "-t",
+      "empty: no counted pixel",
+    ],
+  },
+  {
+    id: "raster-histogram-key-drops-band",
+    patch: "tests/faults/raster-histogram-key-drops-band.patch",
+    describe:
+      "rasterHistogramKey() leaves the band out of the key -- band 2 (the CV) of a multi-band COG is " +
+      "served band 1's cached histogram",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/raster/histogram.test.ts",
+      "-t",
+      "the key separates bands",
+    ],
+  },
   // --- WP4 (places: overlays, summaries, the inside-places filter) -------------------------------
   {
     id: "pip-antimeridian-unshifted",

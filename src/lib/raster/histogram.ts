@@ -171,7 +171,7 @@ export function createHistogramCache(source: HistogramSource): HistogramCache {
       const pending = inflight.get(key);
       if (pending) return pending;
       const p = (async (): Promise<Histogram | null> => {
-        let h: Histogram | null = null;
+        let h: Histogram | null;
         try {
           h = await source.histogram({
             domain: "collection",
