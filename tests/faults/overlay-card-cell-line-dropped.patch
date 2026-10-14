@@ -1,0 +1,15 @@
+diff --git a/src/places/overlayInteraction.ts b/src/places/overlayInteraction.ts
+index d8eccd9..901edc6 100644
+--- a/src/places/overlayInteraction.ts
++++ b/src/places/overlayInteraction.ts
+@@ -75,7 +75,9 @@ export function overlayCardLines(
+   } else if (!info.isArea) {
+     lines.push({ kind: "note", text: "Only areas can be added to Places." });
+   }
+-  if (cellLine) lines.push({ kind: "cell", text: cellLine });
++  // SEEDED FAULT (tests/faults/overlay-card-cell-line-dropped.patch): the card forgets the cell line,
++  // so a click on a place over a hex cell shows the place only (the cell value is lost, or shown in a
++  // second popup).
+   return lines;
+ }
+ 

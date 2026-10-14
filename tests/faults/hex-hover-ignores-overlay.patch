@@ -1,0 +1,19 @@
+diff --git a/src/lib/map/layers/hex.ts b/src/lib/map/layers/hex.ts
+index 51e1ba4..4f0b69d 100644
+--- a/src/lib/map/layers/hex.ts
++++ b/src/lib/map/layers/hex.ts
+@@ -337,11 +337,9 @@ export function installHexInteraction(
+     if (fid === null) return hide();
+     // a gazetteer overlay feature over the cell: ITS hover popup carries this cell's line too, so
+     // this one stays away (one popup, never two)
+-    if (e.point && overlayAt(e.point)) {
+-      if (shown) popup.remove(); // (the overlay's own handler owns the cursor)
+-      shown = false;
+-      return;
+-    }
++    // SEEDED FAULT (tests/faults/hex-hover-ignores-overlay.patch): the hex hover popup no longer yields
++    // to an overlay feature over the same point, so two popups stack.
++    void overlayAt;
+     map.getCanvas().style.cursor = "pointer";
+     popup
+       .setLngLat([e.lngLat.lng, e.lngLat.lat])

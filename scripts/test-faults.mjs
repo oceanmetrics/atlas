@@ -445,6 +445,22 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/raster/statistics.test.ts"],
   },
   {
+    id: "overlay-card-cell-line-dropped",
+    patch: "tests/faults/overlay-card-cell-line-dropped.patch",
+    describe:
+      "the overlay popup forgets the hex cell's value line -- a click on a place over a cell shows " +
+      "the place only",
+    gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
+  },
+  {
+    id: "hex-hover-ignores-overlay",
+    patch: "tests/faults/hex-hover-ignores-overlay.patch",
+    describe:
+      "the hex hover popup does not yield to an overlay feature over the same point -- two popups " +
+      "stack (the gate: a hover over an overlay builds no hex popup)",
+    gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

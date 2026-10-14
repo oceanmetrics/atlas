@@ -17,6 +17,7 @@
 import type { ExpressionSpecification } from "maplibre-gl";
 import type { ValueColumn } from "../../catalog/values";
 import { SELECTION_COLOR } from "../colors";
+import { overlayAt, registerCellLine } from "../clickInfo";
 import { createPopup } from "../popup";
 import type { LayerSpecification, SourceSpecification } from "../types";
 
@@ -272,6 +273,7 @@ export function fidOfFeatures(
 export interface HexMouseEvent {
   features?: { id?: string | number | null }[];
   lngLat: { lng: number; lat: number };
+  point?: { x: number; y: number };
 }
 
 /** the slice of a MapLibre map the interaction needs. */
@@ -287,6 +289,11 @@ export interface HexInteractionMap {
     listener: (e: never) => void,
   ): unknown;
   getCanvas(): { style: { cursor: string } };
+  /** lets the cell's data line be offered to an overlay popup that sits over the same point. */
+  queryRenderedFeatures?(
+    geometry: { x: number; y: number },
+    options: { layers: string[] },
+  ): readonly { id?: string | number | null }[];
 }
 
 export interface HexInteractionOptions {
@@ -328,6 +335,13 @@ export function installHexInteraction(
     if (opts.isOwned?.()) return hide();
     const fid = fidOfFeatures(e.features);
     if (fid === null) return hide();
+    // a gazetteer overlay feature over the cell: ITS hover popup carries this cell's line too, so
+    // this one stays away (one popup, never two)
+    if (e.point && overlayAt(e.point)) {
+      if (shown) popup.remove(); // (the overlay's own handler owns the cursor)
+      shown = false;
+      return;
+    }
     map.getCanvas().style.cursor = "pointer";
     popup
       .setLngLat([e.lngLat.lng, e.lngLat.lat])
@@ -348,11 +362,20 @@ export function installHexInteraction(
       lngLat: [e.lngLat.lng, e.lngLat.lat],
     });
   };
+  // the cell's data line, for an overlay popup over the same point (the hover text, so the two agree)
+  const unregister = registerCellLine((point) => {
+    if (opts.isOwned?.() || !map.queryRenderedFeatures) return null;
+    const fid = fidOfFeatures(map.queryRenderedFeatures(point, { layers: [HEX_FILL_ID] }));
+    return fid === null
+      ? null
+      : hexHoverText(fid, opts.valueOf(fid), opts.format, opts.extra?.(fid));
+  });
   map.on("mousemove", HEX_FILL_ID, onMove as never);
   map.on("mouseleave", HEX_FILL_ID, hide as never);
   map.on("click", HEX_FILL_ID, onClick as never);
   return {
     destroy() {
+      unregister();
       map.off("mousemove", HEX_FILL_ID, onMove as never);
       map.off("mouseleave", HEX_FILL_ID, hide as never);
       map.off("click", HEX_FILL_ID, onClick as never);

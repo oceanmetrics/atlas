@@ -103,6 +103,11 @@ and hex painting follow.
   numbers), and titiler's coverage-weighted pixel count is rounded to whole pixels.
 - **Place layers in both lenses (WP11).** The Species lens' Layers panel now carries the same "Place layers"
   list, and `?ov=` works in either lens (the overlays were Collections-only).
+- **One popup where a place and a cell overlap (WP11).** A click on a gazetteer overlay feature that lies over
+  a hex cell opens ONE card: the place (name, status, "Add <name> to Places") on top and the cell's value
+  line ("Cell 11234: 0.76 · 7 likely species") under it; the cell is still selected (outline, legend marker,
+  Details). The hover tooltip merges the same way instead of stacking two. In the Species lens a click on
+  an overlay feature opens the place card only (click beside it to read the species value).
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.
