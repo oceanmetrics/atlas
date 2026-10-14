@@ -50,6 +50,7 @@
  *                            worst-case OPAQUE composite of that glass over the map (see spec.md)
  * exempt  --om-navy        : raw palette; reaches the screen only through a theme token above
  * exempt  --om-teal        : raw palette
+ * exempt  --om-mark-spark  : decorative, the fixed yellow spark inside the OceanMetrics mark (OmMark.svelte)
  * exempt  --om-teal-deep   : raw palette
  * exempt  --om-sand        : raw palette
  * exempt  --om-crimson     : raw palette
@@ -71,6 +72,8 @@
  */
 
 :root {
+  /* the warm spark on the horizon of the OceanMetrics mark (OmMark.svelte); fixed in both themes */
+  --om-mark-spark: #f5b528;
   /* --- OceanMetrics palette: navy, teal, sand. Chrome only, never data. ----------------------- */
   --om-navy: #05294d; /* ink on teal, paper's text, the wordmark */
   --om-teal: #2fc7b8; /* the active accent: fill, ring and focus on dark; a fill (never text) on paper */

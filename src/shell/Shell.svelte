@@ -1,4 +1,5 @@
 <script lang="ts">
+  import OmMark from "../lib/brand/OmMark.svelte";
   // The hydrated shell. Reads and writes view state ONLY through src/lib/state (createSelStore ->
   // history.replaceState, never pushState -- CLAUDE.md "URL-is-the-view"; see
   // tests/shell/shell-invariants.test.ts's source-scan guard, the same technique
@@ -1291,7 +1292,9 @@
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">
     <h1 class="brand-title" id="app-title">
-      <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+      <OmMark size="1.05em" /><span class="wm-ocean">Ocean</span><span class="wm-metrics"
+        >Metrics</span
+      >
       <span class="wm-atlas">Atlas</span>
     </h1>
   </span>

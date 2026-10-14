@@ -67,7 +67,7 @@ def indicators_readme(fields: list[dict], counts: dict) -> str:
 Prototype (`atlas:status: prototype`). Ecoregion-weighted species richness and cumulative uncertainty for the US
 Atlantic and Gulf of Mexico, by species group (all, fish, ray, redlisted, shark, turtle) and season (summer,
 winter), in {counts['n_hex']:,} 10-km hexagonal cells, as GeoParquet-style tables plus a geometry-only PMTiles
-grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by BOEM and MBON.
+grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by MMA and MBON.
 
 {credits_block()}
 
@@ -216,7 +216,7 @@ def catalog_readme() -> str:
   return """\
 # OceanMetrics Atlas catalog
 
-Root STAC catalog of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by BOEM and MBON.
+Root STAC catalog of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by MMA and MBON.
 Children: `biotrack_indicators` (MBON BioTrack richness and uncertainty) and, by reference, the MarineSensitivity
 SDM collections (v7, v8 gm and nc) at https://file.marinesensitivity.org/stac/. Each collection README holds its
 credits (citation, license, contacts, funders) and methods. Prototype.

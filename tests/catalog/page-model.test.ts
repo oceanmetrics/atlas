@@ -425,11 +425,12 @@ describe("groupCards", () => {
 
 describe("brand strings", () => {
   it("carries the credit line and the supporter links the map, About and footer share", () => {
-    expect(BRAND_CREDIT).toBe("OceanMetrics Atlas · supported by BOEM and MBON");
-    expect(SUPPORTERS.map((s) => s.href)).toEqual([
-      "https://www.boem.gov",
-      "https://marinebon.org",
+    expect(BRAND_CREDIT).toBe("OceanMetrics Atlas · supported by MMA and MBON");
+    expect(SUPPORTERS.map((s) => [s.label, s.href])).toEqual([
+      ["MMA", "https://marinesensitivity.org"],
+      ["MBON", "https://marinebon.org"],
     ]);
+    expect(SUPPORTERS.every((s) => s.logo.startsWith("./logos/"))).toBe(true);
     expect(ABOUT_LINKS.map((l) => l.href)).toEqual([
       "https://marinebon.org/data-products/",
       "https://marinebon.org/biotrack/",

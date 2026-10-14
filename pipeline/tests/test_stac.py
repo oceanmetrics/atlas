@@ -25,7 +25,7 @@ def test_indicator_collection_required_fields_and_extensions():
     assert stac.EXT[k] in c["stac_extensions"]
   assert c["sdm:response_type"] == "mixed" and c["sdm:method"] == "derived_merge"
   assert c["sdm:source_authority"] == "MBON BioTrack" and c["sdm:climatological"] is True
-  assert c["atlas:funders"] == ["NOAA IOOS MBON", "BOEM"] and c["atlas:status"] == "prototype"
+  assert c["atlas:funders"] == ["NOAA IOOS MBON", "MMA"] and c["atlas:status"] == "prototype"
   assert c["cube:dimensions"]["group"]["values"] == ["all", "fish", "ray", "redlisted", "shark", "turtle"]
   assert c["cube:dimensions"]["season"]["values"] == ["summer", "winter"]
   assert c["cube:dimensions"]["metric"]["values"] == ["richness", "uncertainty"]
@@ -103,7 +103,7 @@ def test_restricted_collection_not_linked_from_root_catalog():
   assert "https://file.marinesensitivity.org/stac/v7/collection.json" in children
   assert "https://file.marinesensitivity.org/stac/v8/gm/collection.json" in children
   assert "https://file.marinesensitivity.org/stac/v8/nc/collection.json" in children
-  assert "BOEM" in cat["description"] and "MBON" in cat["description"]
+  assert "MMA" in cat["description"] and "MBON" in cat["description"]
 
 
 def test_check_stac_required_flags_missing_sdm_fields():

@@ -30,7 +30,7 @@ LICENSE_PLACEHOLDER = "CC-BY-4.0"
 CITATION = ("Couto, T.B.A., Hammerschlag, N., et al. (in prep). Multi-species biodiversity indicators from "
             "integrated occupancy models of acoustic telemetry and OBIS records, US Atlantic and Gulf of Mexico. "
             "MBON BioTrack.")
-FUNDERS = ["NOAA IOOS MBON", "BOEM"]
+FUNDERS = ["NOAA IOOS MBON", "MMA"]
 VERSION = "2025.05"
 OBS_START, OBS_END = "2000-01-01T00:00:00Z", "2023-12-31T23:59:59Z"
 
@@ -488,7 +488,7 @@ def root_catalog(external_children: list[dict]) -> dict:
     "title": "OceanMetrics Atlas",
     "description": (
       "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty "
-      "indicators, plus the MarineSensitivity SDM collections by reference. Supported by BOEM and the "
+      "indicators, plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
       "Marine Biodiversity Observation Network (MBON). Built by OceanMetrics."),
     "links": [
       {"rel": "root", "href": "./catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},

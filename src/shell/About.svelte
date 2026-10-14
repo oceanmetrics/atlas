@@ -4,7 +4,9 @@
   // `lib/brand/brand.ts` and `about.ts`, the same files the catalog page footer and the map attribution read, so the
   // credit line cannot drift. The app is the only thing here that varies per build (`appVersion`).
   import Modal from "../lib/ui/Modal.svelte";
-  import { BRAND_NAME, SUPPORTERS } from "../lib/brand/brand";
+  import { BRAND_NAME } from "../lib/brand/brand";
+  import OmMark from "../lib/brand/OmMark.svelte";
+  import SupporterLogos from "../lib/brand/SupporterLogos.svelte";
   import {
     ABOUT_DESCRIPTION,
     ABOUT_LINKS,
@@ -27,17 +29,13 @@
 
 <Modal {open} title="About {BRAND_NAME}" {onclose}>
   <p class="wordmark" aria-hidden="true">
-    <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+    <OmMark size="1.2em" /><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span
+    >
     <span class="wm-atlas">Atlas</span>
   </p>
   <p class="lede">{ABOUT_DESCRIPTION}</p>
 
-  <p class="support" data-testid="about-supporters">
-    Supported by
-    {#each SUPPORTERS as s, i (s.href)}{#if i > 0}{i === SUPPORTERS.length - 1
-          ? " and "
-          : ", "}{/if}<a href={s.href} target="_blank" rel="noopener">{s.label}</a>{/each}.
-  </p>
+  <SupporterLogos testid="about-supporters" />
 
   <h3>Related</h3>
   <ul class="links" data-testid="about-links">
@@ -82,7 +80,6 @@
     color: var(--text-secondary);
   }
   .lede,
-  .support,
   .cite {
     margin: 0 0 var(--space-3);
     font-size: var(--text-md);
