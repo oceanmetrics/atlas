@@ -477,6 +477,21 @@ export const FAULTS = [
       "from a shared view on load",
     gate: ["npx", "vitest", "run", "tests/map/autoZoom.test.ts", "-t", "map= wins on load"],
   },
+  {
+    id: "dim-note-taxon-not-first",
+    patch: "tests/faults/dim-note-taxon-not-first.patch",
+    describe:
+      "unavailableNote() stops asking the taxon-like sibling first -- 'Atlantic' with a Pacific-only " +
+      "species is blamed on the first sibling instead of 'no <species> model'",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/catalog/dimNotes.test.ts",
+      "-t",
+      "a taxon-like sibling blocks",
+    ],
+  },
   // --- WP4 (places: overlays, summaries, the inside-places filter) -------------------------------
   {
     id: "pip-antimeridian-unshifted",

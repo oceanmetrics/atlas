@@ -1,0 +1,16 @@
+diff --git a/src/lib/catalog/dims.ts b/src/lib/catalog/dims.ts
+index 1155d9c..1eef7d6 100644
+--- a/src/lib/catalog/dims.ts
++++ b/src/lib/catalog/dims.ts
+@@ -200,7 +200,10 @@ export function unavailableNote(args: {
+   // taxon-like siblings are asked first: "no <species> model" is the more telling reason
+   const siblings = dims
+     .filter((d) => d.key !== dim.key)
+-    .sort((a, b) => Number(b.taxon === true) - Number(a.taxon === true));
++    // SEEDED FAULT (tests/faults/dim-note-taxon-not-first.patch): the taxon-like sibling is no longer asked
++    // first, so the note blames the first sibling in declaration order ("not with the current region")
++    // instead of the missing model.
++    .filter(() => true);
+   for (const sib of siblings) {
+     const rest = Object.fromEntries(
+       Object.entries(selected).filter(([k]) => k !== dim.key && k !== sib.key),

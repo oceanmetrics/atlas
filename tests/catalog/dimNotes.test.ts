@@ -103,6 +103,43 @@ describe("unavailableNote: what blocks the value", () => {
       }),
     ).toBe("(not with the current selection)");
   });
+  it("the taxon is blamed first even when an earlier sibling would also unblock the value", () => {
+    // region, season, species; Atlantic is reachable by changing the season (A: winter) OR the species (summer)
+    const c = {
+      type: "Collection",
+      id: "x",
+      links: [],
+      "cube:dimensions": {
+        region: { type: "other", values: ["atl", "pac"] },
+        season: { type: "other", values: ["summer", "winter"] },
+        species: {
+          type: "other",
+          "atlas:taxon_dim": true,
+          values: ["A", "B"],
+          "atlas:labels": { A: "Alpha", B: "Beta" },
+        },
+      },
+    } as unknown as StacCollection;
+    const it = (region: string, season: string, species: string) =>
+      ({
+        type: "Feature",
+        id: `${region}${season}${species}`,
+        properties: { "atlas:dims": { region, season, species } },
+        assets: {},
+        links: [],
+      }) as unknown as StacItem;
+    const xs = [it("atl", "summer", "A"), it("pac", "summer", "B"), it("atl", "winter", "B")];
+    const d = dimsOf(c, xs);
+    expect(
+      unavailableNote({
+        dim: d[0],
+        value: "atl",
+        dims: d,
+        items: xs,
+        selected: { region: "pac", season: "summer", species: "B" },
+      }),
+    ).toBe("(no Beta model)");
+  });
   it("an available value, and the current one, have no note", () => {
     expect(note(region, "pacific")).toBe("");
     expect(note(species, "LOON")).toBe("");
