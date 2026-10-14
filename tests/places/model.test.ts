@@ -318,3 +318,18 @@ describe("reportHash", () => {
     },
   );
 });
+
+describe("addGazPlace: an id that cannot be carried in a link is refused (a search hit)", () => {
+  it("a place_id over the p. token's 120 encoded characters is refused, never added", async () => {
+    const { addGazPlace } = await import("../../src/places/model");
+    const long = `ONMS:${"a-very-long-section-name-".repeat(6)}`;
+    const r = addGazPlace([], long, "Long one");
+    expect(r.ok).toBe(false);
+    expect(r.places).toEqual([]);
+    expect(r.reason).toMatch(/too long/);
+  });
+  it("an ordinary id still adds", async () => {
+    const { addGazPlace } = await import("../../src/places/model");
+    expect(addGazPlace([], "NMS:CINMS", "Channel Islands").ok).toBe(true);
+  });
+});

@@ -1,0 +1,12 @@
+diff --git a/src/lib/catalog/centroids.ts b/src/lib/catalog/centroids.ts
+index 1cebf81..d6bd1d5 100644
+--- a/src/lib/catalog/centroids.ts
++++ b/src/lib/catalog/centroids.ts
+@@ -27,7 +27,6 @@ export function centroidsAssetOf(collection: StacCollection | null): CentroidsAs
+ }
+ 
+ function num(v: unknown): number {
+-  if (v === null || v === undefined) return Number.NaN; // Number(null) is 0: a null key is not cell 0
+   return typeof v === "bigint" ? Number(v) : typeof v === "number" ? v : Number(v);
+ }
+ 

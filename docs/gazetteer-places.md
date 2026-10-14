@@ -85,3 +85,25 @@ A failed fetch never removes the token: the place stays in the link and the list
   `VITE_GAZETTEER_BASE`. URLs inside `layers.json` under the canonical root are re-based the same way.
 - **Layer group.** The gazetteer tile layer rides in the Layers panel's "Selection" group (it is a
   picking aid shown beside the selection highlight), under the pink outline.
+
+## WP4: overlays, search, summaries (2026-10-14)
+
+- **Place layers.** `src/places/overlays.ts` (pure model), `overlays.svelte.ts` (URL + manifest wiring),
+  `PlaceLayerList.svelte` (the list under the Layers panel's "Place layers" stack group,
+  `data-overlays`), `src/lib/map/layers/overlays.ts` (style objects), `overlayInteraction.ts` (hover,
+  click, "Add <name> to Places"). The manifest is read with a plain `fetch`
+  (`src/lib/gazetteer/manifest.ts`), never through the parquet client, so the overlay list adds nothing
+  to the static graph beyond a few KB. `?ov=` grammar: `src/lib/gazetteer/overlayUrl.ts`. The overlays are
+  drawn in the Collections lens only (its Layers panel hosts the list); to show them in another lens,
+  mount `PlaceLayerList` in its Layers panel through `LayersPanel`'s `placeLayers` snippet and drop the
+  `overlaysEnabled` condition in `Shell.svelte`.
+- **Search.** `searchGazetteer()` (`resolve.ts`, lazy) wraps the vendored client's `search()`: areas only,
+  one hit per place_id. A `p.` token carries the id alone, so an id that lives in two collections
+  resolves to the first by authority order (the same lease in both BOEM layers: the same polygon).
+- **Summaries.** `summary.ts` (pure), `summary.svelte.ts` (wiring), `hex_centroids` read by
+  `lib/catalog/centroids.ts`, point-in-polygon in `lib/geo/pip.ts`, raster statistics in
+  `lib/raster/statistics.ts`. DuckDB-WASM is not involved: the centroid table and the item's value
+  column are both read with hyparquet and joined in memory.
+- **Known limit.** titiler-v8 answers the CORS preflight of a JSON POST to `/cog/statistics` with 400
+  (`access-control-allow-methods: GET`, checked 2026-10-14), so a browser cannot get raster area
+  statistics until the tile server allows POST; the summary rows say so.

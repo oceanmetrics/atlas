@@ -1,0 +1,13 @@
+diff --git a/src/lib/geo/pip.ts b/src/lib/geo/pip.ts
+index 8598eb0..b121d62 100644
+--- a/src/lib/geo/pip.ts
++++ b/src/lib/geo/pip.ts
+@@ -59,7 +59,7 @@ export function pointInRing(x: number, y: number, ring: readonly Position[]): bo
+   return inside;
+ }
+ 
+-const SHIFTS = [0, 360, -360] as const;
++const SHIFTS = [0] as const;
+ 
+ function inPolygon(p: PreparedPolygon, lon: number, lat: number): boolean {
+   const [x0, y0, x1, y1] = p.box;
