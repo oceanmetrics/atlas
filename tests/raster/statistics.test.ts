@@ -82,6 +82,32 @@ describe("titiler /cog/statistics", () => {
     );
     expect(calls[0].body).toMatchObject({ type: "Feature", geometry: { type: "Polygon" } });
   });
+  it("a multi-band COG is asked for its band: bidx in the URL, the bN answer parsed (live 2026-10-14)", async () => {
+    expect(titilerStatisticsUrl(HOST, "https://b.example/x.tif", 2)).toBe(
+      "https://t.example/cog/statistics?url=https%3A%2F%2Fb.example%2Fx.tif&bidx=2",
+    );
+    const calls: string[] = [];
+    const src = createTitilerStatisticsSource(async (url) => {
+      calls.push(url);
+      return {
+        properties: { statistics: { b2: { count: 306.53, min: 0.27, max: 1.35, mean: 0.35 } } },
+      };
+    }, HOST);
+    const res = await src.statistics({
+      cogUrl: "https://b.example/x.tif",
+      bidx: 2,
+      geometry: box(0, 0, 1, 1),
+    });
+    expect(calls[0]).toMatch(/&bidx=2$/);
+    expect(res).toMatchObject({ ok: true, value: { mean: 0.35, min: 0.27 } });
+  });
+  it("titiler's coverage-weighted count is shown as whole pixels", () => {
+    expect(
+      parseStatistics({ properties: { statistics: { b1: { count: 622.42, mean: 1 } } } }),
+    ).toMatchObject({
+      count: 622,
+    });
+  });
   it("a transport failure (CORS, offline, HTTP 4xx) is a network error, not a throw", async () => {
     const src = createTitilerStatisticsSource(async () => {
       throw new TypeError("Failed to fetch");

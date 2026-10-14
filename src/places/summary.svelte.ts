@@ -121,6 +121,7 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
   // --- what the current item is ------------------------------------------------------------------
   const hasHex = $derived(lens.mapInputs.hex !== null);
   const cogUrl = $derived(lens.mapInputs.cogUrl);
+  const cogBidx = $derived(lens.mapInputs.cogBidx);
   const mode = $derived<SummaryMode>(hasHex ? "hex" : cogUrl ? "raster" : "none");
   const centroidsAsset = $derived(centroidsAssetOf(lens.entry?.collection ?? null));
   const needed = $derived(inputs.length > 0 || filterOn);
@@ -198,12 +199,13 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
   let rasterVersion = $state(0);
   $effect(() => {
     if (mode !== "raster" || !cogUrl) return;
+    const bidx = cogBidx ?? undefined;
     for (const p of inputs) {
       if (p.state !== "ready") continue;
-      const key = `${cogUrl}|${geometryKey(p.geometry)}`;
+      const key = `${cogUrl}|${bidx ?? 1}|${geometryKey(p.geometry)}`;
       if (rasterCache.has(key)) continue;
       rasterCache.set(key, "pending");
-      void stats.statistics({ cogUrl, geometry: p.geometry }).then((res) => {
+      void stats.statistics({ cogUrl, bidx, geometry: p.geometry }).then((res) => {
         rasterCache.set(key, res);
         rasterVersion++;
       });
@@ -212,10 +214,11 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
   const rasterRows = $derived.by<SummaryRow[]>(() => {
     void rasterVersion;
     if (mode !== "raster" || !cogUrl) return [];
+    const band = cogBidx ?? 1;
     return summaryRows(inputs, () => null, "pixels").map((row, i) => {
       const p = inputs[i];
       if (p.state !== "ready") return row;
-      const got = rasterCache.get(`${cogUrl}|${geometryKey(p.geometry)}`);
+      const got = rasterCache.get(`${cogUrl}|${band}|${geometryKey(p.geometry)}`);
       if (!got || got === "pending") return row;
       if (!got.ok) {
         const blocked = got.error.kind === "network";
@@ -223,7 +226,7 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
           ...row,
           status: "error" as const,
           message: blocked
-            ? "the tile server could not be reached for statistics (it may not allow this request from a browser yet)"
+            ? "the tile server could not be reached for statistics"
             : got.error.message,
         };
       }

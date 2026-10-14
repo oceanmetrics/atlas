@@ -1,0 +1,15 @@
+diff --git a/src/lib/raster/statistics.ts b/src/lib/raster/statistics.ts
+index ed20813..2213952 100644
+--- a/src/lib/raster/statistics.ts
++++ b/src/lib/raster/statistics.ts
+@@ -146,7 +146,9 @@ export function createTitilerStatisticsSource(
+ ): StatisticsSource {
+   return {
+     async statistics(req) {
+-      const url = titilerStatisticsUrl(config, req.cogUrl, req.bidx);
++      // SEEDED FAULT (tests/faults/statistics-bidx-dropped.patch): the band is never sent, so a
++      // multi-band COG summarises band 1 whatever the map draws.
++      const url = titilerStatisticsUrl(config, req.cogUrl);
+       const body: Feature = {
+         type: "Feature",
+         properties: {},

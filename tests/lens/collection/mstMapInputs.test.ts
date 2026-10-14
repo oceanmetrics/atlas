@@ -91,6 +91,8 @@ describe("a multi-band item with rescale: auto", () => {
       marker: null,
     });
     expect(out.raster?.tiles[0]).toMatch(/&colormap_name=spectral_r&rescale=0\.11,1\.97&bidx=2$/);
+    // the band reaches the place summaries too (titiler /cog/statistics must read the band drawn)
+    expect(out.cogBidx).toBe(2);
     expect(out.legend?.stops[0].value).toBe(0.11);
     expect(out.legend?.stops.at(-1)?.value).toBe(1.97);
   });

@@ -104,6 +104,6 @@ A failed fetch never removes the token: the place stays in the link and the list
   `lib/catalog/centroids.ts`, point-in-polygon in `lib/geo/pip.ts`, raster statistics in
   `lib/raster/statistics.ts`. DuckDB-WASM is not involved: the centroid table and the item's value
   column are both read with hyparquet and joined in memory.
-- **Known limit.** titiler-v8 answers the CORS preflight of a JSON POST to `/cog/statistics` with 400
-  (`access-control-allow-methods: GET`, checked 2026-10-14), so a browser cannot get raster area
-  statistics until the tile server allows POST; the summary rows say so.
+- **Raster statistics (live 2026-10-14).** titiler-v8 now allows POST in its CORS preflight, so
+  `/cog/statistics` answers a browser: a place over a raster item shows pixels, mean, min, max as
+  "display-grid statistics", on the band the map draws (`bidx`).

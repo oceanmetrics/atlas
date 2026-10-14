@@ -37,6 +37,8 @@ export interface CollectionMapInputs {
   legend: CollectionLegend | null;
   /** the COG a download of "the data layer" would fetch; `null` for a hex item. */
   cogUrl: string | null;
+  /** the band of that COG the map draws (`atlas:bidx`), `null` = band 1. */
+  cogBidx: number | null;
 }
 
 export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
@@ -44,6 +46,7 @@ export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
   raster: null,
   legend: null,
   cogUrl: null,
+  cogBidx: null,
 };
 
 /** the id of the collection raster's source and layer. */
@@ -117,6 +120,7 @@ export function collectionMapInputs(args: {
       },
       raster: null,
       cogUrl: null,
+      cogBidx: null,
       legend: {
         kind: "continuous",
         title: lt.title,
@@ -146,6 +150,7 @@ export function collectionMapInputs(args: {
     return {
       hex: null,
       cogUrl: cog.url,
+      cogBidx: cog.bidx ?? null,
       raster: {
         id: COLLECTION_RASTER_ID,
         tiles: [

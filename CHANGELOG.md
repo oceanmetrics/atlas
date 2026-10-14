@@ -91,10 +91,16 @@ and hex painting follow.
   centroid (new `hex_centroids` asset of `biotrack_indicators`: `FID`, `lon`, `lat`, 27,841 rows, 0.6 MB,
   and `lib/geo/pip.ts`, ray casting that also handles holes and antimeridian-unwrapped places);
   raster items ask titiler `/cog/statistics` (display-grid statistics, labelled as such; the tile
-  server does not yet answer a browser's POST preflight, so these rows say so instead of a number).
+  server answers a browser's POST preflight since 2026-10-14, see WP11 below).
   The same rows are in the Table tool, with a CSV download.
 - **Only inside places.** A switch in the Places pane dims hex cells whose centroid is outside every
   place (feature state `inside`, opacity 0.15); `?filter=places`.
+
+- **Raster place summaries work in the browser (WP11).** The tile server now allows the POST preflight, so a
+  place over a raster item shows pixels, mean, min and max from titiler `/cog/statistics` (checked live:
+  Stellwagen Bank over the Arctic Tern density), labelled "display-grid statistics". A multi-band COG is
+  summarised on the band the map draws (`bidx`: coefficient of variation no longer shows the density's
+  numbers), and titiler's coverage-weighted pixel count is rounded to whole pixels.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

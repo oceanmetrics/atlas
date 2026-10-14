@@ -437,6 +437,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/places/summary.test.ts"],
   },
   {
+    id: "statistics-bidx-dropped",
+    patch: "tests/faults/statistics-bidx-dropped.patch",
+    describe:
+      "the raster statistics source never sends the band (bidx) -- a multi-band COG is summarised " +
+      "on band 1 whatever the map draws (the coefficient of variation shows the density's numbers)",
+    gate: ["npx", "vitest", "run", "tests/raster/statistics.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:
