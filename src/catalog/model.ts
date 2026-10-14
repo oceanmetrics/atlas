@@ -187,7 +187,13 @@ export function assetViews(collection: StacCollection): AssetView[] {
     ...(per ? { title: `${(a.title ?? "").trim() || key} (one per item)` } : {}),
   }));
   rows.sort((x, y) => Number(y.data) - Number(x.data));
-  return rows.map(({ data: _data, ...r }) => r);
+  return rows.map((r) => ({
+    key: r.key,
+    title: r.title,
+    type: r.type,
+    size: r.size,
+    href: r.href,
+  }));
 }
 
 // --- dimensions, temporal, extent ---------------------------------------------------------------
@@ -224,7 +230,12 @@ export function dimViews(collection: StacCollection): DimView[] {
   if (dims && typeof dims === "object") {
     for (const [key, d] of Object.entries(dims)) {
       if (!d || !Array.isArray(d.values) || d.values.length === 0) continue;
-      out.push(cap((d.title ?? "").trim() || key, d.values.map((v) => dimValueLabel(d, v))));
+      out.push(
+        cap(
+          (d.title ?? "").trim() || key,
+          d.values.map((v) => dimValueLabel(d, v)),
+        ),
+      );
     }
   }
   if (out.length > 0) return out;
@@ -257,7 +268,11 @@ export function temporalLabel(collection: StacCollection): string | null {
   if (start && end) range = start === end ? start : `${start}–${end}`;
   else if (start) range = `${start}–present`;
   else if (end) range = `until ${end}`;
-  const step = humanize(typeof collection["sdm:temporal_interval"] === "string" ? (collection["sdm:temporal_interval"] as string) : "");
+  const step = humanize(
+    typeof collection["sdm:temporal_interval"] === "string"
+      ? (collection["sdm:temporal_interval"] as string)
+      : "",
+  );
   if (range && step) return `${range} (${step})`;
   return range ?? (step || null);
 }

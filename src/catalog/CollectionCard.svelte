@@ -42,7 +42,7 @@
           <dt>Response</dt>
           <dd>
             {card.responseType ?? "not stated"}{#if card.method}
-              <span class="sub"> &middot; method: {card.method}</span>{/if}
+              <span class="sub">&nbsp;&middot; method: {card.method}</span>{/if}
           </dd>
         {/if}
         {#if card.temporal}
