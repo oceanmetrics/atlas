@@ -511,7 +511,7 @@ def root_catalog(external_children: list[dict]) -> dict:
     "title": "OceanMetrics Atlas",
     "description": (
       "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty "
-      "indicators, plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
+      "indicators, AquaMaps native 0.5 degree habitat suitability, plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
       "Marine Biodiversity Observation Network (MBON). Built by OceanMetrics."),
     "links": [
       {"rel": "root", "href": "./catalog.json", "type": JSON_T, "title": "OceanMetrics Atlas"},
@@ -520,6 +520,8 @@ def root_catalog(external_children: list[dict]) -> dict:
       {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
       {"rel": "child", "href": "./biotrack_indicators/collection.json", "type": JSON_T,
        "title": "MBON BioTrack biodiversity indicators"},
+      {"rel": "child", "href": "./aquamaps_native/collection.json", "type": JSON_T,
+       "title": "AquaMaps habitat suitability, native 0.5 degree"},
       *[{"rel": "child", "href": c["href"], "type": JSON_T, "title": c["title"]} for c in external_children],
     ],
   }

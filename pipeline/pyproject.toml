@@ -18,6 +18,7 @@ dependencies = [
   "pandas>=2.2",
   "matplotlib>=3.8",
   "pillow>=10",
+  "rasterio>=1.4",
 ]
 
 [dependency-groups]

@@ -222,8 +222,9 @@ def catalog_readme() -> str:
 # OceanMetrics Atlas catalog
 
 Root STAC catalog of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported by MMA and MBON.
-Children: `biotrack_indicators` (MBON BioTrack richness and uncertainty) and, by reference, the MarineSensitivity
-SDM collections (v7, v8 gm and nc) at https://file.marinesensitivity.org/stac/. Each collection README holds its
+Children: `biotrack_indicators` (MBON BioTrack richness and uncertainty), `aquamaps_native` (AquaMaps native 0.5 degree
+habitat suitability, a registry of references to the MarineSensitivity v7 native COGs, non-commercial use only) and,
+by reference, the MarineSensitivity SDM collections (v7, v8 gm and nc) at https://file.marinesensitivity.org/stac/. Each collection README holds its
 credits (citation, license, contacts, funders) and methods. Prototype.
 """
 
@@ -235,4 +236,111 @@ def catalog_agents() -> str:
 Start at `catalog.json`; follow `child` links to collections, then `item` links. Collections declare
 `cube:dimensions`; each Item has `atlas:dims` (one value per dimension) and assets pointing at Parquet columns
 (`atlas:value_column`) or PMTiles (`atlas:id_field`). External children are MarineSensitivity STAC collections.
+"""
+
+
+# ---- aquamaps_native ----
+
+def aquamaps_credits() -> str:
+  from . import aquamaps as aq
+  return f"""\
+## Credits
+
+- Citation: {aq.CITATION}
+- License: {aq.LICENSE} (CC BY-NC 3.0 Unported, {aq.LICENSE_URL}). **{aq.NOTE}**
+- Producer and licensor: AquaMaps ({aq.AQUAMAPS_URL}). Questions about reuse and partnering: info.aquamaps@gmail.com.
+- Processor: MarineSensitivity (https://marinesensitivity.org), which published the native COGs in release v7.
+- Hosted by OceanMetrics (https://oceanmetrics.io)."""
+
+
+def aquamaps_registry_table() -> str:
+  from . import aquamaps as aq
+  rows = ["| Column | Type | Meaning |", "|---|---|---|"]
+  rows += [f"| `{c}` | {t} | {d} |" for c, t, d in aq.REGISTRY_FIELDS]
+  return "\n".join(rows)
+
+
+def aquamaps_readme(counts: dict) -> str:
+  from . import aquamaps as aq
+  idx = (f"- `registry_index.json`: compact search index (`[sp_key, scientific_name, common_name, sp_cat]`, "
+         f"{counts['index_bytes']:,} B) for a picker that loads at idle." if counts.get("index_bytes")
+         else "- No `registry_index.json`: the registry is small enough to read whole.")
+  return f"""\
+# AquaMaps habitat suitability, native 0.5 degree
+
+Relative environmental suitability (1-100 percent) of {counts['n_taxa']:,} aquatic species on AquaMaps' original
+global 0.5 degree grid. **{aq.NOTE}**
+
+The rasters are not part of this collection. They are the native COGs MarineSensitivity (MST) release v7 already
+publishes on the public bucket (`marine-atlas/native/am/<hash>.tif`: Byte, 1-100, nodata 0, EPSG:4326, 0.5 degree
+cells, cropped to each species' extent). This collection is a **registry** of references to them.
+
+## How it differs from the MST AquaMaps collection
+
+The MST collection `msens-v7-am_0.05` ({aq.V7_COLLECTION}) shows the same AquaMaps models interpolated
+(downscaled) to the 0.05 degree MST analysis grid, which is what MST's merged model uses. This collection shows the
+AquaMaps surface as published: coarse 0.5 degree cells, no interpolation. Use it to see what AquaMaps itself predicts
+and to compare against the downscale (`cog_url_005` in the registry points to the matching 0.05 degree COG).
+
+## No per-taxon Item files
+
+{counts['n_taxa']:,} Items would be about 35 MB of JSON, so none are written. An app builds a taxon's Item from its
+registry row (`atlas:taxa_registry` and `atlas:item_template` in `collection.json`):
+
+1. read `registry.parquet` (or `registry_index.json` to search first), find the row by `sp_key`;
+2. Item id = `sp_key`; `bbox` = the row's `bbox`; `geometry` = that bbox as a polygon;
+3. asset `cog` = `cog_url` (type COG, role data, `bands` uint8 nodata 0, rescale `[1, 100]`, colormap
+   `spectral_r`, band 1); asset `cog_005` = `cog_url_005` when present;
+4. `sdm:taxon` = scientific and common name, group = `sp_cat`, authorities `worms` = `aphia_id` and `botw` =
+   `botw_id`, `redlist_code`; omit what is null;
+5. draw the COG through titiler; read a clicked value with `/cog/point` (1-100; 0 or no data means outside the
+   model's range).
+
+{aquamaps_credits()}
+
+## Registry columns (`registry.parquet`, {counts['n_taxa']:,} rows, sorted by scientific name)
+
+{aquamaps_registry_table()}
+
+{idx}
+
+## Method (summary)
+
+AquaMaps (Kaschner et al. 2019) estimates, per species, relative environmental suitability from an envelope of
+six predictors (depth, temperature, salinity, primary production, sea ice concentration, distance to land) fitted to
+occurrence records and expert-reviewed. Values are published to 0.01 and stored as Byte 1-100 (percent); 0 is no
+data. They are suitability, not probability of occurrence or abundance.
+
+## Provenance and exclusions
+
+Registry built from the v7 tables `model`, `taxon_model`, `taxon`, `native_asset` and `model_asset` (URLs and row
+counts in `provenance.json`). Of {counts['n_models']:,} v7 AquaMaps models, {counts['excluded_no_native']} have no
+native COG and are excluded. {counts['n_unmatched']} included models have no taxon match in v7 (mostly SeaLifeBase
+species): they keep the name from the model description and have null `aphia_id`, `sp_cat` and `redlist_code`.
+The `bbox` is the extent of the species' native cells (`native_asset`), not of the world grid.
+
+## Files
+
+- `collection.json`, `registry.parquet`, `provenance.json`, `README.md`, `AGENTS.md`
+- `thumbnail.png`, `thumbnail-sm.png`: 1200x800 and 400 px previews, a 2x2 panel of four native surfaces.
+"""
+
+
+def aquamaps_agents(counts: dict) -> str:
+  from . import aquamaps as aq
+  return f"""\
+# AGENTS.md: aquamaps_native
+
+Non-commercial use only (CC BY-NC 3.0); say the maps and numbers come from AquaMaps and link https://www.aquamaps.org.
+
+1. `collection.json`: `sdm:response_type` suitability, `sdm:value_range` [1, 100], `sdm:method` env_envelope,
+   `sdm:temporal_interval` static. There are **no Item files**: read `atlas:taxa_registry` (asset `registry`, key
+   `sp_key`) and build an Item from a row following `atlas:item_template`.
+2. `registry.parquet`: {counts['n_taxa']:,} rows, one per AquaMaps model with a native COG. `cog_url` is a Byte COG
+   (1-100, nodata 0, EPSG:4326, 0.5 degree), already public; `cog_url_005` is the 0.05 degree MST surface of the same
+   model. `bbox` is `[west, south, east, north]`. Join to WoRMS with `aphia_id`.
+3. Search: `scientific_name` and `common_name`; filter by `sp_cat`. Rows are sorted by scientific name.
+4. Values: draw with titiler `/cog` (rescale 1,100, colormap spectral_r); read a point with `/cog/point`.
+   Never compute numbers from tile pixels.
+5. Related: the 0.05 degree downscale is {aq.V7_COLLECTION} (MarineSensitivity v7).
 """

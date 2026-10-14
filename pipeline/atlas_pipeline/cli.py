@@ -16,13 +16,13 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import docs, grid, stac, taxa, thumbs
+from . import aquamaps, docs, grid, stac, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
 RAW_DIR    = Path("~/My Drive/projects/oceanmetrics/data/raw/couto.thiagoba@gmail.com_indicators").expanduser()
 STAGING    = REPO_DIR / "catalog" / "staging"
-COLLECTIONS = ["biotrack_indicators", "biotrack_species", "catalog"]
+COLLECTIONS = ["biotrack_indicators", "biotrack_species", "aquamaps_native", "catalog"]
 CROCKFORD  = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 H3_DECIMALS = 4
 
@@ -323,6 +323,8 @@ def check_staging(out: Path = STAGING) -> list[str]:
           cols = pq.read_schema((ip.parent / a["href"]).resolve()).names
           if a["atlas:value_column"] not in cols:
             bad.append(f"{ip.name}: {a['atlas:value_column']} not a column of {a['href']}")
+    if coll_dir.name == "aquamaps_native":
+      bad += [f"aquamaps_native: {m}" for m in aquamaps.check_collection(coll_dir, coll)]
     if coll_dir.name == "biotrack_indicators":
       hx = coll_dir / "hex.pmtiles"
       if hx.exists() and grid.pmtiles_attribute_names(hx) != ["FID"]:
@@ -343,7 +345,7 @@ def validate_stac(out: Path = STAGING) -> list[str]:
   sdm_local = Path("~/Github/MarineSensitivity/stac-sdm/json-schema/schema.json").expanduser()
   sdm = json.loads(sdm_local.read_text()) if sdm_local.exists() else None
   for p in sorted(out.rglob("*.json")):
-    if p.parent.name == "styles" or p.name in ("provenance.json",):
+    if p.parent.name == "styles" or p.name in ("provenance.json", "registry_index.json"):
       continue
     obj = load_json(p)
     if sdm is not None and stac.EXT["sdm"] in obj.get("stac_extensions", []):
@@ -381,6 +383,9 @@ def main(argv=None) -> int:
       if slug == "biotrack_indicators":
         r = build_indicators(a.raw, a.out, a.skip_tiles)
         log(f"done: {r['counts']}")
+      elif slug == "aquamaps_native":
+        r = aquamaps.build(a.out, log=log)
+        log(f"done: {r['stats']['n_taxa']:,} taxa, registry {r['registry_bytes']:,} B")
       elif slug == "biotrack_species":
         r = build_species(a.raw, a.out)
         log(f"done: {r['species']} species, {r['items']} items, cell_species {r['cell_rows']:,} rows, {r['cell_bytes']/1e6:.1f} MB")
