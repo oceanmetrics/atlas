@@ -253,7 +253,11 @@ test.describe("species lens, first paint with **/*.wasm blocked", () => {
                     map: {
                       getLayer(id: string): unknown;
                       isSourceLoaded(id: string): boolean;
-                      queryRenderedFeatures(opts: { layers: string[] }): unknown[];
+                      project(ll: [number, number]): { x: number; y: number };
+                      queryRenderedFeatures(
+                        geometry: [[number, number], [number, number]],
+                        opts: { layers: string[] },
+                      ): unknown[];
                     };
                   };
                 };
@@ -263,7 +267,18 @@ test.describe("species lens, first paint with **/*.wasm blocked", () => {
             // `isSourceLoaded` on an absent source fires a MapLibre ErrorEvent into console.error.
             if (!map.getLayer("species-range")) return -1;
             if (!map.isSourceLoaded("species-range")) return -1;
-            return map.queryRenderedFeatures({ layers: ["species-range"] }).length;
+            // WP13: a box around where the fixture's GAA polygon (-96..-84, 24..30) is DRAWN, not the
+            // whole canvas: MapLibre 6.10's globe returns nothing for a whole-canvas query once the
+            // map carries a padding (verified: 2 features unpadded, 0 padded, 2 in mercator), while
+            // point and small-box queries -- all the app ever makes -- are unaffected
+            const at = map.project([-90, 27]);
+            return map.queryRenderedFeatures(
+              [
+                [at.x - 40, at.y - 40],
+                [at.x + 40, at.y + 40],
+              ],
+              { layers: ["species-range"] },
+            ).length;
           });
         },
         {
