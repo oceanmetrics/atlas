@@ -469,6 +469,14 @@ export const FAULTS = [
       "the key separates bands",
     ],
   },
+  {
+    id: "autozoom-map-param-ignored",
+    patch: "tests/faults/autozoom-map-param-ignored.patch",
+    describe:
+      "shouldAutoZoom() ignores a `map=` in the opening link -- the first layer flies the camera away " +
+      "from a shared view on load",
+    gate: ["npx", "vitest", "run", "tests/map/autoZoom.test.ts", "-t", "map= wins on load"],
+  },
   // --- WP4 (places: overlays, summaries, the inside-places filter) -------------------------------
   {
     id: "pip-antimeridian-unshifted",

@@ -1,0 +1,16 @@
+diff --git a/src/lib/map/autoZoom.ts b/src/lib/map/autoZoom.ts
+index f328f96..19c95da 100644
+--- a/src/lib/map/autoZoom.ts
++++ b/src/lib/map/autoZoom.ts
+@@ -32,7 +32,10 @@ export function saveAutoZoom(storage: WritableStorage | null | undefined, on: bo
+  * that the opening URL carried `map=`: that view is the user's, so the first layer never moves it.
+  */
+ export function shouldAutoZoom(a: { on: boolean; first: boolean; hasMapParam: boolean }): boolean {
+-  return a.on && !(a.first && a.hasMapParam);
++  // SEEDED FAULT (tests/faults/autozoom-map-param-ignored.patch): a `map=` in the opening link no longer wins
++  // over the first fit, so a shared view is flown away from on load.
++  void a.hasMapParam;
++  return a.on;
+ }
+ 
+ /** a stable string for a frame, to tell "the same extent again" (a season change of one hex grid) from
