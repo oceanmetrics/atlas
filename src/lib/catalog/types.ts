@@ -112,7 +112,7 @@ export interface StacCollection extends StacBase {
   "sdm:source_authority"?: string;
   "sdm:value_unit"?: string;
   "sdm:value_range"?: [number, number];
-  extent?: unknown;
+  extent?: { spatial?: { bbox?: number[][] }; temporal?: { interval?: unknown } };
   assets?: Record<string, StacAsset>;
 }
 

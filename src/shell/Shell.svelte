@@ -548,6 +548,7 @@
     selStore,
     mapHandle: () => mapHandle,
     isOwned: () => placesMap.interactionOwned,
+    chromePadding: () => currentChromePadding(),
   });
 
   // --- page title: the ONE writer (tests/shell/documentTitle.test.ts's source scan pins that) -------
@@ -942,6 +943,7 @@
     if (!isPhone || !mapHandle || !boot) return;
     if (sheetGeom.height <= 0) return; // Sheet.svelte has not reported a real measurement yet
     if (sel.map) return; // not the default padded first view
+    if (sel.lens === "collection") return; // the collection lens fits its own extent (WP3)
     refitOnceForMeasuredSheet = true;
     const area = studyAreaFromBoot(boot, "FULL");
     const viewport: Viewport = { width: window.innerWidth, height: window.innerHeight };
