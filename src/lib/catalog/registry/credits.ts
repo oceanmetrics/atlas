@@ -20,6 +20,9 @@ export const CC_BY_NC_3_URL = "https://creativecommons.org/licenses/by-nc/3.0/";
 /** what the downscaled surface is called in the legend and the credits. */
 export const DOWNSCALED_TITLE = "AquaMaps habitat suitability, downscaled 0.05° (global)";
 
+/** what the native surface is called in the legend (the collection's own title names both surfaces). */
+export const NATIVE_TITLE = "AquaMaps habitat suitability, native 0.5°";
+
 /** the line the map attribution carries while an AquaMaps surface is on the map. */
 export const AQUAMAPS_ATTRIBUTION = "AquaMaps (Kaschner et al. 2019), CC BY-NC 3.0";
 

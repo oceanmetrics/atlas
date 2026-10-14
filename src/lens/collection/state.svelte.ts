@@ -52,6 +52,7 @@ import { registryRefOf } from "../../lib/catalog/registry/ref";
 import { registryFacts } from "../../lib/catalog/registry/item";
 import {
   DOWNSCALED_TITLE,
+  NATIVE_TITLE,
   downscaledCredits,
   registryAttribution,
 } from "../../lib/catalog/registry/credits";
@@ -646,7 +647,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
     // the legend names the surface on screen: the downscaled one is not the collection's own native one
     const legendEntry =
-      entry && isRegistry && registry.rep === "005" ? { ...entry, title: DOWNSCALED_TITLE } : entry;
+      entry && isRegistry
+        ? { ...entry, title: registry.rep === "005" ? DOWNSCALED_TITLE : NATIVE_TITLE }
+        : entry;
     const inputs = collectionMapInputs({
       entry: legendEntry,
       item: drawItem,

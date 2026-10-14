@@ -1,6 +1,7 @@
 # MarineSensitivity collections by reference (WP6)
 
-The catalog links the MarineSensitivity (MST) STAC by reference: the v7 parent (nine child collections)
+The catalog links the MarineSensitivity (MST) STAC by reference: eight v7 collections, linked one by one (WP12:
+not the v7 parent, which also lists `am_0.05`; AquaMaps is the atlas' own `aquamaps_native`, built from release v8),
 and the two v8 density collections (`gm`, `nc`), all under `https://file.marinesensitivity.org/stac/`.
 The Collections lens draws them. This page records what the MST STAC does and does not publish today,
 the route chosen for per-taxon Items, and every URL.
@@ -25,7 +26,7 @@ the route chosen for per-taxon Items, and every URL.
 
 | collection       | Items come from                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| v7 (nine)        | the v7 `app/` bundle the Species lens reads: `taxa.json` (index) + `taxon/{xx}.json` (one shard per taxon) |
+| v7 (eight)       | the v7 `app/` bundle the Species lens reads: `taxa.json` (index) + `taxon/{xx}.json` (one shard per taxon) |
 | `msens-v8-nc/gm` | `public/mst/{nc,gm}_models.json`, a static per-model table (a stopgap, below)                              |
 
 v7 taxa: `lib/release/mst.ts` pins the release (`MST_SPECIES_VER = "v7"`, shared with the Species lens).
@@ -35,8 +36,8 @@ A shard's `inputs[]` has one entry per source dataset (`ds_key` = the collection
 `atlas:rescale`, `atlas:colormap`; `atlas:value_range`; `sdm:taxon`) so everything downstream (legend,
 tile URL, Details) is the generic Collections path. The rescale and colormap are the asset's own,
 verbatim; an asset that names none asks for titiler's statistics, never a guessed range. The collection
-is listed under the STAC id and credits; only the picker title of `am_0.05` is the atlas' own
-("AquaMaps habitat suitability (0.05 degree)", `catalog/mst/kinds.ts`).
+is listed under the STAC id and credits. (`am_0.05` is no longer listed since WP12; the title override and
+`kinds.ts` handling for it stay so a `?collection=` link to it still works.)
 
 Why not the API: it is the cleaner source (per-model Items, CORS) **once it serves v7/v8**. When it does,
 `loadTaxonItem` becomes a `/search?collections=...&ids=` call and the pin goes away; nothing else changes.
@@ -49,7 +50,9 @@ else the input's `mdl_key`) and the lens draws a vector fill filtered to that ke
 (presence)" legend (the shard carries no value column, so there is nothing to colour by). In the pinned
 v7 release every input that has a PMTiles also has a COG, so today the COG wins; the fill is for a
 release that publishes ranges only. A model with no registered file, or a vector range that names no
-tile layer, shows a sentence saying so instead of a layer (`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection is the atlas' own `aquamaps_native` (WP7): a registry-backed taxon collection, built from `atlas:taxa_registry` and `atlas:item_template` (`src/lib/catalog/registry/`, `src/lens/collection/registry.svelte.ts`); `?c=aquamaps_native&sp=<sp_key>&rep=native|005`.
+tile layer, shows a sentence saying so instead of a layer (`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection is the atlas' own `aquamaps_native` (WP7): a registry-backed taxon collection, built from `atlas:taxa_registry` and `atlas:item_template` (`src/lib/catalog/registry/`, `src/lens/collection/registry.svelte.ts`); `?c=aquamaps_native&sp=<sp_key>&rep=native|005`. Since WP12 the registry is built from release v8 (both surfaces
+global, each with its own box in the row; an old v7 `?sp=` key is mapped through `sp_key_v7`);
+see `pipeline/docs/aquamaps-native.md`.
 
 ## nc and gm: dimensions from a manifest (stopgap)
 
