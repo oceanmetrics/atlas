@@ -1,10 +1,10 @@
 // A registry row -> a STAC Item (`atlas:item_template`), and the native-vs-downscaled switch.
 //
 // The Item is built client-side: one COG asset `cog` (the native surface) and, when the row names one,
-// `cog_005` (the same model downscaled to 0.05 degrees by MarineSensitivity). Rules, one test each
+// `cog_005` (the same model downscaled to a global 0.05 degree grid by MarineSensitivity, release v8). Rules, one test each
 // (tests/catalog/registry/item.test.ts):
-//   - id = the row key; `bbox` = the row's box (a malformed box is left off, never guessed), geometry
-//     = that box as a polygon; `datetime: null`;
+//   - id = the row key; `bbox` = the box of the COG that is drawn (`bbox_native` or `bbox_005`; a malformed
+//     box is left off, never guessed), geometry = that box as a polygon; `datetime: null`;
 //   - the `cog` asset: rescale, colormap, band and no-data come from the collection's template, with
 //     the Spectral-reversed ramp / [1, 100] / no-data 0 where it says nothing;
 //   - `sdm:taxon`: names, the group (`other` for a model with no taxon match), WoRMS / BOTW ids as
@@ -72,6 +72,7 @@ export function registryItem(
   opts: { rep?: Representation | string; collectionTitle?: string } = {},
 ): StacItem {
   const rep = effectiveRep(row, opts.rep);
+  const box = rep === "005" ? row.bbox005 : row.bboxNative;
   const title = taxonTitle(row.scientificName, row.commonName);
   const cog: StacAsset = {
     href: row.cogUrl,
@@ -96,7 +97,8 @@ export function registryItem(
       href: row.cogUrl005,
       type: COG_MEDIA_TYPE,
       roles: [rep === "005" ? "data" : "reference"],
-      title: "MarineSensitivity 0.05 degree surface of the same model (downscaled)",
+      title:
+        "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8)",
       "atlas:rescale": template.rescale,
       "atlas:colormap": template.colormap,
     };
@@ -106,10 +108,9 @@ export function registryItem(
     stac_version: "1.1.0",
     id: row.key,
     collection: collectionId,
-    // the 0.05 degree COG sits on the MarineSensitivity grid, whose footprint is not the native box
-    // (it ends at the grid's own latitudes); the native box would only be a bound, so for the
-    // downscaled surface the lens asks the tile server for the real footprint instead
-    ...(row.bbox && rep === "native" ? { bbox: row.bbox, geometry: boxPolygon(row.bbox) } : {}),
+    // each COG has its own footprint in the registry (`bbox_native`, `bbox_005`), so the source bounds of
+    // BOTH representations come from the row and no `/cog/info` request is made
+    ...(box ? { bbox: box, geometry: boxPolygon(box) } : {}),
     properties: {
       title,
       description: opts.collectionTitle ? `${title} in ${opts.collectionTitle}.` : title,

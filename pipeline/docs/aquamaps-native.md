@@ -13,12 +13,12 @@ surface clipped to US waters) to **release v8** (native 0.5 degree COGs plus the
 `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v8/tables/` (there is no `model_asset.parquet`
 in v8; the 0.05 degree COG is a `native_asset` row with `representation = 'model'`)
 
-| table                  | filter                                                              | columns used                                                                                              |
-| ---------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `model.parquet`        | `ds_key = 'am'` (23,699 rows)                                       | `mdl_key` (`am\|<SpeciesID>`), `sp_id` (= the AquaMaps SpeciesID, the registry `sp_key`), `sci_name`, `common_name` |
-| `taxon_model.parquet`  | `ds_key = 'am'` (23,658)                                            | `mdl_key`, `taxon_authority` (worms, botw), `taxon_id`                                                    |
-| `taxon.parquet`        | all (37,051)                                                        | `taxon_authority`, `taxon_id`, `sp_cat`, `scientific_name`, `common_name`, `iucn_code`                    |
-| `native_asset.parquet` | `ds_key = 'am'`, `asset_type = 'cog'`, `representation` native or model | `mdl_key`, `representation`, `asset_url`, `rescale_min/max`, `colormap`, `xmin ymin xmax ymax`        |
+| table                  | filter                                                                  | columns used                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `model.parquet`        | `ds_key = 'am'` (23,699 rows)                                           | `mdl_key` (`am\|<SpeciesID>`), `sp_id` (= the AquaMaps SpeciesID, the registry `sp_key`), `sci_name`, `common_name` |
+| `taxon_model.parquet`  | `ds_key = 'am'` (23,658)                                                | `mdl_key`, `taxon_authority` (worms, botw), `taxon_id`                                                              |
+| `taxon.parquet`        | all (37,051)                                                            | `taxon_authority`, `taxon_id`, `sp_cat`, `scientific_name`, `common_name`, `iucn_code`                              |
+| `native_asset.parquet` | `ds_key = 'am'`, `asset_type = 'cog'`, `representation` native or model | `mdl_key`, `representation`, `asset_url`, `rescale_min/max`, `colormap`, `xmin ymin xmax ymax`                      |
 
 and, only for `sp_key_v7`, the v7 `model.parquet` (`ds_key = 'am_0.05'`: `taxa`, `description`).
 

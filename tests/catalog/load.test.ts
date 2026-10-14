@@ -61,6 +61,55 @@ describe("loadCatalog: catalog.json -> collections", () => {
     expect(entries.some((e) => e.id === "v7")).toBe(false); // the parent itself is not a row
   });
 
+  it("WP12: the v7 collections linked one by one are one entry each in the MarineSensitivity v7 group, with no AquaMaps 0.05", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const catalog = readFileSync(join(__dirname, "../fixtures/registry/catalog.json"), "utf8");
+    const own = readFileSync(
+      join(__dirname, "../fixtures/registry/aquamaps_native.collection.json"),
+      "utf8",
+    );
+    const stub = (url: string): Response | undefined => {
+      if (url === `${FIXTURE_BASE}catalog.json`) return new Response(catalog);
+      if (url === `${FIXTURE_BASE}aquamaps_native/collection.json`) return new Response(own);
+      const m = /\/stac\/(v\d)\/([^/]+)\/collection\.json$/.exec(url);
+      if (!m) return undefined;
+      const id = `msens-${m[1]}-${m[2]}`;
+      return jsonResponse({
+        type: "Collection",
+        stac_version: "1.0.0",
+        id,
+        title: `title of ${m[2]}`,
+        description: "x",
+        license: "CC-BY-4.0",
+        extent: {},
+        links: [{ rel: "item", href: "./item.json" }],
+      });
+    };
+    const { entries } = await entriesOf(stub);
+    const v7 = entries.filter((e) => e.group === "mst-v7");
+    expect(v7.map((e) => e.id)).toEqual(
+      [
+        "ms_merge",
+        "rng_iucn",
+        "rng_fws",
+        "bl",
+        "ch_nmfs",
+        "ch_fws",
+        "ca_nmfs",
+        "rng_turtle_swot_dps",
+      ].map((k) => `msens-v7-${k}`),
+    );
+    expect(v7.every((e) => e.status === "ok" && e.external)).toBe(true);
+    expect(entries.some((e) => e.id.includes("am_0.05") || e.id === "msens-v8-am")).toBe(false);
+    expect(entries.map((e) => e.id).filter((id) => id.startsWith("msens-v8"))).toEqual([
+      "msens-v8-gm",
+      "msens-v8-nc",
+    ]);
+    // the picker's groups (CollectionLens: GROUP_ORDER filtered to the non-empty ones)
+    expect([...new Set(entries.map((e) => e.group))]).toEqual(["oceanmetrics", "mst-v7", "mst-v8"]);
+  });
+
   it("an external collection that fails is an 'unavailable' row with its error, never a crash", async () => {
     const { entries } = await entriesOf();
     const rng = entries.find((e) => e.id === "rng_iucn");

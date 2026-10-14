@@ -9,9 +9,11 @@
 // not reachable, and the rest of the catalog works.
 //
 // The catalog lists its own collections with relative `child` hrefs and external ones (the
-// MarineSensitivity STAC, https://file.marinesensitivity.org/stac/) with absolute hrefs. A child that
-// is itself a PARENT of collections (the v7 `collection.json`: no items, only `child` links) is
-// flattened into its children, which keep the parent's group. Items are fetched only when a
+// MarineSensitivity STAC, https://file.marinesensitivity.org/stac/) with absolute hrefs. Since WP12 the
+// catalog links the v7 collections one by one (each a collection of its own, so each is one entry, in
+// group `mst-v7` by its URL), not through the v7 parent. A child that is itself a PARENT of collections
+// (no items, only `child` links: the v7 `collection.json`, still valid as a link) is flattened into its
+// children, which keep the parent's group. Items are fetched only when a
 // collection is opened (`loadItems`), a few at a time, and cached per collection.
 import { catalogUrl, resolveHref, resolveCatalogBase } from "./base";
 import { mstTitle } from "./mst/kinds";

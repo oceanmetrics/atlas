@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bboxOfRow, rowFromRecord, rowsFromRecords } from "../../../src/lib/catalog/registry/rows";
+import {
+  bboxOfRow,
+  resolveRegistryKey,
+  rowFromRecord,
+  rowOfV7Key,
+  rowsFromRecords,
+} from "../../../src/lib/catalog/registry/rows";
 import {
   aquamapsUrl,
   effectiveRep,
@@ -22,11 +28,15 @@ describe("registry rows", () => {
     const r = row({ ...LEATHERBACK_RECORD, common_name: "  " });
     expect(r).toMatchObject({
       key: "Rep-3437",
+      mdlKey: "am|Rep-3437",
       aphiaId: 137209,
       botwId: null,
       commonName: null,
       group: "turtle",
       redlistCode: "VU",
+      bboxNative: [-180, -78.5, 180, 70.5],
+      bbox005: [-180, -78.5, 180, 71],
+      spKeyV7: "Rep-3437",
     });
   });
   it("a record with no key or no native COG is not a row (nothing to draw)", () => {
@@ -44,6 +54,26 @@ describe("registry rows", () => {
   });
 });
 
+describe("old v7 keys (?sp=Fis-49220 of a v7-era link) resolve through sp_key_v7", () => {
+  const rows = rowsFromRecords([
+    LEATHERBACK_RECORD,
+    UNMATCHED_RECORD,
+    { ...LEATHERBACK_RECORD, sp_key: "Fis-49220", sp_key_v7: null },
+  ]);
+  it("a key the registry has is itself, even when another row lists it as its v7 key", () => {
+    expect(resolveRegistryKey(rows, "Rep-3437")).toBe("Rep-3437");
+    expect(resolveRegistryKey(rows, "Fis-49220")).toBe("Fis-49220");
+  });
+  it("a v7 key that differs from the v8 one maps to the v8 row", () => {
+    expect(resolveRegistryKey(rows, "SLB-64971")).toBe(UNMATCHED_RECORD.sp_key);
+    expect(rowOfV7Key(rows, "SLB-64971")?.scientificName).toBe("Abylopsis eschscholtzi");
+  });
+  it("an unknown key stays as it is (the lens then says it is not in the registry)", () => {
+    expect(resolveRegistryKey(rows, "Nope-1")).toBe("Nope-1");
+    expect(rowOfV7Key(rows, "Nope-1")).toBeNull();
+  });
+});
+
 describe("registryItem: one Item per row, by the collection's template", () => {
   const item = build(LEATHERBACK_RECORD);
 
@@ -55,7 +85,7 @@ describe("registryItem: one Item per row, by the collection's template", () => {
       properties: { title: "Dermochelys coriacea (Leatherback Turtle)", datetime: null },
     });
   });
-  it("bbox from the row, geometry is that box as a polygon", () => {
+  it("bbox from the row's native box, geometry is that box as a polygon", () => {
     expect(item.bbox).toEqual([-180, -78.5, 180, 70.5]);
     expect(item.geometry).toMatchObject({ type: "Polygon" });
     const ring = (item.geometry as { coordinates: number[][][] }).coordinates[0];
@@ -64,7 +94,7 @@ describe("registryItem: one Item per row, by the collection's template", () => {
     expect(ring[4]).toEqual(ring[0]);
   });
   it("a row with no usable bbox gets no bbox at all (the lens then reads the footprint)", () => {
-    const no = build({ ...LEATHERBACK_RECORD, bbox: [1, 1, 1, 1] });
+    const no = build({ ...LEATHERBACK_RECORD, bbox_native: [1, 1, 1, 1] });
     expect(no.bbox).toBeUndefined();
     expect(no.geometry).toBeUndefined();
   });
@@ -140,16 +170,25 @@ describe("the native vs downscaled switch (rep=native|005)", () => {
     expect(effectiveRep(r, undefined)).toBe("native");
     expect(effectiveRep(null, "005")).toBe("native");
   });
-  it("the downscaled surface carries no native bbox (its grid has its own footprint)", () => {
-    expect(build(LEATHERBACK_RECORD, "005").bbox).toBeUndefined();
-    expect(build(LEATHERBACK_RECORD, "native").bbox).toBeDefined();
+  it("each surface carries its own bbox: native the native box, 005 the 0.05 degree one (no /cog/info)", () => {
+    expect(build(LEATHERBACK_RECORD, "native").bbox).toEqual([-180, -78.5, 180, 70.5]);
+    const d = build(LEATHERBACK_RECORD, "005");
+    expect(d.bbox).toEqual([-180, -78.5, 180, 71]);
+    expect((d.geometry as { coordinates: number[][][] }).coordinates[0][2]).toEqual([180, 71]);
+  });
+  it("a 0.05 box that is missing or malformed leaves the Item with no bbox (never the native one)", () => {
+    expect(build({ ...LEATHERBACK_RECORD, bbox_005: null }, "005").bbox).toBeUndefined();
+    expect(build({ ...LEATHERBACK_RECORD, bbox_005: [5, 5, 1, 1] }, "005").bbox).toBeUndefined();
+  });
+  it("the downscaled asset is named for what it is: global, release v8", () => {
+    expect(build(LEATHERBACK_RECORD).assets.cog_005.title).toMatch(/0\.05 degree, global.*v8/);
   });
 });
 
 describe("drawn through the existing titiler raster path, source bounds from the row's bbox", () => {
   const entry: CollectionEntry = {
     id: "aquamaps_native",
-    title: "AquaMaps habitat suitability, native 0.5 degree",
+    title: "AquaMaps habitat suitability (native 0.5° and global 0.05°)",
     href: "https://x.test/aquamaps_native/collection.json",
     group: "oceanmetrics",
     external: false,
@@ -174,11 +213,21 @@ describe("drawn through the existing titiler raster path, source bounds from the
     expect(out.legend?.stops[0].value).toBe(1);
     expect(out.legend?.stops.at(-1)?.value).toBe(100);
   });
-  it("005: tile URL of the 0.05 COG; no bbox, so no bounds until /cog/info answers", () => {
+  it("005: tile URL of the global 0.05 COG, bounds = the row's 0.05 box (no /cog/info either)", () => {
     const item = build(LEATHERBACK_RECORD, "005");
-    expect(itemSourceBounds(item)).toBeNull();
-    const out = collectionMapInputs({ entry, item, style: null, values: null, marker: null });
-    expect(decodeURIComponent(out.raster!.tiles[0])).toContain("/cog/usa05/3b65e8ff84b8cf75.tif");
+    expect(itemSourceBounds(item)).toEqual([-180, -78.5, 180, 71]);
+    const out = collectionMapInputs({
+      entry,
+      item,
+      style: null,
+      values: null,
+      marker: null,
+      cogBounds: itemSourceBounds(item),
+    });
+    expect(decodeURIComponent(out.raster!.tiles[0])).toContain(
+      "/cog/global05/3b65e8ff84b8cf75.tif",
+    );
+    expect(out.raster?.bounds).toEqual([-180, -78.5, 180, 71]);
     expect(out.cogUrl).toMatch(/3b65e8ff84b8cf75\.tif$/);
   });
   it("itemSourceBounds clamps to the mercator range and ignores a bad box", () => {
@@ -229,24 +278,35 @@ describe("readRegistryRows: a real registry Parquet (3-row sample, same columns 
       buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
     );
     if (!res.ok) throw new Error(res.error.message);
-    expect([...res.value.keys()]).toEqual(["Rep-3437", "SLB-64971", "Fis-1"]);
+    const CHN = "Chn-0a1b2c3d-0000-4000-8000-000000000004";
+    expect([...res.value.keys()]).toEqual(["Rep-3437", CHN, "Fis-1"]);
     expect(res.value.get("Rep-3437")).toMatchObject({
       aphiaId: 137209,
       group: "turtle",
-      bbox: [-180, -78.5, 180, 70.5],
+      bboxNative: [-180, -78.5, 180, 70.5],
+      bbox005: [-180, -78.5, 180, 70.5],
       cogUrl005: "https://x.test/c/bbbb.tif",
+      spKeyV7: "Rep-3437",
     });
-    expect(res.value.get("SLB-64971")).toMatchObject({
+    expect(res.value.get(CHN)).toMatchObject({
       group: null,
       aphiaId: null,
-      cogUrl005: null,
+      spKeyV7: "SLB-64971",
     });
-    expect(res.value.get("Fis-1")?.bbox).toBeNull();
-    // the unmatched row becomes an `other` Item, a row with no bbox an Item with none
-    expect(registryItem(res.value.get("SLB-64971")!, "c").properties["sdm:taxon"]).toMatchObject({
+    expect(res.value.get("Fis-1")).toMatchObject({
+      bboxNative: null,
+      bbox005: null,
+      spKeyV7: null,
+    });
+    // the unmatched row becomes an `other` Item, a row with no bbox an Item with none (either surface)
+    expect(registryItem(res.value.get(CHN)!, "c").properties["sdm:taxon"]).toMatchObject({
       group: "other",
     });
     expect(registryItem(res.value.get("Fis-1")!, "c").bbox).toBeUndefined();
+    expect(
+      registryItem(res.value.get("Fis-1")!, "c", undefined, { rep: "005" }).bbox,
+    ).toBeUndefined();
+    expect(resolveRegistryKey(res.value, "SLB-64971")).toBe(CHN);
   });
   it("garbage is an error result, never a throw", async () => {
     const { readRegistryRows } = await import("../../../src/lib/catalog/registry/rows");

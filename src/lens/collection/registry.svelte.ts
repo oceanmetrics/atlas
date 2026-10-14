@@ -9,7 +9,8 @@
 //   search index    `registry_index.json`, loaded at idle or when the search box is focused, never on the
 //                   static path and never twice (the picker is the Species lens' own, so the ranking is);
 //   taxon           `?sp=` (default: *Dermochelys coriacea*, else the first row), its Item built from the
-//                   row; `?rep=native|005` picks which COG is drawn (005 only for a row that has one).
+//                   row; a v7-era key (`sp_key_v7`) is mapped to the row's v8 key and the URL rewritten with
+//                   replaceState; `?rep=native|005` picks which COG is drawn (005 only for a row that has one).
 //
 // Every request carries a token: a slower earlier answer never overwrites a later choice.
 import { untrack } from "svelte";
@@ -22,6 +23,7 @@ import {
 import { registryRefOf, itemTemplateOf, type RegistryRef } from "../../lib/catalog/registry/ref";
 import {
   readRegistryRows,
+  resolveRegistryKey,
   type RegistryRow,
   type RegistryRows,
 } from "../../lib/catalog/registry/rows";
@@ -37,7 +39,7 @@ export interface RegistrySourceDeps {
   selStore: SelStore;
   /** the active collection entry. */
   entry: () => CollectionEntry | null;
-  /** every catalog entry: the MarineSensitivity `am_0.05` collection is read from here when listed. */
+  /** every catalog entry: the MarineSensitivity v8 `am` collection is read from here when listed (it is not, today). */
   entries?: () => readonly CollectionEntry[];
   /** overrides for tests. */
   readRows?: (url: string, keyColumn?: string) => Promise<Loaded<RegistryRows>>;
@@ -68,7 +70,7 @@ export interface RegistrySource {
   readonly error: LoadError | null;
   /** a sentence when there is nothing to draw (an unknown `sp`, a failed read). */
   readonly notice: string | null;
-  /** the credits collection of the downscaled surface (MarineSensitivity v7), once loaded; null for native. */
+  /** the credits collection of the downscaled surface (MarineSensitivity v8 `am`), once loaded; null for native. */
   readonly downscaled: StacCollection | null;
   /** start loading the search index (idempotent); called on focus of the search box. */
   ensureIndex(): void;
@@ -169,8 +171,14 @@ export function createRegistrySource(deps: RegistrySourceDeps): RegistrySource {
   const taxonKey = $derived.by(() => {
     if (!ref || !rows) return null;
     const sp = selStore.sel.sp;
-    if (sp) return sp;
+    if (sp) return resolveRegistryKey(rows, sp);
     return defaultRegistryKey(rows.values());
+  });
+  // an old link (`?sp=Fis-49220` of the v7 registry) resolves to its v8 row; the URL then names the v8 key
+  $effect(() => {
+    const key = taxonKey;
+    const sp = selStore.sel.sp;
+    if (key && sp && key !== sp) untrack(() => selStore.set({ sp: key }));
   });
   const row = $derived(taxonKey && rows ? (rows.get(taxonKey) ?? null) : null);
   const rep = $derived(effectiveRep(row, selStore.sel.rep));
@@ -196,7 +204,7 @@ export function createRegistrySource(deps: RegistrySourceDeps): RegistrySource {
     return null;
   });
 
-  // --- the downscaled surface's credits (MarineSensitivity v7), only once it is shown ---------------
+  // --- the downscaled surface's credits (MarineSensitivity v8 `am`), only once it is shown ---------------
   let downscaledToken = 0;
   $effect(() => {
     const showing = rep === "005";

@@ -229,9 +229,9 @@
                     },
                     {
                       value: "005",
-                      label: "Downscaled 0.05° (MST v7)",
+                      label: "Downscaled 0.05° (global)",
                       title:
-                        "The same model downscaled to 0.05 degrees by MarineSensitivity (release v7)",
+                        "The same model downscaled to 0.05 degrees, worldwide, by MarineSensitivity (release v8)",
                     },
                   ]}
                   onchange={(v) => lens.registry.setRep(v === "005" ? "005" : "native")}
