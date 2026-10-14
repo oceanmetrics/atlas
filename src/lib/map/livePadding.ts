@@ -72,6 +72,30 @@ export function livePadding(
   return pad;
 }
 
+/**
+ * The part of a chrome reserve that lies INSIDE the stage. `chromePadding.ts` reserves the top bar
+ * (48px) as if it floated over the map, but the shell lays it out as its own row ABOVE the stage
+ * (measured at 1280x800 and 390x844: the stage starts at y=48), so padding the map for it would
+ * pull the centre 24px up for nothing. `stageTopPx` is how far down the viewport the stage starts;
+ * the bar's reserve is whatever of it still overlaps the stage (none today, all of it if a layout
+ * ever floats the bar over the map).
+ */
+export function insideStage(chrome: ChromePadding, stageTopPx: number): ChromePadding {
+  return { ...chrome, top: Math.max(0, chrome.top - Math.max(0, stageTopPx)) };
+}
+
+/** the reserve a fit measures from the stage edge: {@link insideStage}, with at least the breathing
+ * gutter above and below so an extent never lands flush against the stage's own edge (the sides
+ * already carry theirs, `chromePadding.ts`). */
+export function fitReserve(chrome: ChromePadding, stageTopPx: number): ChromePadding {
+  const inside = insideStage(chrome, stageTopPx);
+  return {
+    ...inside,
+    top: Math.max(FIT_GUTTER_PX, inside.top),
+    bottom: Math.max(FIT_GUTTER_PX, inside.bottom),
+  };
+}
+
 /** are two paddings the same, to the pixel? (the shell only eases the map when this is false) */
 export function paddingEqual(a: ChromePadding, b: ChromePadding): boolean {
   return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;

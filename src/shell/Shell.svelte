@@ -88,7 +88,7 @@
     type ChromePadding,
     type Viewport,
   } from "../lib/map/camera";
-  import { livePadding } from "../lib/map/livePadding";
+  import { fitReserve, insideStage, livePadding } from "../lib/map/livePadding";
   import {
     desktopPanelPadding,
     phonePadding,
@@ -528,6 +528,7 @@
   // first `load`: the first view is set, not eased.
   let stageW = $state(0);
   let stageH = $state(0);
+  let stageTop = $state(0); // px from the viewport top: the top bar is a row ABOVE the stage
   let pointerHeld = $state(false);
   let padEase = false;
   // 0.10.21: `selStore` deps the store's own baseline outline-restore effect reads (see
@@ -772,6 +773,9 @@
   // above). The actual padding math is `chromePadding.ts#phoneLiveChromePadding` (a plain,
   // testable function -- see its own header); this just feeds it the live state.
   function currentChromePadding(): ChromePadding {
+    return fitReserve(chromeReserve(), stageTop);
+  }
+  function chromeReserve(): ChromePadding {
     if (isPhone) {
       const chipShowing = !!phoneLegend && legendChipMode(sheetGeom.detent) === "floating";
       return phoneLiveChromePadding(
@@ -821,15 +825,20 @@
   // it (small floating corner boxes, not a column to centre around), so a legend appearing never
   // moves the map. Before the map exists the estimate from localStorage stands in.
   function initialLivePadding(): ChromePadding {
-    return livePadding(window.innerWidth, window.innerHeight, initialChromePadding());
+    const r = mapEl?.getBoundingClientRect();
+    const [w, h, top] =
+      r && r.width > 0 ? [r.width, r.height, r.top] : [window.innerWidth, window.innerHeight, 0];
+    return livePadding(w, h, insideStage(initialChromePadding(), top));
   }
   function currentLivePadding(stageW: number, stageH: number): ChromePadding {
     if (isPhone) {
       const chrome = phoneLiveChromePadding(sheetGeom.height, sheetGeom.detent, stageH, false);
-      return livePadding(stageW, stageH, chrome);
+      return livePadding(stageW, stageH, insideStage(chrome, stageTop));
     }
     const chrome = desktopPanelPadding(panelGeom, false);
-    return livePadding(stageW, stageH, chrome, { maximized: panelGeom.maximized });
+    return livePadding(stageW, stageH, insideStage(chrome, stageTop), {
+      maximized: panelGeom.maximized,
+    });
   }
 
   // usability M4's OTHER half: a light loader over the map until the first raster/basemap tile
@@ -913,6 +922,7 @@
       if (r && r.width > 0) {
         stageW = Math.round(r.width);
         stageH = Math.round(r.height);
+        stageTop = Math.round(r.top);
       }
       handle.setPadding(
         currentLivePadding(stageW || window.innerWidth, stageH || window.innerHeight),
@@ -924,6 +934,7 @@
       if (!r) return;
       stageW = Math.round(r.width);
       stageH = Math.round(r.height);
+      stageTop = Math.round(r.top);
     });
     stageObserver.observe(mapEl);
     const holdPointer = () => (pointerHeld = true);

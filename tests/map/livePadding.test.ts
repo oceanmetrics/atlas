@@ -6,6 +6,8 @@ import {
 } from "../../src/lib/map/chromePadding";
 import {
   MIN_OPEN_SHARE,
+  fitReserve,
+  insideStage,
   livePadding,
   paddingEqual,
   residualFitPadding,
@@ -151,5 +153,34 @@ describe("paddingEqual", () => {
   it("compares all four edges", () => {
     expect(paddingEqual(NO_PADDING, { ...NO_PADDING })).toBe(true);
     expect(paddingEqual(NO_PADDING, { ...NO_PADDING, bottom: 1 })).toBe(false);
+  });
+});
+
+describe("insideStage / fitReserve (WP13): the top bar is a row above the stage, not over it", () => {
+  const chrome = desktopPanelPadding(DEFAULT_PANEL_GEOMETRY);
+
+  it("a stage that starts below the 48px bar reserves none of it", () => {
+    expect(insideStage(chrome, 48).top).toBe(0);
+    expect(livePadding(W, 752, insideStage(chrome, 48)).top).toBe(0);
+  });
+
+  it("a stage the bar floats over still reserves it (and only the overlap)", () => {
+    expect(insideStage(chrome, 0).top).toBe(TOPBAR);
+    expect(insideStage(chrome, 20).top).toBe(TOPBAR - 20);
+  });
+
+  it("a fit keeps a gutter above and below, and leaves the sides alone", () => {
+    expect(fitReserve(chrome, 48)).toEqual({
+      top: FIT_GUTTER_PX,
+      right: 0,
+      bottom: FIT_GUTTER_PX,
+      left: chrome.left,
+    });
+  });
+
+  it("a fit's bottom reserve (legend card, phone sheet) is never reduced to the gutter", () => {
+    expect(fitReserve(desktopPanelPadding(DEFAULT_PANEL_GEOMETRY, true), 48).bottom).toBe(
+      desktopPanelPadding(DEFAULT_PANEL_GEOMETRY, true).bottom,
+    );
   });
 });
