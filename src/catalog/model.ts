@@ -244,7 +244,9 @@ export function dimViews(collection: StacCollection): DimView[] {
   const summaries = collection["summaries"];
   if (summaries && typeof summaries === "object") {
     for (const [key, v] of Object.entries(summaries as Record<string, unknown>)) {
-      if (key.startsWith("sdm:") || !Array.isArray(v) || v.length === 0) continue;
+      // `atlas:taxa` is the registry's size: the card prints it as "Taxa", not as a dimension
+      if (key.startsWith("sdm:") || key === "atlas:taxa" || !Array.isArray(v) || v.length === 0)
+        continue;
       if (!v.every((x) => typeof x === "string" || typeof x === "number")) continue;
       out.push(cap(key, v.map(String)));
     }

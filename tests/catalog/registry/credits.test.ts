@@ -109,3 +109,10 @@ describe("credits for the downscaled surface (MarineSensitivity v7 am_0.05)", ()
     expect(creditsOf(downscaledCredits(am, nativeCollection())).citation).toMatch(/Kaschner/);
   });
 });
+
+describe("catalog card dimensions", () => {
+  it("summaries[atlas:taxa] is the Taxa line, not also a dimension row", async () => {
+    const { dimViews } = await import("../../../src/catalog/model");
+    expect(dimViews(nativeCollection()).map((d) => d.label)).not.toContain("atlas:taxa");
+  });
+});
