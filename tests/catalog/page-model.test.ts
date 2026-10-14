@@ -178,12 +178,22 @@ describe("assets", () => {
     const rows = assetViews(
       coll({
         item_assets: {
-          data: { type: "application/vnd.apache.parquet", roles: ["data"], title: "Per-taxon surfaces" },
+          data: {
+            type: "application/vnd.apache.parquet",
+            roles: ["data"],
+            title: "Per-taxon surfaces",
+          },
         },
       } as never),
     );
     expect(rows).toEqual([
-      { key: "data", title: "Per-taxon surfaces (one per item)", type: "Parquet", size: null, href: null },
+      {
+        key: "data",
+        title: "Per-taxon surfaces (one per item)",
+        type: "Parquet",
+        size: null,
+        href: null,
+      },
     ]);
   });
   it("names the COG media type and passes an unknown one through", () => {
@@ -202,7 +212,11 @@ describe("dimensions, time and extent", () => {
         coll({
           "cube:dimensions": {
             season: { type: "other", values: ["summer", "winter"] },
-            group: { type: "other", title: "Group", values: [{ value: "all", label: "All species" }, "fish"] },
+            group: {
+              type: "other",
+              title: "Group",
+              values: [{ value: "all", label: "All species" }, "fish"],
+            },
             x: { type: "spatial" },
             m: { values: ["r"], "atlas:labels": { r: "Richness" } },
           },
@@ -237,7 +251,9 @@ describe("dimensions, time and extent", () => {
       "2000–2023",
     );
     expect(temporalLabel(withTime([["2019-01-01T00:00:00Z", null]]))).toBe("2019–present");
-    expect(temporalLabel(withTime([["2025-01-01T00:00:00Z", "2025-12-31T00:00:00Z"]]))).toBe("2025");
+    expect(temporalLabel(withTime([["2025-01-01T00:00:00Z", "2025-12-31T00:00:00Z"]]))).toBe(
+      "2025",
+    );
     expect(
       temporalLabel(
         withTime([["2000-01-01T00:00:00Z", "2023-12-31T00:00:00Z"]], {
@@ -249,7 +265,9 @@ describe("dimensions, time and extent", () => {
   });
 
   it("reads the first bbox (2D or 3D) and rejects malformed ones", () => {
-    expect(bboxOf(coll({ extent: { spatial: { bbox: [[-98, 12, -44, 56]] } } }))).toEqual([-98, 12, -44, 56]);
+    expect(bboxOf(coll({ extent: { spatial: { bbox: [[-98, 12, -44, 56]] } } }))).toEqual([
+      -98, 12, -44, 56,
+    ]);
     expect(bboxOf(coll({ extent: { spatial: { bbox: [[-98, 12, 0, -44, 56, 10]] } } }))).toEqual([
       -98, 12, -44, 56,
     ]);
@@ -280,7 +298,10 @@ describe("firstParagraph", () => {
 });
 
 describe("buildCard", () => {
-  const entry = (c: StacCollection | null, extra: Partial<CollectionEntry> = {}): CollectionEntry => ({
+  const entry = (
+    c: StacCollection | null,
+    extra: Partial<CollectionEntry> = {},
+  ): CollectionEntry => ({
     id: "c",
     title: "A collection",
     href: URL_OF,
@@ -362,7 +383,12 @@ describe("buildCard", () => {
 
   it("never throws on a bare collection", () => {
     const card = buildCard(entry(coll()));
-    expect(card.credits).toMatchObject({ citation: null, license: null, contacts: [], funders: [] });
+    expect(card.credits).toMatchObject({
+      citation: null,
+      license: null,
+      contacts: [],
+      funders: [],
+    });
     expect(card.dims).toEqual([]);
     expect(card.temporal).toBeNull();
   });
@@ -382,7 +408,9 @@ describe("groupCards", () => {
     ]);
   });
   it("lists an unavailable external collection inside its own group", async () => {
-    const f = fakeFetch((url) => (url.includes("/v8/nc/") ? new Response("", { status: 503 }) : undefined));
+    const f = fakeFetch((url) =>
+      url.includes("/v8/nc/") ? new Response("", { status: 503 }) : undefined,
+    );
     const res = await loadCatalog({ base: FIXTURE_BASE, fetchImpl: f.fetch, cache: new Map() });
     if (!res.ok) throw new Error("catalog failed");
     const v8 = groupCards(res.value.entries).find((g) => g.group === "mst-v8");
@@ -396,7 +424,10 @@ describe("groupCards", () => {
 describe("brand strings", () => {
   it("carries the credit line and the supporter links the map, About and footer share", () => {
     expect(BRAND_CREDIT).toBe("OceanMetrics Atlas · supported by BOEM and MBON");
-    expect(SUPPORTERS.map((s) => s.href)).toEqual(["https://www.boem.gov", "https://marinebon.org"]);
+    expect(SUPPORTERS.map((s) => s.href)).toEqual([
+      "https://www.boem.gov",
+      "https://marinebon.org",
+    ]);
     expect(ABOUT_LINKS.map((l) => l.href)).toEqual([
       "https://marinebon.org/data-products/",
       "https://marinebon.org/biotrack/",

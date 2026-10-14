@@ -1288,7 +1288,10 @@
 
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">
-    <h1 class="brand-title" id="app-title"><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span> <span class="wm-atlas">Atlas</span></h1>
+    <h1 class="brand-title" id="app-title">
+      <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+      <span class="wm-atlas">Atlas</span>
+    </h1>
   </span>
 
   <div data-tour="lens-switch" data-control="lens-switch">

@@ -15,7 +15,14 @@ import { join, relative, sep } from "node:path";
 // (the shell's inlined critical CSS) and "src/shell/shell.css" (the file that CSS is `@import`ed
 // from, and the one src/shell/Shell.svelte imports too) now that the shell's critical CSS lands.
 // A SCAN_ROOTS entry may name a single FILE, not only a directory -- see `walk()` below.
-export const SCAN_ROOTS = ["src/lib/brand", "src/lib/ui", "index.html", "src/shell/shell.css", "src/catalog", "catalog.html"];
+export const SCAN_ROOTS = [
+  "src/lib/brand",
+  "src/lib/ui",
+  "index.html",
+  "src/shell/shell.css",
+  "src/catalog",
+  "catalog.html",
+];
 const SCANNED_EXTENSIONS = new Set([
   ".css",
   ".html",
