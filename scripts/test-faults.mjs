@@ -469,6 +469,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/lens/collection/mstMapInputs.test.ts"],
   },
   {
+    id: "vector-only-model-undrawable",
+    patch: "tests/faults/vector-only-model-undrawable.patch",
+    describe:
+      "surfaceFor() never finds a PMTiles range for a model with no COG -- a vector-only v7 model shows " +
+      "the 'cannot draw' notice again instead of a presence fill",
+    gate: ["npx", "vitest", "run", "tests/catalog/mst/taxon.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

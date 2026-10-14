@@ -113,6 +113,11 @@ and hex painting follow.
   seabird surfaces) and sets it as the MapLibre source `bounds`, so tiles outside the COG are never
   requested (Arctic Tern density at zoom 3: 78 tile requests with 62 404s before, 4 and none after). The
   camera's degenerate-extent handling is unchanged.
+- **Vector-only MarineSensitivity models are drawn (WP11).** A v7 taxon whose model for a collection is a
+  PMTiles range with no COG is drawn in the Collections lens as a presence fill (one colour, "range
+  (presence)" legend) instead of the "only raster surfaces are drawn here yet" notice. The shard has no
+  value column, so there is nothing to colour by. (The pinned v7 release gives every vector range a COG
+  twin, so the COG still wins there.)
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

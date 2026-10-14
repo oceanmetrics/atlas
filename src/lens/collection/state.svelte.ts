@@ -725,6 +725,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return (
         mapInputs.hex !== null ||
         mapInputs.raster !== null ||
+        mapInputs.range !== null ||
         (extentPending && mapInputs.legend !== null)
       );
     },

@@ -1055,7 +1055,12 @@
         : sel.lens === "collection"
           ? collectionLens.mapInputs.raster
           : null,
-    range: sel.lens === "species" ? speciesLens.mapInputs.range : null,
+    range:
+      sel.lens === "species"
+        ? speciesLens.mapInputs.range
+        : sel.lens === "collection"
+          ? collectionLens.mapInputs.range
+          : null,
     overlays: [],
     // WP4: the gazetteer collections toggled in the "Place layers" group
     placeOverlays: placesMap.overlays.specs,

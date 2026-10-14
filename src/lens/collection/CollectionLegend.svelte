@@ -28,6 +28,20 @@
     <h2 id={titleId}>{legend.title}</h2>
     <p>Map tiles unavailable -- ramp not shown.</p>
   </div>
+{:else if legend.kind === "presence"}
+  <div
+    class="collection-legend"
+    role="region"
+    aria-labelledby={titleId}
+    data-testid="collection-legend"
+  >
+    <h2 id={titleId} class="presence-title">{legend.title}</h2>
+    {#if legend.subtitle}<p class="presence-subtitle">{legend.subtitle}</p>{/if}
+    <div class="presence-row">
+      <span class="swatch" style="background:{legend.swatch}"></span>
+      <span>range (presence)</span>
+    </div>
+  </div>
 {:else}
   <div class="collection-legend" data-testid="collection-legend">
     <Legend
@@ -62,8 +76,26 @@
   :global(.stage[data-panel-maximized="true"]) .collection-legend {
     display: none;
   }
+  .presence-title,
   .collection-legend--down h2 {
     font-size: var(--text-sm);
     margin: 0 0 var(--space-1);
+  }
+  .presence-subtitle {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .presence-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+  .swatch {
+    width: 18px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid var(--border-control);
   }
 </style>

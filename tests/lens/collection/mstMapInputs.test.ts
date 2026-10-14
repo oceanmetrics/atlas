@@ -140,6 +140,46 @@ describe("the raster source's bounds (WP11): the COG footprint, when it is known
   });
 });
 
+describe("a vector-only model draws as a presence fill, not a 'cannot draw' notice (WP11)", () => {
+  const e = entry("msens-v7-rng_iucn", "IUCN range");
+  const vec = {
+    ...card,
+    inputs: card.inputs.map((i) => ({
+      ...i,
+      assets: i.assets.filter((a) => a.type === "pmtiles"),
+    })),
+  };
+  const item = taxonItem(vec, "rng_iucn", e.id, e.title)!;
+  const out = collectionMapInputs({ entry: e, item, style: null, values: null, marker: null });
+  it("a range layer keyed by the model, no raster and no hex", () => {
+    expect(out.raster).toBeNull();
+    expect(out.hex).toBeNull();
+    expect(out.range).toMatchObject({
+      id: "collection_range",
+      sourceLayer: "rng_iucn",
+      keyProperty: "mdl_key",
+      key: "rng_iucn|6494",
+      pmtiles: expect.stringMatching(/3a26f18f3e7cdca6\.pmtiles$/),
+    });
+  });
+  it("the legend is a presence swatch with the taxon's title", () => {
+    expect(out.legend).toMatchObject({ kind: "presence", stops: [], histogram: null });
+    expect(out.legend?.swatch).toBe(out.range?.fillColor);
+    expect(out.legend?.title).toContain("Dermochelys coriacea");
+  });
+  it("a COG item has no range layer", () => {
+    const cog = taxonItem(card, "am_0.05", "msens-v7-am_0.05", "AquaMaps")!;
+    const o = collectionMapInputs({
+      entry: entry("msens-v7-am_0.05", "AquaMaps"),
+      item: cog,
+      style: null,
+      values: null,
+      marker: null,
+    });
+    expect(o.range).toBeNull();
+  });
+});
+
 describe("a fixed rescale in the asset (gm's relative index)", () => {
   it("is used without any statistics read", () => {
     const e = entry("msens-v8-gm", "gm");

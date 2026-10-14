@@ -4,7 +4,7 @@
 // `HexLayerSpec`; a cloud-optimized GeoTIFF item becomes a titiler `RasterLayerSpec`; either way the
 // legend spans the item's own `atlas:value_range` (`catalog/ramp.ts#valueDomain`), the same domain
 // the colours use, so the legend and the painted map always agree.
-import { hexAssetOf, rasterAssetOf, valuesAssetOf } from "../../lib/catalog/assets";
+import { hexAssetOf, rangeAssetOf, rasterAssetOf, valuesAssetOf } from "../../lib/catalog/assets";
 import type { CollectionEntry } from "../../lib/catalog/load";
 import { collectionRamp, rampStops, valueDomain } from "../../lib/catalog/ramp";
 import type { StacItem } from "../../lib/catalog/types";
@@ -13,16 +13,21 @@ import type { HexLayerSpec } from "../../lib/map/layers/hex";
 import { titilerTileTemplate } from "../../lib/map/layers/titiler";
 import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
-import type { RasterLayerSpec } from "../../lib/map/types";
+import { RANGE_FILL_COLOR, RANGE_FILL_OPACITY } from "../../lib/map/layers/ranges";
+import type { RangeLayerSpec, RasterLayerSpec } from "../../lib/map/types";
 import { PALETTES } from "../../lib/state/types";
 import type { Palette } from "../../lib/state/types";
 import { paletteStopsWithFallback, type LegendStop } from "../../lib/raster/ramps";
 
 export interface CollectionLegend {
-  kind: "continuous";
+  /** `continuous`: a ramp over the item's value range. `presence`: a vector range (one swatch, "range
+   * (presence)"; `stops` is empty). */
+  kind: "continuous" | "presence";
   title: string;
   subtitle: string | null;
   stops: LegendStop[];
+  /** the swatch of a `presence` legend. */
+  swatch?: string;
   /** what the values are (`sdm:value_unit`); "" when the item says nothing. */
   unit: string;
   /** the density of the item's values across the whole layer (hex items); `null` for a raster. */
@@ -34,6 +39,8 @@ export interface CollectionLegend {
 export interface CollectionMapInputs {
   hex: HexLayerSpec | null;
   raster: RasterLayerSpec | null;
+  /** a vector range item (a v7 model that publishes PMTiles only): drawn as a presence fill. */
+  range: RangeLayerSpec | null;
   legend: CollectionLegend | null;
   /** the COG a download of "the data layer" would fetch; `null` for a hex item. */
   cogUrl: string | null;
@@ -44,6 +51,7 @@ export interface CollectionMapInputs {
 export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
   hex: null,
   raster: null,
+  range: null,
   legend: null,
   cogUrl: null,
   cogBidx: null,
@@ -52,6 +60,8 @@ export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
 /** the id of the collection raster's source and layer. */
 export const COLLECTION_RASTER_ID = "collection_raster";
 export const COLLECTION_RASTER_OPACITY = 0.8;
+/** the id of the vector range's source and layer. */
+export const COLLECTION_RANGE_ID = "collection_range";
 
 /** an item's display label: its own title, else its id. */
 export function itemLabel(item: StacItem): string {
@@ -122,6 +132,7 @@ export function collectionMapInputs(args: {
         domain,
       },
       raster: null,
+      range: null,
       cogUrl: null,
       cogBidx: null,
       legend: {
@@ -154,6 +165,7 @@ export function collectionMapInputs(args: {
       hex: null,
       cogUrl: cog.url,
       cogBidx: cog.bidx ?? null,
+      range: null,
       raster: {
         id: COLLECTION_RASTER_ID,
         tiles: [
@@ -176,6 +188,36 @@ export function collectionMapInputs(args: {
         unit: unitOf(item, entry),
         histogram: null,
         marker: marker !== null && Number.isFinite(marker) ? marker : null,
+      },
+    };
+  }
+
+  const vector = rangeAssetOf(item);
+  if (vector) {
+    // a vector-only model: presence, no value to colour by (the shard carries none)
+    return {
+      hex: null,
+      raster: null,
+      range: {
+        id: COLLECTION_RANGE_ID,
+        pmtiles: vector.url,
+        sourceLayer: vector.layer,
+        keyProperty: vector.keyProperty,
+        key: vector.key,
+        fillColor: RANGE_FILL_COLOR,
+        opacity: RANGE_FILL_OPACITY,
+      },
+      cogUrl: null,
+      cogBidx: null,
+      legend: {
+        kind: "presence",
+        title: lt.title,
+        subtitle: lt.subtitle,
+        stops: [],
+        swatch: RANGE_FILL_COLOR,
+        unit: "",
+        histogram: null,
+        marker: null,
       },
     };
   }
