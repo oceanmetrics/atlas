@@ -118,6 +118,14 @@ and hex painting follow.
   (presence)" legend) instead of the "only raster surfaces are drawn here yet" notice. The shard has no
   value column, so there is nothing to colour by. (The pinned v7 release gives every vector range a COG
   twin, so the COG still wins there.)
+- **Unlisted collection by link (WP11).** `?collection=<https url of a collection.json>` loads ONE extra
+  collection into the picker, marked "(unlisted)" under "Unlisted (shared by link)", so a restricted
+  collection (the BioTrack per-species one) can be previewed through a private link before it is public;
+  a link with no `?c=` opens on it. Its items load from its own `items/` links and hex assets resolve
+  relative to it. The URL is validated like `?catalog=` (https only, no credentials, no fragment, a `.json`
+  path; a signed link's query is kept); an invalid one is ignored, an unreadable one is an "unavailable" row,
+  and a collection id the catalog already lists is not added twice. Like `catalog`, the key never reaches
+  analytics page locations.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

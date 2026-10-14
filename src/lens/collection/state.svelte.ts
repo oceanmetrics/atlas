@@ -56,6 +56,7 @@ import {
   loadCatalog,
   loadItems,
   clearCatalogCache,
+  unlistedEntryId,
   type AtlasCatalog,
   type CollectionEntry,
   type LoadError,
@@ -256,7 +257,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       phase = "loading";
       error = null;
     });
-    void loadCatalog({ ...deps.loadOptions, base }).then((res) => {
+    const extra = selStore.sel.collection;
+    void loadCatalog({
+      ...deps.loadOptions,
+      base,
+      ...(extra ? { extraCollections: [extra] } : {}),
+    }).then((res) => {
       if (token !== catalogToken) return;
       if (res.ok) {
         catalog = res.value;
@@ -270,7 +276,13 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
 
   const entries = $derived(catalog?.entries ?? []);
-  const entry = $derived(pickEntry(entries, selStore.sel.c));
+  // a `?collection=` link opens on its collection unless the link also says `?c=`
+  const entry = $derived(
+    pickEntry(
+      entries,
+      selStore.sel.c ?? (selStore.sel.collection ? unlistedEntryId(entries) : null) ?? undefined,
+    ),
+  );
 
   // --- MarineSensitivity collections ------------------------------------------------------------
   // taxon collections (v7) draw one taxon at a time (`mst.items`); nc / gm are dimension cubes whose

@@ -25,7 +25,8 @@ npm run test:faults        # seeded-fault suite (tests/GATES.md)
 - **Catalog and collections**: `https://storage.oceanmetrics.io/atlas/` = `s3://oceanmetrics.io-public/atlas/`
   (read path-style at `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/` until the
   storage host answers CORS). Built by the Python pipeline in `pipeline/`. The one place the origin
-  is formed is `src/lib/catalog/base.ts`; override it with `?catalog=<https url>` or `VITE_CATALOG_BASE`.
+  is formed is `src/lib/catalog/base.ts`; override it with `?catalog=<https url>` or `VITE_CATALOG_BASE`. `?collection=<https url of a
+collection.json>` adds one unlisted collection to the picker (a private preview link).
 - **MarineSensitivity collections** are read by reference from `https://file.marinesensitivity.org/stac/`;
   the Species lens still reads one pinned MST release (`src/lib/release/mst.ts`).
 - **Gazetteer places**: `https://storage.oceanmetrics.io/gazetteer/` (`docs/gazetteer-places.md`).

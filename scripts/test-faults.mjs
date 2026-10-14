@@ -477,6 +477,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/catalog/mst/taxon.test.ts"],
   },
   {
+    id: "collection-url-accepts-http",
+    patch: "tests/faults/collection-url-accepts-http.patch",
+    describe:
+      "validateCollectionUrl() accepts plain http -- a ?collection= link can point the app's reads at an " +
+      "unencrypted origin",
+    gate: ["npx", "vitest", "run", "tests/catalog/unlisted.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

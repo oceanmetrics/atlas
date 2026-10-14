@@ -62,7 +62,12 @@
         .filter((e) => e.group === g)
         .map((e) => ({
           value: e.id,
-          label: e.status === "ok" ? e.title : `${e.title} (unavailable)`,
+          label:
+            e.status !== "ok"
+              ? `${e.title} (unavailable)`
+              : e.group === "unlisted"
+                ? `${e.title} (unlisted)`
+                : e.title,
           disabled: e.status !== "ok",
         })),
     })).filter((g) => g.options.length > 0),
