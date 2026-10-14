@@ -14,6 +14,7 @@
 // flattened into its children, which keep the parent's group. Items are fetched only when a
 // collection is opened (`loadItems`), a few at a time, and cached per collection.
 import { catalogUrl, resolveHref, resolveCatalogBase } from "./base";
+import { mstTitle } from "./mst/kinds";
 import type { StacAsset, StacCatalog, StacCollection, StacItem, StacLink } from "./types";
 
 // --- result shape -------------------------------------------------------------------------------
@@ -287,7 +288,9 @@ async function loadEntries(
   return [
     {
       id: coll.id,
-      title: coll.title?.trim() || link.title?.trim() || coll.id,
+      // MarineSensitivity collections are listed under the atlas' own wording where the STAC's is
+      // ambiguous ("AquaMaps SDM" is the downscaled 0.05 degree collection: catalog/mst/kinds.ts)
+      title: mstTitle(coll.id, coll.title?.trim() || link.title?.trim() || coll.id),
       href: url,
       group,
       external: !url.startsWith(base),

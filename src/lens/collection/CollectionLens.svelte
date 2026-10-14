@@ -20,6 +20,8 @@
   import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
   import { formatCellValue } from "./mapInputs";
+  import MstDetails from "./MstDetails.svelte";
+  import TaxonField from "./TaxonField.svelte";
   import type { CollectionLens } from "./state.svelte";
 
   interface Props {
@@ -79,6 +81,13 @@
   });
 
   const cell = $derived(lens.cell);
+  // MarineSensitivity: the taxon collections pick a taxon by search; the rest show the collection's
+  // own `sdm:source_authority` under the identifiers
+  const isTaxonCollection = $derived(lens.mst.ref?.kind === "taxon");
+  const sourceAuthority = $derived.by(() => {
+    const a = lens.entry?.collection?.["sdm:source_authority"];
+    return typeof a === "string" && a.trim() ? a.trim() : null;
+  });
 </script>
 
 {#snippet detailsContent()}
@@ -132,6 +141,15 @@
     {#if lens.itemDescription}
       <p class="description">{lens.itemDescription}</p>
     {/if}
+    {#if lens.mst.ref}
+      <MstDetails
+        facts={lens.taxonFacts}
+        source={sourceAuthority}
+        onOpenSpecies={isTaxonCollection && lens.mst.taxonKey
+          ? () => lens.openInSpecies()
+          : undefined}
+      />
+    {/if}
   </div>
 {/snippet}
 
@@ -168,6 +186,10 @@
             />
           </label>
 
+          {#if isTaxonCollection}
+            <TaxonField mst={lens.mst} />
+          {/if}
+
           {#if lens.itemsPhase === "loading"}
             <p role="status">Loading the collection…</p>
           {:else if lens.itemsPhase === "error"}
@@ -192,7 +214,15 @@
                 />
               </label>
             {/each}
-            {#if lens.itemsPhase === "ready" && !lens.drawable}
+            {#if lens.notice}
+              <p class="note" role="status" data-testid="collection-notice">{lens.notice}</p>
+            {:else if lens.itemsPhase === "ready" && !lens.drawable && lens.rangeLoading}
+              <p class="note" role="status">Reading the value range…</p>
+            {:else if lens.rangeFailed}
+              <p class="error" role="alert" data-testid="collection-range-failed">
+                The value range could not be read from the tile server, so this layer is not drawn.
+              </p>
+            {:else if lens.itemsPhase === "ready" && !lens.drawable}
               <p class="note" role="status" data-testid="collection-undrawable">
                 This collection's layers cannot be drawn by the Collections lens yet: it publishes
                 no hex grid with values and no cloud-optimized GeoTIFF the lens understands.

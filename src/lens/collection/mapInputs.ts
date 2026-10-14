@@ -14,6 +14,8 @@ import { titilerTileTemplate } from "../../lib/map/layers/titiler";
 import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
 import type { RasterLayerSpec } from "../../lib/map/types";
+import { PALETTES } from "../../lib/state/types";
+import type { Palette } from "../../lib/state/types";
 import { paletteStopsWithFallback, type LegendStop } from "../../lib/raster/ramps";
 
 export interface CollectionLegend {
@@ -128,9 +130,19 @@ export function collectionMapInputs(args: {
   }
 
   if (cog) {
-    // titiler colours by a NAMED colormap, so a raster item always uses the default ramp (a
-    // collection style is a MapLibre expression titiler cannot take)
-    const colors = [...(paletteStopsWithFallback(null, "spectral_r") ?? [])];
+    // an asset that asks for `rescale: "auto"` draws once the range has been read (the lens puts it
+    // in `atlas:value_range`); until then there is nothing honest to paint or to put in the legend
+    const hasOwnRange = Array.isArray(item.properties?.["atlas:value_range"]);
+    if (cog.rescale === "auto" && !hasOwnRange) return EMPTY_COLLECTION_INPUTS;
+    const rescale = Array.isArray(cog.rescale) ? cog.rescale : null;
+    const rasterDomain: [number, number] = rescale && !hasOwnRange ? rescale : domain;
+    // titiler colours by a NAMED colormap, so a raster item uses the asset's own (when it is one of
+    // the app's four ramps) else the default; a collection style is a MapLibre expression titiler
+    // cannot take
+    const colormap: Palette = PALETTES.includes(cog.colormap as Palette)
+      ? (cog.colormap as Palette)
+      : "spectral_r";
+    const colors = [...(paletteStopsWithFallback(null, colormap) ?? [])];
     return {
       hex: null,
       cogUrl: cog.url,
@@ -139,9 +151,10 @@ export function collectionMapInputs(args: {
         tiles: [
           titilerTileTemplate({
             url: cog.url,
-            colormapName: "spectral_r",
-            rescaleMin: domain[0],
-            rescaleMax: domain[1],
+            colormapName: colormap,
+            rescaleMin: rasterDomain[0],
+            rescaleMax: rasterDomain[1],
+            ...(cog.bidx === undefined ? {} : { bidx: cog.bidx }),
           }),
         ],
         opacity: COLLECTION_RASTER_OPACITY,
@@ -150,7 +163,7 @@ export function collectionMapInputs(args: {
         kind: "continuous",
         title: lt.title,
         subtitle: lt.subtitle,
-        stops: rampStops(colors, domain),
+        stops: rampStops(colors, rasterDomain),
         unit: unitOf(item, entry),
         histogram: null,
         marker: marker !== null && Number.isFinite(marker) ? marker : null,

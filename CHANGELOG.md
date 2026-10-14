@@ -56,6 +56,23 @@ and hex painting follow.
 - **Attribution and head.** The map attribution reads "... | OceanMetrics Atlas · supported by BOEM and MBON"
   after the basemap credit (desktop; on the phone the basemap credit stays whole), the catalog footer carries
   the same line; `index.html` gains a description and `og:`/`twitter:` meta.
+- **MarineSensitivity collections are drawable (WP6).** Every v7 collection the catalog links (merged
+  model, AquaMaps 0.05 degree, IUCN / FWS / BirdLife ranges, critical habitat, core areas, SWOT+DPS
+  turtles) has a taxon search (scientific or common name, the Species lens' ranking, "Only species in US
+  waters") and draws the taxon's COG through titiler at the asset's own rescale and colormap, with the
+  STAC collection's citation and license and, in Details, the taxon's identifiers (WoRMS linked, BOTW,
+  GBIF, Red List, ESA). Taxa are read from the v7 `app/` bundle because the MST STAC API serves v9 only
+  (`docs/mst-by-reference.md`). The downscaled AquaMaps collection is titled "AquaMaps habitat
+  suitability (0.05 degree)".
+- **NOAA density collections with selectors.** `msens-v8-nc` (seabirds): region x species or group x
+  season x variable (density, CV, 90% CI); `msens-v8-gm` (Gulf of Mexico marine mammals and turtles):
+  taxon x time (annual only; the monthly surfaces have no COG yet). Multi-band COGs draw by band
+  (`bidx`); a density's display range is read once per band from titiler `/cog/statistics` (minimum to
+  98th percentile) and cached. Per-model tables are static manifests (`public/mst/`, built by
+  `scripts/mst/build-manifests.mjs`), a stopgap until the MST STAC publishes per-model Items.
+- **URL.** `?c=<collection>&sp=<taxon>` for a v7 taxon collection (it now stays in the Collections
+  lens; `?sp=` alone is still the Species lens), `?c=msens-v8-nc&i=<region.species.season.variable>`
+  and `?c=msens-v8-gm&i=<taxon.time>` for the density collections.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

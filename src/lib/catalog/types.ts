@@ -39,6 +39,12 @@ export interface StacAsset {
   /** the feature id property of a PMTiles grid (`FID`), the key `promoteId` promotes. */
   "atlas:id_field"?: string;
   "sdm:h3_resolution"?: number;
+  /** a multi-band COG: the 1-based band to draw (`bidx`). Omitted = band 1. */
+  "atlas:bidx"?: number;
+  /** a COG's display rescale: `[min, max]`, or `"auto"` = read it from titiler `/cog/statistics`. */
+  "atlas:rescale"?: [number, number] | "auto";
+  /** a named titiler colormap (`spectral_r`, ...); omitted = the default ramp. */
+  "atlas:colormap"?: string;
   [key: string]: unknown;
 }
 

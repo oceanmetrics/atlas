@@ -27,7 +27,12 @@ import {
   viewOf,
   type DimSpec,
 } from "../../lib/catalog/dims";
-import { styleUrlOf, valuesAssetOf, type ValuesAsset } from "../../lib/catalog/assets";
+import {
+  rasterAssetOf,
+  styleUrlOf,
+  valuesAssetOf,
+  type ValuesAsset,
+} from "../../lib/catalog/assets";
 import { extentBounds } from "../../lib/catalog/extent";
 import {
   likelyCountIndex,
@@ -42,6 +47,10 @@ import {
   type SpeciesData,
 } from "../../lib/catalog/species";
 import type { ChromePadding } from "../../lib/map/camera";
+import { mstRefOf } from "../../lib/catalog/mst/kinds";
+import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
+import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
+import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
 import {
   loadCatalog,
   loadItems,
@@ -51,7 +60,7 @@ import {
   type LoadError,
   type LoadOptions,
 } from "../../lib/catalog/load";
-import type { StacItem } from "../../lib/catalog/types";
+import type { CubeDimension, StacCollection, StacItem } from "../../lib/catalog/types";
 import { readValueColumn, type ValueColumn } from "../../lib/catalog/values";
 import {
   createHexPainter,
@@ -62,6 +71,7 @@ import {
 } from "../../lib/map/layers/hex";
 import type { MapHandle } from "../../lib/map/map";
 import type { SelStore } from "../../lib/state/sel.svelte";
+import { createMstSource, type MstSource } from "./mst.svelte";
 import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
@@ -89,6 +99,10 @@ export interface CollectionLensDeps {
   readSpecies?: typeof readSpeciesData;
   /** the chrome (docked panel, phone sheet) covering the map right now, for the default camera fit. */
   chromePadding?: () => ChromePadding;
+  /** MarineSensitivity collections (nc / gm manifests, v7 taxon shards): overrides for tests. */
+  mst?: { items?: MstItemOptions; taxon?: import("../../lib/catalog/mst/items").TaxonLoadOptions };
+  /** the display-rescale reader (titiler `/cog/statistics`, cached); default the module cache. */
+  rescale?: RescaleCache;
 }
 
 /** the species list of the clicked cell, for the item's season and group (see `lib/catalog/species.ts`). */
@@ -147,8 +161,20 @@ export interface CollectionLens {
   /** the clicked cell's value for every metric of the same group and season (empty when the
    * collection has no `metric` dimension). */
   readonly siblings: SiblingValue[];
+  /** the MarineSensitivity side of the active collection (taxon search, identifiers, notices). */
+  readonly mst: MstSource;
+  /** the active item's taxon identifiers (WoRMS / BOTW / GBIF ids, Red List, ESA), as rows. */
+  readonly taxonFacts: TaxonFact[];
+  /** a sentence to show instead of the layer (an MST taxon with no model here, a failed lookup). */
+  readonly notice: string | null;
+  /** true while a raster's display rescale is being read from the tile server. */
+  readonly rangeLoading: boolean;
+  /** true when that read failed (the layer is then not drawn). */
+  readonly rangeFailed: boolean;
   /** the dimension values still reachable, per dimension key (`availableValues`). */
   isAvailable(dimKey: string, value: string): boolean;
+  /** hand the taxon on screen to the Species lens. */
+  openInSpecies(): void;
   selectCollection(id: string): void;
   selectDim(key: string, value: string): void;
   clearCell(): void;
@@ -164,6 +190,12 @@ async function defaultFetchStyle(url: string): Promise<unknown | null> {
   }
 }
 
+async function defaultFetchJson(url: string): Promise<unknown> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const { selStore } = deps;
   const store = deps.cellSelection ?? defaultCellSelection;
@@ -174,9 +206,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   let phase = $state<Phase>("loading");
   let error = $state.raw<LoadError | null>(null);
   let catalog = $state.raw<AtlasCatalog | null>(null);
-  let items = $state.raw<StacItem[]>([]);
-  let itemsPhase = $state<"idle" | "loading" | "ready" | "error">("idle");
-  let itemsError = $state.raw<LoadError | null>(null);
+  let loadedItems = $state.raw<StacItem[]>([]);
+  let loadedPhase = $state<"idle" | "loading" | "ready" | "error">("idle");
+  let loadedError = $state.raw<LoadError | null>(null);
+  // the `cube:dimensions` an MST dimension cube (nc / gm) brings with its manifest
+  let loadedCube = $state.raw<Record<string, CubeDimension> | null>(null);
   let styleJson = $state.raw<unknown | null>(null);
   let values = $state.raw<ValueColumn | null>(null);
   let valuesLoading = $state(false);
@@ -230,32 +264,103 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const entries = $derived(catalog?.entries ?? []);
   const entry = $derived(pickEntry(entries, selStore.sel.c));
 
+  // --- MarineSensitivity collections ------------------------------------------------------------
+  // taxon collections (v7) draw one taxon at a time (`mst.items`); nc / gm are dimension cubes whose
+  // Items come from a manifest; every other collection is the generic STAC flow below.
+  const mst = createMstSource({
+    selStore,
+    entry: () => entry,
+    taxonOptions: deps.mst?.taxon,
+  });
+  const isTaxon = $derived(mst.ref?.kind === "taxon");
+  const items = $derived(isTaxon ? mst.items : loadedItems);
+  const itemsPhase = $derived(isTaxon ? mst.phase : loadedPhase);
+  const itemsError = $derived(isTaxon ? mst.error : loadedError);
+  // an MST cube's selectors are labelled and ordered by the manifest's `cube:dimensions`
+  const collection = $derived.by((): StacCollection | null => {
+    const c = entry?.collection ?? null;
+    return c && loadedCube && !isTaxon ? { ...c, "cube:dimensions": loadedCube } : c;
+  });
+
   // --- the items of the active collection (lazy) --------------------------------------------------
   let itemsToken = 0;
   $effect(() => {
     const e = entry;
     void reloadTick;
     const token = ++itemsToken;
+    const ref = mstRefOf(e);
     untrack(() => {
-      items = [];
-      itemsError = null;
-      itemsPhase = e ? "loading" : "idle";
+      loadedItems = [];
+      loadedCube = null;
+      loadedError = null;
+      loadedPhase = e && ref?.kind !== "taxon" ? "loading" : "idle";
     });
-    if (!e) return;
+    if (!e || ref?.kind === "taxon") return;
+    if (ref) {
+      void loadMstItems(e, deps.mst?.items).then((res) => {
+        if (token !== itemsToken) return;
+        if (res.ok) {
+          loadedItems = res.value.items;
+          loadedCube = res.value.cube;
+          loadedPhase = "ready";
+        } else {
+          loadedError = res.error;
+          loadedPhase = "error";
+        }
+      });
+      return;
+    }
     void loadItems(e, { ...deps.loadOptions }).then((res) => {
       if (token !== itemsToken) return;
       if (res.ok) {
-        items = res.value.items;
-        itemsPhase = "ready";
+        loadedItems = res.value.items;
+        loadedPhase = "ready";
       } else {
-        itemsError = res.error;
-        itemsPhase = "error";
+        loadedError = res.error;
+        loadedPhase = "error";
       }
     });
   });
 
-  const view = $derived(viewOf(entry?.collection ?? null, items, selStore.sel.i));
+  const view = $derived(viewOf(collection, items, selStore.sel.i));
   const item = $derived(view.item);
+
+  // --- a raster's display rescale (`rescale: "auto"`): titiler's band statistics, cached ------------
+  const rescaleCache = deps.rescale ?? createRescaleCache(defaultFetchJson);
+  let resolved = $state.raw<{ key: string; range: Rescale } | null>(null);
+  let rangeFailedKey = $state<string | null>(null);
+  const rangeKey = $derived.by(() => {
+    const cog = rasterAssetOf(item);
+    if (!item || !cog || cog.rescale !== "auto") return null;
+    if (Array.isArray(item.properties?.["atlas:value_range"])) return null;
+    return `${cog.url}#${cog.bidx ?? 1}`;
+  });
+  let rangeToken = 0;
+  $effect(() => {
+    const key = rangeKey;
+    const cog = untrack(() => rasterAssetOf(item));
+    const token = ++rangeToken;
+    if (!key || !cog) return;
+    void rescaleCache.get(cog.url, cog.bidx ?? 1).then((range) => {
+      if (token !== rangeToken) return;
+      if (range) {
+        resolved = { key, range };
+        rangeFailedKey = null;
+      } else {
+        rangeFailedKey = key;
+      }
+    });
+  });
+  // the item the map draws: the active one, with its rescale filled in once it has been read
+  const drawItem = $derived.by((): StacItem | null => {
+    const it = item;
+    if (!it || !rangeKey || resolved?.key !== rangeKey) return it;
+    return { ...it, properties: { ...it.properties, "atlas:value_range": resolved.range } };
+  });
+  const rangeLoading = $derived(
+    rangeKey !== null && resolved?.key !== rangeKey && rangeFailedKey !== rangeKey,
+  );
+  const rangeFailed = $derived(rangeKey !== null && rangeFailedKey === rangeKey);
 
   // --- the collection's style (a MapLibre fill layer; the ramp is read out of it) ------------------
   let styleToken = 0;
@@ -466,7 +571,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
     const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
-    return collectionMapInputs({ entry, item, style: styleJson, values, marker });
+    return collectionMapInputs({ entry, item: drawItem, style: styleJson, values, marker });
   });
 
   // --- the live map: painter + hover/click ---------------------------------------------------------
@@ -518,7 +623,16 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const e = entries.find((x) => x.id === id && x.status === "ok");
     if (!e) return;
     store.set(null);
-    selStore.set(selPatchFor(entries, e, [], null));
+    // the taxon travels between the v7 taxon collections (compare the IUCN range with AquaMaps for the
+    // same species) and is dropped from the URL elsewhere, where `sp` would mean nothing
+    const taxon = mstRefOf(e)?.kind === "taxon";
+    if (mstRefOf(entry)?.kind === "taxon") mst.remember(selStore.sel.sp ?? mst.remembered);
+    const patch = selPatchFor(entries, e, [], null);
+    selStore.set(
+      taxon
+        ? { ...patch, c: e.id, sp: selStore.sel.sp ?? mst.remembered }
+        : { ...patch, sp: undefined },
+    );
   }
 
   function selectDim(key: string, value: string): void {
@@ -591,6 +705,33 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get siblings() {
       return siblings;
+    },
+    get mst() {
+      return mst;
+    },
+    get taxonFacts() {
+      return taxonFacts(item);
+    },
+    get notice() {
+      return isTaxon ? mst.notice : null;
+    },
+    get rangeLoading() {
+      return rangeLoading;
+    },
+    get rangeFailed() {
+      return rangeFailed;
+    },
+    openInSpecies() {
+      const sp = selStore.sel.sp ?? (isTaxon ? (mst.taxonKey ?? undefined) : undefined);
+      if (!sp) return;
+      const ds = mstRefOf(entry)?.dsKey;
+      selStore.set({
+        lens: "species",
+        sp,
+        in: ds && ds !== "ms_merge" ? ds : "merged",
+        c: undefined,
+        i: undefined,
+      });
     },
     isAvailable(dimKey, value) {
       const dim = view.dims.find((d) => d.key === dimKey);
