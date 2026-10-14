@@ -12,6 +12,10 @@ const gtagCalls: unknown[][] = [];
 const analytics = createAnalytics({
   appVersion: "e2e-fixture",
   preview: false,
+  // GA is OFF unless a measurement id is configured (no id ships in the repo), so this fixture
+  // supplies a made-up one: the gate must exercise the real GA code path (config + page_view +
+  // events through the injected sink), exactly what a build with `VITE_GA_ID` set would run.
+  measurementId: "G-TEST000000",
   logUrl: "/log", // same-origin; e2e/analytics-privacy.spec.ts page.routes this to a fixture handler
   isWebdriver: () => false,
   gtag: (...args: unknown[]) => {
