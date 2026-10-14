@@ -18,6 +18,19 @@ and hex painting follow.
   refetched. Hover shows a cell's value; click selects it (outlined, marked on the legend, and published
   to `cellSelection` for the species-list panel). The legend spans the item's own value range and shows
   the layer's histogram. A collection's `styles/default.json` supplies the ramp, else Spectral reversed.
+- **Cell panel (Details tool).** Clicking a hex shows the collection and item title, the cell id, its
+  value (two decimals) and, for BioTrack, the sibling metric of the same group and season (richness next
+  to uncertainty, read from `values.parquet`). Below it is the cell's **species list** for the item's
+  season and group (`all` = every species, `redlisted` = red-listed, otherwise the species group):
+  scientific name (italic), English common name, probability, a Very likely / Likely pill, an IUCN code
+  chip and a share bar (% Very likely, % Likely, rest of the modeled species), with the count line "N
+  species likely (prob >= 0.6) of M modeled in this group", an empty state, and a CSV download. The
+  data is the collection's public `cell_species` + `species` Parquet assets (fetched once, kept in
+  memory; the per-species map layers stay restricted).
+- **Hover** shows the value with two decimals and "N likely species" once the species list is loaded
+  (one in-memory lookup per cell, no fetch while hovering).
+- **Default camera.** With no `map=` in the URL the first load fits the collection's
+  `extent.spatial.bbox` (with the panel padding) instead of the globe; `map=` still wins.
 - **Raster items** (cloud-optimized GeoTIFF assets) render through the existing titiler layer.
 - **URL grammar.** `?c=<collection id>&i=<item id>` (plus `?catalog=<https url>` to read another catalog
   base, e.g. a staging folder served with CORS + Range). The default view writes nothing; an unknown

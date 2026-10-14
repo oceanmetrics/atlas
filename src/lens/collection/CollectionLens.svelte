@@ -17,8 +17,9 @@
   import type { SelStore } from "../../lib/state/sel.svelte";
   import type { MapHandle } from "../../lib/map/map";
   import type { LayerGroupId } from "../../lib/map/layerStack";
+  import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
-  import { formatCollectionValue } from "./mapInputs";
+  import { formatCellValue } from "./mapInputs";
   import type { CollectionLens } from "./state.svelte";
 
   interface Props {
@@ -82,14 +83,48 @@
 
 {#snippet detailsContent()}
   <div class="collection-details" data-testid="collection-details">
+    {#if lens.entry}
+      <p class="collection-title">{lens.entry.title}</p>
+    {/if}
     {#if lens.itemTitle}
       <h3>{lens.itemTitle}</h3>
     {/if}
     {#if cell && lens.entry && cell.collection === lens.entry.id}
       <p data-testid="collection-cell">
         Cell <b>{cell.fid}</b>:
-        {cell.value === null ? "no value" : formatCollectionValue(cell.value)}
+        {cell.value === null ? "no value" : formatCellValue(cell.value)}
       </p>
+      {#if lens.siblings.length > 1}
+        <ul class="siblings" data-testid="collection-siblings">
+          {#each lens.siblings as sib (sib.label)}
+            <li class:current={sib.current}>
+              <span>{sib.label}</span>
+              <b>{sib.value === null ? "no value" : formatCellValue(sib.value)}</b>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if lens.cellSpecies || lens.speciesPhase !== "idle"}
+        {@const cs = lens.cellSpecies}
+        <CellSpeciesPanel
+          phase={lens.speciesPhase}
+          error={lens.speciesError}
+          fid={cell.fid}
+          season={cs?.season ?? lens.selected.season ?? ""}
+          seasonLabel={lens.dims
+            .find((d) => d.key === "season")
+            ?.values.find((v) => v.value === (cs?.season ?? lens.selected.season))?.label ??
+            cs?.season ??
+            ""}
+          groupLabel={lens.dims
+            .find((d) => d.key === "group")
+            ?.values.find((v) => v.value === (cs?.group ?? lens.selected.group))?.label ?? "All"}
+          list={cs?.list ?? []}
+          modeled={cs?.modeled ?? 0}
+          share={cs?.share ?? { veryLikely: 0, likely: 0, rest: 100 }}
+          stem={lens.entry.id}
+        />
+      {/if}
       <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
     {:else}
       <p>Click a cell on the map to see its value.</p>
@@ -246,5 +281,26 @@
   }
   .collection-details p {
     margin: 0;
+  }
+  .collection-title {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .siblings {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+  }
+  .siblings li {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-secondary);
+  }
+  .siblings li.current {
+    color: var(--text-primary);
   }
 </style>

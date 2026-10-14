@@ -64,6 +64,31 @@ def raw_paths(raw: Path) -> dict[str, Path]:
 
 # ---- biotrack_indicators ----
 
+PUBLIC_SPECIES_COLUMNS = ["aphia_id", "scientific_name", "abbreviation", "iucn_code", "redlisted", "group1", "group2", "common_name"]
+CELL_SPECIES_COLUMNS   = ["FID", "season", "aphia_id", "prob", "class"]
+
+
+def public_species_tables(raw: Path = RAW_DIR, session=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+  """the public species list: (cell_species long table, species lookup with English common names).
+  Neil Hammerschlag asked for "click a cell, see the list of species" as a public feature; the per-species MAP
+  surfaces (prob_*/class_*) stay restricted, so only these two small tables go into biotrack_indicators."""
+  rp = raw_paths(raw)
+  sp = bt.read_species_sheet(rp["xlsx"])
+  worms = taxa.fetch_worms(sp["name"].tolist(), PIPE_DIR / "cache" / "worms.json", session=session)
+  taxa_df = taxa.resolve_taxa(sp, worms)
+  taxa.check_taxa(taxa_df)
+  vern = taxa.fetch_vernaculars(taxa_df["aphia_id"].astype(int).tolist(), PIPE_DIR / "cache" / "vernaculars.json", session=session)
+  species = taxa.add_common_names(taxa_df, vern)
+  species = species.assign(aphia_id=species["aphia_id"].astype("int32"))[PUBLIC_SPECIES_COLUMNS]
+  longs = []
+  for season in bt.SEASONS:
+    prob = bt.read_sppresence(rp["sp"] / f"Indicator_SpPresence_Prob_{season}.csv")
+    cls  = bt.read_sppresence(rp["sp"] / f"Indicator_SpPresence_Class_{season}.csv")
+    p, c = species_tables(prob, cls, taxa_df)
+    longs.append(cell_species_long(p, c, season))
+  return pd.concat(longs, ignore_index=True)[CELL_SPECIES_COLUMNS], species.reset_index(drop=True)
+
+
 def provenance_sources(raw: Path, paths: list[Path]) -> list[dict]:
   return [{"path": str(p.relative_to(raw)), "bytes": p.stat().st_size, "sha256": bt.sha256_file(p)} for p in paths]
 
@@ -99,12 +124,20 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
   write_parquet(vh3, dest / "values_h3.parquet")
   log(f"hex_h3.parquet {len(xw)} rows; values_h3.parquet {len(vh3)} cells")
 
+  log("public species list (cell_species.parquet, species.parquet)")
+  cell_sp, species = public_species_tables(raw)
+  write_parquet(cell_sp, dest / "cell_species.parquet")
+  write_parquet(species, dest / "species.parquet")
+  log(f"cell_species.parquet: {len(cell_sp):,} rows; species.parquet: {len(species)} species, "
+      f"{int((species['common_name'] != '').sum())} with an English common name")
+
   # stac
   bbox = [round(float(x), 6) for x in hexg.total_bounds]
   dtypes = {k: ("string" if v == "string" or v.startswith("large_string") else "double") for k, v in pa_types(dest / "values.parquet").items()}
   stac.write_json(dest / "styles" / "default.json", docs.style_default())
   fcache: dict = {}
-  coll = stac.indicators_collection(bbox, vcols, dtypes, num_cols, len(values), len(vh3), hex_info)
+  coll = stac.indicators_collection(bbox, vcols, dtypes, num_cols, len(values), len(vh3), hex_info,
+                                    species_rows={"cell_species": len(cell_sp), "species": len(species)})
   stac.write_json(dest / "collection.json", stac.add_file_info(coll, dest, fcache))
   ranges = {c: (float(values[c].min()), float(values[c].max())) for c in num_cols}
   items = stac.indicator_items(bbox, ranges)
@@ -114,6 +147,7 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
   fields = bt.read_fields_sheet(rp["xlsx"])
   counts = {"n_hex": len(values), "n_values_cols": len(vcols),
             "n_null_richness": int(values["all_summer_richness"].isna().sum())}
+  counts |= {"n_cell_species": len(cell_sp), "n_species": len(species)}
   (dest / "README.md").write_text(docs.indicators_readme(fields, counts))
   (dest / "AGENTS.md").write_text(docs.indicators_agents(counts))
 
@@ -126,7 +160,7 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
     "source_dir": "Google Drive: projects/oceanmetrics/data/raw/couto.thiagoba@gmail.com_indicators",
     "sources": provenance_sources(raw, srcs),
     "record_counts": {"hexes": len(values), "shapefiles": len(list(rp["shp"].glob("Ind_*.shp"))),
-                      "value_columns": len(vcols), "h3_crosswalk_rows": len(xw), "h3_cells": len(vh3),
+                      "value_columns": len(vcols), "cell_species_rows": len(cell_sp), "species": len(species), "h3_crosswalk_rows": len(xw), "h3_cells": len(vh3),
                       "items": len(items)},
     "tippecanoe": {"version": grid.tippecanoe_version(), "cmd": hex_info.get("cmd")},
     "hex_pmtiles_bytes": hex_info["bytes"],
@@ -252,6 +286,17 @@ def check_staging(out: Path = STAGING) -> list[str]:
       continue
     coll = load_json(cj)
     bad += [f"{coll_dir.name}: {m}" for m in stac.check_stac_required(coll)]
+    for k, a in coll.get("assets", {}).items():
+      if coll_dir.name != "biotrack_indicators" or a["href"].startswith("http"):
+        continue
+      f = (coll_dir / a["href"]).resolve()
+      if not f.exists():
+        bad.append(f"{coll_dir.name}: collection asset {k} -> {a['href']} not found")
+      elif f.suffix == ".parquet" and "table:columns" in a:
+        have = pq.read_schema(f).names
+        want = [c["name"] for c in a["table:columns"]]
+        if k in ("cell_species", "species") and have != want:
+          bad.append(f"{coll_dir.name}: asset {k} columns {have} differ from table:columns {want}")
     for item_link in [l for l in coll["links"] if l["rel"] == "item"]:
       ip = coll_dir / item_link["href"]
       if not ip.exists():

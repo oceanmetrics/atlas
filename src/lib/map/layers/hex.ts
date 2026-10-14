@@ -208,13 +208,16 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
 
 // --- interaction ----------------------------------------------------------------------------------
 
-/** "Cell 1234: 0.42" -- the hover text; `null` value reads "no value". Pure. */
+/** "Cell 1234: 0.42" -- the hover text; `null` value reads "no value". An `extra` (e.g. "12 likely
+ * species") is appended after a middle dot. Pure. */
 export function hexHoverText(
   fid: number,
   value: number | null | undefined,
   format: (v: number) => string = (v) => String(v),
+  extra?: string | null,
 ): string {
-  return `Cell ${fid}: ${typeof value === "number" ? format(value) : "no value"}`;
+  const base = `Cell ${fid}: ${typeof value === "number" ? format(value) : "no value"}`;
+  return extra ? `${base} · ${extra}` : base;
 }
 
 /** the FID of the first feature of a `queryRenderedFeatures`/event answer that carries one. */
@@ -253,6 +256,9 @@ export interface HexInteractionOptions {
   valueOf(fid: number): number | null | undefined;
   /** formats a value for the hover text. */
   format?: (v: number) => string;
+  /** a second hover fact from data already in memory ("12 likely species"); `null`/absent for none.
+   * Called on every mousemove, so it must be a lookup, never a fetch. */
+  extra?(fid: number): string | null | undefined;
   /** called with the clicked cell. */
   onClick(cell: { fid: number; value: number | null; lngLat: [number, number] }): void;
   /** while true (a place pick/draw session owns map clicks) hover and click do nothing. */
@@ -287,7 +293,7 @@ export function installHexInteraction(
     map.getCanvas().style.cursor = "pointer";
     popup
       .setLngLat([e.lngLat.lng, e.lngLat.lat])
-      .setText(hexHoverText(fid, opts.valueOf(fid), opts.format));
+      .setText(hexHoverText(fid, opts.valueOf(fid), opts.format, opts.extra?.(fid)));
     if (!shown) {
       popup.addTo(map as never); // the real MapLibre map is what the shell passes in
       shown = true;

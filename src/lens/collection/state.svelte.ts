@@ -19,13 +19,29 @@ import {
 import { creditsOf, type Credits } from "../../lib/catalog/credits";
 import { resolveCatalogBase } from "../../lib/catalog/base";
 import {
+  itemDims,
   pickEntry,
+  resolveItem,
   selPatchFor,
   selectDim as selectDimItem,
   viewOf,
   type DimSpec,
 } from "../../lib/catalog/dims";
-import { styleUrlOf, valuesAssetOf } from "../../lib/catalog/assets";
+import { styleUrlOf, valuesAssetOf, type ValuesAsset } from "../../lib/catalog/assets";
+import { extentBounds } from "../../lib/catalog/extent";
+import {
+  likelyCountIndex,
+  likelySpeciesText,
+  modeledCount,
+  readSpeciesData,
+  shareByGroup,
+  speciesAssetsOf,
+  speciesInCell,
+  type CellSpecies,
+  type GroupShare,
+  type SpeciesData,
+} from "../../lib/catalog/species";
+import type { ChromePadding } from "../../lib/map/camera";
 import {
   loadCatalog,
   loadItems,
@@ -49,7 +65,7 @@ import type { SelStore } from "../../lib/state/sel.svelte";
 import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
-  formatCollectionValue,
+  formatCellValue,
   itemLabel,
   type CollectionMapInputs,
 } from "./mapInputs";
@@ -69,6 +85,32 @@ export interface CollectionLensDeps {
   readValues?: typeof readValueColumn;
   /** fetches the collection's style JSON; default `fetch`; `null` on any failure. */
   fetchStyle?: (url: string) => Promise<unknown | null>;
+  /** reads the collection's public species list (two small Parquet files); default hyparquet. */
+  readSpecies?: typeof readSpeciesData;
+  /** the chrome (docked panel, phone sheet) covering the map right now, for the default camera fit. */
+  chromePadding?: () => ChromePadding;
+}
+
+/** the species list of the clicked cell, for the item's season and group (see `lib/catalog/species.ts`). */
+export interface CellSpeciesView {
+  fid: number;
+  season: string;
+  /** the item's group dimension ("all" when it has none). */
+  group: string;
+  /** Likely / Very likely species of the group, highest probability first. */
+  list: CellSpecies[];
+  /** how many species the models cover in the group. */
+  modeled: number;
+  share: GroupShare;
+}
+
+/** one value of the item's `metric` dimension at the clicked cell (richness / uncertainty ...). */
+export interface SiblingValue {
+  /** the metric's label ("Richness"). */
+  label: string;
+  value: number | null;
+  /** true for the metric on the map. */
+  current: boolean;
 }
 
 export interface CollectionLens {
@@ -97,6 +139,14 @@ export interface CollectionLens {
   readonly valuesError: LoadError | null;
   /** the clicked cell (mirrors the store, reactively). */
   readonly cell: CellSelection | null;
+  /** the public species list's load state (`idle` when the collection publishes none). */
+  readonly speciesPhase: "idle" | "loading" | "ready" | "error";
+  readonly speciesError: LoadError | null;
+  /** the clicked cell's species list; `null` when there is no cell, no list, or no season dimension. */
+  readonly cellSpecies: CellSpeciesView | null;
+  /** the clicked cell's value for every metric of the same group and season (empty when the
+   * collection has no `metric` dimension). */
+  readonly siblings: SiblingValue[];
   /** the dimension values still reachable, per dimension key (`availableValues`). */
   isAvailable(dimKey: string, value: string): boolean;
   selectCollection(id: string): void;
@@ -119,6 +169,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const store = deps.cellSelection ?? defaultCellSelection;
   const readValues = deps.readValues ?? readValueColumn;
   const fetchStyle = deps.fetchStyle ?? defaultFetchStyle;
+  const readSpecies = deps.readSpecies ?? readSpeciesData;
 
   let phase = $state<Phase>("loading");
   let error = $state.raw<LoadError | null>(null);
@@ -133,6 +184,10 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   let cell = $state.raw<CellSelection | null>(store.get());
   let reloadTick = $state(0);
   let painter = $state.raw<HexPainter | null>(null);
+  let speciesData = $state.raw<SpeciesData | null>(null);
+  let speciesPhase = $state<"idle" | "loading" | "ready" | "error">("idle");
+  let speciesError = $state.raw<LoadError | null>(null);
+  let siblings = $state.raw<SiblingValue[]>([]);
 
   // mirror the store, so a template can read `lens.cell` reactively
   $effect(() =>
@@ -145,6 +200,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   /* eslint-disable svelte/prefer-svelte-reactivity */
   const columnCache = new Map<string, ValueColumn>();
   const styleCache = new Map<string, unknown | null>();
+  const speciesCache = new Map<string, SpeciesData>();
   /* eslint-enable svelte/prefer-svelte-reactivity */
 
   // --- the catalog ------------------------------------------------------------------------------
@@ -278,6 +334,134 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     store.set({ ...sel, item: it.id, value: typeof next === "number" ? next : null });
   });
 
+  // --- the public species list (fetched once per collection, kept in memory) ------------------------
+  let speciesToken = 0;
+  $effect(() => {
+    const assets =
+      selStore.sel.lens === "collection" ? speciesAssetsOf(entry?.collection ?? null) : null;
+    const token = ++speciesToken;
+    if (!assets) {
+      untrack(() => {
+        speciesData = null;
+        speciesPhase = "idle";
+        speciesError = null;
+      });
+      return;
+    }
+    const hit = speciesCache.get(assets.cellSpeciesUrl);
+    if (hit) {
+      untrack(() => {
+        speciesData = hit;
+        speciesPhase = "ready";
+        speciesError = null;
+      });
+      return;
+    }
+    untrack(() => {
+      speciesData = null;
+      speciesPhase = "loading";
+      speciesError = null;
+    });
+    void readSpecies(assets).then((res) => {
+      if (token !== speciesToken) return;
+      if (res.ok) {
+        speciesCache.set(assets.cellSpeciesUrl, res.value);
+        speciesData = res.value;
+        speciesPhase = "ready";
+      } else {
+        speciesError = res.error;
+        speciesPhase = "error";
+      }
+    });
+  });
+
+  const itemSeason = $derived(item ? itemDims(item).season : undefined);
+  const itemGroup = $derived(item ? itemDims(item).group : undefined);
+
+  // fid -> likely-species count for the item's season and group (a plain Map read by the hover handler:
+  // one lookup per mousemove, never a fetch); null until the species list is loaded
+  let likelyIndex: Map<number, number> | null = null;
+  $effect(() => {
+    const d = speciesData;
+    const season = itemSeason;
+    likelyIndex = d && season ? likelyCountIndex(d, season, itemGroup) : null;
+  });
+
+  const cellSpecies = $derived.by((): CellSpeciesView | null => {
+    if (!cell || !entry || cell.collection !== entry.id || !speciesData || !itemSeason) return null;
+    const list = speciesInCell(speciesData, cell.fid, itemSeason, itemGroup);
+    const modeled = modeledCount(speciesData, itemGroup);
+    return {
+      fid: cell.fid,
+      season: itemSeason,
+      group: itemGroup ?? "all",
+      list,
+      modeled,
+      share: shareByGroup(list, modeled),
+    };
+  });
+
+  // --- the clicked cell's sibling metrics (richness next to uncertainty, same group and season) -----
+  async function columnOf(asset: ValuesAsset): Promise<ValueColumn | null> {
+    const key = `${asset.url}#${asset.valueColumn}`;
+    const hit = columnCache.get(key);
+    if (hit) return hit;
+    const res = await readValues(asset.url, {
+      keyColumn: asset.keyColumn,
+      valueColumn: asset.valueColumn,
+    });
+    if (!res.ok) return null;
+    columnCache.set(key, res.value);
+    return res.value;
+  }
+
+  let siblingsToken = 0;
+  $effect(() => {
+    const c = cell;
+    const e = entry;
+    const it = item;
+    const all = items;
+    const metricDim = view.dims.find((d) => d.key === "metric");
+    const selected = view.selected;
+    const token = ++siblingsToken;
+    if (!c || !e || !it || c.collection !== e.id || !metricDim || metricDim.values.length < 2) {
+      untrack(() => {
+        siblings = [];
+      });
+      return;
+    }
+    const current = itemDims(it).metric;
+    void Promise.all(
+      metricDim.values.map(async (v): Promise<SiblingValue | null> => {
+        if (v.value === current) return { label: v.label, value: c.value, current: true };
+        const other = resolveItem(all, { ...selected, metric: v.value });
+        const asset = other ? valuesAssetOf(other) : null;
+        if (!asset) return null;
+        const col = await columnOf(asset);
+        const i = col ? col.fids.indexOf(c.fid) : -1;
+        const value = col && i >= 0 ? col.values[i] : null;
+        return { label: v.label, value: typeof value === "number" ? value : null, current: false };
+      }),
+    ).then((rows) => {
+      if (token !== siblingsToken) return;
+      siblings = rows.filter((r): r is SiblingValue => r !== null);
+    });
+  });
+
+  // --- the default camera: the collection's own extent, once, unless the URL carries a `map=` ---------
+  let fitted = false;
+  $effect(() => {
+    if (fitted || selStore.sel.lens !== "collection") return;
+    const handle = deps.mapHandle();
+    const coll = entry?.collection;
+    if (!handle || !coll) return;
+    fitted = true; // first load only: a later collection switch never moves the camera
+    if (untrack(() => selStore.sel.map)) return; // `map=` wins
+    const bounds = extentBounds(coll);
+    if (!bounds) return;
+    handle.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
+  });
+
   // --- what the map draws ------------------------------------------------------------------------
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
@@ -316,7 +500,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     if (!handle || !hasHex) return;
     const interaction = installHexInteraction(handle.map as unknown as HexInteractionMap, {
       valueOf: (fid) => valueIndex.get(fid),
-      format: formatCollectionValue,
+      format: formatCellValue,
+      extra: (fid) => (likelyIndex ? likelySpeciesText(likelyIndex.get(fid) ?? 0) : null),
       isOwned: () => deps.isOwned?.() === true || untrack(() => selStore.sel.lens) !== "collection",
       onClick: ({ fid, value, lngLat }) => {
         const e = untrack(() => entry);
@@ -394,6 +579,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get cell() {
       return cell;
+    },
+    get speciesPhase() {
+      return speciesPhase;
+    },
+    get speciesError() {
+      return speciesError;
+    },
+    get cellSpecies() {
+      return cellSpecies;
+    },
+    get siblings() {
+      return siblings;
     },
     isAvailable(dimKey, value) {
       const dim = view.dims.find((d) => d.key === dimKey);

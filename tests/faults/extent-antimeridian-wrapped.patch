@@ -1,0 +1,13 @@
+diff --git a/src/lib/catalog/extent.ts b/src/lib/catalog/extent.ts
+index d3d22bd..d2a5937 100644
+--- a/src/lib/catalog/extent.ts
++++ b/src/lib/catalog/extent.ts
+@@ -20,7 +20,7 @@ export function extentBounds(collection: StacCollection | null): CameraBoundsInp
+   const [west, south, east, north] =
+     nums.length >= 6 ? [nums[0], nums[1], nums[3], nums[4]] : [nums[0], nums[1], nums[2], nums[3]];
+   if (!(north > south)) return null;
+-  const e = east < west ? east + 360 : east;
++  const e = east;
+   if (!(e > west)) return null;
+   return [
+     [west, Math.max(-85, south)],

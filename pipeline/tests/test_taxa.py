@@ -68,3 +68,48 @@ def test_duplicate_accepted_id_fails_check(species_sheet, worms_json):
 
 def test_species_column_name():
   assert taxa.species_column(105836) == "aphia_105836"
+
+
+# ---- common names ----
+
+class FakeVernacularSession:
+  """stands in for requests: 204 for ids in `none`, else the canned records; counts calls."""
+  def __init__(self, records, none=()):
+    self.records, self.none, self.calls = records, set(none), []
+
+  def get(self, url, timeout=0):
+    aphia = int(url.rsplit("/", 1)[1])
+    self.calls.append(aphia)
+    if aphia in self.none:
+      return type("R", (), {"status_code": 204, "text": "", "raise_for_status": lambda s: None, "json": lambda s: None})()
+    return type("R", (), {"status_code": 200, "text": "x", "raise_for_status": lambda s: None, "json": lambda s: self.records[aphia]})()
+
+
+THRESHER = [{"vernacular": "allopia", "language_code": "ita"}, {"vernacular": " common thresher ", "language_code": "eng"},
+            {"vernacular": "fox shark", "language_code": "eng"}]
+
+
+def test_common_name_is_first_english_vernacular_trimmed():
+  assert taxa.pick_common_name(THRESHER) == "common thresher"
+
+
+def test_common_name_blank_without_english_or_records():
+  assert taxa.pick_common_name([{"vernacular": "Fuchshai", "language_code": "deu"}]) == ""
+  assert taxa.pick_common_name([]) == "" and taxa.pick_common_name(None) == ""
+  assert taxa.pick_common_name([{"vernacular": "  ", "language_code": "eng"}]) == ""
+
+
+def test_add_common_names_falls_back_to_blank_per_species():
+  df = pd.DataFrame({"aphia_id": [105836, 137205]})
+  out = taxa.add_common_names(df, {"105836": THRESHER, "137205": []})
+  assert out["common_name"].tolist() == ["common thresher", ""]
+  assert "common_name" not in df.columns   # input untouched
+
+
+def test_fetch_vernaculars_caches_including_204(tmp_path):
+  sess = FakeVernacularSession({105836: THRESHER}, none=[137205])
+  cache = tmp_path / "cache" / "vernaculars.json"
+  got = taxa.fetch_vernaculars([105836, 137205], cache, session=sess)
+  assert got == {"105836": THRESHER, "137205": []} and sess.calls == [105836, 137205]
+  again = taxa.fetch_vernaculars([137205, 105836], cache, session=sess)
+  assert again == got and sess.calls == [105836, 137205]   # a re-run costs nothing

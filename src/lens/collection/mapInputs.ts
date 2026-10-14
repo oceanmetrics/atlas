@@ -62,6 +62,16 @@ export function formatCollectionValue(v: number): string {
   return Math.abs(s) >= 1e6 || Math.abs(s) < 1e-3 ? s.toExponential(2) : String(s);
 }
 
+/** a cell's value for the hover and the cell panel: two decimals ("0.42"), except where two decimals
+ * would hide it (a value of 100 or more, or a non-zero value under 0.01): then the legend's three
+ * significant figures. */
+export function formatCellValue(v: number): string {
+  if (!Number.isFinite(v)) return "";
+  const a = Math.abs(v);
+  if (a >= 100 || (a !== 0 && a < 0.01)) return formatCollectionValue(v);
+  return v.toFixed(2);
+}
+
 function unitOf(item: StacItem, entry: CollectionEntry): string {
   const u = item.properties?.["sdm:value_unit"] ?? entry.collection?.["sdm:value_unit"];
   return typeof u === "string" && u !== "unitless" ? u : "";

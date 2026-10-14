@@ -1,0 +1,13 @@
+diff --git a/src/lib/catalog/species.ts b/src/lib/catalog/species.ts
+index 9ac87a5..d1b3830 100644
+--- a/src/lib/catalog/species.ts
++++ b/src/lib/catalog/species.ts
+@@ -253,7 +253,7 @@ export function speciesInCell(
+     });
+   }
+   return out.sort(
+-    (a, b) => b.prob - a.prob || a.scientificName.localeCompare(b.scientificName, "en"),
++    (a, b) => a.prob - b.prob || a.scientificName.localeCompare(b.scientificName, "en"),
+   );
+ }
+ 

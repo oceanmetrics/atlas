@@ -36,6 +36,30 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // without running a single gate -- the manifest itself stays the one place a fault's patch path is
 // written (never duplicated into a second list that could drift).
 export const FAULTS = [
+  // --- WP3: the cell panel's species list and default camera ---------------------------------------
+  {
+    id: "species-group-case-sensitive",
+    patch: "tests/faults/species-group-case-sensitive.patch",
+    describe:
+      "inGroup() compares the species' coarse group case-sensitively -- the cube's lowercase `shark` " +
+      "never matches the table's `Shark`, so a group's species list comes back empty",
+    gate: ["npx", "vitest", "run", "tests/catalog/species.test.ts", "-t", "inGroup"],
+  },
+  {
+    id: "species-sort-ascending",
+    patch: "tests/faults/species-sort-ascending.patch",
+    describe:
+      "speciesInCell() sorts by probability ascending -- the least likely species lead the list",
+    gate: ["npx", "vitest", "run", "tests/catalog/species.test.ts", "-t", "speciesInCell"],
+  },
+  {
+    id: "extent-antimeridian-wrapped",
+    patch: "tests/faults/extent-antimeridian-wrapped.patch",
+    describe:
+      "extentBounds() stops re-expressing an antimeridian-crossing extent with east > 180 -- the default " +
+      "camera of such a collection is rejected (or inverts)",
+    gate: ["npx", "vitest", "run", "tests/catalog/extent.test.ts"],
+  },
   {
     id: "coverage-quadratic-scan",
     patch: "tests/faults/coverage-quadratic-scan.patch",

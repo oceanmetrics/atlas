@@ -54,3 +54,17 @@ def test_add_file_info_adds_size_and_multihash_checksum(tmp_path):
   assert obj["assets"]["a"]["file:size"] == 3
   assert obj["assets"]["a"]["file:checksum"] == "1220ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
   assert "file:size" not in obj["assets"]["b"] and stac.EXT["file"] in obj["stac_extensions"]
+
+
+def test_check_flags_public_species_asset_with_wrong_columns(tmp_path):
+  out = tmp_path / "staging"
+  cols = [bt.column_name("all", "summer", "richness")]
+  d = out / "biotrack_indicators"
+  coll = stac.indicators_collection(BBOX, cols, {}, cols, 3, 10, {"bytes": 1}, species_rows={"cell_species": 1, "species": 1})
+  coll["links"] = [l for l in coll["links"] if l["rel"] != "item"]
+  stac.write_json(d / "collection.json", coll)
+  stac.write_json(out / "catalog.json", stac.root_catalog([]))
+  cli.write_parquet(pd.DataFrame({"FID": [0], "season": ["summer"], "aphia_id": [1], "prob": [0.7], "class": ["Likely"]}), d / "cell_species.parquet")
+  cli.write_parquet(pd.DataFrame({"aphia_id": [1]}), d / "species.parquet")
+  bad = cli.check_staging(out)
+  assert any("asset species columns" in m for m in bad) and not any("asset cell_species" in m for m in bad)
