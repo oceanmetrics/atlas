@@ -28,20 +28,48 @@ export type FetchLike = (
  * a hit rate cap all come back as 200 `{ok:false}`. Read the body when the transport exposes it; an
  * unreadable (opaque) body keeps the HTTP verdict. Exported for tests.
  */
+export interface FeedbackVerdict {
+  ok: boolean;
+  /** the Sheet row id the script assigned (when the body was readable). */
+  id?: string;
+  /** the public GitHub issue the script opened (when it did: unrestricted app with a token). */
+  issueUrl?: string;
+  /** the script's own error text on a 200 `{ok:false}`. */
+  error?: string;
+}
+
+/** the script's JSON verdict with its ids, or the HTTP verdict alone when the body is opaque. */
+export async function readVerdict(res: {
+  ok: boolean;
+  text?: () => Promise<string>;
+}): Promise<FeedbackVerdict> {
+  if (!res.ok) return { ok: false };
+  if (typeof res.text !== "function") return { ok: true };
+  try {
+    const body = (await res.text()).trim();
+    if (!body.startsWith("{")) return { ok: true };
+    const parsed = JSON.parse(body) as {
+      ok?: unknown;
+      id?: unknown;
+      issue_url?: unknown;
+      error?: unknown;
+    };
+    const v: FeedbackVerdict = { ok: parsed.ok !== false };
+    if (typeof parsed.id === "string" && parsed.id) v.id = parsed.id;
+    if (typeof parsed.issue_url === "string" && /^https:\/\/github\.com\//.test(parsed.issue_url))
+      v.issueUrl = parsed.issue_url;
+    if (typeof parsed.error === "string" && parsed.error) v.error = parsed.error;
+    return v;
+  } catch {
+    return { ok: true };
+  }
+}
+
 export async function bodySaysOk(res: {
   ok: boolean;
   text?: () => Promise<string>;
 }): Promise<boolean> {
-  if (!res.ok) return false;
-  if (typeof res.text !== "function") return true;
-  try {
-    const body = (await res.text()).trim();
-    if (!body.startsWith("{")) return true;
-    const parsed = JSON.parse(body) as { ok?: unknown };
-    return parsed.ok !== false;
-  } catch {
-    return true;
-  }
+  return (await readVerdict(res)).ok;
 }
 
 /**
@@ -55,14 +83,23 @@ export async function postFeedback(
   payload: unknown,
   doFetch: FetchLike,
 ): Promise<boolean> {
+  return (await sendFeedback(url, payload, doFetch)).ok;
+}
+
+/** `postFeedback` with the script's verdict: the dialog shows the issue link it carries. */
+export async function sendFeedback(
+  url: string,
+  payload: unknown,
+  doFetch: FetchLike,
+): Promise<FeedbackVerdict> {
   try {
     const res = await doFetch(url, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify(payload),
     });
-    return await bodySaysOk(res);
+    return await readVerdict(res);
   } catch {
-    return false; // network error, CORS failure, endpoint down -- the caller falls back to GitHub
+    return { ok: false }; // network error, CORS failure, endpoint down -- the caller falls back to GitHub
   }
 }

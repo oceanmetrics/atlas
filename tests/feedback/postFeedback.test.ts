@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bodySaysOk } from "../../src/lib/feedback/postFeedback";
+import { bodySaysOk, readVerdict, sendFeedback } from "../../src/lib/feedback/postFeedback";
 import { postFeedback } from "../../src/lib/feedback/postFeedback";
 
 describe("postFeedback", () => {
@@ -53,5 +53,31 @@ describe("postFeedback", () => {
     );
     expect(await bodySaysOk({ ok: true, text: async () => "{not json" })).toBe(true);
     expect(await bodySaysOk({ ok: false, text: async () => '{"ok":true}' })).toBe(false);
+  });
+
+  it("sendFeedback carries the script's issue link and id so the dialog can show them (2026-10-15)", async () => {
+    const doFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        '{"ok":true,"id":"21ff774b16","image_url":"","issue_url":"https://github.com/oceanmetrics/atlas/issues/2","status":"issue; mailed 1"}',
+    });
+    expect(await sendFeedback("https://script.google.com/exec", { app: "x" }, doFetch)).toEqual({
+      ok: true,
+      id: "21ff774b16",
+      issueUrl: "https://github.com/oceanmetrics/atlas/issues/2",
+    });
+  });
+
+  it("readVerdict keeps only a github.com issue link and reports the script's error text", async () => {
+    expect(
+      await readVerdict({
+        ok: true,
+        text: async () => '{"ok":true,"issue_url":"javascript:alert(1)"}',
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await readVerdict({ ok: true, text: async () => '{"ok":false,"error":"unknown app"}' }),
+    ).toEqual({ ok: false, error: "unknown app" });
+    expect(await readVerdict({ ok: true })).toEqual({ ok: true });
   });
 });

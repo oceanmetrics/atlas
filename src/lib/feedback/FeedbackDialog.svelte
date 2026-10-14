@@ -23,7 +23,7 @@
     type FeedbackKind,
   } from "./payload";
   import { feedbackEndpoint } from "./endpoint";
-  import { postFeedback } from "./postFeedback";
+  import { sendFeedback } from "./postFeedback";
   import { githubIssueUrl } from "./githubIssue";
   import type { AnnotateShape, AnnotateTool } from "./annotate";
   import { ANNOTATE_COLORS, DEFAULT_ANNOTATE_COLOR } from "./colors";
@@ -73,7 +73,9 @@
   let text = $state("");
   let email = $state("");
   let website = $state(""); // honeypot -- must stay "" from a real person
-  let includeUrl = $state(false); // the privacy rule: OFF by default
+  // ON by default (Ben, 2026-10-15): the view link is a permalink of release, lens and any drawn place,
+  // never personal data, and a report without it is hard to act on. It stays a visible checkbox.
+  let includeUrl = $state(true);
 
   // --- screenshot ----------------------------------------------------------------------------------
   let capturing = $state(false);
@@ -97,7 +99,7 @@
   // --- send ------------------------------------------------------------------------------------
   let endpoint = $state<string | null>(null);
   let sending = $state(false);
-  let result = $state<{ ok: boolean; error?: string } | null>(null);
+  let result = $state<{ ok: boolean; error?: string; issueUrl?: string } | null>(null);
 
   const kindOptions = FEEDBACK_KINDS.map((k) => ({ value: k, label: FEEDBACK_KIND_LABEL[k] }));
 
@@ -132,7 +134,7 @@
     text = "";
     email = "";
     website = "";
-    includeUrl = false;
+    includeUrl = true;
     includeShot = true;
     annotating = false;
     shapes = [];
@@ -336,9 +338,9 @@
       }
     }
     const payload = currentPayload(imageDataUrl);
-    const ok = await postFeedback(endpoint, payload, fetch);
-    if (ok) {
-      result = { ok: true };
+    const verdict = await sendFeedback(endpoint, payload, fetch);
+    if (verdict.ok) {
+      result = { ok: true, issueUrl: verdict.issueUrl };
       track?.("feedback_sent", { kind, restricted });
       announce("Thanks — your feedback was sent.");
     } else {
@@ -468,6 +470,12 @@
     </div>
   {:else if result?.ok}
     <p>Thanks — your feedback was sent to the team.</p>
+    {#if result.issueUrl}
+      <p class="hint" data-testid="feedback-issue-link">
+        Follow it on GitHub:
+        <a href={result.issueUrl} target="_blank" rel="noopener noreferrer">{result.issueUrl}</a>
+      </p>
+    {/if}
     {#if restricted}
       <p class="hint">This release is under review, so no public GitHub issue was filed.</p>
     {/if}
