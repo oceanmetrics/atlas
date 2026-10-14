@@ -82,7 +82,6 @@ function str(v: unknown): string {
 
 /** species Parquet rows -> lookup; a row with no finite `aphia_id` is dropped. */
 export function speciesLookup(rows: readonly Record<string, unknown>[]): Map<number, SpeciesInfo> {
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain data, never reactive
   const out = new Map<number, SpeciesInfo>();
   for (const r of rows) {
     const aphiaId = num(r.aphia_id);
@@ -113,7 +112,7 @@ export function cellSpeciesIndex(
     veryLikely: new Uint8Array(n),
     seasons: [],
   };
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain data, never reactive
+
   const rowsOf = new Map<string, Map<number, number[]>>();
   let k = 0;
   for (const r of rows) {
@@ -131,7 +130,6 @@ export function cellSpeciesIndex(
     cells.veryLikely[k] = str(r.class) === "Very likely" ? 1 : 0;
     let bySeason = rowsOf.get(season);
     if (!bySeason) {
-      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain data, never reactive
       bySeason = new Map();
       rowsOf.set(season, bySeason);
     }
@@ -292,7 +290,6 @@ export function likelyCountIndex(
   season: string,
   group: string | undefined,
 ): Map<number, number> {
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- read by map event handlers, not templates
   const out = new Map<number, number>();
   const bySeason = data.rowsOf.get(season);
   if (!bySeason) return out;
