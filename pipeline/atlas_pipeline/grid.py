@@ -45,6 +45,21 @@ def read_hex(path: Path) -> gpd.GeoDataFrame:
   return g.sort_values("FID").reset_index(drop=True)
 
 
+def hex_centroids(g: gpd.GeoDataFrame) -> pd.DataFrame:
+  """FID, lon, lat of each hexagon's planar centroid (EPSG:4326, rounded to 6 dp = ~0.1 m).
+
+  The atlas app tests these points against a place's polygon in the browser (place summaries and the
+  "only inside places" filter): the hex PMTiles are tiled and partial, so the full cell set has to come
+  from here, 27,841 rows, ~0.5 MB.
+  """
+  c = shapely.centroid(g.geometry.values)
+  return pd.DataFrame({
+    "FID": g["FID"].astype("int64").to_numpy(),
+    "lon": np.round(shapely.get_x(c), 6),
+    "lat": np.round(shapely.get_y(c), 6),
+  }).sort_values("FID").reset_index(drop=True)
+
+
 def fid_only(g: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
   """geometry + integer FID, nothing else (the only attribute the PMTiles may carry)."""
   return g[["FID", "geometry"]].astype({"FID": "int64"})

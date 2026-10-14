@@ -90,6 +90,9 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
     hex_info = grid.build_pmtiles(hexg, dest / "hex.pmtiles")
   hex_info["tile_stats"] = grid.tile_size_stats(dest / "hex.pmtiles").to_dict("records")
 
+  write_parquet(grid.hex_centroids(hexg), dest / "hex_centroids.parquet")
+  log("hex_centroids.parquet")
+
   log("h3 crosswalk")
   xw = grid.build_crosswalk(hexg)
   write_parquet(xw, dest / "hex_h3.parquet")
