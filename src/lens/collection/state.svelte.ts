@@ -69,6 +69,9 @@ export interface CollectionLensDeps {
   readValues?: typeof readValueColumn;
   /** fetches the collection's style JSON; default `fetch`; `null` on any failure. */
   fetchStyle?: (url: string) => Promise<unknown | null>;
+  /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
+   * dimmed), read reactively; `null`/absent = no filter. */
+  insideFids?: () => ReadonlySet<number> | null;
 }
 
 export interface CollectionLens {
@@ -95,6 +98,8 @@ export interface CollectionLens {
   /** true while the item's value column is being read. */
   readonly valuesLoading: boolean;
   readonly valuesError: LoadError | null;
+  /** the active item's value column (`FID` + values), `null` until it is read or for a raster item. */
+  readonly values: ValueColumn | null;
   /** the clicked cell (mirrors the store, reactively). */
   readonly cell: CellSelection | null;
   /** the dimension values still reachable, per dimension key (`availableValues`). */
@@ -303,6 +308,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     painter?.apply(mapInputs.hex ? values : null);
   });
   $effect(() => {
+    painter?.setInside(mapInputs.hex ? (deps.insideFids?.() ?? null) : null);
+  });
+  $effect(() => {
     painter?.setSelected(
       mapInputs.hex && cell && entry && cell.collection === entry.id ? cell.fid : null,
     );
@@ -391,6 +399,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get valuesError() {
       return valuesError;
+    },
+    get values() {
+      return values;
     },
     get cell() {
       return cell;

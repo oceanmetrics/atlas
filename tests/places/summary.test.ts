@@ -100,7 +100,9 @@ describe("summary rows and CSV", () => {
     ];
     const csv = summaryCsv(rows, "all_summer_richness").split("\r\n");
     expect(csv[0]).toBe("item,place,unit,n,mean,min,max,share_no_value");
-    expect(csv[1]).toBe('all_summer_richness,"Sanctuary, North",cells,3,1.5,1,2,0.3333333333333333');
+    expect(csv[1]).toBe(
+      'all_summer_richness,"Sanctuary, North",cells,3,1.5,1,2,0.3333333333333333',
+    );
     expect(csv[2]).toBe("all_summer_richness,B,cells,0,,,,");
   });
 });
@@ -142,5 +144,65 @@ describe("the hex_centroids table", () => {
     });
     expect(centroidsAssetOf({ ...coll, assets: {} })).toBeNull();
     expect(centroidsAssetOf(null)).toBeNull();
+  });
+});
+
+import { formatShare, geometryKey, summaryLine, summaryRows } from "../../src/places/summary";
+
+describe("the one-line summary under a place row", () => {
+  const row = (stats: ReturnType<typeof cellStats> | null, unit: "cells" | "pixels" = "cells") =>
+    summaryRowOf(0, "P", stats, unit);
+  it("n, mean, min, max; a share of cells with no value is added only when it is not 0", () => {
+    expect(summaryLine(row(cellStats([1, 2, 3])))).toBe("3 cells · mean 2 · min 1 · max 3");
+    expect(summaryLine(row(cellStats([1, null, 3, null])))).toBe(
+      "4 cells · mean 2 · min 1 · max 3 · 50% no value",
+    );
+  });
+  it("one cell is singular; pixels say pixels", () => {
+    expect(summaryLine(row(cellStats([0.5])))).toBe("1 cell · mean 0.5 · min 0.5 · max 0.5");
+    expect(summaryLine(row({ ...cellStats([1, 3]) }, "pixels"))).toBe(
+      "2 pixels · mean 2 · min 1 · max 3",
+    );
+  });
+  it("an empty place and an all-no-value place say so, never 0 or NaN", () => {
+    expect(summaryLine(row(cellStats([])))).toBe("No cells inside this place.");
+    expect(summaryLine(row(cellStats([null, null])))).toBe("2 cells · no values");
+  });
+  it("loading and error rows say so", () => {
+    expect(summaryLine(row(null))).toBe("Summarising…");
+    expect(
+      summaryLine({ ...row(null), status: "error", message: "couldn't load this place" }),
+    ).toBe("No summary: couldn't load this place.");
+  });
+  it("shares: whole percents, and <1% for a sliver", () => {
+    expect(formatShare(0.5)).toBe("50%");
+    expect(formatShare(0.004)).toBe("<1%");
+    expect(formatShare(0)).toBe("0%");
+    expect(formatShare(null)).toBe("");
+  });
+});
+
+describe("rows for a list of places", () => {
+  const g = box(0, 0, 1, 1);
+  it("one row per place, index-aligned: ready ones get stats, loading ones wait, unresolvable ones say why", () => {
+    const rows = summaryRows(
+      [
+        { name: "A", state: "ready", geometry: g },
+        { name: "B", state: "loading" },
+        { name: "C", state: "none", reason: "uploaded without geometry in this session" },
+      ],
+      (_p, i) => cellStats([i + 1]),
+    );
+    expect(rows.map((r) => [r.index, r.name, r.status])).toEqual([
+      [0, "A", "ok"],
+      [1, "B", "loading"],
+      [2, "C", "error"],
+    ]);
+    expect(rows[0].mean).toBe(1);
+    expect(rows[2].message).toMatch(/uploaded/);
+  });
+  it("the same geometry decoded twice has the same cache key; a different one does not", () => {
+    expect(geometryKey(box(0, 0, 1, 1))).toBe(geometryKey(box(0, 0, 1, 1)));
+    expect(geometryKey(box(0, 0, 1, 1))).not.toBe(geometryKey(box(0, 0, 1, 2)));
   });
 });

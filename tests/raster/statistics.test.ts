@@ -71,22 +71,36 @@ describe("titiler /cog/statistics", () => {
       calls.push({ url, body });
       return TITILER_ANSWER;
     }, HOST);
-    const res = await src.statistics({ cogUrl: "https://b.example/x.tif", geometry: box(0, 0, 1, 1) });
+    const res = await src.statistics({
+      cogUrl: "https://b.example/x.tif",
+      geometry: box(0, 0, 1, 1),
+    });
     expect(res).toMatchObject({ ok: true, value: { mean: 0.5 } });
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe("https://t.example/cog/statistics?url=https%3A%2F%2Fb.example%2Fx.tif");
+    expect(calls[0].url).toBe(
+      "https://t.example/cog/statistics?url=https%3A%2F%2Fb.example%2Fx.tif",
+    );
     expect(calls[0].body).toMatchObject({ type: "Feature", geometry: { type: "Polygon" } });
   });
   it("a transport failure (CORS, offline, HTTP 4xx) is a network error, not a throw", async () => {
     const src = createTitilerStatisticsSource(async () => {
       throw new TypeError("Failed to fetch");
     }, HOST);
-    const res = await src.statistics({ cogUrl: "https://b.example/x.tif", geometry: box(0, 0, 1, 1) });
-    expect(res).toMatchObject({ ok: false, error: { kind: "network", message: "Failed to fetch" } });
+    const res = await src.statistics({
+      cogUrl: "https://b.example/x.tif",
+      geometry: box(0, 0, 1, 1),
+    });
+    expect(res).toMatchObject({
+      ok: false,
+      error: { kind: "network", message: "Failed to fetch" },
+    });
   });
   it("an answer without statistics is a parse error", async () => {
     const src = createTitilerStatisticsSource(async () => ({ ok: 1 }), HOST);
-    const res = await src.statistics({ cogUrl: "https://b.example/x.tif", geometry: box(0, 0, 1, 1) });
+    const res = await src.statistics({
+      cogUrl: "https://b.example/x.tif",
+      geometry: box(0, 0, 1, 1),
+    });
     expect(res).toMatchObject({ ok: false, error: { kind: "parse" } });
   });
 });

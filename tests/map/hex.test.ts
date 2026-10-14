@@ -257,7 +257,7 @@ describe("the 'Only inside places' filter (feature state `inside`)", () => {
     f.calls.filter((c) => "inside" in c.state).map((c) => [c.id, c.state.inside]);
 
   it("the fill dims a cell whose inside state is exactly false (0.15) and leaves the rest at full opacity", () => {
-    const op = hexFillLayer(SPEC).paint!["fill-opacity"] as unknown[];
+    const op = (hexFillLayer(SPEC).paint as Record<string, unknown>)["fill-opacity"] as unknown[];
     expect(op[0]).toBe("case");
     expect(JSON.stringify(op[1])).toBe('["==",["feature-state","inside"],false]');
     expect(op[2]).toBe(HEX_OUTSIDE_OPACITY);

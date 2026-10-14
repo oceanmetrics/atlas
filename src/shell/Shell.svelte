@@ -120,6 +120,10 @@
   // same reason `state.svelte.ts` does above: `placesSelection` (below) reads it unconditionally,
   // even when the Places PANEL itself (`../places/Places.svelte`, lazy) has never been opened.
   import { createPlacesMapStore } from "../places/placesMap.svelte";
+  // WP4: summaries of the current item over the places, and the "Only inside places" filter (the lens
+  // below reads `summaries.insideFids`). Static: a `?filter=places` link has to dim the map without
+  // any panel open; every heavy part (hyparquet, the g1 codec, the place index) stays lazy inside it.
+  import { createPlaceSummaries } from "../places/summary.svelte";
   // The Download menu -- `places/model.ts#placesFromHash` (never a second parser of `sel.pl`)
   // gives it the current places list for "Selected places · GeoJSON"'s enabled/disabled state, and
   // the Places tab's header its count.
@@ -516,7 +520,12 @@
   // 0.10.21: `selStore` deps the store's own baseline outline-restore effect reads (see
   // placesMap.svelte.ts's header) -- unconditional/eager, same as `createSpeciesLens` above, so a
   // deep-linked selected place's outline restores regardless of which tool is active.
-  const placesMap = createPlacesMapStore({ selStore });
+  const placesMap = createPlacesMapStore({
+    selStore,
+    mapHandle: () => mapHandle,
+    // the "Place layers" list lives in the Collections lens' Layers panel
+    overlaysEnabled: () => selStore.sel.lens === "collection",
+  });
 
   // atlas-5: the species lens' reactive core. A plain call, not a component -- state.svelte.ts's
   // own header explains why (the same "wiring only, rules live in plain modules" split
@@ -548,7 +557,10 @@
     selStore,
     mapHandle: () => mapHandle,
     isOwned: () => placesMap.interactionOwned,
+    insideFids: () => summaries.insideFids,
   });
+  // WP4: one row per place for the CURRENT item (Places pane, Table tool) + the inside-places set
+  const summaries = createPlaceSummaries({ selStore, lens: collectionLens, placesMap });
 
   // --- page title: the ONE writer (tests/shell/documentTitle.test.ts's source scan pins that) -------
   $effect(() => {
@@ -1042,6 +1054,8 @@
           : null,
     range: sel.lens === "species" ? speciesLens.mapInputs.range : null,
     overlays: [],
+    // WP4: the gazetteer collections toggled in the "Place layers" group
+    placeOverlays: placesMap.overlays.specs,
     selection: placesSelection,
     // gazetteer-places: the "Pick from gazetteer" tile polygons, only while that picker is on
     gazetteer: placesMap.gazetteer,
@@ -1150,6 +1164,9 @@
   let NotFoundModalComp = $state<Component<any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let PlacesComp = $state<Component<any> | null>(null);
+  // WP4: the Collections lens' "Table" tool (the places summary), lazy on first open
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let PlaceSummaryTableComp = $state<Component<any> | null>(null);
   // the phone-only search modal's own lazy chunk -- loaded on first tap of the phone search button
   // (below), the same "load on first open" idiom, rather than a preemptive `$effect`: a phone
   // visitor who never opens search never pays for it.
@@ -1247,6 +1264,14 @@
       import("../places/Places.svelte")
         .then((mod) => (PlacesComp = mod.default))
         .catch(() => announceChunkFailure("the Places panel"));
+    }
+  });
+
+  $effect(() => {
+    if (sel.lens === "collection" && activeTool === "table" && !PlaceSummaryTableComp) {
+      import("../places/PlaceSummaryTable.svelte")
+        .then((mod) => (PlaceSummaryTableComp = mod.default))
+        .catch(() => announceChunkFailure("the places summary table"));
     }
   });
 
@@ -1683,7 +1708,7 @@
       {#if activeTool === "places"}
         {#if PlacesComp}
           {@const Comp = PlacesComp}
-          <Comp {sel} {selStore} {mapHandle} mapStore={placesMap} />
+          <Comp {sel} {selStore} {mapHandle} mapStore={placesMap} {summaries} />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
         {/if}
@@ -1700,7 +1725,16 @@
             {expandedRow}
             onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
             part={activeTool === "details" ? "details" : "layers"}
+            overlays={placesMap.overlays}
           />
+        {:else}
+          <p>{TOOL_BODY[activeTool]}</p>
+        {/if}
+      {:else if sel.lens === "collection" && activeTool === "table"}
+        <!-- WP4: the places summary of the current item (one row per place), with CSV download -->
+        {#if PlaceSummaryTableComp}
+          {@const Comp = PlaceSummaryTableComp}
+          <Comp {summaries} />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
         {/if}

@@ -27,8 +27,18 @@ const POLY: PlaceOverlaySpec = {
   lineWidth: 2,
   attribution: "ONMS. Processed by Ocean Metrics.",
 };
-const LINE: PlaceOverlaySpec = { ...POLY, slug: "calcofi_lines", sourceLayer: "calcofi_lines", kind: "line" };
-const POINT: PlaceOverlaySpec = { ...POLY, slug: "calcofi_stations", sourceLayer: "calcofi_stations", kind: "point" };
+const LINE: PlaceOverlaySpec = {
+  ...POLY,
+  slug: "calcofi_lines",
+  sourceLayer: "calcofi_lines",
+  kind: "line",
+};
+const POINT: PlaceOverlaySpec = {
+  ...POLY,
+  slug: "calcofi_stations",
+  sourceLayer: "calcofi_stations",
+  kind: "point",
+};
 const EMPTY_BASEMAP = { sources: {}, layers: [] };
 const compose = (extra: object = {}) =>
   composeStyle({ theme: "paper", basemapStyle: EMPTY_BASEMAP, ...extra });
@@ -46,7 +56,10 @@ describe("overlay style objects", () => {
   it("a polygon is a faint fill under a line; a line is a line; a point is a circle", () => {
     const poly = overlayLayers(POLY);
     expect(poly.map((l) => l.layer.type)).toEqual(["fill", "line"]);
-    expect(poly[0].layer.paint).toMatchObject({ "fill-color": "orange", "fill-opacity": OVERLAY_FILL_OPACITY });
+    expect(poly[0].layer.paint).toMatchObject({
+      "fill-color": "orange",
+      "fill-opacity": OVERLAY_FILL_OPACITY,
+    });
     expect(OVERLAY_FILL_OPACITY).toBeLessThan(0.25); // faint: fainter than the picker's fill
     expect(poly[1].layer.paint).toMatchObject({ "line-color": "brown", "line-width": 2 });
     expect(overlayLayers(LINE).map((l) => l.layer.type)).toEqual(["line"]);
@@ -65,7 +78,9 @@ describe("composeStyle with place overlays", () => {
   it("each overlay adds one source and its layers on the archive's source-layer", () => {
     const style = compose({ placeOverlays: [POLY, LINE] });
     expect(Object.keys(style.sources).sort()).toEqual(["ov-calcofi_lines", "ov-noaa_sanctuaries"]);
-    const fill = style.layers.find((l) => l.id === "ov-noaa_sanctuaries-fill") as { "source-layer": string };
+    const fill = style.layers.find((l) => l.id === "ov-noaa_sanctuaries-fill") as {
+      "source-layer": string;
+    };
     expect(fill["source-layer"]).toBe("noaa_sanctuaries");
   });
   it("no overlays, no trace (every existing style is unchanged)", () => {
@@ -83,7 +98,12 @@ describe("composeStyle with place overlays", () => {
         colors: ["black", "white"],
         domain: [0, 1],
       },
-      gazetteer: { slug: "places", pmtiles: "https://x/p.pmtiles", sourceLayer: "places", attribution: "" },
+      gazetteer: {
+        slug: "places",
+        pmtiles: "https://x/p.pmtiles",
+        sourceLayer: "places",
+        attribution: "",
+      },
       selection: { features: { type: "FeatureCollection", features: [] } },
     });
     const order = ids(style);
@@ -101,14 +121,23 @@ describe("composeStyle with place overlays", () => {
     );
     const hidden = compose({ placeOverlays: [POLY], layerStack: stack });
     for (const id of ["ov-noaa_sanctuaries-fill", "ov-noaa_sanctuaries-line"]) {
-      expect((hidden.layers.find((l) => l.id === id) as { layout?: { visibility?: string } }).layout?.visibility).toBe("none");
+      expect(
+        (hidden.layers.find((l) => l.id === id) as { layout?: { visibility?: string } }).layout
+          ?.visibility,
+      ).toBe("none");
     }
     const dimmed = compose({
       placeOverlays: [POLY],
-      layerStack: defaultLayerStackEntries().map((e) => (e.id === "data-overlays" ? { ...e, opacity: 0.5 } : e)),
+      layerStack: defaultLayerStackEntries().map((e) =>
+        e.id === "data-overlays" ? { ...e, opacity: 0.5 } : e,
+      ),
     });
     expect(
-      (dimmed.layers.find((l) => l.id === "ov-noaa_sanctuaries-line") as { paint: Record<string, unknown> }).paint["line-opacity"],
+      (
+        dimmed.layers.find((l) => l.id === "ov-noaa_sanctuaries-line") as {
+          paint: Record<string, unknown>;
+        }
+      ).paint["line-opacity"],
     ).toBe(0.5);
   });
 });

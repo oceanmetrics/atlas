@@ -18,6 +18,8 @@
   import type { MapHandle } from "../../lib/map/map";
   import type { LayerGroupId } from "../../lib/map/layerStack";
   import CreditsStrip from "./CreditsStrip.svelte";
+  import PlaceLayerList from "../../places/PlaceLayerList.svelte";
+  import type { PlaceOverlays } from "../../places/overlays.svelte";
   import { formatCollectionValue } from "./mapInputs";
   import type { CollectionLens } from "./state.svelte";
 
@@ -31,6 +33,8 @@
     expandedRow?: LayerGroupId | null;
     onExpandedRowChange?: (id: LayerGroupId | null) => void;
     part?: "layers" | "details";
+    /** WP4: the gazetteer collections toggled under the "Place layers" row. */
+    overlays?: PlaceOverlays;
   }
 
   let {
@@ -43,6 +47,7 @@
     expandedRow,
     onExpandedRowChange,
     part = "layers",
+    overlays,
   }: Props = $props();
 
   // the collection picker: unavailable collections are listed but disabled, so the viewer sees the
@@ -100,6 +105,10 @@
   </div>
 {/snippet}
 
+{#snippet placeLayers()}
+  {#if overlays}<PlaceLayerList {overlays} />{/if}
+{/snippet}
+
 {#if part === "details"}
   {@render detailsContent()}
 {:else}
@@ -110,6 +119,7 @@
     {rowState}
     {expandedRow}
     {onExpandedRowChange}
+    placeLayers={overlays ? placeLayers : undefined}
   >
     {#snippet speciesField()}
       <div class="collection-field" data-testid="collection-field">

@@ -78,7 +78,15 @@ describe("pointInGeometry", () => {
     expect(pointInArea(area, 5, Number.POSITIVE_INFINITY)).toBe(false);
   });
   it("a degenerate ring (fewer than three vertices) contains nothing", () => {
-    const area = prepareArea({ type: "Polygon", coordinates: [[[0, 0], [1, 1]]] });
+    const area = prepareArea({
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, 0],
+          [1, 1],
+        ],
+      ],
+    });
     expect(area.polygons).toHaveLength(0);
     expect(pointInArea(area, 0.5, 0.5)).toBe(false);
   });

@@ -37,7 +37,11 @@ const row = (over: Partial<Layer> & { slug: string }): Layer =>
   }) as Layer;
 
 const MANIFEST: Layer[] = [
-  row({ slug: "noaa_sanctuaries", title: "NOAA national marine sanctuaries", place_type: "protected_area" }),
+  row({
+    slug: "noaa_sanctuaries",
+    title: "NOAA national marine sanctuaries",
+    place_type: "protected_area",
+  }),
   row({ slug: "boem_wind_leases", title: "BOEM offshore wind leases", place_type: "lease" }),
   row({ slug: "boem_ocs_planning", title: "BOEM OCS planning areas", place_type: "planning_area" }),
   row({ slug: "mpa_inventory", title: "MPA inventory", place_type: "mpa" }),
@@ -57,9 +61,16 @@ const MANIFEST: Layer[] = [
     paint: { line: { "line-color": "#0b6e99" } },
   }),
   row({ slug: "mystery", title: "Alpha mystery", place_type: null }),
-  Object.assign(row({ slug: "boem_wind_planning_rescinded", title: "BOEM wind planning areas", place_type: "planning_area" }), {
-    status_label: "rescinded 2025-07-30",
-  }),
+  Object.assign(
+    row({
+      slug: "boem_wind_planning_rescinded",
+      title: "BOEM wind planning areas",
+      place_type: "planning_area",
+    }),
+    {
+      status_label: "rescinded 2025-07-30",
+    },
+  ),
 ];
 const LAYERS = overlayLayersFrom(MANIFEST);
 
@@ -108,7 +119,9 @@ describe("grouping: by theme when the manifest has place types, else alphabetica
     const g = groupOverlays(flat);
     expect(g).toHaveLength(1);
     expect(g[0].label).toBe("");
-    expect(g[0].layers.map((l) => l.label)).toEqual([...g[0].layers.map((l) => l.label)].sort((a, b) => a.localeCompare(b)));
+    expect(g[0].layers.map((l) => l.label)).toEqual(
+      [...g[0].layers.map((l) => l.label)].sort((a, b) => a.localeCompare(b)),
+    );
   });
   it("an empty manifest has no groups", () => {
     expect(groupOverlays([])).toEqual([]);
@@ -117,7 +130,12 @@ describe("grouping: by theme when the manifest has place types, else alphabetica
 
 describe("specs for the map: only the layers that are ON and listed", () => {
   it("unknown slugs are skipped, order follows `on`, duplicates once", () => {
-    const specs = overlaySpecs(LAYERS, ["boem_wind_leases", "retired_layer", "noaa_sanctuaries", "boem_wind_leases"]);
+    const specs = overlaySpecs(LAYERS, [
+      "boem_wind_leases",
+      "retired_layer",
+      "noaa_sanctuaries",
+      "boem_wind_leases",
+    ]);
     expect(specs.map((s) => s.slug)).toEqual(["boem_wind_leases", "noaa_sanctuaries"]);
     expect(specs[0]).toMatchObject({
       kind: "polygon",
@@ -132,12 +150,18 @@ describe("specs for the map: only the layers that are ON and listed", () => {
 
 describe("attribution aggregation", () => {
   it("one credit per overlay that is ON and carries a credit, in `on` order", () => {
-    const c = overlayCreditsFor(LAYERS, ["calcofi_stations", "noaa_sanctuaries", "boem_wind_leases"]);
+    const c = overlayCreditsFor(LAYERS, [
+      "calcofi_stations",
+      "noaa_sanctuaries",
+      "boem_wind_leases",
+    ]);
     expect(c.map((x) => x.slug)).toEqual(["noaa_sanctuaries", "boem_wind_leases"]); // stations has no credit
     expect(c[0].license).toBe("CC-PDDC");
   });
   it("the line deduplicates and says 'Processed by Ocean Metrics.' once", () => {
-    const line = overlayCreditLine(overlayCreditsFor(LAYERS, ["noaa_sanctuaries", "boem_wind_leases"]));
+    const line = overlayCreditLine(
+      overlayCreditsFor(LAYERS, ["noaa_sanctuaries", "boem_wind_leases"]),
+    );
     expect(line).toBe(
       "Credit for noaa_sanctuaries; Credit for boem_wind_leases. Processed by Ocean Metrics.",
     );

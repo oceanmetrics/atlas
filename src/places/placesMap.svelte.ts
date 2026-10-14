@@ -66,6 +66,8 @@ import type { SelStore } from "../lib/state/sel.svelte";
 // the hash paints its outlines one tick after the chunk arrives, never missing.
 import type { allGeomPlacesOutline as AllGeomFn, composeOutline as ComposeFn } from "./model";
 import type { GazetteerLayerSpec } from "../lib/map/types";
+import type { MapHandle } from "../lib/map/map";
+import { createPlaceOverlays, type PlaceOverlays } from "./overlays.svelte";
 import { joinCredits } from "../lib/gazetteer/config";
 import { notify } from "../lib/ui/announcer";
 import { createGazResolver, type GazEntry } from "./gazResolver";
@@ -102,6 +104,9 @@ export interface PlacesMapStore {
   /** the credit line for what gazetteer data is on the map right now (the picker's collection
    * while it is on, plus every resolved gazetteer place in the list); "" when there is none. */
   readonly credits: string;
+  /** WP4: the gazetteer collections toggled in the Layers panel's "Place layers" group (`?ov=`);
+   * their credit line is part of `credits`. */
+  readonly overlays: PlaceOverlays;
   /** state of a `p.` place's geometry fetch (reactive); `undefined` = not asked for yet. */
   gazEntry(id: string): GazEntry | undefined;
   /** the resolved analysis geometry of a `p.` place (reactive), `undefined` until it loads. */
@@ -117,6 +122,10 @@ export interface PlacesMapStore {
 
 export interface PlacesMapDeps {
   selStore: SelStore;
+  /** the live map, for the overlays' hover and click (read when needed, never captured). */
+  mapHandle?: () => MapHandle | undefined;
+  /** whether the "Place layers" overlays are drawn right now (default always). */
+  overlaysEnabled?: () => boolean;
 }
 
 export function createPlacesMapStore(deps: PlacesMapDeps): PlacesMapStore {
@@ -185,7 +194,14 @@ export function createPlacesMapStore(deps: PlacesMapDeps): PlacesMapStore {
     void gazVersion; // a `p.` place's geometry arriving redraws the outline
     return model ? model.all(deps.selStore.sel.pl, (id) => resolver.geometry(id)) : null;
   });
-  const credits = $derived(joinCredits([gazetteer?.attribution, placeCredit]));
+  // the overlays' own click handling must stand down while a pick/draw session owns the map
+  const overlays = createPlaceOverlays({
+    selStore: deps.selStore,
+    mapHandle: deps.mapHandle,
+    isOwned: () => interactionOwned,
+    enabled: deps.overlaysEnabled,
+  });
+  const credits = $derived(joinCredits([gazetteer?.attribution, placeCredit, overlays.creditLine]));
 
   // a place/pl selection change drops any interaction override left over from a PREVIOUS
   // selection (this module header's own rule, unchanged by the P7 fix) -- `Places.svelte`'s
@@ -218,6 +234,9 @@ export function createPlacesMapStore(deps: PlacesMapDeps): PlacesMapStore {
     },
     get credits() {
       return credits;
+    },
+    get overlays() {
+      return overlays;
     },
     gazEntry(id: string) {
       void gazVersion;

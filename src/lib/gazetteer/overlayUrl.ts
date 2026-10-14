@@ -46,7 +46,11 @@ export function toggledOv(
   on: boolean,
 ): string[] | undefined {
   const cur = effectiveOv(ov);
-  const next = on ? (cur.includes(slug) ? [...cur] : [...cur, slug]) : cur.filter((s) => s !== slug);
+  const next = on
+    ? cur.includes(slug)
+      ? [...cur]
+      : [...cur, slug]
+    : cur.filter((s) => s !== slug);
   return sameSet(next, DEFAULT_OVERLAYS) ? undefined : next;
 }
 

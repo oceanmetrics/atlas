@@ -145,9 +145,7 @@ export function groupOverlays(layers: readonly OverlayLayer[]): OverlayGroup[] {
     a.label.localeCompare(b.label, "en", { sensitivity: "base" });
   const hasThemes = layers.some((l) => l.theme !== "other");
   if (!hasThemes) {
-    return layers.length
-      ? [{ theme: "other", label: "", layers: [...layers].sort(byLabel) }]
-      : [];
+    return layers.length ? [{ theme: "other", label: "", layers: [...layers].sort(byLabel) }] : [];
   }
   return OVERLAY_THEMES.map((theme) => ({
     theme,
