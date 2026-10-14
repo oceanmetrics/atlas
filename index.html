@@ -128,15 +128,18 @@
         }, 8000);
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-4zyE2lCU.js"></script>
+    <script type="module" crossorigin src="./assets/index-fUZ5Ko1o.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-DK3Fl9T5.js">
-    <link rel="modulepreload" crossorigin href="./assets/load-DRTcyWnJ.js">
+    <link rel="modulepreload" crossorigin href="./assets/licenses-pFykLNQi.js">
+    <link rel="modulepreload" crossorigin href="./assets/shards-Bkr1Y0XK.js">
+    <link rel="modulepreload" crossorigin href="./assets/layerStack-DnJNzb88.js">
+    <link rel="modulepreload" crossorigin href="./assets/types-Bau4qHFA.js">
+    <link rel="modulepreload" crossorigin href="./assets/layerBar-DpodTkV7.js">
     <link rel="modulepreload" crossorigin href="./assets/round-JHhtdZvD.js">
-    <link rel="modulepreload" crossorigin href="./assets/legendTitle-DiZAmzZI.js">
-    <link rel="modulepreload" crossorigin href="./assets/types-A441w9V0.js">
+    <link rel="modulepreload" crossorigin href="./assets/legendTitle-u56At-X7.js">
     <link rel="modulepreload" crossorigin href="./assets/colors-DDXxPIEZ.js">
-    <link rel="stylesheet" crossorigin href="./assets/load-C6YD1SHR.css">
-    <link rel="stylesheet" crossorigin href="./assets/index-CLki7cO1.css">
+    <link rel="stylesheet" crossorigin href="./assets/licenses-BGlV9sP9.css">
+    <link rel="stylesheet" crossorigin href="./assets/index-CfNs-Iah.css">
   </head>
   <body>
     <!-- atlas-8 fix: a single skip link to #panel-region jumped straight past the topbar AND the
@@ -152,7 +155,18 @@
       <header class="topbar" data-tour="topbar">
         <span data-tour="brand" style="display: flex; align-items: center; gap: var(--space-2)">
           <h1 class="brand-title" id="app-title">
-            <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+            <!-- the ensō mark's box (src/lib/brand/OmMark.svelte, size 1.05em): same size and baseline
+                 offset as the hydrated SVG, empty here, so the wordmark does not shift when it arrives -->
+            <svg
+              class="om-mark"
+              viewBox="0 0 2048 2048"
+              width="1.05em"
+              height="1.05em"
+              aria-hidden="true"
+              focusable="false"
+              style="display: inline-block; vertical-align: -0.15em; flex: none"
+            ></svg
+            ><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
             <span class="wm-atlas">Atlas</span>
           </h1>
         </span>
