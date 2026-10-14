@@ -20,7 +20,7 @@ entire view state (including place geometry and the report title) lives in the U
 for. If it is ON, every `replaceState` call would independently leak the current URL, fragment
 included, to Google, regardless of anything `src/lib/analytics/` does.
 
-**This must be OFF for measurement ID `G-9HW6L751XG`.** It is a GA4 dashboard property setting, not
+**This must be OFF for measurement ID `the configured measurement ID (`VITE_GA_ID`)`.** It is a GA4 dashboard property setting, not
 something a pinned dependency version or a code review can enforce — it can be changed by anyone with
 Editor access on the property, at any time, without touching this repo. Treat it the same as an
 infrastructure control: verify it's off during setup, and re-verify it after any GA4
@@ -33,7 +33,7 @@ measurement** (gear icon) → **Page changes based on browser history events**. 
 
 The Sheet-log beacon (`analytics.ts`'s `flush()`) is a no-op until a build-time `logUrl` is
 supplied. That comes from **`VITE_LOG_URL`**, a _repository variable_ on this repo (GitHub →
-`MarineSensitivity/atlas` → Settings → Secrets and variables → Actions → **Variables** tab, not
+`oceanmetrics/atlas` → Settings → Secrets and variables → Actions → **Variables** tab, not
 Secrets — the URL ships in the public bundle either way, same reasoning as `VITE_FEEDBACK_URL`).
 `.github/workflows/pages.yml`'s `checks` job forwards it into `npx vite build`;
 `src/lib/analytics/logUrl.ts`'s `analyticsLogUrl()` reads it at build time (unset, empty, or

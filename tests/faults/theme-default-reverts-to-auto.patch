@@ -1,13 +1,13 @@
 diff --git a/src/lib/state/types.ts b/src/lib/state/types.ts
-index d39792d..8205b3c 100644
+index c20c41e..78750c8 100644
 --- a/src/lib/state/types.ts
 +++ b/src/lib/state/types.ts
-@@ -217,7 +217,7 @@ export const DEFAULT_SEL: Sel = {
+@@ -184,7 +184,7 @@ export const DEFAULT_SEL: Sel = {
    // Theme value (an old `?theme=auto` link, or a future auto-follow control, still resolves
    // through prefers-color-scheme via resolveTheme()) -- it is simply no longer what an absent or
    // malformed `?theme=` falls back to. See docs/usability.md p3 and "Ben's items" (theme default).
 -  theme: "dark",
 +  theme: "auto",
    tour: "on",
-   zl: true,
-   pl: undefined,
+   c: undefined,
+   i: undefined,

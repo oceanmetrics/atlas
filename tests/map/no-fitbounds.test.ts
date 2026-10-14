@@ -1,15 +1,14 @@
-// GATE: `fitBounds(` never appears under src/lib/map, src/lens, src/places or src/report (atlas-4
-// §6.5, the plan's "No `fitBounds` over a zone set" review line). A source scan is the available
+// GATE: `fitBounds(` never appears under src/lib/map, src/lens or src/places (atlas-4 §6.5, the
+// plan's "No `fitBounds` over a zone set" review line; the antimeridian rule below still holds for
+// every bbox-driven camera). A source scan is the available
 // form — the failure it guards against is geometric, not observable from a unit test's return
 // value: a bbox INVERTS across the antimeridian (EBS and PIS both cross it; PIS's true 67.5° span
 // reads as 360°), so the camera frames the whole globe and the map looks "broken" for no
 // reportable reason. Same technique tests/state/invariants.test.ts uses for pushState.
 //
 // m8 (atlas-8 review round 2): widened from src/lib/map + src/lens alone -- D2's rule is not
-// lens-scoped, and two more callers build a camera from a bbox the same way a lens would:
-// src/places/camera.ts (Places' own antimeridian-aware bbox->camera, atlas-6) and
-// src/report/reportMap.ts (the report's map, atlas-7 -- combinedBbox() feeds flyToBounds(), never
-// MapLibre's own fitBounds).
+// lens-scoped, and src/places/camera.ts (Places' own antimeridian-aware bbox->camera, atlas-6)
+// builds a camera from a bbox the same way a lens would.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,21 +46,15 @@ export function findFitBoundsCalls(dirs: readonly string[]): string[] {
   return offenders;
 }
 
-const SCANNED = [
-  join(ROOT, "src/lib/map"),
-  join(ROOT, "src/lens"),
-  join(ROOT, "src/places"),
-  join(ROOT, "src/report"),
-];
+const SCANNED = [join(ROOT, "src/lib/map"), join(ROOT, "src/lens"), join(ROOT, "src/places")];
 
-describe("no fitBounds under src/lib/map, src/lens, src/places or src/report", () => {
+describe("no fitBounds under src/lib/map, src/lens or src/places", () => {
   it("finds no call", () => {
     expect(findFitBoundsCalls(SCANNED)).toEqual([]);
   });
 
-  it("is not vacuous: src/places and src/report really contain source files (m8's own widening)", () => {
+  it("is not vacuous: src/places really contains source files (m8's own widening)", () => {
     expect(listFiles(join(ROOT, "src/places")).length).toBeGreaterThan(4);
-    expect(listFiles(join(ROOT, "src/report")).length).toBeGreaterThan(4);
   });
 
   it("is not vacuous: the scanned directories really contain source files", () => {

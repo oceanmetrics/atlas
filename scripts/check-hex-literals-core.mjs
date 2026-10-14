@@ -1,6 +1,6 @@
 // atlas-3 review checklist, rule 1: "No hex literal outside tokens.css."
 //
-// Component CSS, mockups and motif assets read custom properties only — that is what makes two
+// Component CSS and motif assets read custom properties only — that is what makes two
 // themes, a contrast gate and a future brand revision one-file changes. This checker makes the rule
 // mechanical over the surfaces atlas-3 owns. Two deliberate carve-outs, both narrow:
 //   1. src/lib/brand/tokens.css — the single place a color literal is allowed to exist.
@@ -11,18 +11,11 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-// atlas-3 step 1 surfaces, plus step 2's component library and gallery. Step 3 adds "index.html"
+// atlas-3 step 1 surfaces, plus step 2's component library. Step 3 adds "index.html"
 // (the shell's inlined critical CSS) and "src/shell/shell.css" (the file that CSS is `@import`ed
 // from, and the one src/shell/Shell.svelte imports too) now that the shell's critical CSS lands.
 // A SCAN_ROOTS entry may name a single FILE, not only a directory -- see `walk()` below.
-export const SCAN_ROOTS = [
-  "src/lib/brand",
-  "src/lib/ui",
-  "src/gallery",
-  "docs/design/mockups",
-  "index.html",
-  "src/shell/shell.css",
-];
+export const SCAN_ROOTS = ["src/lib/brand", "src/lib/ui", "index.html", "src/shell/shell.css"];
 const SCANNED_EXTENSIONS = new Set([
   ".css",
   ".html",

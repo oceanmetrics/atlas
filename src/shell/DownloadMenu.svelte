@@ -18,7 +18,7 @@
   // mounted, THIS component's own `<Menu>`-driven trigger button takes over for every later
   // open/close (Shell.svelte's placeholder is gone by then, so there is never a doubled control) --
   // see Shell.svelte's own "lazy lens/panel chunks" section for the identical pattern applied to
-  // ScoresLens/species panels, and `scripts/size-budget.mjs`'s FORBIDDEN_LAZY_MARKERS-adjacent
+  // the lens panels, and `scripts/size-budget.mjs`'s FORBIDDEN_LAZY_MARKERS-adjacent
   // rule this keeps this repo honest about ("before first interaction" stays under 450 KB gzip).
   import { onMount } from "svelte";
   import Icon from "../lib/ui/Icon.svelte";
@@ -28,7 +28,7 @@
   import type { MenuItem } from "../lib/ui/menuItem";
   import type { MapHandle } from "../lib/map/map";
   import type { Place } from "../lib/geo/placeCodec";
-  import { placesToGeoJson, downloadGeoJson, zonePolygonSourceFromMap } from "../places/download";
+  import { placesToGeoJson, downloadGeoJson } from "../places/download";
   import {
     buildDownloadItems,
     type DownloadItemKind,
@@ -46,7 +46,6 @@
     lens: DownloadLens;
     ver: string | null;
     mapHandle: MapHandle | undefined;
-    boot: unknown;
     /** the SHORT layer/species title -- the metric's short display label (never its long
      * description, D3 fix) or the species' `sci` name. */
     title: string;
@@ -57,7 +56,7 @@
      * `mapCapture.ts`/`mapSvgExport.ts`, not here -- this component only passes the candidate through). */
     description?: string | null;
     unit?: string;
-    /** the id the GeoTIFF filename carries -- a `metric_key` (scores) or `mdl_key` (species). */
+    /** the id the GeoTIFF filename carries -- a collection item id (collection) or `mdl_key` (species). */
     metricOrMdlKey: string | null;
     cogUrl: string | null;
     cogDisabledReason?: string;
@@ -86,7 +85,6 @@
     lens,
     ver,
     mapHandle,
-    boot,
     title,
     description = null,
     unit,
@@ -120,7 +118,7 @@
   function footerInfo() {
     // `location.href` -- the SAME absolute string `Shell.svelte#onShare` copies (D3 fix: never
     // stripped to a relative path); `footer.ts#canonicalShareUrl` drops `theme` from it.
-    return { title, description, unit, ver: ver ?? "unknown", url: location.href };
+    return { title, description, unit, ver, url: location.href };
   }
 
   async function downloadMapPng() {
@@ -172,7 +170,7 @@
   }
 
   function downloadPlacesGeojson() {
-    const fc = placesToGeoJson(places, boot, zonePolygonSourceFromMap(mapHandle, boot));
+    const fc = placesToGeoJson(places);
     downloadGeoJson(fc, placesFileName(ver ?? "unknown"));
   }
 

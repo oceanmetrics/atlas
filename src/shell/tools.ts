@@ -6,15 +6,14 @@
 // `<script module>` named exports the way svelte-check can, so `ToolRailItem` is a plain,
 // structurally-matching local type instead.
 //
-// R4-B (owner decision, 2026-09-30, control-grammar.md): the rail is the SPINE -- it changes the
-// SURFACE, and it has FOUR entries, in this order, in both lenses and on every viewport:
-// Layers - Details - Table - Report. "Details" holds the Flower plot (Scores lens) and the
-// species information (Species lens), which used to be the Layers pane's second tab (R3-W8 item
-// 4); neither lens needs its own entry (control-grammar rule 7). Every tool is active in both
-// lenses, so `buildRailItems` needs no lens argument or inactive/inactiveReason concept.
+// The rail is the SPINE -- it changes the SURFACE, and it has FOUR entries, in this order, in both
+// lenses and on every viewport: Layers - Details - Table - Places. "Details" holds the species
+// information (Species lens) and the clicked-cell detail (Collection lens); neither lens needs its
+// own entry. Every tool is active in both lenses, so `buildRailItems` needs no lens argument or
+// inactive/inactiveReason concept.
 import type { IconName } from "../lib/ui/icon-paths";
 
-export type ToolName = "layers" | "details" | "table" | "report";
+export type ToolName = "layers" | "details" | "table" | "places";
 
 /** structurally identical to src/lib/ui/Rail.svelte's exported `RailItem` -- Svelte's prop typing
  * accepts this by shape, not by declaration identity. */
@@ -27,22 +26,22 @@ export interface ToolRailItem {
 /** spec.md §5.1 / control-grammar.md: the spine is FOUR controls, the SAME four, in the SAME order,
  * on every viewport and every lens. This array's order IS that order -- `buildRailItems` below
  * never reorders it. */
-export const TOOL_ORDER: readonly ToolName[] = ["layers", "details", "table", "report"];
+export const TOOL_ORDER: readonly ToolName[] = ["layers", "details", "table", "places"];
 
 export const TOOL_LABEL: Record<ToolName, string> = {
   layers: "Layers",
   details: "Details",
   table: "Table",
-  report: "Report",
+  places: "Places",
 };
 
-/** one icon per tool, the same in both lenses (R4-B: Details uses the info glyph in Scores and
- * Species alike). Only `layers`/`table`/`report` share their tool's own name as the icon name. */
+/** one icon per tool, the same in both lenses. Only `layers`/`table`/`places` share their tool's
+ * own name as the icon name. */
 export const TOOL_ICON: Record<ToolName, IconName> = {
   layers: "layers",
   details: "info",
   table: "table",
-  report: "report",
+  places: "places",
 };
 
 // This exact sentence, for "layers" only, is duplicated in index.html's static skeleton body (a
@@ -50,10 +49,10 @@ export const TOOL_ICON: Record<ToolName, IconName> = {
 // the two stay equal, and the CLS gate (e2e/shell.cls.spec.ts) is what proves that equal text also
 // means equal painted height.
 export const TOOL_BODY: Record<ToolName, string> = {
-  layers: "Layers, palette and outline options arrive in a later phase.",
+  layers: "Layers and options arrive in a later phase.",
   details: "Select a cell or an area on the map to see its details.",
-  table: "The species and zone tables arrive in a later phase.",
-  report: "The report builder arrives in a later phase.",
+  table: "The tables arrive in a later phase.",
+  places: "Draw, upload or pick a place.",
 };
 
 /** every tool is always active, in both lenses, on every viewport. */
@@ -65,7 +64,7 @@ export function buildRailItems(): ToolRailItem[] {
   }));
 }
 
-/** R4-B: whether a tool takes the whole stage (control-grammar rule 5: "Layers, Details and Report
+/** R4-B: whether a tool takes the whole stage ("Layers, Details and Places
  * open as a side panel; Table takes the whole stage"). One rule, one place -- Shell.svelte hands
  * the result to Panel.svelte's `fullStage`. */
 export function toolTakesFullStage(tool: ToolName): boolean {
@@ -77,14 +76,14 @@ export function toolTakesFullStage(tool: ToolName): boolean {
  * the shell from its own state; the fallbacks are the tool's own label so a header is never
  * blank. */
 export interface PanelContext {
-  /** Layers: the active layer's name and its unit, e.g. "Score" / "Raster cells". */
+  /** Layers: the active layer's name and its unit, e.g. "Richness" / "Hex cells". */
   layer: string | null;
   unit: string | null;
-  /** Details: the clicked subject's label (Scores) or the species' name (Species). */
+  /** Details: the clicked subject's label (Collection) or the species' name (Species). */
   subject: string | null;
   /** Table: its subject line. */
   tableSubject: string | null;
-  /** Report: how many places are in the report (0 = none), and the last clicked place's label. */
+  /** Places: how many places are listed (0 = none), and the last clicked place's label. */
   placeCount: number;
   lastClicked: string | null;
 }
@@ -99,8 +98,8 @@ export function panelHeaderTitle(tool: ToolName, ctx: PanelContext): string {
       return ctx.subject ?? TOOL_LABEL.details;
     case "table":
       return ctx.tableSubject ?? TOOL_LABEL.table;
-    case "report":
+    case "places":
       if (ctx.placeCount > 0) return ctx.placeCount === 1 ? "1 place" : `${ctx.placeCount} places`;
-      return ctx.lastClicked ? "Last clicked place" : TOOL_LABEL.report;
+      return ctx.lastClicked ? "Last clicked place" : TOOL_LABEL.places;
   }
 }

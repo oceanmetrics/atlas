@@ -2,50 +2,30 @@
 import { describe, expect, it } from "vitest";
 import { legendChipTitle, legendTitle } from "../../../src/lib/map/legendTitle";
 
-describe("legendTitle: scores, raster cells", () => {
-  it("'Overall score' title, 'Raster cells · {zoom region} · {release}' subtitle", () => {
+describe("legendTitle: collection", () => {
+  it("the item's label as the title; 'collection title · value unit' as the subtitle", () => {
     expect(
       legendTitle({
-        lens: "scores",
-        branch: "raster",
-        metricLabel: "Overall score",
-        zoomRegionLabel: "All US waters",
-        release: "v7",
+        lens: "collection",
+        itemLabel: "Richness of sharks, summer",
+        collectionTitle: "MBON BioTrack biodiversity indicators",
+        valueUnit: "unitless",
       }),
-    ).toEqual({ title: "Overall score", subtitle: "Raster cells · All US waters · v7" });
-  });
-
-  it("a rescaled component names the category, not the bare 'Raster cells' unit", () => {
-    const t = legendTitle({
-      lens: "scores",
-      branch: "raster",
-      metricLabel: "Bird: extinction risk",
-      rescaledByEcoregion: true,
-      release: "v7",
+    ).toEqual({
+      title: "Richness of sharks, summer",
+      subtitle: "MBON BioTrack biodiversity indicators · unitless",
     });
-    expect(t.title).toBe("Bird: extinction risk");
-    expect(t.subtitle).toBe("Rescaled 0-100 by ecoregion · v7");
   });
 
-  it("missing zoomRegionLabel/release: the subtitle just drops those clauses, never a blank one", () => {
-    expect(legendTitle({ lens: "scores", branch: "raster", metricLabel: "Overall score" })).toEqual(
-      {
-        title: "Overall score",
-        subtitle: "Raster cells",
-      },
-    );
-  });
-
-  it("no metricLabel at all: falls back to 'Score'", () => {
-    expect(legendTitle({ lens: "scores", branch: "raster" }).title).toBe("Score");
-  });
-});
-
-describe("legendTitle: scores, Program areas", () => {
-  it("'{metric label} · Program Areas · {release}'", () => {
+  it("a missing clause just drops, never a blank one", () => {
     expect(
-      legendTitle({ lens: "scores", branch: "zone", metricLabel: "Overall score", release: "v7" }),
-    ).toEqual({ title: "Overall score", subtitle: "Program Areas · v7" });
+      legendTitle({ lens: "collection", itemLabel: "Richness", collectionTitle: "BioTrack" }),
+    ).toEqual({ title: "Richness", subtitle: "BioTrack" });
+    expect(legendTitle({ lens: "collection", itemLabel: "Richness" }).subtitle).toBeNull();
+  });
+
+  it("no item label at all: falls back to 'Layer'", () => {
+    expect(legendTitle({ lens: "collection" }).title).toBe("Layer");
   });
 });
 
@@ -85,11 +65,10 @@ describe("legendChipTitle", () => {
   it("the title alone -- the chip's short form", () => {
     expect(
       legendChipTitle({
-        lens: "scores",
-        branch: "raster",
-        metricLabel: "Overall score",
-        release: "v7",
+        lens: "collection",
+        itemLabel: "Richness of sharks, summer",
+        collectionTitle: "BioTrack",
       }),
-    ).toBe("Overall score");
+    ).toBe("Richness of sharks, summer");
   });
 });

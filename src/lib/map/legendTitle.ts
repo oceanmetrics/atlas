@@ -1,34 +1,22 @@
 // Ben's ask (round-3 review, 2026-09-25 — folded in as UI-L2): "Given the different toolbar
 // selections and data layer options, we should probably update the Legend to mention which layer
-// is being displayed." ONE pure builder, used by the desktop legend card
-// (`Legend.svelte`/`ScoresLegend.svelte`/`SpeciesLegend.svelte`), the phone legend chip's short
-// form, the phone Legend modal, and the Download menu's PNG/SVG footer title (`lib/download/
-// legendFormat.ts`) — so an exported figure says the same thing the screen does.
+// is being displayed." ONE pure builder, used by the desktop legend card, the phone legend chip's
+// short form, the phone Legend modal, and the Download menu's PNG/SVG footer title
+// (`lib/download/legendFormat.ts`) — so an exported figure says the same thing the screen does.
 //
-// Three forms (brief, verbatim):
-//   - scores, raster cells:   "Overall score" title, "Raster cells · {zoom region} · {release}"
-//     subtitle (a component layer instead names the category, e.g. "Bird: extinction risk ·
-//     rescaled 0–100 by ecoregion" when the manifest says it is rescaled).
-//   - scores, Program areas:  "{metric label} · Program Areas · {release}".
-//   - species:                "{common name} (*{binomial}*)" title, "{input label} ·
-//     {representation} · {value semantics}" subtitle.
+// Two forms:
+//   - collection:  "{item label}" title (e.g. "Richness of sharks, summer"), "{collection title} ·
+//     {value unit}" subtitle (a missing clause just drops).
+//   - species:     "{common name} (*{binomial}*)" title, "{input label} · {representation} ·
+//     {value semantics}" subtitle.
 export interface LegendTitleContext {
-  lens: "scores" | "species";
-  /** scores only: which branch is on screen. */
-  branch?: "raster" | "zone";
-  /** the metric's own display label (already resolved by the caller, e.g. `metricKeyLabel()`). */
-  metricLabel?: string;
-  /** the zoom-to-region select's current label (`"All US waters"` when nothing is chosen — the
-   * SAME no-selection label `lib/format.ts#formatSubject` uses, UI-5). Omitted entirely when the
-   * caller has not wired it through yet — the subtitle just carries fewer clauses, never a blank
-   * one. */
-  zoomRegionLabel?: string | null;
-  /** the release id ("v7"), shown last in every scores subtitle. */
-  release?: string | null;
-  /** true when this metric is a component whose values are rescaled 0-100 within each ecoregion
-   * (the manifest's own `component`/"Rescaled by ecoregion" wording, `boot.ts`) — folds a second
-   * clause onto the subtitle rather than a plain unit label. */
-  rescaledByEcoregion?: boolean;
+  lens: "collection" | "species";
+  /** collection only: the item's own title (the dimension selection spelled out), else its id. */
+  itemLabel?: string;
+  /** collection only: the collection's own title. */
+  collectionTitle?: string;
+  /** collection only: what the values mean (`sdm:value_unit`, e.g. "unitless", "individuals/km2"). */
+  valueUnit?: string;
   /** species only. */
   commonName?: string;
   scientificName?: string;
@@ -45,7 +33,7 @@ export interface LegendTitleContext {
 export interface LegendTitle {
   title: string;
   /** `null` when there is nothing more to say than the title (an "unavailable"/"empty" legend, or
-   * a caller that supplied no context beyond the bare metric label). */
+   * a caller that supplied no context beyond the bare label). */
   subtitle: string | null;
 }
 
@@ -54,16 +42,12 @@ function joinClauses(clauses: readonly (string | null | undefined)[]): string | 
   return parts.length ? parts.join(" · ") : null;
 }
 
-/** the scores lens' two branches. */
-function scoresLegendTitle(ctx: LegendTitleContext): LegendTitle {
-  const title = ctx.metricLabel ?? "Score";
-  if (ctx.branch === "zone") {
-    return { title, subtitle: joinClauses(["Program Areas", ctx.release]) };
-  }
-  // raster (default branch when unspecified — every scores legend that is not the zone
-  // choropleth is a raster-cells one).
-  const unit = ctx.rescaledByEcoregion ? "Rescaled 0-100 by ecoregion" : "Raster cells";
-  return { title, subtitle: joinClauses([unit, ctx.zoomRegionLabel, ctx.release]) };
+/** the collection lens: the item's label, then which collection it belongs to and its value unit. */
+function collectionLegendTitle(ctx: LegendTitleContext): LegendTitle {
+  return {
+    title: ctx.itemLabel?.trim() || "Layer",
+    subtitle: joinClauses([ctx.collectionTitle, ctx.valueUnit]),
+  };
 }
 
 /** the species lens: common name + italic-flagged binomial as the title (the caller renders the
@@ -83,7 +67,7 @@ function speciesLegendTitle(ctx: LegendTitleContext): LegendTitle {
  * correct — if shorter — legend rather than an error).
  */
 export function legendTitle(ctx: LegendTitleContext): LegendTitle {
-  return ctx.lens === "species" ? speciesLegendTitle(ctx) : scoresLegendTitle(ctx);
+  return ctx.lens === "species" ? speciesLegendTitle(ctx) : collectionLegendTitle(ctx);
 }
 
 /** the phone legend chip's SHORT form — the title alone (module header: "the chip's short form is

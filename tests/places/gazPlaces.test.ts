@@ -13,9 +13,7 @@ import {
 } from "../../src/places/model";
 import { gazPickAtPoint, installGazPick } from "../../src/places/gazPick";
 import { placesToGeoJson } from "../../src/places/download";
-import { resolveGazForReport } from "../../src/report/gazPlaces";
-import { expandPlaces } from "../../src/lib/report/model";
-import { encodePlace, type Place } from "../../src/lib/geo/placeCodec";
+import type { Place } from "../../src/lib/geo/placeCodec";
 import type { AreaGeometry } from "../../src/lib/geo/types";
 
 const SQUARE: AreaGeometry = {
@@ -136,7 +134,7 @@ describe("gazPickAtPoint / installGazPick", () => {
 
 describe("placesToGeoJson for a gazetteer place", () => {
   it("carries the place_id, and the geometry when the session fetched it", () => {
-    const fc = placesToGeoJson([GAZ], undefined, undefined, () => SQUARE);
+    const fc = placesToGeoJson([GAZ], () => SQUARE);
     expect(fc.features[0]).toEqual({
       type: "Feature",
       geometry: SQUARE,
@@ -147,30 +145,5 @@ describe("placesToGeoJson for a gazetteer place", () => {
     const fc = placesToGeoJson([GAZ]);
     expect(fc.features[0].geometry).toBeNull();
     expect(fc.features[0].properties).toMatchObject({ place_id: "NMS:CINMS" });
-  });
-});
-
-describe("report: p. places are resolved to geometry places, token kept", () => {
-  const resolve = async (id: string) => {
-    if (id === "BAD:1") throw new Error("down");
-    return { id, name: `resolved ${id}`, geometry: SQUARE };
-  };
-  it("swaps gaz for geom, keeps the original token, passes other kinds through, drops failures", async () => {
-    const zone: Place = { kind: "zone", set: "pa", keys: ["GAA"] };
-    const r = await resolveGazForReport(
-      [zone, GAZ, { kind: "gaz", id: "BAD:1", name: "bad" }, { kind: "gaz", id: "A:1", name: "" }],
-      resolve,
-    );
-    expect(r.failed).toEqual([{ id: "BAD:1", message: "down" }]);
-    expect(r.places.map((p) => p.kind)).toEqual(["zone", "geom", "geom"]);
-    expect(r.places[1]).toEqual({ kind: "geom", name: "Channel Islands", geometry: SQUARE });
-    expect(r.places[2]).toMatchObject({ name: "resolved A:1" }); // empty token name -> the place's own
-    const stubs = expandPlaces(r.places, null, r.tokens);
-    expect(stubs[1].token).toBe(encodePlace(GAZ));
-    expect(stubs[1].place.kind).toBe("geom");
-  });
-  it("expandPlaces names an unresolved gaz place by its id, never an empty string", () => {
-    const [s] = expandPlaces([{ kind: "gaz", id: "A:1", name: "" }], null);
-    expect(s.name).toBe("A:1");
   });
 });

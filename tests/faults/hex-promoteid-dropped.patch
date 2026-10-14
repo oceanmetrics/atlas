@@ -1,0 +1,13 @@
+diff --git a/src/lib/map/layers/hex.ts b/src/lib/map/layers/hex.ts
+index a745053..ce5d980 100644
+--- a/src/lib/map/layers/hex.ts
++++ b/src/lib/map/layers/hex.ts
+@@ -73,7 +73,7 @@ export function hexColorExpression(
+ }
+ 
+ export function hexSource(spec: HexLayerSpec): SourceSpecification {
+-  return { type: "vector", url: `pmtiles://${spec.pmtiles}`, promoteId: spec.idField };
++  return { type: "vector", url: `pmtiles://${spec.pmtiles}` };
+ }
+ 
+ export function hexFillLayer(spec: HexLayerSpec): LayerSpecification {

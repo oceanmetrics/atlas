@@ -1,18 +1,18 @@
 name: Pages
 
-# atlas-0 Deliverable 3. Checks run on every push (any branch) and every pull request; only a push
-# to `main` goes on to publish `dist/` — as the SAME artifact the checks job just built, never a
-# second `vite build` — to the `gh-pages` branch (branch-based Pages, not the artifact-deploy
-# action: the preview host's sidecar pulls this same branch in atlas-9, so both hosts serve one
-# commit).
+# Checks run on every push (any branch) and every pull request; only a push to `main` goes on to
+# publish `dist/` -- as the SAME artifact the checks job just built, never a second `vite build` --
+# to this repository's `gh-pages` branch (branch-based Pages: Settings -> Pages -> "Deploy from a
+# branch" -> gh-pages), served at https://oceanmetrics.io/atlas/.
 on:
   push:
     # the feedback Apps Script (scripts/feedback/Code.gs) commits each report's screenshot to
     # main under feedback/<id>.png; that commit changes nothing the build reads, and as a plain
     # push it re-ran every job AND (via the per-ref concurrency group below) cancelled the
-    # in-flight three-engine + seeded-fault jobs of the real push before it (2026-09-24, #1).
+    # in-flight jobs of the real push before it.
     paths-ignore:
       - "feedback/**"
+      - "pipeline/**"
   pull_request:
 
 # scoped per ref, not a single global "pages" group: a global group would let any push to a
@@ -45,91 +45,64 @@ jobs:
 
       - run: npx tsc --noEmit
 
-      # atlas-8 phase review M3: `npm run check` (svelte-check) sees inside a `.svelte` <script>
-      # block the way a plain `tsc --noEmit` above cannot -- GATES.md long claimed this ran in CI
-      # ("manual only; see step 3") when it never did. Separate step (not folded into the tsc line
-      # above) so a red svelte-check names itself in the job log rather than hiding behind "tsc".
+      # `npm run check` (svelte-check) sees inside a `.svelte` <script> block the way a plain
+      # `tsc --noEmit` above cannot. Separate step so a red svelte-check names itself in the log.
       - run: npm run check
 
       - run: npx vitest run
 
-      # atlas-8 phase review M3: same story as `check` above -- lint/format were documented as
-      # "added in step 3" in tests/GATES.md but pages.yml never ran them. `lint`/`format:check` are
-      # both read-only (no `--fix`/`--write`), so they are safe this early in the job.
+      # lint/format are both read-only (no `--fix`/`--write`), so they are safe this early in the job.
       - run: npm run lint
 
       - run: npm run format:check
 
-      # atlas-2 Step 3a fix round 1: mirrors DuckDB-WASM's parquet extension (both platforms) into
-      # public/duckdb-ext/ BEFORE the build, so Vite's publicDir copies it into dist/ — without this
-      # step a published site has no same-origin mirror and the first read_parquet() crashes with an
-      # uncatchable WASM error the moment extensions.duckdb.org is unreachable (docs/spikes/S3.md).
-      # Each downloaded file is verified against the pinned sha256/bytes in
-      # scripts/duckdb-extensions.manifest.json; a mismatch fails this step, not silently continues.
+      # mirrors DuckDB-WASM's parquet extension (both platforms) into public/duckdb-ext/ BEFORE the
+      # build, so Vite's publicDir copies it into dist/ -- without this step a published site has no
+      # same-origin mirror and the first read_parquet() crashes with an uncatchable WASM error the
+      # moment extensions.duckdb.org is unreachable (docs/spikes/S3.md). Each downloaded file is
+      # verified against the pinned sha256/bytes in scripts/duckdb-extensions.manifest.json; a
+      # mismatch fails this step, not silently continues.
       - run: node scripts/fetch-duckdb-extensions.mjs
 
-      # atlas-3 plan D10: the seal and agency name are build flags, approved by the owner
-      # (docs/design/spec.md §9) -- VITE_SEAL=1/VITE_AGENCY=MMA here is what actually ships it;
-      # everywhere else (a local `npm run build` with no .env) defaults to unset, which fails
-      # closed (src/lib/ui/sealVisibility.ts) and shows no seal at all.
-      #
-      # round 2 Q4: VITE_FEEDBACK_URL (docs/feedback.md step 5) is the deployed Apps Script `/exec`
-      # URL for "Send feedback" -- a repository VARIABLE (Settings -> Secrets and variables ->
-      # Actions -> Variables), not a secret, since the endpoint URL ships in the public bundle
-      # either way. Unset here (Ben has not created the Sheet/Apps Script yet) resolves to an empty
-      # string, which `feedbackEndpoint()` (src/lib/feedback/endpoint.ts) treats as "no endpoint
-      # configured" -- the dialog still works, "Send" just stays disabled.
-      #
-      # VITE_PREVIEW_ATLAS_ROUTE (P8 item 8, deferred; src/lib/release/previewLink.ts) gates the
-      # version picker's "Continue on the preview host" Atlas link on atlas-9 actually having
-      # deployed that route -- also unset until then, so the modal falls back to linking the
-      # Scores/Species apps that already exist on the preview host instead of a 404.
-      #
-      # round 2 Q7: VITE_LOG_URL (docs/analytics.md "Enabling the Sheet leg") is the SAME Apps
-      # Script `/exec` URL the Shiny apps use as `MSENS_LOG_URL` -- a repository variable for the
-      # same reason VITE_FEEDBACK_URL above is one. Unset here resolves to an empty string, which
-      # `analyticsLogUrl()` (src/lib/analytics/logUrl.ts) treats as "no Sheet leg" -- GA4 still
-      # receives events either way.
+      # Build-time configuration, all optional and all repository VARIABLES (Settings -> Secrets and
+      # variables -> Actions -> Variables), never secrets: the endpoint URLs ship in the public bundle
+      # either way. Unset resolves to an empty string, which each reader treats as "off":
+      #   VITE_FEEDBACK_URL  the Apps Script `/exec` URL for "Send feedback" (src/lib/feedback/endpoint.ts)
+      #   VITE_LOG_URL       the Sheet-log beacon URL (src/lib/analytics/logUrl.ts)
+      #   VITE_GA_ID         the GA4 measurement id (src/lib/analytics/gaId.ts); no id ships in the repo
+      #   VITE_CATALOG_BASE  override of the catalog origin (src/lib/catalog/base.ts); default is the
+      #                      public bucket's atlas/ prefix
       - run: npx vite build
         env:
-          VITE_SEAL: "1"
-          VITE_AGENCY: MMA
           VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}
-          VITE_PREVIEW_ATLAS_ROUTE: ${{ vars.VITE_PREVIEW_ATLAS_ROUTE }}
           VITE_LOG_URL: ${{ vars.VITE_LOG_URL }}
+          VITE_GA_ID: ${{ vars.VITE_GA_ID }}
+          VITE_CATALOG_BASE: ${{ vars.VITE_CATALOG_BASE }}
 
-      # atlas-0 Deliverable 4 (F3 extended; budget relaxed 350->450 KB by plan D13, 2026-09-21):
       # fails on a >450 KB gzip static critical path, a >150 KB gzip runtime worker referenced from
-      # it (e.g. maplibre-gl's, S2.md), or a lazy-only chunk (duckdb*/terra-draw*/docx*/shp*/treemap)
+      # it (e.g. maplibre-gl's, S2.md), or a lazy-only chunk (duckdb*/terra-draw*/shp*/hyparquet)
       # reachable by static import or by a runtime worker.
       - run: node scripts/size-budget.mjs
 
-      # atlas-0 review fix round 1, F4: the two lines above prove size-budget.mjs is green against a
-      # real build; these two prove it can actually go RED — against dist alone, not a unit test's
-      # synthetic manifest, so a real Vite manifest-shape drift that made the checker walk nothing
-      # would be caught here even if every vitest case stayed green. `!` inverts the exit code: each
-      # of these STEPS fails if its fixture ever stops being red (e.g. someone deletes the static
-      # import/worker reference that makes it red in the first place).
+      # the line above proves size-budget.mjs is green against a real build; these two prove it can
+      # actually go RED -- against dist alone, not a unit test's synthetic manifest, so a real Vite
+      # manifest-shape drift that made the checker walk nothing would be caught here even if every
+      # vitest case stayed green. `!` inverts the exit code: each of these STEPS fails if its fixture
+      # ever stops being red.
       - run: npm run build:fixture:size-budget && ! node scripts/size-budget.mjs --dist tests/fixtures/size-budget-static-duckdb/dist
 
       - run: npm run build:fixture:size-budget-worker && ! node scripts/size-budget.mjs --dist tests/fixtures/size-budget-worker/dist
 
-      # atlas-0 Deliverable 3 / plan D6: dist/ must never contain session.json — that file only
-      # ever exists on the preview host, and its presence is the sole switch into preview mode.
-      - run: node scripts/check-dist-session.mjs dist
-
-      # plan D2: base: "./" must produce relative asset URLs only, so the same dist/ runs under
-      # both /atlas/ and /v9/atlas/.
+      # base: "./" must produce relative asset URLs only, so the same dist/ runs under any mount path.
       - run: node scripts/check-relative-assets.mjs dist
 
-      # atlas-2 Step 3a fix round 1: re-verifies dist/duckdb-ext/ against the same pinned manifest,
-      # against what actually ended up on disk after the build (not just what was downloaded).
+      # re-verifies dist/duckdb-ext/ against the same pinned manifest, against what actually ended up
+      # on disk after the build (not just what was downloaded).
       - run: node scripts/check-duckdb-ext.mjs dist
 
-      # atlas-3 step 3: index.html's inlined critical CSS copies its token VALUES from
-      # src/lib/brand/tokens.css via a real build step (an `@import` chain Vite's CSS pipeline
-      # resolves), never by hand -- this re-parses the built dist/index.html and proves every
-      # token still matches.
+      # index.html's inlined critical CSS copies its token VALUES from src/lib/brand/tokens.css via a
+      # real build step (an `@import` chain Vite's CSS pipeline resolves), never by hand -- this
+      # re-parses the built dist/index.html and proves every token still matches.
       - run: node scripts/check-inlined-tokens.mjs dist
 
       - uses: actions/upload-artifact@v4
@@ -153,212 +126,12 @@ jobs:
 
       - run: npm ci
 
-      # atlas-8 step 3: three of the six faults now drive a real browser (the two accessibility
-      # ones, and `verify-missing-export` which runs `scripts/verify.mjs`), so this job needs a
-      # chromium. Only chromium: every browser-driven fault pins `--project=chromium` /
-      # `--engines=chromium` on purpose, since what they prove (an unnamed button, a lost focus
-      # restore, a state that throws) is engine-independent and a three-engine install here would
-      # triple the job's setup for nothing.
-      - run: npx playwright install --with-deps chromium
-
-      # atlas-8 step 1: scripts/test-faults.mjs applies each tests/faults/*.patch in its own
-      # `git worktree add --detach` copy of HEAD under $TMPDIR, runs the named gate, and expects
-      # RED -- a fault that stays green fails this job. Independent of the `checks` job above (it
-      # never touches dist/); gates `publish` the same way `checks` does (see that job's `needs:`).
+      # scripts/test-faults.mjs applies each tests/faults/*.patch in its own `git worktree add
+      # --detach` copy of HEAD under $TMPDIR, runs the named gate, and expects RED -- a fault that
+      # stays green fails this job. Independent of the `checks` job above (it never touches dist/).
       - run: npm run test:faults
         env:
           TMPDIR: ${{ runner.temp }}
-
-  e2e:
-    name: e2e (chromium, webkit, firefox)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # same reason as the `checks` job: without this mirror, a spec that boots the real DuckDB
-      # engine (e.g. e2e/places.spec.ts's fresh-profile round trip) falls back to fetching the
-      # parquet extension from extensions.duckdb.org on the runner instead of same-origin.
-      - run: node scripts/fetch-duckdb-extensions.mjs
-
-      - run: npx playwright install --with-deps chromium firefox webkit
-
-      # 0.10.14: chromium ships its own software rasterizer (SwiftShader) and works anywhere;
-      # FIREFOX uses the system GL stack, and `playwright install --with-deps` brings libGL but not
-      # Mesa's actual DRI drivers -- so on a GPU-less runner Firefox had no WebGL2 at all and
-      # maplibre-gl threw `GPUInitializationError` before the map existed (run 35819393922: 5 of
-      # 9 reds, plus everything the serial describes then skipped behind them).
-      - name: mesa software GL drivers + xvfb (firefox needs the system stack AND a display)
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
-
-      # the gate for the two steps above and for scripts/firefox-webgl-prefs.json: one explicit
-      # red saying "firefox: no WebGL2" instead of six specs failing for a reason none of them is
-      # about. Runs BEFORE the suite, so a broken GL stack is never mistaken for a broken app.
-      #
-      # EVERY step below that launches a browser carries the SAME two things -- `xvfb-run` and
-      # `FIREFOX_HEADED=1` -- because that pair is what gives Firefox WebGL2 here, and a step that
-      # has one without the other is the bug this round fixed (run 35823503729). `FIREFOX_HEADED`
-      # is read by playwright.config.ts AND scripts/check-webgl2.mjs, and both throw if it is set
-      # with no $DISPLAY: forgetting `xvfb-run` is now a loud failure, never a silent headless
-      # launch with no WebGL.
-      - run: xvfb-run -a --server-args="-screen 0 1280x1024x24" node scripts/check-webgl2.mjs chromium firefox webkit
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          FIREFOX_HEADED: "1"
-
-      # atlas-8 step 3: the root suite (e2e/**, minus the fixtures/gallery/timing carve-outs
-      # playwright.config.ts's own testIgnore already documents) on all three engines in ONE
-      # invocation -- chromium under headless SwiftShader is enough for the gl.readPixels probes
-      # (atlas-8 subplan). The "timing" project is excluded here on purpose: it has its own step
-      # below, alone, per the pyramid's rule that a cold-load timing gate must never share the
-      # runner with anything else touching titiler.
-      - run: xvfb-run -a --server-args="-screen 0 1280x1024x24" npx playwright test --project=chromium --project=webkit --project=firefox
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1" # firefox: use Mesa's software path, never probe for a GPU
-          FIREFOX_HEADED: "1"
-
-      # its OWN step, after the three engines above finish (playwright.config.ts's `dependencies:`
-      # on the "timing" project already enforces this ordering even within one `npx playwright
-      # test` invocation, run here as an explicit second step for a clearly separated CI log/
-      # failure, matching atlas-0's hand-over: "Put the map gate into CI here and record the
-      # runner's number" — see docs/performance.md for what this run measured).
-      #
-      # `--no-deps` (0.10.14): the "timing" project DEPENDS ON chromium+webkit+firefox, and a
-      # `--project=timing` invocation runs a project's dependencies first -- so this step was
-      # silently re-running the ENTIRE three-engine matrix a second time, doubling the job. The
-      # step above already ran them; the dependency exists to order them inside ONE invocation,
-      # which is not what this is. That hidden second run is also what kept this job red after
-      # the real suite went green: it was the one browser step with no `xvfb-run`, so its firefox
-      # had no WebGL2 and reported the same six failures the step above had just passed.
-      - name: timing gate (species.timing.spec.ts, alone)
-        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" npx playwright test --project=timing --no-deps
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          FIREFOX_HEADED: "1"
-
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
-      # 0.10.14: the report alone is not enough to debug a linux-only red from a mac laptop --
-      # test-results/ carries the traces, the error-context dumps AND any screenshot Playwright
-      # WROTE as an "actual" (a missing platform baseline). Without it there is no way to get a
-      # linux rendering off the runner short of installing Docker.
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-test-results
-          path: test-results/
-          retention-days: 7
-
-  e2e-gallery:
-    name: e2e (gallery)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - run: npx playwright install --with-deps chromium
-
-      - run: npm run e2e:gallery
-
-      # 0.10.14: same reason as the engine job above -- a gallery snapshot has a PLATFORM suffix
-      # (`-chromium-linux.png`), so the linux baselines can only be produced by a linux run. This
-      # is how they get off the runner: on a red gallery job, test-results/ holds the `-actual.png`
-      # Playwright just wrote, which is downloaded, eyeballed and committed as the baseline.
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: gallery-test-results
-          path: test-results/
-          retention-days: 7
-
-  verify:
-    name: verify (state matrix, 58 states x 3 viewports)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # CHROMIUM ONLY, and only chromium is installed. atlas-8 step 3 measured both options on a
-      # laptop (macOS, `node scripts/verify.mjs`; the states run SERIALLY, one page at a time, by
-      # design) before choosing:
-      #
-      #   --engines=chromium   174 runs (58 states x 3 viewports)   **134 s**  174 pass / 0 fail
-      #   (all three)          522 runs                             **315 s**  174 pass each, 0 fail
-      #
-      # So COST is NOT the reason -- both fit comfortably inside the ~10 min a job here should take.
-      # The reason is FIREFOX. `scripts/verify.mjs` launches browsers DIRECTLY (`chromium/webkit/
-      # firefox` from `@playwright/test`, its own `ENGINES` map, `launcher.launch()` with no
-      # options) -- it does not read `playwright.config.ts`, so none of 0.10.14's firefox work
-      # applies to it: no `firefoxUserPrefs`, no `headless: !FIREFOX_HEADED`. On a GPU-less runner
-      # that firefox has no WebGL2 at all, and every scores state's `gl.readPixels` / vector probe
-      # would fail for a reason that has nothing to do with the app (exactly the 0.10.14 class of
-      # red). It passes locally only because macOS Firefox gets a real accelerated context.
-      #
-      # FOLLOW-UP, not done here: teach verify.mjs the same prefs + `xvfb-run` + FIREFOX_HEADED
-      # recipe the `e2e` job uses, then run all three here (315 s locally says it would fit). Until
-      # then the three-engine matrix IS still covered in CI -- by the `e2e` job above, which runs
-      # the same specs through playwright.config.ts on all three engines with the working recipe.
-      #
-      # Run the full three-engine matrix locally before a release candidate:
-      #   node scripts/verify.mjs                      # all three, ~5 min
-      #   node scripts/verify.mjs --engines=chromium   # what this job runs, ~2 min
-      #
-      # Chromium needs no Mesa/xvfb: it ships SwiftShader and gets a real software WebGL2 context
-      # on a bare runner (the same reason the `e2e` job's chromium never needed the firefox recipe).
-      # No `duckdb:fetch-ext` either: every state this matrix visits goes through `blockWasm()`
-      # (scripts/verify.mjs's `gotoScores`, e2e/species-hermetic.ts's `gotoSpecies`), so the engine
-      # is never booted and the extension mirror is never read.
-      - run: npx playwright install --with-deps chromium
-
-      # `verify.mjs` builds dist/ and starts its own `vite preview` on VERIFY_BASE_URL's port if
-      # nothing answers there, and shuts down only a server it started. Nothing is listening on a
-      # fresh runner, so it does both.
-      #
-      # This job FAILS on a thrown state, not just on a failed assertion -- `runState`'s own
-      # try/catch counts a throw as a failure and `main()` exits 1, and `main()` now also has a
-      # `.catch()` for anything thrown OUTSIDE a state. That is the whole reason this job exists:
-      # `routeBasemapTiles` was deleted from e2e/map-hermetic.ts by the basemap round while
-      # verify.mjs kept importing it, so every scores state threw before its first assertion, and
-      # with verify.mjs in no CI job nothing said so for a day.
-      # Seeded fault: `tests/faults/verify-missing-export.patch` (`npm run test:faults`), which
-      # reintroduces exactly that import and must turn this command red.
-      - run: node scripts/verify.mjs --engines=chromium
-
-      # No `upload-artifact` step here, unlike the `e2e` jobs: `verify.mjs` is not Playwright's
-      # runner and writes no `test-results/` or trace at all -- its diagnostic IS its stdout (one
-      # `✗ <state> @ <viewport> [<engine>]` line per failure with the specific problem underneath,
-      # plus the per-engine summary and the slowest-3 table), which the job log already keeps.
-      # An `if: failure()` upload of a directory that never exists would only add a second, more
-      # confusing red (`upload-artifact@v4` errors when nothing matches its path).
 
   e2e-engine:
     name: e2e (DuckDB-WASM engine, eh/mvp x chromium/firefox/webkit)
@@ -400,61 +173,8 @@ jobs:
 
       - run: npm run duckdb:fetch-ext && npm run e2e:opfs
 
-  parity:
-    name: parity (v9 vs msens, max|Δ| < 1e-9)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # scripts/parity/run.mjs shells out to the `duckdb` CLI (native, not duckdb-wasm) -- the
-      # official install script drops a pinned-version binary on PATH.
-      - run: |
-          curl -fsSL https://install.duckdb.org | sh
-          echo "$HOME/.duckdb/cli/latest" >> "$GITHUB_PATH"
-
-      # against the real bucket, not scripts/parity/mirror.mjs's local dry-run stand-in (that
-      # script reads laptop-only paths -- .claude/worktrees/contract/... and ~/_big/msens/derived
-      # -- that do not exist on a runner). `--base` being an https:// URL makes run.mjs load the
-      # CLI's own `httpfs` extension and read v9's published objects directly; the (bundled)
-      # duckdb-wasm parquet mirror above is unrelated to this native CLI and not needed here.
-      #
-      # Verified 2026-09-23 (this dispatch, laptop, real network): mirror.mjs's own header once
-      # said v9's `app/` objects were "not on S3 yet" -- they are now. A real `v9 --base
-      # https://.../marine-atlas/` run PASSED here (max|delta| < 1e-9 on every quantity,
-      # 14,238-cell GAA composite included) before this job was written, so this is wired as a
-      # real gate, not a hopeful one.
-      #
-      # atlas-8 phase review M3: v7 alongside v9 -- `run.mjs`'s own default (`out.vers = ["v9",
-      # "v7"]` when none are named) already covers both, and `tests/fixtures/parity/v7/*.json` are
-      # committed (`scripts/parity/fixtures.R`'s output, not regenerated here), so nothing extra is
-      # needed to add it. Verified 2026-09-23 (laptop, real network, duckdb 1.5.5): `node
-      # scripts/parity/run.mjs v7 --base https://.../marine-atlas/` PASSED alone (max|delta| <
-      # 1e-9 on every quantity, including the tracing GAA/GEO checks v7-only) before this line was
-      # written.
-      - run: node scripts/parity/run.mjs v9 v7 --base https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/
-
-      # atlas-8 phase review M3: the seeded-fault proof that the two lines above are a real gate,
-      # not a hopeful one -- GATES.md listed this as a self-proving gate with "No" CI wiring
-      # ("needs DuckDB CLI + data"), both of which this job already has by this point. `faults.mjs`
-      # on its own only knew ensureMirror()'s LAPTOP-only local mirror (`.claude/worktrees/
-      # contract/...`, `~/_big/msens/derived`, neither of which exists on a runner) -- pointing it
-      # at `--base` (added for this job; forwarded to every run.mjs invocation) is what makes it
-      # runnable here at all. Verified 2026-09-23 (laptop, real network): all 5 named mutations
-      # (blend dropped, D7b clip removed, bare in_usa, mdl_id hardcoded on v7, an unquoted `lit()`
-      # parameter) turned run.mjs red for the SEEDED reason, not for a missing local path.
-      - run: node scripts/parity/faults.mjs --base https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/
-
   analytics-privacy:
-    name: e2e (analytics privacy — GA4 Enhanced Measurement history-event leak)
+    name: e2e (analytics privacy -- GA4 Enhanced Measurement history-event leak)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -468,12 +188,8 @@ jobs:
 
       - run: npm ci
 
-      # atlas-8 phase review M3: this spec's own webServer (e2e/fixtures/analytics-privacy/
-      # playwright.config.ts) already runs `build:fixture:analytics-privacy` before `vite preview`
-      # -- an explicit build step here is not load-bearing, but it matches every other fixture in
-      # this workflow (size-budget's two fixtures above) in building its own red/target artifact as
-      # a separately-logged step, so a build failure here is never mistaken for the e2e run itself
-      # going red.
+      # this spec's own webServer already runs `build:fixture:analytics-privacy` before `vite
+      # preview`; an explicit step keeps a build failure from being mistaken for the e2e run itself.
       - run: npm run build:fixture:analytics-privacy
 
       - run: npx playwright install --with-deps chromium
@@ -482,12 +198,8 @@ jobs:
 
   publish:
     name: publish dist/ to gh-pages
-    # round 2 (2026-09-24, owner's call): Pages publishes as soon as the fast build-and-checks job is
-    # green. The browser, fault, verify, engine, OPFS, parity and analytics suites still run on every
-    # push and still turn the run red, but they no longer hold the site: the FULL gate script
-    # (vitest, check, tsc, lint, format, build, size, dist invariants, test:faults, verify, three-engine
-    # Playwright, timing, gallery) runs locally before every push to main, so CI is a second opinion in
-    # a known environment, not the gate. A red slow job is investigated, never waited for.
+    # Pages publishes as soon as the fast build-and-checks job is green; the fault and browser
+    # suites still run on every push and still turn the run red, but they do not hold the site.
     needs: [checks]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -499,11 +211,9 @@ jobs:
           name: dist
           path: dist
 
-      - name: publish to gh-pages
+      - name: publish to gh-pages (this repository's own Pages branch)
         # pinned to a full commit SHA, not a tag: this step runs with contents:write.
-        # peaceiris/actions-gh-pages v4.1.0 (resolved via `gh api
-        # repos/peaceiris/actions-gh-pages/commits/v4.1.0`); first-party actions/* above may stay
-        # on major-version tags.
+        # peaceiris/actions-gh-pages v4.1.0; first-party actions/* above may stay on major tags.
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

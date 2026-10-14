@@ -12,7 +12,7 @@ import {
   type GazetteerClient,
 } from "../../src/lib/gazetteer/resolve";
 import { createClient } from "../../src/lib/gazetteer/vendor/client";
-import { analysisGeometry } from "../../src/lib/analysis/place";
+import { analysisGeometry } from "../../src/lib/geo/analysisGeometry";
 import { isUnwrapped } from "../../src/lib/geo/unwrap";
 import { bboxOf, type AreaGeometry } from "../../src/lib/geo/types";
 import { serveFixtures } from "./server";

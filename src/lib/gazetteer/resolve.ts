@@ -6,7 +6,7 @@
 // The injectable `GazetteerClient` seam keeps the rules testable without a network: tests/gazetteer
 // drives the REAL vendored client against committed parquet fixtures served from a local HTTP
 // server, and the store-level tests inject a stub.
-import { analysisGeometry } from "../analysis/place";
+import { analysisGeometry } from "../geo/analysisGeometry";
 import { isAreaGeometry, type AreaGeometry } from "../geo/types";
 import { createClient } from "./vendor/client";
 import type { Layer, PlaceFeature } from "./vendor/types";

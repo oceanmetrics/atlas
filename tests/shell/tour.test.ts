@@ -4,13 +4,13 @@
 // the TourActions it should.
 import { describe, expect, it } from "vitest";
 import {
-  SCORES_TOUR_STEPS,
+  COLLECTION_TOUR_STEPS,
   SPECIES_TOUR_STEPS,
   tourStepsForLens,
   type TourActions,
 } from "../../src/shell/tour";
 
-function fakeActions(currentLens: "scores" | "species" = "scores"): TourActions & {
+function fakeActions(currentLens: "collection" | "species" = "collection"): TourActions & {
   calls: {
     setLens: string[];
     selectTool: string[];
@@ -34,25 +34,22 @@ function fakeActions(currentLens: "scores" | "species" = "scores"): TourActions 
   };
 }
 
-describe("SCORES_TOUR_STEPS: 9 steps, docs/usability.md §5 (R4-B added Details)", () => {
-  it("has exactly 9 steps, unique ids, in the documented order", () => {
-    expect(SCORES_TOUR_STEPS).toHaveLength(9);
-    expect(SCORES_TOUR_STEPS.map((s) => s.id)).toEqual([
+describe("COLLECTION_TOUR_STEPS: 6 steps", () => {
+  it("has exactly 6 steps, unique ids, in the documented order", () => {
+    expect(COLLECTION_TOUR_STEPS).toHaveLength(6);
+    expect(COLLECTION_TOUR_STEPS.map((s) => s.id)).toEqual([
       "map",
-      "release",
       "lenses",
       "layers",
       "click",
-      "details",
       "table",
       "places",
-      "report",
     ]);
-    expect(new Set(SCORES_TOUR_STEPS.map((s) => s.id)).size).toBe(9);
+    expect(new Set(COLLECTION_TOUR_STEPS.map((s) => s.id)).size).toBe(6);
   });
 
-  it("every step has a non-empty selector, title and description (≤ 2 sentences)", () => {
-    for (const step of SCORES_TOUR_STEPS) {
+  it("every step has a non-empty selector, title and description (<= 2 sentences)", () => {
+    for (const step of COLLECTION_TOUR_STEPS) {
       expect(step.element.length).toBeGreaterThan(0);
       expect(step.title.length).toBeGreaterThan(0);
       expect(step.description.length).toBeGreaterThan(0);
@@ -61,54 +58,39 @@ describe("SCORES_TOUR_STEPS: 9 steps, docs/usability.md §5 (R4-B added Details)
     }
   });
 
-  it("the map/release/lenses/click steps have no before() -- their anchor is always mounted", () => {
-    for (const id of ["release", "lenses", "click"]) {
-      expect(SCORES_TOUR_STEPS.find((s) => s.id === id)?.before).toBeUndefined();
+  it("the lenses/click steps have no before() -- their anchor is always mounted", () => {
+    for (const id of ["lenses", "click"]) {
+      expect(COLLECTION_TOUR_STEPS.find((s) => s.id === id)?.before).toBeUndefined();
     }
   });
 
-  it("the layers/details/table steps each open exactly their own rail tool via selectTool()", () => {
-    // owner review item 3 (live 0.10.62): "report" moved from the removed desktop topbar button
-    // to the rail's own Report tool (tour.ts's own header) -- it now needs the SAME before() hook
-    // its rail siblings already had, not the "always mounted" exemption above.
+  it("the layers/table/places steps each open exactly their own rail tool via selectTool()", () => {
     for (const [id, tool] of [
       ["layers", "layers"],
-      ["details", "details"],
       ["table", "table"],
+      ["places", "places"],
     ] as const) {
       const a = fakeActions();
-      SCORES_TOUR_STEPS.find((s) => s.id === id)?.before?.(a);
+      COLLECTION_TOUR_STEPS.find((s) => s.id === id)?.before?.(a);
       expect(a.calls.selectTool).toEqual([tool]);
       expect(a.calls.setLens).toEqual([]);
     }
-  });
-
-  // R4-D: the Report tool is one flow (no sub-tabs): the places/report steps both just open it, and
-  // the places step points at the Places heading inside the flow.
-  it("the places/report steps both open the Report rail tool", () => {
-    for (const id of ["places", "report"]) {
-      const a = fakeActions();
-      SCORES_TOUR_STEPS.find((s) => s.id === id)?.before?.(a);
-      expect(a.calls.selectTool).toEqual(["report"]);
-      expect(a.calls.setLens).toEqual([]);
-    }
-    expect(SCORES_TOUR_STEPS.find((s) => s.id === "places")?.element).toBe(
+    expect(COLLECTION_TOUR_STEPS.find((s) => s.id === "places")?.element).toBe(
       '[data-tour="places-heading"]',
     );
   });
 
-  it("the map step switches to the scores lens when the tour started from Species", () => {
+  it("the map step switches to the collection lens when the tour started from Species", () => {
     const a = fakeActions("species");
-    SCORES_TOUR_STEPS[0]?.before?.(a);
-    expect(a.calls.setLens).toEqual(["scores"]);
+    COLLECTION_TOUR_STEPS[0]?.before?.(a);
+    expect(a.calls.setLens).toEqual(["collection"]);
   });
 
-  // guarded (found by e2e/tour.spec.ts's own species walk going red): an UNCONDITIONAL setLens()
-  // call reset `sel.out` (defaultOut(lens)) even when the lens was UNCHANGED, restarting the
-  // reactive chain the lens' own data load depends on for no reason.
-  it("the map step does NOT call setLens() when already on the scores lens", () => {
-    const a = fakeActions("scores");
-    SCORES_TOUR_STEPS[0]?.before?.(a);
+  // guarded: an UNCONDITIONAL setLens() call restarted the reactive chain the lens' own data load
+  // depends on for no reason.
+  it("the map step does NOT call setLens() when already on the collection lens", () => {
+    const a = fakeActions("collection");
+    COLLECTION_TOUR_STEPS[0]?.before?.(a);
     expect(a.calls.setLens).toEqual([]);
   });
 });
@@ -134,13 +116,13 @@ describe("SPECIES_TOUR_STEPS: 5 steps, docs/usability.md §5", () => {
     }
   });
 
-  it("the search step switches to the species lens when the tour started from Scores", () => {
-    const a = fakeActions("scores");
+  it("the search step switches to the species lens when the tour started from Collections", () => {
+    const a = fakeActions("collection");
     SPECIES_TOUR_STEPS[0]?.before?.(a);
     expect(a.calls.setLens).toEqual(["species"]);
   });
 
-  // guarded, the same regression the scores "map" step's identical test above covers: a real
+  // guarded, the same regression the collection "map" step's identical test above covers: a real
   // `?sp=` deep link already resolves `sel.lens === "species"` before the tour ever starts, so an
   // unconditional setLens("species") here reset the species lens' own reactive load underneath
   // the walk -- reproduced directly in e2e/tour.spec.ts (the legend step's anchor never appeared).
@@ -158,9 +140,9 @@ describe("SPECIES_TOUR_STEPS: 5 steps, docs/usability.md §5", () => {
 });
 
 describe("tourStepsForLens", () => {
-  it("returns the species list for 'species' and the scores list otherwise", () => {
+  it("returns the species list for 'species' and the collection list otherwise", () => {
     expect(tourStepsForLens("species")).toBe(SPECIES_TOUR_STEPS);
-    expect(tourStepsForLens("scores")).toBe(SCORES_TOUR_STEPS);
+    expect(tourStepsForLens("collection")).toBe(COLLECTION_TOUR_STEPS);
   });
 });
 
@@ -169,7 +151,7 @@ describe("tourStepsForLens", () => {
 // never a bare tag/class an ordinary layout change could silently repoint at the wrong element.
 describe("anchors are attribute selectors, not bare tags or classes", () => {
   it("every element selector targets a data-tour or data-testid attribute", () => {
-    for (const step of [...SCORES_TOUR_STEPS, ...SPECIES_TOUR_STEPS]) {
+    for (const step of [...COLLECTION_TOUR_STEPS, ...SPECIES_TOUR_STEPS]) {
       expect(step.element, step.id).toMatch(/\[data-(tour|testid)="[a-z0-9-]+"\]/);
     }
   });

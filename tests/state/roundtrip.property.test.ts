@@ -7,13 +7,11 @@ import { describe, expect, it } from "vitest";
 import { formatSel, parseSel } from "../../src/lib/state/codec";
 import {
   DEFAULT_SEL,
-  OUTLINES,
   PALETTES,
   PROJECTIONS,
   REPRESENTATIONS,
   THEMES,
   defaultLens,
-  defaultOut,
   type Sel,
 } from "../../src/lib/state/types";
 
@@ -73,18 +71,13 @@ type Rng = ReturnType<typeof makeRng>;
 
 function randomSel(rng: Rng): Sel {
   const sp = rng.maybe(() => rng.token(2, 10), 0.5);
-  const lens = rng.bool() ? defaultLens(sp) : rng.pick(["scores", "species"] as const);
-  const out = rng.bool() ? defaultOut(lens) : rng.pick(OUTLINES);
+  const lens = rng.bool() ? defaultLens(sp) : rng.pick(["collection", "species"] as const);
   const us = rng.bool(0.7); // skew toward the default (true), same as real traffic would
   const obis = rng.bool(0.3);
 
   return {
-    ver: rng.maybe(() => `v${rng.int(1, 12)}${rng.bool(0.3) ? "b" : ""}`, 0.3),
     lens,
-    lyr: rng.maybe(() => rng.token(3, 15), 0.4),
     pal: rng.pick(PALETTES),
-    unit: rng.bool(0.6) ? DEFAULT_SEL.unit : rng.token(2, 10),
-    area: rng.bool(0.6) ? DEFAULT_SEL.area : rng.token(2, 10),
     map: rng.maybe(
       () => ({
         lon: rng.num(-180, 180),
@@ -99,14 +92,8 @@ function randomSel(rng: Rng): Sel {
     in: rng.bool(0.6) ? DEFAULT_SEL.in : rng.token(3, 12),
     rep: rng.pick(REPRESENTATIONS),
     us,
-    out,
     obis,
-    sel: rng.maybe(() => {
-      const kind = rng.int(0, 2);
-      if (kind === 0) return `cell:${rng.int(1, 999999)}`;
-      if (kind === 1) return `zone:${rng.safeToken(2, 8)}:${rng.safeToken(1, 8)}`;
-      return `place:${rng.int(0, 99)}`;
-    }, 0.4),
+    sel: rng.maybe(() => `place:${rng.int(0, 99)}`, 0.4),
     show: rng.bool(0.4) ? Array.from({ length: rng.int(1, 4) }, () => rng.safeToken(2, 8)) : [],
     hide: rng.bool(0.4) ? Array.from({ length: rng.int(1, 4) }, () => rng.safeToken(2, 8)) : [],
     theme: rng.pick(THEMES),
@@ -140,7 +127,7 @@ describe(`URL round trip property test (seed ${SEED}, N=${N})`, () => {
     }
   });
 
-  it("every generated URL keeps ver/lens/... out of the hash and pl/t out of the query", () => {
+  it("every generated URL keeps lens/... out of the hash and pl/t out of the query", () => {
     for (let i = 0; i < N; i++) {
       const { search, hash } = formatSel(randomSel(rng));
       if (hash) {

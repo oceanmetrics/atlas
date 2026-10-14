@@ -61,7 +61,7 @@ a shared footer partial — whatever this repo's own convention for a site-wide 
       params.set("title", "Docs feedback (" + kind + ")");
       params.set("body", body);
       params.set("labels", kind);
-      return "https://github.com/MarineSensitivity/atlas/issues/new?" + params.toString();
+      return "https://github.com/oceanmetrics/atlas/issues/new?" + params.toString();
     }
 
     function mount() {

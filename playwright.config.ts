@@ -55,18 +55,12 @@ export default defineConfig({
   // config out of spikes/<n>/ on their own ports (4311-4314); this one never crawls spikes/**.
   testDir: "./e2e",
   // e2e/fixtures/** are standalone mini-projects (their own vite.config.ts, never reachable from
-  // index.html/report.html's static graph — same idea as tests/fixtures/**, which vitest.config.ts
+  // index.html's static graph — same idea as tests/fixtures/**, which vitest.config.ts
   // excludes the same way) with their OWN scoped Playwright config and webServer, run via their own
   // npm script — e2e/fixtures/analytics-privacy/ is the first of these. Without this, Playwright's
   // default recursive spec discovery would also try to run that spec here, against a webServer that
   // never starts its fixture build.
-  //
-  // gallery.spec.ts is the same story the other way: it has its OWN scoped config
-  // (playwright.gallery.config.ts, port 4401) so it is excluded here — this config's webServer
-  // never varies its baseURL by lens, and running it here too would double-execute every gallery
-  // test (once correctly scoped, once against this config's chromium/webkit/firefox matrix with no
-  // guarantee the gallery's own baseline snapshots exist for webkit/firefox).
-  testIgnore: ["fixtures/**", "gallery.spec.ts"],
+  testIgnore: ["fixtures/**"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -89,30 +83,17 @@ export default defineConfig({
     // project, so each list below repeats the top-level entries too.
     {
       name: "chromium",
-      testIgnore: ["fixtures/**", "gallery.spec.ts", "species.timing.spec.ts"],
+      testIgnore: ["fixtures/**", "species.timing.spec.ts"],
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "webkit",
-      // matrix.a11y.spec.ts is CHROMIUM-ONLY (atlas-8 step 3, see that file's own header): axe-core
-      // reads the same computed accessibility tree in every engine, and ignoring the file here keeps
-      // a full run from reporting 358 skips instead of 179 audits.
-      testIgnore: [
-        "fixtures/**",
-        "gallery.spec.ts",
-        "species.timing.spec.ts",
-        "matrix.a11y.spec.ts",
-      ],
+      testIgnore: ["fixtures/**", "species.timing.spec.ts"],
       use: { ...devices["Desktop Safari"] },
     },
     {
       name: "firefox",
-      testIgnore: [
-        "fixtures/**",
-        "gallery.spec.ts",
-        "species.timing.spec.ts",
-        "matrix.a11y.spec.ts",
-      ],
+      testIgnore: ["fixtures/**", "species.timing.spec.ts"],
       use: {
         ...devices["Desktop Firefox"],
         // 0.10.14: on a GPU-less ubuntu-latest runner Firefox BLOCKLISTS its software (llvmpipe)

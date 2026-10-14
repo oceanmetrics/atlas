@@ -1,0 +1,158 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "id": "biotrack_indicators",
+  "title": "MBON BioTrack biodiversity indicators",
+  "description": "synthetic fixture",
+  "license": "CC-BY-4.0",
+  "sci:citation": "Couto, T.B.A., Hammerschlag, N., et al. (in prep). Fixture citation.",
+  "contacts": [
+    {
+      "name": "Pat Investigator",
+      "organization": "Shark Research Foundation / MBON BioTrack",
+      "roles": ["principal investigator"],
+      "emails": [
+        {
+          "value": "pi@example.test"
+        }
+      ]
+    },
+    {
+      "name": "Alex Author",
+      "organization": "Lancaster University",
+      "roles": ["author"]
+    }
+  ],
+  "providers": [
+    {
+      "name": "MBON BioTrack",
+      "roles": ["producer"]
+    },
+    {
+      "name": "OceanMetrics",
+      "roles": ["processor", "host"],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "atlas:funders": ["NOAA IOOS MBON", "BOEM"],
+  "sdm:response_type": "mixed",
+  "sdm:value_range": [0, 1],
+  "cube:dimensions": {
+    "x": {
+      "type": "spatial",
+      "axis": "x"
+    },
+    "group": {
+      "type": "other",
+      "description": "species group",
+      "values": ["all", "shark"],
+      "atlas:labels": {
+        "all": "All species",
+        "shark": "Sharks"
+      }
+    },
+    "season": {
+      "type": "other",
+      "description": "season",
+      "values": ["summer", "winter"]
+    },
+    "metric": {
+      "type": "other",
+      "description": "indicator metric",
+      "values": ["richness", "uncertainty"]
+    }
+  },
+  "assets": {
+    "hex": {
+      "href": "./hex.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "pmtiles:layers": ["hex"],
+      "atlas:id_field": "FID"
+    },
+    "values": {
+      "href": "./values.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "atlas:key_column": "FID"
+    },
+    "style": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "roles": ["style"]
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json"
+    },
+    {
+      "rel": "self",
+      "href": "./collection.json"
+    },
+    {
+      "rel": "item",
+      "href": "./items/all_summer_richness.json",
+      "type": "application/geo+json",
+      "title": "all summer richness"
+    },
+    {
+      "rel": "item",
+      "href": "./items/all_summer_uncertainty.json",
+      "type": "application/geo+json",
+      "title": "all summer uncertainty"
+    },
+    {
+      "rel": "item",
+      "href": "./items/all_winter_richness.json",
+      "type": "application/geo+json",
+      "title": "all winter richness"
+    },
+    {
+      "rel": "item",
+      "href": "./items/all_winter_uncertainty.json",
+      "type": "application/geo+json",
+      "title": "all winter uncertainty"
+    },
+    {
+      "rel": "item",
+      "href": "./items/shark_summer_richness.json",
+      "type": "application/geo+json",
+      "title": "shark summer richness"
+    },
+    {
+      "rel": "item",
+      "href": "./items/shark_summer_uncertainty.json",
+      "type": "application/geo+json",
+      "title": "shark summer uncertainty"
+    },
+    {
+      "rel": "item",
+      "href": "./items/shark_winter_richness.json",
+      "type": "application/geo+json",
+      "title": "shark winter richness"
+    },
+    {
+      "rel": "item",
+      "href": "./items/shark_winter_uncertainty.json",
+      "type": "application/geo+json",
+      "title": "shark winter uncertainty"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Methods"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html"
+    }
+  ]
+}

@@ -36,11 +36,10 @@ describe("no hex literal outside tokens.css", () => {
     expect(findHexLiterals(".")).toEqual([]);
   });
 
-  it("scans the mockups, the brand directory, the component library and the gallery", () => {
-    expect(SCAN_ROOTS).toContain("docs/design/mockups");
+  it("scans the brand directory, the component library and the shell css", () => {
     expect(SCAN_ROOTS).toContain("src/lib/brand");
     expect(SCAN_ROOTS).toContain("src/lib/ui");
-    expect(SCAN_ROOTS).toContain("src/gallery");
+    expect(SCAN_ROOTS).toContain("src/shell/shell.css");
   });
 
   it("flags a planted literal in a component under src/lib/ui (the step 2 seeded fault)", () => {
@@ -53,10 +52,8 @@ describe("no hex literal outside tokens.css", () => {
     expect(hits[0].path).toBe(join("src", "lib", "ui", "HexButton.svelte"));
   });
 
-  it("flags a planted literal in a gallery section too", () => {
-    const d = makeRepo({
-      "src/gallery/sections/Chip.svelte": "<style>.chip { color: #fff; }</style>",
-    });
+  it("flags a planted literal in the shell css too", () => {
+    const d = makeRepo({ "src/shell/shell.css": ".chip { color: #fff; }" });
     expect(findHexLiterals(d)).toHaveLength(1);
   });
 
@@ -76,24 +73,14 @@ describe("no hex literal outside tokens.css", () => {
     expect(findHexLiterals(".").filter((h) => h.path === TOKENS_JSON_FILE)).toEqual([]);
   });
 
-  it("flags a planted literal in mockup CSS (the seeded fault)", () => {
+  it("flags a planted literal in the inlined critical CSS of index.html (the seeded fault)", () => {
     const d = makeRepo({
       "src/lib/brand/tokens.css": ":root { --mma-gold: #e8c24a; }",
-      "docs/design/mockups/mockup.css": ".chip { color: #e8c24a; }",
+      "index.html": "<style>.chip { color: #e8c24a; }</style>",
     });
     const hits = findHexLiterals(d);
     expect(hits).toHaveLength(1);
-    expect(hits[0]).toMatchObject({
-      path: join("docs", "design", "mockups", "mockup.css"),
-      match: "#e8c24a",
-    });
-  });
-
-  it("flags a planted literal in a mockup's inline style too", () => {
-    const d = makeRepo({
-      "docs/design/mockups/x.html": '<div style="background: #fff"></div>',
-    });
-    expect(findHexLiterals(d)).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ path: "index.html", match: "#e8c24a" });
   });
 
   it("allows literals inside tokens.css itself", () => {
@@ -103,7 +90,7 @@ describe("no hex literal outside tokens.css", () => {
 
   it("does not mistake a fragment link or an svg id reference for a color", () => {
     const d = makeRepo({
-      "docs/design/mockups/x.html": '<a href="#place-panel">x</a><use href="#i-layers" />',
+      "index.html": '<a href="#place-panel">x</a><use href="#i-layers" />',
     });
     expect(findHexLiterals(d)).toEqual([]);
   });
@@ -118,12 +105,6 @@ describe("no hex literal outside tokens.css", () => {
 
     const without = makeRepo({ "src/lib/brand/vendor/mark.svg": '<svg fill="#FFFFFF"/>' });
     expect(findHexLiterals(without)[0].reason).toMatch(/provenance/);
-  });
-
-  it("holds for the committed vendored marks", () => {
-    for (const f of ["mst-mark.svg", "mst-mark-dark.svg"]) {
-      expect(readFileSync(`src/lib/brand/vendor/${f}`, "utf8")).toMatch(/vendored verbatim from/);
-    }
   });
 });
 

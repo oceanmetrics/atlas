@@ -34,13 +34,21 @@ describe('the shell never calls history.pushState -- only src/lib/state\'s repla
   });
 });
 
-describe("src/main.ts and src/shell/* stay out of the directories this step must not edit", () => {
-  // this step imports src/lib/ui/* components and src/lib/state/* -- never src/lib/release
-  // directly (the shell reads the release resolution result off window.__early instead, the same
-  // global VersionBadge.svelte already reads, so the early-fetch script stays the one place that
-  // logic runs before any bundle parses).
-  it("Shell.svelte does not import from src/lib/release", () => {
-    expect(SHELL_SVELTE).not.toMatch(/from\s+["']\.\.\/lib\/release/);
+describe("src/shell/* reaches the legacy MST release only through the one pinned seam", () => {
+  // the Species lens still reads one fixed MarineSensitivity release; Shell.svelte gets its version
+  // and boot bundle ONLY through src/lib/release/mst.ts, never by importing the other release
+  // modules (dataBase/boot) itself, and never from window.__early (that registry is gone).
+  it("Shell.svelte imports from src/lib/release/mst only", () => {
+    const imports = [...SHELL_SVELTE.matchAll(/from\s+["']\.\.\/lib\/release\/([^"']+)["']/g)].map(
+      (m) => m[1],
+    );
+    expect(imports.length).toBeGreaterThan(0);
+    for (const i of imports) expect(i).toBe("mst");
+  });
+
+  it("nothing in src/shell reads window.__early", () => {
+    expect(SHELL_SVELTE).not.toMatch(/__early/);
+    expect(TOP_BAR_ACTIONS_SVELTE).not.toMatch(/__early/);
   });
 
   it("tools.ts does not import from src/lib/release, geo, grid, engine, raster or analytics", () => {
@@ -86,9 +94,7 @@ describe("the skeleton and the hydrated shell agree on every data-control/data-t
   });
 });
 
-// Q1 follow-up (coordinator, 2026-09-24): state.svelte.ts's showCellPopup shipped two DIAG2
-// console.log calls to production, one on every scores-lens cell click -- a shipped app must not
-// log diagnostics on every click. Removed; this scan is what keeps it removed.
+// a shipped app must not log diagnostics on every click: this scan keeps `console.log` out of lenses.
 describe("src/lens/** never ships a console.log(", () => {
   it("no console.log( appears in any src/lens/**/*.{ts,svelte} file", () => {
     const files = (readdirSync("src/lens", { recursive: true }) as string[]).filter((f) =>

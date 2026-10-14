@@ -2,6 +2,8 @@
   export interface SelectOption {
     value: string;
     label: string;
+    /** a native disabled `<option>`: listed (so the viewer sees it exists) but not choosable. */
+    disabled?: boolean;
   }
 
   /** R3-B2 (round-3 plan, `LayersPanel.svelte`'s "Layer" picker): one `<optgroup>`. */
@@ -73,12 +75,12 @@
       {#if groups}
         <optgroup label={group.label}>
           {#each group.options as opt (opt.value)}
-            <option value={opt.value}>{opt.label}</option>
+            <option value={opt.value} disabled={opt.disabled}>{opt.label}</option>
           {/each}
         </optgroup>
       {:else}
         {#each group.options as opt (opt.value)}
-          <option value={opt.value}>{opt.label}</option>
+          <option value={opt.value} disabled={opt.disabled}>{opt.label}</option>
         {/each}
       {/if}
     {/each}

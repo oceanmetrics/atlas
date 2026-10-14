@@ -118,37 +118,6 @@ describe("CIRCLE_SEGMENTS: Deliverable 3's '64-gon' is the literal value, not ju
   });
 });
 
-describe("'Show analysis cells' paints the D7b-CLIPPED set, never the raw geo/coverage.ts#cellsInPolygon() one", () => {
-  // atlas-6 fix round 1 (Opus review): tests/places/results.test.ts proves `placeCellsInStudyArea`
-  // ITSELF returns the clipped rows, but nothing proved `Places.svelte`'s `toggleAnalysisCells`
-  // actually PAINTS them -- a revert back to painting the unclipped `cellsInPolygon()` result would
-  // stay green there while GAA re-paints 14,238 squares for 14,165 analysed cells. This source scan
-  // is the wiring gate: the paint call (`mapStore.setCells(...)`) must be built from
-  // `placeCellsInStudyArea`'s own result, not from the pre-check upper bound.
-  it("toggleAnalysisCells() paints cellsFeatureCollection(cells, grid) where `cells` came from placeCellsInStudyArea(), not cellsInPolygon()", () => {
-    const [, src] = allSource.find(([f]) => f.endsWith("Places.svelte"))!;
-    const fn = src.slice(
-      src.indexOf("async function toggleAnalysisCells"),
-      src.indexOf("// turning the toggle off"),
-    );
-    expect(fn).toMatch(/const cells = await placeCellsInStudyArea\(ctx, p\.geometry\);/);
-    expect(fn).toMatch(/mapStore\.setCells\(cellsFeatureCollection\(cells, grid\)\)/);
-    // the unclipped call is still allowed to exist (it's the cheap pre-check upper bound), but it
-    // must never be the thing PAINTED -- i.e. never passed straight into cellsFeatureCollection.
-    expect(fn).not.toMatch(/cellsFeatureCollection\(unclipped/);
-  });
-
-  it("SEEDED FAULT: painting the pre-check's unclipped set instead is exactly what this scan catches", () => {
-    const seeded =
-      "const unclipped = cellsInPolygon(p.geometry, grid);\n" +
-      "    showCells = true;\n" +
-      "    mapStore.setCells(cellsFeatureCollection(unclipped, grid));\n" +
-      "  }\n\n  // turning the toggle off";
-    expect(seeded).not.toMatch(/const cells = await placeCellsInStudyArea\(ctx, p\.geometry\);/);
-    expect(seeded).toMatch(/cellsFeatureCollection\(unclipped/);
-  });
-});
-
 describe("ShareDialog: the ladder renders before the plain copy button, and copyLink never trusts location.href", () => {
   // atlas-6 fix round 1 (Opus review), "Dead ladder, link/number divergence": `fitPlacesToUrl` can
   // report `status: "ok"`/`"long"` with `simplified: true` (a rung already ran), and the ladder

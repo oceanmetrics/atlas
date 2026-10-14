@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { placesToGeoJson } from "../../src/places/download";
 import type { GeomPlace, Place, UploadPlace, ZonePlace } from "../../src/lib/geo/placeCodec";
+import type { AreaGeometry } from "../../src/lib/geo/types";
 
 const GEOM: GeomPlace = {
   kind: "geom",
@@ -29,14 +30,15 @@ describe("placesToGeoJson: the DECODED geometries actually analysed (Deliverable
     expect(fc.features[0].properties).toEqual({ kind: "geom", name: "My Draw" });
   });
 
-  it("a zone place with no boot/polygons context still degrades to `geometry: null` (RFC 7946), with an explanatory note rather than a silent drop", () => {
+  it("a legacy zone place (an older link) exports its keys with `geometry: null` (RFC 7946) and a note, never a silent drop", () => {
     const fc = placesToGeoJson([ZONE]);
     expect(fc.features[0].geometry).toBeNull();
     expect(fc.features[0].properties).toMatchObject({
       kind: "zone",
       set: "pa",
       keys: ["GAA", "WGA"],
-      note: expect.stringContaining("no polygon tile loaded"),
+      name: "GAA, WGA",
+      note: expect.stringContaining("no longer published"),
     });
   });
 
@@ -60,18 +62,9 @@ describe("placesToGeoJson: the DECODED geometries actually analysed (Deliverable
   });
 });
 
-// owner review item 2 (Ben, live 0.10.62): "Download places returns a places.geojson with
-// `geometry: null` and `name: GAA`, ie only acronym and not full program name." RED-FIRST: every
-// test below fails on the pre-fix `placesToGeoJson(places)` (a one-argument function that always
-// wrote `fallbackZoneLabel` and `geometry: null` for a zone place, no matter what).
-describe("placesToGeoJson: zone places resolve the FULL name + REAL geometry (owner review item 2)", () => {
-  const BOOT = {
-    zones: {
-      programarea: [{ key: "GAA", name: "Gulf of America", label_pt: [-90, 27] }],
-    },
-  };
-  const SQUARE = {
-    type: "Polygon" as const,
+describe("placesToGeoJson: gazetteer (p.) places", () => {
+  const SQUARE: AreaGeometry = {
+    type: "Polygon",
     coordinates: [
       [
         [-91, 26],
@@ -82,67 +75,23 @@ describe("placesToGeoJson: zone places resolve the FULL name + REAL geometry (ow
       ],
     ],
   };
-  const ONE_ZONE: ZonePlace = { kind: "zone", set: "pa", keys: ["GAA"] };
 
-  it("resolves the release's own full 'Name (KEY)' label -- never the bare acronym", () => {
-    const fc = placesToGeoJson([ONE_ZONE], BOOT);
-    expect(fc.features[0].properties?.name).toBe("Gulf of America (GAA)");
-  });
-
-  it("embeds the REAL polygon queried live off the map's own PMTiles source -- never null when one is found", () => {
-    const polygons = {
-      queryZonePolygons: (unit: string, keys: readonly string[]) => {
-        expect(unit).toBe("programarea");
-        expect(keys).toEqual(["GAA"]);
-        return [{ geometry: SQUARE }];
-      },
-    };
-    const fc = placesToGeoJson([ONE_ZONE], BOOT, polygons);
-    expect(fc.features[0].geometry).toEqual({
-      type: "MultiPolygon",
-      coordinates: [SQUARE.coordinates],
+  it("embeds the fetched geometry when the session has it, naming the place_id", () => {
+    const fc = placesToGeoJson([{ kind: "gaz", id: "NMS:fknms", name: "Florida Keys" }], (id) =>
+      id === "NMS:fknms" ? SQUARE : null,
+    );
+    expect(fc.features[0].geometry).toEqual(SQUARE);
+    expect(fc.features[0].properties).toEqual({
+      kind: "gaz",
+      place_id: "NMS:fknms",
+      name: "Florida Keys",
     });
-    expect(fc.features[0].properties).not.toHaveProperty("geometry_source");
-    expect(fc.features[0].properties?.name).toBe("Gulf of America (GAA)");
   });
 
-  it("falls back to a bbox polygon around the zone's label point when the query finds nothing, marked geometry_source: bbox", () => {
-    const polygons = { queryZonePolygons: () => [] };
-    const fc = placesToGeoJson([ONE_ZONE], BOOT, polygons);
-    expect(fc.features[0].geometry).not.toBeNull();
-    expect(fc.features[0].geometry?.type).toBe("Polygon");
-    expect(fc.features[0].properties?.geometry_source).toBe("bbox");
-    // a small box around the published label point (-90, 27), never the whole world.
-    const coords = (fc.features[0].geometry as { coordinates: number[][][] }).coordinates[0];
-    for (const [lon, lat] of coords) {
-      expect(lon).toBeGreaterThanOrEqual(-91);
-      expect(lon).toBeLessThanOrEqual(-89);
-      expect(lat).toBeGreaterThanOrEqual(26);
-      expect(lat).toBeLessThanOrEqual(28);
-    }
-  });
-
-  it("a multi-key zone place unions every key's rendered polygon into one MultiPolygon", () => {
-    const TWO_ZONE: ZonePlace = { kind: "zone", set: "pa", keys: ["GAA", "WGA"] };
-    const other = {
-      type: "Polygon" as const,
-      coordinates: [
-        [
-          [10, 10],
-          [11, 10],
-          [11, 11],
-          [10, 11],
-          [10, 10],
-        ],
-      ],
-    };
-    const polygons = {
-      queryZonePolygons: () => [{ geometry: SQUARE }, { geometry: other }],
-    };
-    const fc = placesToGeoJson([TWO_ZONE], BOOT, polygons);
-    expect(fc.features[0].geometry).toEqual({
-      type: "MultiPolygon",
-      coordinates: [SQUARE.coordinates, other.coordinates],
-    });
+  it("leaves geometry null (never drops the place) when the geometry has not been fetched", () => {
+    const fc = placesToGeoJson([{ kind: "gaz", id: "NMS:fknms", name: "" }]);
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0].geometry).toBeNull();
+    expect(fc.features[0].properties?.name).toBe("NMS:fknms"); // the id names it when no name
   });
 });

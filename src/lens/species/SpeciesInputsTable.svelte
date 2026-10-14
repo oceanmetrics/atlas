@@ -9,7 +9,7 @@
   import { inputsTableRows } from "./data/inputsTable";
   import Icon from "../../lib/ui/Icon.svelte";
   import { collapseToMap } from "../../lib/ui/backToMap";
-  import { csvFilename, toCsv } from "../scores/species";
+  import { downloadCsv, toCsv } from "../../lib/download/csv";
 
   interface Props {
     bar: LayerBar | null;
@@ -28,11 +28,7 @@
       { key: "representation", value: (r) => r.representation },
       { key: "available", value: (r) => (r.available ? "Available" : "Not available") },
     ]);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = csvFilename("model-inputs");
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(csv, "model-inputs");
   }
 </script>
 

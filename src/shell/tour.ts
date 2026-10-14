@@ -5,7 +5,7 @@
 // header. Anchors are the `data-tour="…"` attributes already stamped on the shell's controls
 // (docs/usability.md "Take a tour", CalCOFI explore's `src/tour.ts` pattern) plus the two new ones
 // this round adds: `rail-<tool>` (HexButton.svelte's `tourId` prop, via Rail.svelte) for a specific
-// rail tool, and the species/scores legends' own `data-testid` (already unique, so no new attribute
+// rail tool, and the species legend's own `data-testid` (already unique, so no new attribute
 // needed there).
 import type { Lens } from "../lib/state/types";
 import type { ToolName } from "./tools";
@@ -39,46 +39,36 @@ export interface TourStep {
   before?: (a: TourActions) => void;
 }
 
-// --- Scores (8 steps, docs/usability.md §5 "Take a tour", Scores) --------------------------------
-export const SCORES_TOUR_STEPS: TourStep[] = [
+// --- Collections (6 steps) -------------------------------------------------------------------------
+export const COLLECTION_TOUR_STEPS: TourStep[] = [
   {
     id: "map",
     element: '[data-tour="map"]',
     side: "left",
     align: "start",
     title: "The map",
-    description:
-      "Colour is the combined sensitivity score for each 0.05° cell of US waters (red high, blue low).",
-    // guarded (a tour started while ALREADY on the scores lens is the common case): calling
-    // setLens() unconditionally re-set `sel.out` to its lens default even when the lens itself
-    // was unchanged, which reset in-flight lens state for no reason -- measured on the species
-    // side (see the species step below) as a legend that never resolved because its OWN
-    // redundant setLens() call kept restarting the species data load underneath the walk.
+    description: "Colour shows the selected layer of the selected collection.",
+    // guarded (a tour started while ALREADY on the collection lens is the common case): calling
+    // setLens() unconditionally re-sets lens state for no reason -- measured on the species side
+    // (see the species step below) as a legend that never resolved because its OWN redundant
+    // setLens() call kept restarting the species data load underneath the walk.
     before: (a) => {
-      if (a.getLens() !== "scores") a.setLens("scores");
+      if (a.getLens() !== "collection") a.setLens("collection");
     },
-  },
-  {
-    id: "release",
-    element: '[data-tour="version-chip"]',
-    side: "bottom",
-    align: "start",
-    title: "The release",
-    description: "You are looking at this release; every published release is here.",
   },
   {
     id: "lenses",
     element: '[data-tour="lens-switch"]',
     side: "bottom",
     title: "The lenses",
-    description: "Scores ranks places; Species shows one species' distribution.",
+    description: "Collections maps a published layer; Species shows one species' distribution.",
   },
   {
     id: "layers",
     element: '[data-tour="rail-layers"]',
     side: "right",
     title: "Layers",
-    description: "Choose the score layer, Program Areas or cells, and the colour ramp.",
+    description: "Choose the collection and its dimensions, such as group, season and metric.",
     before: (a) => a.selectTool("layers"),
   },
   {
@@ -87,47 +77,26 @@ export const SCORES_TOUR_STEPS: TourStep[] = [
     side: "left",
     align: "start",
     title: "Click",
-    description: "Click a cell or a Program Area for its score and a link to its details.",
-  },
-  {
-    // R4-B: the Flower tab left the Layers pane and became the spine's own "Details" entry.
-    id: "details",
-    element: '[data-tour="rail-details"]',
-    side: "right",
-    title: "Details",
-    description: "The flower for what you clicked; add it to your report or open its table.",
-    before: (a) => a.selectTool("details"),
+    description: "Click a cell for its value.",
   },
   {
     id: "table",
     element: '[data-tour="rail-table"]',
     side: "right",
     title: "Table",
-    description: "Every Program Area ranked; tick some and report on them.",
+    description: "The tables for the current layer.",
     before: (a) => a.selectTool("table"),
   },
   {
-    // R4-D: the Report tool is one flow with no sub-tabs; this step opens it and points at its
-    // "Places" heading (`Places.svelte`'s `[data-tour="places-heading"]`).
+    // the Places tool is one flow with no sub-tabs; this step opens it and points at its heading
+    // (`Places.svelte`'s `[data-tour="places-heading"]`).
     id: "places",
     element: '[data-tour="places-heading"]',
     side: "right",
     title: "Places",
-    description: "Draw your own area, enter coordinates or upload a file.",
-    before: (a) => a.selectTool("report"),
-  },
-  {
-    // owner review item 3 (live 0.10.62): the desktop topbar's own Report button was dropped
-    // (duplicative with this exact rail tool -- TopBarActions.svelte/Shell.svelte's own header),
-    // so this step now anchors the rail's Report tool instead of `[data-tour="report-top"]`, which
-    // no longer exists -- same `before`/`side` convention as its "table"/"places" siblings above.
-    // "Share" (still a topbar button) keeps no tour step of its own, same as before this fix.
-    id: "report",
-    element: '[data-tour="rail-report"]',
-    side: "right",
-    title: "Report",
-    description: "Build a printable, downloadable report for what you selected.",
-    before: (a) => a.selectTool("report"),
+    description:
+      "Pick a place from the gazetteer, draw your own area, enter coordinates or upload a file.",
+    before: (a) => a.selectTool("places"),
   },
 ];
 
@@ -139,10 +108,10 @@ export const SPECIES_TOUR_STEPS: TourStep[] = [
     side: "bottom",
     title: "Search",
     description: "Find a species by common or scientific name.",
-    // guarded, same reason the scores "map" step's identical guard has: an UNCONDITIONAL
+    // guarded, same reason the collection "map" step's identical guard has: an UNCONDITIONAL
     // setLens("species") here, even when a `?sp=` deep link already put the shell on the species
-    // lens, reset `sel.out` and restarted the reactive chain the species lens' own data load
-    // depends on -- measured directly: the "legend" step's anchor (a REAL resolved species query)
+    // lens, restarted the reactive chain the species lens' own data load depends on -- measured
+    // directly: the "legend" step's anchor (a REAL resolved species query)
     // never appeared, reproducibly, until this guard was added.
     before: (a) => {
       if (a.getLens() !== "species") a.setLens("species");
@@ -177,10 +146,10 @@ export const SPECIES_TOUR_STEPS: TourStep[] = [
     element: '[data-tour="lens-switch"]',
     side: "bottom",
     title: "Back",
-    description: "Switch to Scores to see how this species contributes.",
+    description: "Switch to Collections to map a published layer.",
   },
 ];
 
 export function tourStepsForLens(lens: Lens): TourStep[] {
-  return lens === "species" ? SPECIES_TOUR_STEPS : SCORES_TOUR_STEPS;
+  return lens === "species" ? SPECIES_TOUR_STEPS : COLLECTION_TOUR_STEPS;
 }

@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createAnalytics,
-  GA_MEASUREMENT_ID,
+  createAnalytics as createAnalyticsRaw,
   type Analytics,
+  type AnalyticsOptions,
   type KeyValueStore,
 } from "../../src/lib/analytics/analytics";
 import type { Transport } from "../../src/lib/analytics/transport";
 import type { LocationLike } from "../../src/lib/analytics/pageLocation";
+
+// GA is OFF unless a measurement id is configured (`VITE_GA_ID`); these tests exercise the GA leg, so
+// they configure a made-up one. The "no id -> no GA leg" rule has its own describe block below.
+const GA_TEST_ID = "G-TEST000000";
+function createAnalytics(opts: AnalyticsOptions): Analytics {
+  return createAnalyticsRaw({ measurementId: GA_TEST_ID, ...opts });
+}
 
 function fakeTransport() {
   const sent: { url: string; body: string }[] = [];
@@ -28,9 +35,9 @@ function fakeStore(): KeyValueStore {
 }
 
 const LOC: LocationLike = {
-  origin: "https://marinesensitivity.org",
+  origin: "https://oceanmetrics.io",
   pathname: "/atlas/",
-  search: "?ver=v9",
+  search: "?proj=mercator",
 };
 
 let live: Analytics[] = [];
@@ -176,7 +183,7 @@ describe("createAnalytics — navigator.webdriver exclusion (seeded fault)", () 
     );
     const configCall = calls.find((c) => c[0] === "config");
     expect(configCall).toBeDefined();
-    expect(configCall?.[1]).toBe(GA_MEASUREMENT_ID);
+    expect(configCall?.[1]).toBe(GA_TEST_ID);
     expect(configCall?.[2]).toMatchObject({
       content_group: "atlas",
       app_name: "atlas",
@@ -253,7 +260,7 @@ describe("createAnalytics — the queued row's page never carries the hash", () 
         transport,
         gtag: fakeGtag().gtag,
         isWebdriver: () => false,
-        location: () => ({ ...LOC, search: "?ver=v9&secret=xyz" }),
+        location: () => ({ ...LOC, search: "?proj=mercator&secret=xyz" }),
         clientStore: null,
         sessionStore: null,
       }),
@@ -261,7 +268,7 @@ describe("createAnalytics — the queued row's page never carries the hash", () 
     a.track("open_about", {});
     a.flush();
     const row = JSON.parse(sent[0].body).rows[0];
-    expect(row.page).toBe("/atlas/?ver=v9");
+    expect(row.page).toBe("/atlas/?proj=mercator");
     expect(row.page).not.toContain("secret");
   });
 });
@@ -290,7 +297,7 @@ describe("createAnalytics — privacy fix round 1: no hit ever falls back to gta
     );
     const configCall = calls.find((c) => c[0] === "config");
     const configParams = configCall?.[2] as Record<string, unknown>;
-    expect(configParams.page_location).toBe("https://marinesensitivity.org/atlas/?ver=v9");
+    expect(configParams.page_location).toBe("https://oceanmetrics.io/atlas/?proj=mercator");
     expect(configParams.page_location).toBeTruthy();
   });
 
@@ -329,7 +336,7 @@ describe("createAnalytics — privacy fix round 1: no hit ever falls back to gta
     const pageViewCall = calls.find((c) => c[0] === "event" && c[1] === "page_view");
     expect(pageViewCall).toBeDefined();
     const params = pageViewCall?.[2] as Record<string, unknown>;
-    expect(params.page_location).toBe("https://marinesensitivity.org/atlas/?ver=v9");
+    expect(params.page_location).toBe("https://oceanmetrics.io/atlas/?proj=mercator");
   });
 
   it("seeded fault: EVERY track()-driven event carries an explicit page_location, never left implicit", () => {
@@ -350,7 +357,7 @@ describe("createAnalytics — privacy fix round 1: no hit ever falls back to gta
     const customEventCall = calls.find((c) => c[0] === "event" && c[1] === "open_about");
     expect(customEventCall).toBeDefined();
     const params = customEventCall?.[2] as Record<string, unknown>;
-    expect(params.page_location).toBe("https://marinesensitivity.org/atlas/?ver=v9");
+    expect(params.page_location).toBe("https://oceanmetrics.io/atlas/?proj=mercator");
     expect(params.page_title).toBeTruthy();
   });
 
@@ -402,25 +409,25 @@ describe("createAnalytics — privacy fix round 1: no hit ever falls back to gta
       }),
     );
     a.updateLocation({
-      origin: "https://marinesensitivity.org",
+      origin: "https://oceanmetrics.io",
       pathname: "/atlas/",
-      search: "?ver=v9&lens=species",
+      search: "?lens=species&proj=mercator",
     });
 
     const setCall = calls.find((c) => c[0] === "set");
     expect((setCall?.[1] as Record<string, unknown>).page_location).toBe(
-      "https://marinesensitivity.org/atlas/?ver=v9&lens=species",
+      "https://oceanmetrics.io/atlas/?lens=species&proj=mercator",
     );
 
     a.track("open_about", {});
     const eventCall = calls.find((c) => c[0] === "event" && c[1] === "open_about");
     expect((eventCall?.[2] as Record<string, unknown>).page_location).toBe(
-      "https://marinesensitivity.org/atlas/?ver=v9&lens=species",
+      "https://oceanmetrics.io/atlas/?lens=species&proj=mercator",
     );
 
     a.flush();
     const row = JSON.parse(sent[0].body).rows[0];
-    expect(row.page).toBe("/atlas/?ver=v9&lens=species");
+    expect(row.page).toBe("/atlas/?lens=species&proj=mercator");
   });
 
   it("updateLocation() is a no-op leg-wise for a webdriver session (still tracks the new location, never calls gtag)", () => {
@@ -437,7 +444,7 @@ describe("createAnalytics — privacy fix round 1: no hit ever falls back to gta
         sessionStore: null,
       }),
     );
-    a.updateLocation({ origin: "https://x.test", pathname: "/atlas/", search: "?ver=v10" });
+    a.updateLocation({ origin: "https://x.test", pathname: "/atlas/", search: "?pal=magma" });
     expect(calls).toEqual([]);
   });
 });
@@ -515,5 +522,47 @@ describe("createAnalytics — updatePreview() (R3-B15)", () => {
     );
     a.updatePreview(true);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("createAnalytics — GA is OFF unless a measurement id is configured (no id ships in the repo)", () => {
+  it("with no measurementId, no gtag call is ever made, for any method", () => {
+    const { gtag, calls } = fakeGtag();
+    const a = register(
+      createAnalyticsRaw({
+        appVersion: "v1",
+        preview: false,
+        gtag,
+        transport: fakeTransport().transport,
+        isWebdriver: () => false,
+        location: () => LOC,
+        clientStore: null,
+        sessionStore: null,
+      }),
+    );
+    a.track("open_about", {});
+    a.updateLocation({ ...LOC, search: "?pal=magma" });
+    a.updatePreview(true);
+    expect(calls).toEqual([]); // seeded fault: a GA id baked back into the module
+  });
+
+  it("the Sheet-log leg still works without a GA id (it is keyed on logUrl alone)", () => {
+    const { transport, sent } = fakeTransport();
+    const a = register(
+      createAnalyticsRaw({
+        appVersion: "v1",
+        preview: false,
+        logUrl: "https://example.test/exec",
+        transport,
+        gtag: fakeGtag().gtag,
+        isWebdriver: () => false,
+        location: () => LOC,
+        clientStore: null,
+        sessionStore: null,
+      }),
+    );
+    a.track("open_about", {});
+    a.flush();
+    expect(sent).toHaveLength(1);
   });
 });

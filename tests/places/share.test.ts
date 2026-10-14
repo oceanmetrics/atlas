@@ -31,29 +31,27 @@ const GRID: GridSpec = {
   tileSize: 50,
 };
 
-const ZONE: Sel = { ...DEFAULT_SEL, ver: "v9", lens: "scores", lyr: "composite" };
+const COLLECTION: Sel = { ...DEFAULT_SEL, lens: "collection" };
 
 describe("summarizeShare", () => {
-  it("reads ver/lens/layer/camera/n places off Sel", () => {
-    const sel: Sel = { ...ZONE, map: { lon: -100, lat: 40, zoom: 5 } };
-    expect(summarizeShare(sel, [{ kind: "zone", set: "pa", keys: ["GAA"] }])).toEqual({
-      ver: "v9",
-      lens: "scores",
-      layer: "composite",
+  it("reads lens/layer/camera/n places off Sel", () => {
+    const sel: Sel = { ...COLLECTION, sp: "some-key", map: { lon: -100, lat: 40, zoom: 5 } };
+    expect(summarizeShare(sel, [{ kind: "gaz", id: "NMS:fknms", name: "" }])).toEqual({
+      lens: "collection",
+      layer: "some-key",
       hasCamera: true,
       nPlaces: 1,
     });
   });
 
-  it("layer falls back to the species key when lyr is absent", () => {
+  it("layer is the species key", () => {
     const sel: Sel = { ...DEFAULT_SEL, sp: "some-species-key", lens: "species" };
     expect(summarizeShare(sel, []).layer).toBe("some-species-key");
   });
 
-  it("ver/layer are null and hasCamera is false when absent", () => {
+  it("layer is null and hasCamera is false when absent", () => {
     expect(summarizeShare(DEFAULT_SEL, [])).toEqual({
-      ver: null,
-      lens: "scores",
+      lens: "collection",
       layer: null,
       hasCamera: false,
       nPlaces: 0,
@@ -64,20 +62,18 @@ describe("summarizeShare", () => {
 describe("describeShareSummary", () => {
   it("reads as a sentence naming every carried piece", () => {
     const text = describeShareSummary({
-      ver: "v9",
-      lens: "scores",
+      lens: "collection",
       layer: "composite",
       hasCamera: true,
       nPlaces: 2,
     });
     expect(text).toBe(
-      'This link carries release v9, the scores lens, layer "composite", the current map view, 2 places.',
+      'This link carries the collection lens, layer "composite", the current map view, 2 places.',
     );
   });
 
   it("singularizes one place", () => {
     const text = describeShareSummary({
-      ver: null,
       lens: "species",
       layer: null,
       hasCamera: false,

@@ -1,3 +1,63 @@
+# Changelog
+
+## 0.1.0
+
+OceanMetrics Atlas: forked 2026-10-14 from MarineSensitivity/atlas 0.10.88 and stripped to a core that
+a STAC catalog will drive. The strip is first below; the catalog loader, the generic Collections lens
+and hex painting follow.
+
+- **The Collections lens (new, the default).** Picks a collection from the catalog (grouped
+  OceanMetrics / MarineSensitivity v7 / MarineSensitivity v8) and shows one selector per dimension of
+  that collection (for BioTrack: group, season, metric, derived from its `cube:dimensions`), a legend,
+  and a credits strip (citation with DOI, license, principal investigators, funders, a link to the
+  methods README; never an e-mail address). A collection that cannot be reached is listed as
+  "unavailable" and never breaks the rest.
+- **Hex painting.** A collection's hex grid is ONE PMTiles archive of geometry + `FID`; values come from
+  a Parquet column read with hyparquet (only the `FID` and the item's column) and paint by MapLibre
+  feature state. Changing group, season or metric re-reads one column and recolours; the grid is never
+  refetched. Hover shows a cell's value; click selects it (outlined, marked on the legend, and published
+  to `cellSelection` for the species-list panel). The legend spans the item's own value range and shows
+  the layer's histogram. A collection's `styles/default.json` supplies the ramp, else Spectral reversed.
+- **Raster items** (cloud-optimized GeoTIFF assets) render through the existing titiler layer.
+- **URL grammar.** `?c=<collection id>&i=<item id>` (plus `?catalog=<https url>` to read another catalog
+  base, e.g. a staging folder served with CORS + Range). The default view writes nothing; an unknown
+  `c` or `i` falls back to the default. Changing one selector snaps the others to the nearest item
+  that exists. `VITE_CATALOG_BASE` overrides the origin at build time.
+
+- **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
+  brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.
+- **Removed the Scores lens and Program Areas.** No scores map, Program Area outlines or choropleth,
+  scores search, flower plot, composition treemap, zones table or "pick a Program Area". The lens
+  switch is now Collections | Species (the Collections lens panel arrives with the catalog loader).
+  The `lyr`, `unit`, `area`, `out` and `ver` URL keys are retired and ignored; a `sel=` token is now
+  only `place:<n>`.
+- **Removed the Report.** No `report.html`, ZIP/DOCX/HTML export, report map or parity tooling; the
+  "Report" rail tool is now **Places** (the same panel, same list/draw/upload/gazetteer/coordinates/
+  share/download), and old `tool=report` and `ui=` links open it. Place results (scores per place)
+  are gone with the scores data; the place list, areas, rename, duplicate, zoom and GeoJSON download
+  stay.
+- **Removed the MarineSensitivity release gate.** No `latest.txt`, `versions.json`, `session.json`,
+  preview-host sessions, version picker, version chip, welcome modal or the inline early-fetch
+  script. The Species lens reads one pinned MarineSensitivity release (`src/lib/release/mst.ts`)
+  until the MST collections are read through the catalog.
+- **Removed BOEM branding.** No seal, agency flags (`VITE_SEAL`, `VITE_AGENCY`), brand mark or brand
+  fonts (Jost, Carlito); text and a neutral system font stack instead. The About dialog says the app
+  is supported by BOEM and MBON.
+- **Removed the component gallery** (`gallery.html`, its build, baselines and Playwright config) and
+  the MST usability, mockup and parity tooling.
+- **Analytics are off unless configured.** The hard-coded GA4 id is gone; set `VITE_GA_ID` (and
+  optionally `VITE_LOG_URL`) at build time to re-enable the privacy-safe module. With no id no `gtag`
+  call is ever made.
+- **Feedback** keeps its dialog and points at placeholders: `VITE_FEEDBACK_URL` for the endpoint, issues
+  filed in `oceanmetrics/atlas`; no email address is hard-coded anywhere.
+- **Download filenames** read `oceanmetrics-atlas_{lens}_...` and the map-figure footer reads
+  "OceanMetrics Atlas".
+- **CI** (`pages.yml`) publishes this repository's own Pages branch; the gates that no longer apply
+  (gallery, verify matrix, parity, release-session check) are gone. The Playwright-gated seeded faults
+  and the inherited `e2e/` shell suite are not revalidated yet (see `tests/GATES.md`).
+
+# Upstream (MarineSensitivity/atlas) history
+
 # atlas 0.10.88
 
 Gazetteer places.

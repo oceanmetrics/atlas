@@ -731,7 +731,6 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
           // runtime — `queryRenderedFeatures`'s stricter `PointLike` param type is TS-only friction.
           cellId = mapClick(handle.map as unknown as QueryableMap, lngLat, point, {
             grid: gridFromBoot(boot),
-            units: [],
           }).cellId;
         } catch {
           cellId = null;

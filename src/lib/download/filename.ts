@@ -2,7 +2,7 @@
 // lives in an exported function; a component only calls it) -- `clock` is injected so a test never
 // depends on the real date.
 //
-// Map figures: `marine-atlas_{lens}_{layer-or-species-key}_{ver}_{yyyymmdd}.{ext}` (the brief's own
+// Map figures: `oceanmetrics-atlas_{lens}_{layer-or-species-key}_{ver}_{yyyymmdd}.{ext}` (the brief's own
 // convention, one word per field, `_` between fields -- never a raw title with spaces or slashes).
 // The data-layer GeoTIFF keeps its OWN suffix (`..._{metric_or_mdl_key}.tif`) because the brief
 // asks for the metric/model id specifically, not the human label `key()` sanitizes for the other
@@ -25,9 +25,9 @@ export function slugKey(label: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export type DownloadLens = "scores" | "species";
+export type DownloadLens = "collection" | "species";
 
-/** `marine-atlas_{lens}_{layer-or-species-key}_{ver}_{yyyymmdd}.{ext}` -- `key` is
+/** `oceanmetrics-atlas_{lens}_{layer-or-species-key}_{ver}_{yyyymmdd}.{ext}` -- `key` is
  * {@link slugKey}'d here (callers pass the raw human label, e.g. a metric's `label` or a species'
  * `sci`); an empty/unresolved key falls back to `"layer"`/`"species"` by lens rather than leaving a
  * double-underscore gap. `ver`/`ext` are taken verbatim (a version is already a safe token,
@@ -40,10 +40,10 @@ export function mapFigureName(
   clock?: () => Date,
 ): string {
   const slug = slugKey(key) || (lens === "species" ? "species" : "layer");
-  return `marine-atlas_${lens}_${slug}_${ver}_${yyyymmdd(clock)}.${ext}`;
+  return `oceanmetrics-atlas_${lens}_${slug}_${ver}_${yyyymmdd(clock)}.${ext}`;
 }
 
-/** `marine-atlas_{lens}_{metric-or-mdl-key}.tif` -- the GeoTIFF item's own name (brief: "name
+/** `oceanmetrics-atlas_{lens}_{metric-or-mdl-key}.tif` -- the GeoTIFF item's own name (brief: "name
  * `…_{metric_or_mdl_key}.tif`"). `metricOrMdlKey` is kept VERBATIM (not slugified): a `mdl_key`
  * (`am|Fis-29291`) and a `metric_key` (`sensitivity_ecoregion_rescaled`) are already safe, opaque
  * ids used elsewhere in the app (deep links, STAC item ids) -- slugifying would make the downloaded
@@ -52,12 +52,12 @@ export function mapFigureName(
  * are guaranteed to contain that filenames should not. */
 export function cogFileName(lens: DownloadLens, metricOrMdlKey: string): string {
   const safe = metricOrMdlKey.replace(/\|/g, "-");
-  return `marine-atlas_${lens}_${safe}.tif`;
+  return `oceanmetrics-atlas_${lens}_${safe}.tif`;
 }
 
-/** `marine-atlas_places_{ver}_{yyyymmdd}.geojson` -- the "Selected places" export's own name,
+/** `oceanmetrics-atlas_places_{ver}_{yyyymmdd}.geojson` -- the "Selected places" export's own name,
  * distinct from `places/download.ts#downloadGeoJson`'s existing default `"places.geojson"` (that
  * function's own default is unchanged; this is only what R3-W2's Download menu passes it). */
 export function placesFileName(ver: string, clock?: () => Date): string {
-  return `marine-atlas_places_${ver}_${yyyymmdd(clock)}.geojson`;
+  return `oceanmetrics-atlas_places_${ver}_${yyyymmdd(clock)}.geojson`;
 }

@@ -1,0 +1,55 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "id": "all_winter_uncertainty",
+  "collection": "biotrack_indicators",
+  "properties": {
+    "title": "Uncertainty of all species, winter",
+    "datetime": null,
+    "atlas:dims": {
+      "group": "all",
+      "season": "winter",
+      "metric": "uncertainty"
+    },
+    "atlas:metric": "uncertainty",
+    "atlas:value_range": [0.1, 0.5],
+    "sdm:value_unit": "unitless",
+    "sdm:value_range": [0, 1]
+  },
+  "assets": {
+    "values": {
+      "href": "../values.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "atlas:key_column": "FID",
+      "atlas:value_column": "all_winter_uncertainty",
+      "table:columns": [
+        {
+          "name": "FID",
+          "type": "int64"
+        },
+        {
+          "name": "all_winter_uncertainty",
+          "type": "double"
+        }
+      ]
+    },
+    "hex": {
+      "href": "../hex.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "pmtiles:layers": ["hex"],
+      "atlas:id_field": "FID"
+    }
+  },
+  "links": [
+    {
+      "rel": "collection",
+      "href": "../collection.json"
+    },
+    {
+      "rel": "self",
+      "href": "./all_winter_uncertainty.json"
+    }
+  ]
+}

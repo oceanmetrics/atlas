@@ -24,13 +24,6 @@
  * No hex literal: every color is `var(--token)` (scripts/check-hex-literals.mjs scans this file).
  */
 @import "../lib/brand/tokens.css";
-/* the @font-face rules (local() first, then the self-hosted metric-compatible fallback) must be
-   part of the CRITICAL path, not a later async stylesheet -- registering them only after the
-   skeleton's first paint would let the browser lay text out in a generic fallback first and swap
-   fonts once fonts.css finally loaded, which is exactly the metric-override machinery in that file
-   is there to prevent. index.html preloads the one display weight this frame needs (see its own
-   head comment); this import is what makes that preload matter at all. */
-@import "../lib/brand/fonts.css";
 /* atlas-3 step 4 fix round 1 (SC 2.5.8): the shared coarse-pointer touch-target floor, imported
    once at the app root as that step's own report asks -- it targets several src/lib/ui/*
    selectors (`.seg button`, `button.chip`, ...) that the shell's own hand-built version chip and
@@ -258,36 +251,6 @@ a {
   pointer-events: none;
 }
 
-/* R5: the wave-in-hexagon mark (src/lib/brand/WaveHexMark.svelte's own header explains the
-   source). Geometry only here -- width/height are explicit SVG attributes on both the skeleton's
-   inline copy and the component's own markup, so this rule never has to reproduce a size (unlike
-   the sk-* rules below, which duplicate a REAL component's box model). Global, not scoped, on
-   purpose: it must style the skeleton's plain inline <svg> (index.html), which has no component of
-   its own to carry scoped styles -- and it styles the hydrated WaveHexMark identically, since a
-   global class selector matches a Svelte-scoped element just as it matches any other. */
-.wavehex {
-  display: block;
-  flex: none;
-}
-.wavehex-bg {
-  fill: var(--mma-navy);
-}
-.wavehex-wave {
-  fill: var(--mma-gold);
-}
-.wavehex-crest {
-  fill: none;
-  stroke: var(--surface-seal-plate);
-  stroke-width: 3.5;
-  stroke-linecap: round;
-}
-.wavehex-ring {
-  fill: none;
-  stroke: var(--border-accent);
-  stroke-width: 3.5;
-  stroke-linejoin: round;
-}
-
 .brand-title {
   flex: none;
   font-family: var(--font-display);
@@ -332,41 +295,6 @@ button.chip {
 }
 .chip:hover {
   border-color: var(--text-secondary);
-}
-
-/* atlas-8 fix: src/lib/ui/VersionBadge.svelte's "PREVIEW" span had NO style anywhere -- unstyled
-   text at the button's own font-size, which widens button.chip well past its 84px CLS-stable
-   min-width (measured 100.7px, `+16.7px`) and, at the 320 CSS px viewport, pushed the topbar's
-   theme toggle 0.7px past the right edge (scripts/verify.mjs's assertLayout caught it on the
-   species lens, where a v9 preview session is the only way to view a restricted release). Small
-   and compact, not hidden: the badge is the one visual cue that this release is not the public
-   one, so it must survive down to 320 px, just narrower.
-
-   R2/U1 fix (owner decision, 2026-09-24): that margin did not survive this round's OWN 320px
-   reclamation (hiding the brand mark below) -- re-measured, the chip is 97.78px with the badge
-   at this 9px size (v9 preview) vs 84px without (v7 public), and the mark-hiding fix was tuned
-   with zero slack for the no-badge case (verify.mjs: 17 of 17 species-lens phoneNarrow states
-   caught it). Below, `.ms-preview-badge-short` ("PRE") replaces the full word at <= 380px --
-   `aria-label`/`title` on the outer span keep BOTH the accessible name and the hover tooltip at
-   "Preview release" regardless of which form is visually shown, and neither inner span is ever
-   removed from the accessibility tree (`aria-hidden`, not `{#if}` -- a pure CSS swap). */
-.ms-preview-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: var(--radius-control);
-  background: var(--fill-accent);
-  color: var(--text-on-accent);
-  flex: none;
-}
-/* the compact form is inert until the <= 380px query below flips which one is visible; both
-   always render (see VersionBadge.svelte's own header on why). */
-.ms-preview-badge-short {
-  display: none;
 }
 
 .search-field {
@@ -846,28 +774,10 @@ button.chip {
   }
 }
 
-/* the smallest viewport verify.mjs covers (320px): even with the tightened gap/padding above, the
-   fixed-content total (mark + version chip + lens switch + ⋯ + theme, no more slack to reclaim
-   from gap/padding alone -- measured, the "spacer" flex item bottoms out at 0px width first) still
-   exceeds 320px by ~34px once the ⋯ trigger is added. The brand MARK (not its name -- already
-   visually hidden here, `.brand-title`'s own rule above) is the one purely decorative control left:
-   hiding it reclaims its own width AND the gap beside it, the same "nothing here is hidden because
-   every remaining control is load-bearing" note the file already made about this breakpoint, minus
-   the one exception that is not load-bearing. Selector is `.wavehex` (R4/R5's `WaveHexMark.svelte`
-   root `<svg class="wavehex {klass}">`), not `.mark` -- R4 replaced the old `<img class="mark
-   mark--navy/paper">` pair with this ONE component, so a plain `.wavehex{display:none}` rule here
-   silently stopped matching anything until this merge caught it (verify.mjs's own `assertLayout`
-   re-failed "theme is off-screen at 320x800" after the R4/U1 merge -- the fix, not a new
-   regression) -- AND, once retargeted, still lost outright: WaveHexMark.svelte's OWN scoped style
-   sets `.wavehex { display: block; flex: none; }`, which Svelte compiles to `.wavehex.svelte-hash`
-   (specificity 0,2,0) -- a plain `.wavehex` here (0,1,0) cannot outrank it regardless of media
-   query or source order (the same "specificity beats source order" lesson as the `[hidden]` note
-   elsewhere in this file). `header.topbar .wavehex` (specificity 0,2,1 -- TWO classes, same as the scoped rule, PLUS one
-   element, which breaks the tie) comfortably outranks it without `!important`. */
+/* the smallest phones: the fixed-content total (lens switch + ⋯ + theme) exceeds 320px by a few px
+   even with the tightened gap/padding above, so the two remaining topbar tools lose a little
+   padding. */
 @media (max-width: 380px) {
-  header.topbar .wavehex {
-    display: none;
-  }
   /* the two remaining topbar tools at this width (⋯ and theme) are both icon-only -- a few px off
    * `.tool`'s own padding closes the last of the ~34px deficit above (hiding the mark alone
    * reclaimed all but ~2px). A real coarse-pointer device is unaffected: `@media (pointer:
@@ -876,16 +786,6 @@ button.chip {
    * coarse`) is exactly the gap this closes. */
   .tool {
     padding: 0 var(--space-2);
-  }
-  /* a v9 preview session's chip (VersionBadge.svelte's own header) is ~14px wider than this --
-     "PREVIEW" swaps for "PRE" here, never hidden or removed from the accessibility tree (both
-     spans keep `aria-hidden`; the OUTER span's `aria-label`/`title` already fix the accessible
-     name/tooltip at "Preview release" regardless of which one is showing). */
-  .ms-preview-badge-full {
-    display: none;
-  }
-  .ms-preview-badge-short {
-    display: inline;
   }
 }
 

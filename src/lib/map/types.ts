@@ -21,49 +21,6 @@ export interface BasemapSpec {
   attribution: string;
 }
 
-/** one zone unit's choropleth, built by the lens from `boot.zones[unit]` values (atlas-4 §6.4). */
-export interface ZoneFillSpec {
-  /** the tile property a stop's `key` is matched against, e.g. `programarea_key`. */
-  keyProperty: string;
-  /** one `{key, color}` per zone; a key absent here paints `defaultColor`. */
-  stops: ReadonlyArray<{ key: string; color: string }>;
-  /** `lightgrey` in the Shiny app (`app.R:2318`) — a zone with no value is drawn, not dropped. */
-  defaultColor: string;
-  opacity: number;
-  outlineColor: string;
-}
-
-/** label points for one unit — `boot.zones[unit][*].label_pt` (atlas-4 §6.2 step 3). */
-export interface ZoneLabelSpec {
-  /** GeoJSON FeatureCollection of points carrying `key` and `name` properties. */
-  points: FeatureCollection;
-  /** which property the symbol layer renders; `"key"` matches the Shiny app's `text_field`. */
-  textProperty: string;
-}
-
-/** one drawable zone unit — a `boot.units[]` row plus whatever the lens adds on top. */
-export interface ZoneUnitSpec {
-  /** the unit *type*: `programarea`, `ecoregion`, `subregion`, `planarea`, … (`fld` minus `_key`). */
-  unit: string;
-  /** absolute https URL of the PMTiles archive (`boot.units[].pmtiles`). */
-  pmtiles: string;
-  /** the vector layer inside the archive (`boot.units[].source_layer`). */
-  sourceLayer: string;
-  /** human label (`boot.units[].label`), for the layers control; never used in a URL. */
-  label?: string;
-  /** omit for an outline-only unit (the default: atlas-4 draws a fill only for the selected unit). */
-  fill?: ZoneFillSpec;
-  /** omit for no labels; `layers/zones.ts` already refuses labels for `subregion` (zone_style). */
-  labels?: ZoneLabelSpec;
-  /** `false` hides the line layer without removing it (the layers control's switch). */
-  lineVisible?: boolean;
-  /** the key of ONE zone to outline in the selection colour (atlas-4 §6.6: a clicked zone's
-   * highlight, `colors.ts`'s `SELECTION_COLOR`, 4 px) — filtered against the SAME vector
-   * source/layer, so no separate geometry fetch is needed. `layers/zones.ts`'s
-   * `zoneHighlightLayer()` builds it. */
-  highlightKey?: string;
-}
-
 /** a titiler-backed raster: the score COG, or an overlay such as `_outside_pra` (atlas-4 §6.2). */
 export interface RasterLayerSpec {
   /** style source AND layer id (they share the id, as in `msens::add_cell_tiles`). */
@@ -85,9 +42,9 @@ export interface RasterLayerSpec {
 
 /**
  * A gazetteer collection's PMTiles polygons, shown while "Pick from gazetteer" is on (places/
- * gazPick.ts) so a click can read a feature's `place_id`. Distinct from `ZoneUnitSpec` (a release's
- * drawable unit) and `RangeLayerSpec` (a per-species filter): this is the Ocean Metrics gazetteer's
- * own tile source, absolute-URL and release-independent.
+ * gazPick.ts) so a click can read a feature's `place_id`. Distinct from `RangeLayerSpec` (a per-species
+ * filter): this is the Ocean Metrics gazetteer's own tile source, absolute-URL and
+ * release-independent.
  */
 export interface GazetteerLayerSpec {
   /** collection slug, e.g. `places`, `boem_wind_leases` -- also the source id suffix. */
@@ -119,9 +76,7 @@ export interface SelectionSpec {
 
 /**
  * A PMTiles vector "presence" fill — atlas-5's ranges branch (an IUCN/BirdLife/critical-habitat
- * range polygon, `atlas-refs/"parity species app.md"` §6.2's PMTiles branch). Distinct from
- * `ZoneUnitSpec` (a release's drawable UNIT, e.g. Program Area) even though both are PMTiles vector
- * fills: a range is per-SPECIES-input, filtered to one `mdl_key`, and carries no outline/label.
+ * range polygon, `atlas-refs/"parity species app.md"` §6.2's PMTiles branch). A range is per-SPECIES-input, filtered to one `mdl_key`, and carries no outline/label.
  */
 export interface RangeLayerSpec {
   /** style source AND layer id. */

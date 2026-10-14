@@ -1,0 +1,18 @@
+{
+  "type": "Feature",
+  "id": "Fis-1",
+  "properties": {
+    "title": "A fish",
+    "atlas:dims": {
+      "taxon": "Fis-1"
+    }
+  },
+  "assets": {
+    "cog": {
+      "href": "../cog/Fis-1.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "roles": ["data"]
+    }
+  },
+  "links": []
+}

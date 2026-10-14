@@ -25,7 +25,7 @@ import {
 } from "./shards";
 import type { TaxaIndex } from "./picker";
 import { formatSel, parseSel, type UrlLike } from "../../../lib/state/codec";
-import { DEFAULT_SEL, defaultOut, type Sel } from "../../../lib/state/types";
+import { DEFAULT_SEL, type Sel } from "../../../lib/state/types";
 
 /** the `in` value meaning "the merged model" in this app's URL (state/types.ts's default). */
 export const MERGED_IN = DEFAULT_SEL.in;
@@ -201,14 +201,9 @@ export function canonicalUrl(
   target: SpeciesTarget,
 ): { search: string; hash: string } {
   const sel = parseSel(loc);
-  // `out`'s default is per-lens (state/types.ts's DEFAULT_OUT_BY_LENS). A URL that never said `out`
-  // must keep taking the default of the lens it ends up in, or switching to the species lens would
-  // write the SCORES default out into the link as if the user had chosen it.
-  const explicitOut = new URLSearchParams(loc.search ?? "").has("out");
   const next: Sel = {
     ...sel,
     lens: "species",
-    out: explicitOut ? sel.out : defaultOut("species"),
     sp: target.sp,
     in: target.in,
     rep: target.rep ?? sel.rep,

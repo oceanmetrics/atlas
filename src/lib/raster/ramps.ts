@@ -203,9 +203,24 @@ export function textColorFor(hexBg: string): "black" | "white" {
 // These are the standard, widely-published anchor colors for each colormap family (matplotlib's
 // perceptually-uniform Viridis/Cividis/Magma), resampled to 11 stops with THIS module's own
 // `colorForValue()` interpolation — never a second ramp/interpolation algorithm, and this stays the
-// one file `tests/raster/ramps.wiring.test.ts` polices for that. `spectral_r` needs no entry: every
-// release publishes it, so `paletteStopsFromBoot` never falls through for it today.
+// one file `tests/raster/ramps.wiring.test.ts` polices for that. `spectral_r` is every release's published ramp, but a collection with no
+// boot bundle at all (the catalog-driven lens) falls back to the entry below.
 const FALLBACK_RAMP_ANCHORS: Partial<Record<PaletteName, PaletteStops>> = {
+  // ColorBrewer Spectral, reversed (low = purple-blue, high = dark red): the default ramp for a
+  // catalog collection that publishes no style of its own (there is no `boot.palettes` there).
+  spectral_r: [
+    "#5e4fa2",
+    "#3288bd",
+    "#66c2a5",
+    "#abdda4",
+    "#e6f598",
+    "#ffffbf",
+    "#fee08b",
+    "#fdae61",
+    "#f46d43",
+    "#d53e4f",
+    "#9e0142",
+  ],
   viridis: ["#440154", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"],
   cividis: ["#00204d", "#414d6b", "#7c7b78", "#b9a468", "#ffea46"],
   magma: ["#000004", "#3b0f70", "#8c2981", "#de4968", "#fe9f6d", "#fcfdbf"],

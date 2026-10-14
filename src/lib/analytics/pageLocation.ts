@@ -9,9 +9,12 @@
 //
 // The allow-list is state/types.ts's own `QUERY_KEYS` — the exact list of query keys `Sel` ever
 // writes (state/'s header: "Query holds short, non-sensitive scalars") — imported rather than
-// duplicated so the two cannot drift apart. `HASH_KEYS` (`pl`, `t`) never appears here because this
+// duplicated so the two cannot drift apart. Minus `catalog`: a data-origin override (a staging
+// folder, a localhost URL) is not something to send to analytics. `HASH_KEYS` (`pl`, `t`) never appears here because this
 // module never even looks at the fragment.
-import { QUERY_KEYS } from "../state/types";
+import { QUERY_KEYS as SEL_QUERY_KEYS } from "../state/types";
+
+const QUERY_KEYS = SEL_QUERY_KEYS.filter((k) => k !== "catalog");
 
 export interface LocationLike {
   origin: string;

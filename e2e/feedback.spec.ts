@@ -50,7 +50,7 @@ test.describe("Report a problem: the control's href never carries the hash", () 
     // the version, lens and query ARE kept -- only the fragment is stripped.
     const url = new URL(href as string);
     expect(url.hostname).toBe("github.com");
-    expect(url.pathname).toBe("/MarineSensitivity/atlas/issues/new");
+    expect(url.pathname).toBe("/oceanmetrics/atlas/issues/new");
     expect(url.searchParams.get("labels")).toBe("beta-feedback");
 
     const body = issueBody(href as string);
@@ -264,7 +264,7 @@ test.describe("Send feedback: the dialog (U3)", () => {
     const ghLink = dialog.getByRole("link", { name: "Open as GitHub issue" });
     await expect(ghLink).toBeVisible();
     const href = await ghLink.getAttribute("href");
-    expect(href).toContain("github.com/MarineSensitivity/atlas/issues/new");
+    expect(href).toContain("github.com/oceanmetrics/atlas/issues/new");
     expect(href).toContain("labels=bug");
   });
 

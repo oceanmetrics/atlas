@@ -43,13 +43,13 @@ export const LEAKY_TILE_URL_BY_VALUE =
 
 /**
  * FAULT 3 — a merged basemap layer tagged with the WRONG role (as if `composeStyle()`'s CARTO
- * merge loop pushed a layer with `role: "zone-line"` instead of `"basemap"`). `orderLayers()`
- * sorts purely by role, so this sorts the layer AFTER a real zone fill/line instead of keeping it
- * with the rest of the basemap block underneath everything — exactly the "CARTO layers placed
- * after the zone layers" regression `tests/map/style.test.ts` proves is catchable.
+ * merge loop pushed a layer with `role: "selection-line"` instead of a basemap sub-role).
+ * `orderLayers()` sorts purely by role, so this sorts the layer AFTER a real data layer instead of
+ * keeping it with the rest of the basemap block underneath everything — exactly the "CARTO layers
+ * placed after the data layers" regression `tests/map/style.test.ts` proves is catchable.
  */
 export const MISTAGGED_BASEMAP_LAYER = {
-  role: "zone-line" as never, // should have been "basemap"
+  role: "selection-line" as never, // should have been a basemap sub-role
   layer: {
     id: "basemap-water",
     type: "fill",

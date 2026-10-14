@@ -52,12 +52,8 @@ describe("hyparquet and the vendored gazetteer client are dynamic imports only",
     expect(staticImportsOf(src)).toEqual([]);
   });
 
-  it("the three consumers reach resolve.ts dynamically", () => {
-    for (const rel of [
-      "places/placesMap.svelte.ts",
-      "places/Places.svelte",
-      "report/Report.svelte",
-    ]) {
+  it("the consumers reach resolve.ts dynamically", () => {
+    for (const rel of ["places/placesMap.svelte.ts", "places/Places.svelte"]) {
       const src = readFileSync(join(srcDir, rel), "utf8");
       expect(
         dynamicImportsOf(src).some((s) => s.endsWith("gazetteer/resolve")),
