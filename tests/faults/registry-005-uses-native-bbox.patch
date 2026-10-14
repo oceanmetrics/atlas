@@ -1,0 +1,15 @@
+diff --git a/src/lib/catalog/registry/item.ts b/src/lib/catalog/registry/item.ts
+index 8173e9e..a9bfc70 100644
+--- a/src/lib/catalog/registry/item.ts
++++ b/src/lib/catalog/registry/item.ts
+@@ -72,7 +72,9 @@ export function registryItem(
+   opts: { rep?: Representation | string; collectionTitle?: string } = {},
+ ): StacItem {
+   const rep = effectiveRep(row, opts.rep);
+-  const box = rep === "005" ? row.bbox005 : row.bboxNative;
++  // SEEDED FAULT (tests/faults/registry-005-uses-native-bbox.patch): the 0.05 degree surface is bounded by the
++  // native box, so a species whose global 0.05 footprint is wider loses tiles outside the native box
++  const box = row.bboxNative;
+   const title = taxonTitle(row.scientificName, row.commonName);
+   const cog: StacAsset = {
+     href: row.cogUrl,

@@ -16,13 +16,18 @@ export interface RegistryRow {
   aphiaId: number | null;
   botwId: number | null;
   redlistCode: string | null;
-  /** the native COG (the surface the collection draws). */
+  /** the native 0.5 degree COG (the surface the collection draws). */
   cogUrl: string;
-  /** the same model's downscaled COG, when one exists (the native-vs-downscaled switch). */
+  /** the same model's global 0.05 degree COG (MarineSensitivity v8 downscale; the native-vs-downscaled switch). */
   cogUrl005: string | null;
-  /** `[west, south, east, north]` of the native surface; `null` when absent or malformed. */
-  bbox: [number, number, number, number] | null;
-  mdlSeq: number | null;
+  /** `[west, south, east, north]` of the native COG; `null` when absent or malformed. */
+  bboxNative: [number, number, number, number] | null;
+  /** the same for the 0.05 degree COG. */
+  bbox005: [number, number, number, number] | null;
+  /** the model's key in the MarineSensitivity v8 tables (`am|<key>`). */
+  mdlKey: string | null;
+  /** the key the species had in the v7 registry (an old `?sp=` link); `null` when v7 had none. */
+  spKeyV7: string | null;
 }
 
 function num(v: unknown): number | null {
@@ -66,12 +71,27 @@ export function rowFromRecord(
     redlistCode: text(rec.redlist_code),
     cogUrl,
     cogUrl005: text(rec.cog_url_005),
-    bbox: bboxOfRow(rec.bbox),
-    mdlSeq: num(rec.mdl_seq),
+    bboxNative: bboxOfRow(rec.bbox_native),
+    bbox005: bboxOfRow(rec.bbox_005),
+    mdlKey: text(rec.mdl_key),
+    spKeyV7: text(rec.sp_key_v7),
   };
 }
 
 export type RegistryRows = Map<string, RegistryRow>;
+
+/** the row an old v7 key (`?sp=Fis-49220` of a v7-era link) stands for: the row whose `sp_key_v7` it is, or
+ * `null`. Built per lookup over the Map (a rare, one-off scan of ~19,000 rows, not an index kept in memory). */
+export function rowOfV7Key(rows: RegistryRows, v7Key: string): RegistryRow | null {
+  for (const r of rows.values()) if (r.spKeyV7 === v7Key) return r;
+  return null;
+}
+
+/** the registry key an `?sp=` value stands for: itself when the registry has it, else the v8 key of the row
+ * that had it as its v7 key, else itself again (an unknown key; the lens then says so). */
+export function resolveRegistryKey(rows: RegistryRows, sp: string): string {
+  return rows.has(sp) ? sp : (rowOfV7Key(rows, sp)?.key ?? sp);
+}
 
 export function rowsFromRecords(
   records: readonly Record<string, unknown>[],

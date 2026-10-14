@@ -1,0 +1,106 @@
+{
+  "type": "Catalog",
+  "stac_version": "1.1.0",
+  "stac_extensions": ["https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"],
+  "id": "oceanmetrics-atlas",
+  "updated": "2026-10-14T20:39:28Z",
+  "title": "OceanMetrics Atlas",
+  "description": "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty indicators, AquaMaps habitat suitability (native 0.5 degree and global 0.05 degree), plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the Marine Biodiversity Observation Network (MBON). Built by OceanMetrics.",
+  "links": [
+    {
+      "rel": "root",
+      "href": "./catalog.json",
+      "type": "application/json",
+      "title": "OceanMetrics Atlas"
+    },
+    {
+      "rel": "self",
+      "href": "./catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Human-readable documentation"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Agent/LLM usage guide"
+    },
+    {
+      "rel": "child",
+      "href": "./biotrack_indicators/collection.json",
+      "type": "application/json",
+      "title": "MBON BioTrack biodiversity indicators"
+    },
+    {
+      "rel": "child",
+      "href": "./aquamaps_native/collection.json",
+      "type": "application/json",
+      "title": "AquaMaps habitat suitability (native 0.5° and global 0.05°)"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/ms_merge/collection.json",
+      "type": "application/json",
+      "title": "Merged Model"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/rng_iucn/collection.json",
+      "type": "application/json",
+      "title": "IUCN Range"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/rng_fws/collection.json",
+      "type": "application/json",
+      "title": "FWS Range"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/bl/collection.json",
+      "type": "application/json",
+      "title": "BirdLife Range"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/ch_nmfs/collection.json",
+      "type": "application/json",
+      "title": "NMFS Critical Habitat"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/ch_fws/collection.json",
+      "type": "application/json",
+      "title": "FWS Critical Habitat"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/ca_nmfs/collection.json",
+      "type": "application/json",
+      "title": "NMFS Core Area"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v7/rng_turtle_swot_dps/collection.json",
+      "type": "application/json",
+      "title": "SWOT+DPS Turtle Range"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v8/gm/collection.json",
+      "type": "application/json",
+      "title": "NOAA SEFSC (density)"
+    },
+    {
+      "rel": "child",
+      "href": "https://file.marinesensitivity.org/stac/v8/nc/collection.json",
+      "type": "application/json",
+      "title": "NOAA NCCOS (density)"
+    }
+  ]
+}

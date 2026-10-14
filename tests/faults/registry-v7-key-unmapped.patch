@@ -1,0 +1,16 @@
+diff --git a/src/lib/catalog/registry/rows.ts b/src/lib/catalog/registry/rows.ts
+index 073e38d..a8f4330 100644
+--- a/src/lib/catalog/registry/rows.ts
++++ b/src/lib/catalog/registry/rows.ts
+@@ -90,7 +90,10 @@ export function rowOfV7Key(rows: RegistryRows, v7Key: string): RegistryRow | nul
+ /** the registry key an `?sp=` value stands for: itself when the registry has it, else the v8 key of the row
+  * that had it as its v7 key, else itself again (an unknown key; the lens then says so). */
+ export function resolveRegistryKey(rows: RegistryRows, sp: string): string {
+-  return rows.has(sp) ? sp : (rowOfV7Key(rows, sp)?.key ?? sp);
++  // SEEDED FAULT (tests/faults/registry-v7-key-unmapped.patch): an old v7 `?sp=` key is never mapped, so a
++  // v7-era link says the taxon is not in the registry
++  void rowOfV7Key;
++  return sp;
+ }
+ 
+ export function rowsFromRecords(

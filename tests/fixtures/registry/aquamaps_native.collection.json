@@ -10,9 +10,9 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
   "id": "aquamaps_native",
-  "updated": "2026-10-14T17:27:29Z",
-  "title": "AquaMaps habitat suitability, native 0.5 degree",
-  "description": "AquaMaps relative environmental suitability (1-100 percent) for 17,499 aquatic species on the original global 0.5 degree grid, drawn from the native COGs that MarineSensitivity release v7 publishes. The COGs are referenced, not copied; one registry row per species lets an app build a per-taxon COG Item without 17,000 Item files. Distinct from the 0.05 degree downscaled AquaMaps in the MarineSensitivity v7 collection. Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md.",
+  "updated": "2026-10-14T20:39:20Z",
+  "title": "AquaMaps habitat suitability (native 0.5° and global 0.05°)",
+  "description": "AquaMaps relative environmental suitability (1-100 percent) for 18,697 aquatic species in two representations, both from MarineSensitivity release v8: the original global 0.5 degree grid (native) and the global 0.05 degree downscale (not the USA-clipped surface of release v7). The COGs are referenced, not copied; one registry row per species lets an app build a per-taxon Item with both COGs without 18,697 Item files. Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md.",
   "license": "CC-BY-NC-3.0",
   "version": "2019.10",
   "deprecated": false,
@@ -28,7 +28,7 @@
       "name": "MarineSensitivity",
       "roles": ["processor"],
       "url": "https://marinesensitivity.org",
-      "description": "published the native 0.5 degree COGs in release v7"
+      "description": "published the native 0.5 degree COGs and downscaled the surfaces to a global 0.05 degree grid in release v8"
     },
     {
       "name": "OceanMetrics",
@@ -39,7 +39,7 @@
   "atlas:funders": [],
   "atlas:status": "prototype",
   "atlas:note": "Non-commercial use only (CC BY-NC 3.0). Maps and numbers come from AquaMaps; link back to aquamaps.org when you reuse them.",
-  "atlas:source_release": "MarineSensitivity v7",
+  "atlas:source_release": "MarineSensitivity v8",
   "extent": {
     "spatial": {
       "bbox": [[-180.0, -90.0, 180.0, 90.0]]
@@ -52,7 +52,7 @@
   "sdm:value_unit": "percent",
   "sdm:value_range": [1, 100],
   "sdm:method": "env_envelope",
-  "sdm:method_detail": "AquaMaps relative environmental suitability: per species, an envelope of the cell values of six predictors, fitted to occurrence records and expert-checked; published to 0.01 and stored here as Byte 1-100 (0 = no data) on the 0.5 degree HCAF grid.",
+  "sdm:method_detail": "AquaMaps relative environmental suitability: per species, an envelope of the cell values of six predictors, fitted to occurrence records and expert-checked; published to 0.01 and stored here as Byte 1-100 (0 = no data) on the 0.5 degree HCAF grid (native) and downscaled by MarineSensitivity to a global 0.05 degree grid (release v8).",
   "sdm:source_authority": "AquaMaps",
   "sdm:temporal_interval": "static",
   "sdm:predictors": [
@@ -66,19 +66,20 @@
   "atlas:taxa_registry": {
     "asset": "registry",
     "key_column": "sp_key",
-    "row_count": 17499,
+    "row_count": 18697,
     "search_columns": ["scientific_name", "common_name"],
     "group_column": "sp_cat",
+    "legacy_key_column": "sp_key_v7",
     "index_asset": "registry_index"
   },
   "atlas:item_template": {
-    "description": "Build one Item per registry row, client-side; no Item files are published. Substitute each placeholder in braces with the row's value of the column of that name; omit keys whose value is null.",
+    "description": "Build one Item per registry row, client-side; no Item files are published. Substitute each placeholder in braces with the row's value of the column of that name; omit keys whose value is null. Both assets are listed; `atlas:representation` says which one plays the `data` role (native by default). The Item bbox and geometry are the `atlas:bbox` of that asset.",
     "registry_asset": "registry",
     "key_column": "sp_key",
     "id": "{sp_key}",
     "collection": "aquamaps_native",
-    "bbox": "{bbox}",
-    "geometry": "Polygon of {bbox} (west, south, east, north)",
+    "bbox": "{bbox_native}",
+    "geometry": "Polygon of the bbox (west, south, east, north)",
     "properties": {
       "title": "{scientific_name} ({common_name})",
       "title_without_common_name": "{scientific_name}",
@@ -114,6 +115,7 @@
             }
           }
         ],
+        "atlas:bbox": "{bbox_native}",
         "atlas:rescale": [1, 100],
         "atlas:colormap": "spectral_r",
         "atlas:bidx": 1
@@ -121,54 +123,69 @@
       "cog_005": {
         "href": "{cog_url_005}",
         "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-        "roles": ["data"],
-        "title": "MarineSensitivity 0.05 degree surface of the same model (usa05 grid), for comparison",
-        "atlas:optional": true,
+        "roles": ["reference"],
+        "title": "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8)",
+        "bands": [
+          {
+            "name": "suitability",
+            "data_type": "uint8",
+            "nodata": 0,
+            "unit": "percent",
+            "statistics": {
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "atlas:bbox": "{bbox_005}",
         "atlas:rescale": [1, 100],
-        "atlas:colormap": "spectral_r"
+        "atlas:colormap": "spectral_r",
+        "atlas:bidx": 1
       }
     },
-    "point_value": "titiler /cog/point on the `cog` asset (value 1-100; 0 or no data = outside the model's range)"
+    "point_value": "titiler /cog/point on the drawn asset (value 1-100; 0 or no data = outside the model's range)"
   },
   "atlas:registry_stats": {
-    "n_models": 17550,
-    "n_taxa": 17499,
-    "excluded_no_native": 51,
-    "n_unmatched": 595
+    "n_models": 23699,
+    "n_taxa": 18697,
+    "native_only": 0,
+    "only_005": 0,
+    "no_cog": 5002,
+    "n_unmatched": 0,
+    "n_sp_key_v7": 17498
   },
   "summaries": {
     "sdm:taxon.group": {
-      "bird": 1,
-      "coral": 773,
-      "fish": 6667,
-      "invertebrate": 8224,
-      "mammal": 84,
-      "other": 1126,
-      "reptile": 23,
-      "turtle": 6,
-      "unmatched": 595
+      "bird": 8,
+      "coral": 921,
+      "fish": 7632,
+      "invertebrate": 9718,
+      "mammal": 116,
+      "primary_producer": 296,
+      "turtle": 6
     },
-    "atlas:taxa": [17499],
-    "sdm:response_type": ["suitability"]
+    "atlas:taxa": [18697],
+    "sdm:response_type": ["suitability"],
+    "atlas:representation": ["native", "005"]
   },
   "assets": {
     "registry": {
       "href": "./registry.parquet",
       "type": "application/vnd.apache.parquet",
       "roles": ["metadata"],
-      "title": "Taxa registry: one row per AquaMaps model with a native COG (names, ids, COG urls, bbox)",
+      "title": "Taxa registry: one row per AquaMaps model with both a native 0.5 degree and a global 0.05 degree COG (names, ids, COG urls, bboxes)",
       "atlas:key_column": "sp_key",
-      "table:row_count": 17499,
+      "table:row_count": 18697,
       "table:columns": [
         {
           "name": "sp_key",
           "type": "string",
-          "description": "AquaMaps species key (model.taxa); the Item id"
+          "description": "AquaMaps SpeciesID (v8 model.sp_id, e.g. Rep-3437); the Item id and the `?sp=` key"
         },
         {
-          "name": "mdl_seq",
-          "type": "int32",
-          "description": "MarineSensitivity v7 model number (model.parquet, ds_key am_0.05)"
+          "name": "mdl_key",
+          "type": "string",
+          "description": "MarineSensitivity v8 model key `am|<sp_key>` (model.parquet, ds_key am)"
         },
         {
           "name": "aphia_id",
@@ -178,12 +195,12 @@
         {
           "name": "botw_id",
           "type": "int32",
-          "description": "BirdLife BOTW id for the one bird model; null otherwise"
+          "description": "BirdLife BOTW id for a bird model; null otherwise"
         },
         {
           "name": "scientific_name",
           "type": "string",
-          "description": "accepted scientific name; falls back to the name in the model description when unmatched"
+          "description": "accepted scientific name; falls back to the model's own name when unmatched"
         },
         {
           "name": "common_name",
@@ -193,7 +210,7 @@
         {
           "name": "sp_cat",
           "type": "string",
-          "description": "category: fish, invertebrate, mammal, turtle, reptile, bird, coral, other; null when unmatched"
+          "description": "category: fish, invertebrate, mammal, turtle, reptile, bird, coral, ...; null when unmatched"
         },
         {
           "name": "redlist_code",
@@ -203,35 +220,55 @@
         {
           "name": "cog_url",
           "type": "string",
-          "description": "native 0.5 degree COG (Byte, 1-100, nodata 0), the surface this collection draws"
+          "description": "native 0.5 degree COG (Byte, 1-100, nodata 0), the collection's own surface"
+        },
+        {
+          "name": "bbox_native",
+          "type": "list<double>",
+          "description": "[west, south, east, north]: extent of the native COG, from native_asset"
         },
         {
           "name": "cog_url_005",
           "type": "string",
-          "description": "the 0.05 degree COG of the same model on the MST analysis grid (usa05), for comparison"
+          "description": "global 0.05 degree COG of the same model: the v8 downscale of the native surface"
         },
         {
-          "name": "bbox",
+          "name": "bbox_005",
           "type": "list<double>",
-          "description": "[west, south, east, north]: extent of the native surface's cells, from native_asset"
+          "description": "[west, south, east, north]: extent of the 0.05 degree COG, from native_asset"
         },
         {
-          "name": "n_cells_005",
+          "name": "rescale_min",
           "type": "int32",
-          "description": "number of 0.05 degree cells in the model's MST surface (model_asset.n_cells); null when unknown"
+          "description": "display rescale minimum of the COGs (native_asset.rescale_min, 1)"
+        },
+        {
+          "name": "rescale_max",
+          "type": "int32",
+          "description": "display rescale maximum of the COGs (native_asset.rescale_max, 100)"
+        },
+        {
+          "name": "colormap",
+          "type": "string",
+          "description": "titiler colormap name of the COGs (native_asset.colormap, spectral_r)"
+        },
+        {
+          "name": "sp_key_v7",
+          "type": "string",
+          "description": "the v7 registry key (v7 model.taxa, ds_key am_0.05) of the same species, to map an old `?sp=` link; null when v7 had no model of it"
         }
       ],
-      "file:size": 1057459,
-      "file:checksum": "122079c831b5f373715cac30244f5a2435c0a8eb79ee16191fc7322e92c24d62d4d3"
+      "file:size": 1255977,
+      "file:checksum": "12202197139564bda08e75f91da459360964fbc3eadd125f774880b493b149639d71"
     },
     "registry_index": {
       "href": "./registry_index.json",
       "type": "application/json",
       "roles": ["metadata"],
       "title": "Compact search index of the registry: [sp_key, scientific_name, common_name, sp_cat]",
-      "atlas:row_count": 17499,
-      "file:size": 1089368,
-      "file:checksum": "122013985c9e191a591b2f470290f8e8b069150fc06d700caf04fffe6813ed39bdb9"
+      "atlas:row_count": 18697,
+      "file:size": 1079237,
+      "file:checksum": "1220ac88b4078f28dfc2e6101360fe7d4e6f12a2f171166ac05364c4ea4b99b72e35"
     },
     "thumbnail": {
       "href": "./thumbnail.png",
@@ -247,6 +284,27 @@
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "roles": ["data"],
       "title": "AquaMaps native 0.5 degree habitat suitability (percent)",
+      "bands": [
+        {
+          "name": "suitability",
+          "data_type": "uint8",
+          "nodata": 0,
+          "unit": "percent",
+          "statistics": {
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "sdm:value_unit": "percent",
+      "sdm:value_range": [1, 100],
+      "atlas:rescale": [1, 100],
+      "atlas:colormap": "spectral_r"
+    },
+    "cog_005": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "roles": ["reference"],
+      "title": "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8)",
       "bands": [
         {
           "name": "suitability",
@@ -309,9 +367,9 @@
     },
     {
       "rel": "related",
-      "href": "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json",
+      "href": "https://file.marinesensitivity.org/stac/v8/am/collection.json",
       "type": "application/json",
-      "title": "MarineSensitivity v7 AquaMaps, 0.05 degree downscale"
+      "title": "MarineSensitivity v8 AquaMaps, 0.05 degree global downscale"
     },
     {
       "rel": "license",

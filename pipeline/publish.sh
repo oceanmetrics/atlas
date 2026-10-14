@@ -26,8 +26,19 @@ sync() { aws s3 sync "$1" "$2" --exclude '.DS_Store' $flag; }
 
 # public: collection(s) + root catalog (catalog.json is a single file, not a directory sync)
 sync "$stage/biotrack_indicators" "s3://$bucket/atlas/biotrack_indicators"
-# aquamaps_native: registry + collection + docs + thumbnails (the COGs it references already live under marine-atlas/native/am/)
-[ -d "$stage/aquamaps_native" ] && sync "$stage/aquamaps_native" "s3://$bucket/atlas/aquamaps_native"
+# aquamaps_native: registry + collection + docs + thumbnails (the COGs it references already live under marine-atlas/)
+# registry_index.json is served gzip-encoded (1.1 MB -> ~300 KB; the app's size budget assumes it): it is excluded from
+# the sync and uploaded from a gzip -9 copy with Content-Encoding gzip
+if [ -d "$stage/aquamaps_native" ]; then
+  aws s3 sync "$stage/aquamaps_native" "s3://$bucket/atlas/aquamaps_native" --exclude '.DS_Store' --exclude 'registry_index.json' $flag
+  if [ -f "$stage/aquamaps_native/registry_index.json" ]; then
+    tmp="$(mktemp -d)"
+    gzip -9 -c "$stage/aquamaps_native/registry_index.json" > "$tmp/registry_index.json"
+    aws s3 cp "$tmp/registry_index.json" "s3://$bucket/atlas/aquamaps_native/registry_index.json" \
+      --content-encoding gzip --content-type application/json $flag
+    rm -rf "$tmp"
+  fi
+fi
 aws s3 cp "$stage/catalog.json" "s3://$bucket/atlas/catalog.json" --content-type application/json $flag
 
 # restricted: unlisted prefix, never linked from catalog.json

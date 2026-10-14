@@ -17,7 +17,7 @@ describe("registryRefOf: a collection with atlas:taxa_registry is a taxon collec
       keyColumn: "sp_key",
       groupColumn: "sp_cat",
       searchColumns: ["scientific_name", "common_name"],
-      rowCount: 17499,
+      rowCount: 18697,
     });
   });
   it("a collection without atlas:taxa_registry is not one", () => {

@@ -290,6 +290,11 @@ def check_staging(out: Path = STAGING) -> list[str]:
   bad += [f"catalog: {m}" for m in stac.check_stac_required({**c, "type": "Catalog"}) if m.startswith("missing") and "extent" not in m]
   if "biotrack_species" in json.dumps(c) or "atlas-restricted" in json.dumps(c):
     bad.append("catalog.json links the restricted collection")
+  # the atlas' AquaMaps entry is aquamaps_native: neither the v7 parent (it lists am_0.05) nor an MST AquaMaps child
+  for l in c.get("links", []):
+    h = l.get("href", "")
+    if l.get("rel") == "child" and (h.endswith("/stac/v7/collection.json") or "am_0.05" in h or "/stac/v8/am/" in h):
+      bad.append(f"catalog links {h}: AquaMaps is the aquamaps_native collection (list the v7 children one by one)")
   for coll_dir in sorted(p for p in out.iterdir() if p.is_dir()):
     cj = coll_dir / "collection.json"
     if not cj.exists():

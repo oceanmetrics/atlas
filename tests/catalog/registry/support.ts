@@ -1,5 +1,6 @@
-// Shared fixtures for the registry tests: the real AquaMaps native collection.json (and the MarineSensitivity
-// am_0.05 one) as published 2026-10-14, with the loader's `atlas:url` stamped on, and a few registry rows.
+// Shared fixtures for the registry tests: the real AquaMaps native collection.json (as built from MarineSensitivity
+// release v8, 2026-10-15) and the MarineSensitivity v8 `am` one, with the loader's `atlas:url` stamped on, and a few
+// registry rows.
 import { readFileSync } from "node:fs";
 import type { StacCollection } from "../../../src/lib/catalog/types";
 import { rowFromRecord, type RegistryRow } from "../../../src/lib/catalog/registry/rows";
@@ -17,18 +18,16 @@ function load(name: string, url: string): StacCollection {
 export const nativeCollection = (): StacCollection =>
   load("aquamaps_native.collection.json", NATIVE_URL);
 export const am005Collection = (): StacCollection =>
-  load(
-    "am_0.05.collection.json",
-    "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json",
-  );
+  load("am.collection.json", "https://file.marinesensitivity.org/stac/v8/am/collection.json");
 
 const COG = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/native/am/";
-const COG005 = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/";
+const COG005 =
+  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/global05/";
 
-/** Dermochelys coriacea: matched to WoRMS, has a 0.05 degree surface, a global box. */
+/** Dermochelys coriacea: matched to WoRMS, has both surfaces (each with its own box), a v7 key. */
 export const LEATHERBACK_RECORD = {
   sp_key: "Rep-3437",
-  mdl_seq: 12,
+  mdl_key: "am|Rep-3437",
   aphia_id: 137209n, // hyparquet returns int64 as BigInt; int32 columns arrive as numbers
   botw_id: null,
   scientific_name: "Dermochelys coriacea",
@@ -37,14 +36,16 @@ export const LEATHERBACK_RECORD = {
   redlist_code: "VU",
   cog_url: `${COG}aaaa.tif`,
   cog_url_005: `${COG005}3b65e8ff84b8cf75.tif`,
-  bbox: [-180, -78.5, 180, 70.5],
-  n_cells_005: 123456,
+  bbox_native: [-180, -78.5, 180, 70.5],
+  bbox_005: [-180, -78.5, 180, 71],
+  sp_key_v7: "Rep-3437",
 };
 
-/** a SeaLifeBase model with no taxon match: no ids, no group, no common name, no 0.05 surface. */
+/** a model with no taxon match: no ids, no group, no common name, no 0.05 surface (a registry row always has
+ * one today; the app still falls back to native), a v7 key that differs from its v8 one. */
 export const UNMATCHED_RECORD = {
-  sp_key: "SLB-64971",
-  mdl_seq: 99,
+  sp_key: "Chn-0a1b2c3d-0000-4000-8000-000000000004",
+  mdl_key: "am|Chn-0a1b2c3d-0000-4000-8000-000000000004",
   aphia_id: null,
   botw_id: null,
   scientific_name: "Abylopsis eschscholtzi",
@@ -53,8 +54,9 @@ export const UNMATCHED_RECORD = {
   redlist_code: null,
   cog_url: `${COG}bbbb.tif`,
   cog_url_005: null,
-  bbox: [-90, -30, 100, 40],
-  n_cells_005: null,
+  bbox_native: [-90, -30, 100, 40],
+  bbox_005: null,
+  sp_key_v7: "SLB-64971",
 };
 
 export function row(rec: Record<string, unknown>): RegistryRow {

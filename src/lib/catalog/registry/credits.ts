@@ -1,25 +1,27 @@
 // Credits for a registry collection's two representations, and the map attribution while it is drawn.
 //
 //   native      the collection's own credits (`creditsOf(collection)`), unchanged;
-//   downscaled  the MarineSensitivity v7 `am_0.05` collection's citation and license, because that is
-//               whose surface is on the map when `rep=005`.
+//   downscaled  the MarineSensitivity v8 `am` collection's citation and license, because that is
+//               whose surface is on the map when `rep=005` (the global 0.05 degree downscale).
 //
 // KNOWN DEFECT UPSTREAM (om_TODO: "msens: fix msens-v7-am_0.05 STAC license (CC-BY-4.0 vs CC-BY-NC 3.0
-// citation)"): that collection's `license` field says CC-BY-4.0 while its own `sci:citation` says
+// citation)", still true of the v8 `am` collection): its `license` field says CC-BY-4.0 while its own `sci:citation` says
 // "Creative Commons Attribution-NonCommercial 3.0". AquaMaps' terms are the NonCommercial ones, so we
 // show those for BOTH representations: when the citation says NonCommercial the license is overridden to
 // CC-BY-NC-3.0 here. Delete `withCitedLicense` once msens fixes the STAC.
 import type { StacCollection, StacLink } from "../types";
 
-/** the MarineSensitivity v7 collection the 0.05 degree surfaces belong to. */
-export const AM005_COLLECTION_ID = "msens-v7-am_0.05";
-export const AM005_COLLECTION_URL =
-  "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json";
+/** the MarineSensitivity v8 collection the (global) 0.05 degree surfaces belong to. The catalog does not
+ * list it (`aquamaps_native` is the AquaMaps entry), so it is loaded lazily, when `rep=005` is shown. */
+export const AM005_COLLECTION_ID = "msens-v8-am";
+export const AM005_COLLECTION_URL = "https://file.marinesensitivity.org/stac/v8/am/collection.json";
 export const CC_BY_NC_3_URL = "https://creativecommons.org/licenses/by-nc/3.0/";
 
 /** what the downscaled surface is called in the legend and the credits. */
-export const DOWNSCALED_TITLE =
-  "AquaMaps habitat suitability, downscaled 0.05 degree (MarineSensitivity v7)";
+export const DOWNSCALED_TITLE = "AquaMaps habitat suitability, downscaled 0.05° (global)";
+
+/** what the native surface is called in the legend (the collection's own title names both surfaces). */
+export const NATIVE_TITLE = "AquaMaps habitat suitability, native 0.5°";
 
 /** the line the map attribution carries while an AquaMaps surface is on the map. */
 export const AQUAMAPS_ATTRIBUTION = "AquaMaps (Kaschner et al. 2019), CC BY-NC 3.0";
@@ -51,7 +53,7 @@ export function withCitedLicense(collection: StacCollection): StacCollection {
 }
 
 /**
- * The collection whose credits are shown for the 0.05 degree surface: MarineSensitivity's `am_0.05`
+ * The collection whose credits are shown for the 0.05 degree surface: MarineSensitivity's v8 `am`
  * with the cited license, titled for what it is, carrying the native collection's note (the same
  * AquaMaps terms apply) and, when it has no citation of its own, the native collection's.
  */

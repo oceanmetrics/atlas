@@ -3,6 +3,7 @@ import { creditsOf } from "../../../src/lib/catalog/credits";
 import { licenseModelOf } from "../../../src/lib/catalog/licenses";
 import { noteFromText, noteOf } from "../../../src/lib/catalog/note";
 import {
+  AM005_COLLECTION_ID,
   AM005_COLLECTION_URL,
   AQUAMAPS_ATTRIBUTION,
   CC_BY_NC_3_URL,
@@ -54,15 +55,15 @@ describe("the note rendering helper (atlas:note)", () => {
       error: null,
     };
     const card = buildCard(entry);
-    expect(card.taxaCount).toBe(17499);
+    expect(card.taxaCount).toBe(18697);
     expect(card.credits?.note?.nonCommercial).toBe(true);
     expect(card.openInMap).toBe("./index.html?c=aquamaps_native");
   });
   it("taxaCountOf: summaries first, then the registry's row_count, else null", () => {
     const c = nativeCollection();
-    expect(taxaCountOf(c)).toBe(17499);
+    expect(taxaCountOf(c)).toBe(18697);
     expect(taxaCountOf({ ...c, summaries: { "atlas:taxa": [12] } })).toBe(12);
-    expect(taxaCountOf({ ...c, summaries: {} })).toBe(17499);
+    expect(taxaCountOf({ ...c, summaries: {} })).toBe(18697);
     expect(taxaCountOf({ type: "Collection", id: "x", links: [] })).toBeNull();
   });
 });
@@ -75,12 +76,16 @@ describe("map attribution", () => {
   });
 });
 
-describe("credits for the downscaled surface (MarineSensitivity v7 am_0.05)", () => {
+describe("credits for the downscaled surface (MarineSensitivity v8 am, global 0.05 degree)", () => {
   it("the MST collection's license field contradicts its citation (the defect this works around)", () => {
     const am = am005Collection();
     expect(am.license).toBe("CC-BY-4.0");
     expect(am["sci:citation"]).toMatch(/Attribution-NonCommercial 3\.0/);
     expect(AM005_COLLECTION_URL).toBe(am["atlas:url"]);
+    expect(AM005_COLLECTION_ID).toBe(am.id);
+    expect(AM005_COLLECTION_URL).toBe(
+      "https://file.marinesensitivity.org/stac/v8/am/collection.json",
+    );
   });
   it("shows the citation's CC BY-NC 3.0 license, with a license link to the legal code", () => {
     const c = withCitedLicense(am005Collection());
@@ -101,7 +106,7 @@ describe("credits for the downscaled surface (MarineSensitivity v7 am_0.05)", ()
     expect(credits.citation).toMatch(/AquaMaps: Predicted range maps/);
     expect(credits.license).toBe("CC-BY-NC-3.0");
     expect(credits.note?.nonCommercial).toBe(true);
-    expect(credits.title).toMatch(/downscaled 0\.05 degree/);
+    expect(credits.title).toBe("AquaMaps habitat suitability, downscaled 0.05° (global)");
   });
   it("with no citation of its own it borrows the native collection's", () => {
     const am: StacCollection = { ...am005Collection() };

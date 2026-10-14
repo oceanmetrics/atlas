@@ -7,9 +7,9 @@
     "https://stac-extensions.github.io/item-assets/v1.0.0/schema.json",
     "https://marinesensitivity.github.io/stac-sdm/v1.0.0/schema.json"
   ],
-  "id": "msens-v7-am_0.05",
+  "id": "msens-v8-am",
   "title": "AquaMaps SDM",
-  "description": "AquaMaps species distribution models downscaled from 0.5° to 0.05° cells",
+  "description": "AquaMaps species distribution models downscaled from 0.5\u00b0 to 0.05\u00b0 cells",
   "license": "CC-BY-4.0",
   "extent": {
     "spatial": {
@@ -19,7 +19,7 @@
       "interval": [["2023-01-01T00:00:00Z", "2019-01-01T00:00:00Z"]]
     }
   },
-  "version": "v7",
+  "version": "v8",
   "deprecated": false,
   "sdm:response_type": "suitability",
   "sdm:method": "env_envelope",
@@ -46,11 +46,11 @@
     },
     {
       "rel": "self",
-      "href": "https://file.marinesensitivity.org/stac/v7/am_0.05/collection.json"
+      "href": "https://file.marinesensitivity.org/stac/v8/am/collection.json"
     },
     {
       "rel": "item",
-      "href": "./msens-v7-am_0.05-model_cell.json"
+      "href": "./msens-v8-am-model_cell.json"
     }
   ],
   "sci:citation": "Kaschner, K., K. Kesner-Reyes, C. Garilao, J. Segschneider, J. Rius-Barile, T. Rees, and R. Froese. 2019. AquaMaps: Predicted range maps for aquatic species. World wide web electronic publication, www.aquamaps.org, Version 10/2019. Content from AquaMaps as provided in this R package is licensed under a Creative Commons Attribution-NonCommercial 3.0 UnportedLicense, please see http://creativecommons.org/licenses/by-nc/3.0/"
