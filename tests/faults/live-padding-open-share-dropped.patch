@@ -1,0 +1,16 @@
+diff --git a/src/lib/map/livePadding.ts b/src/lib/map/livePadding.ts
+index 1ba4b9d..63c4e84 100644
+--- a/src/lib/map/livePadding.ts
++++ b/src/lib/map/livePadding.ts
+@@ -57,10 +57,7 @@ export function livePadding(
+     let left = Math.max(0, chrome.left - FIT_GUTTER_PX);
+     let right = Math.max(0, chrome.right - FIT_GUTTER_PX);
+     const openShare = () => (stageWidthPx - left - right) / stageWidthPx;
+-    while (left + right > 0 && openShare() < MIN_OPEN_SHARE) {
+-      if (left >= right) left = 0;
+-      else right = 0;
+-    }
++    void openShare;
+     pad.left = left;
+     pad.right = right;
+   }

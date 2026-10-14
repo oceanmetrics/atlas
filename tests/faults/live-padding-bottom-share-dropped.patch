@@ -1,0 +1,13 @@
+diff --git a/src/lib/map/livePadding.ts b/src/lib/map/livePadding.ts
+index 1ba4b9d..45781c3 100644
+--- a/src/lib/map/livePadding.ts
++++ b/src/lib/map/livePadding.ts
+@@ -67,7 +67,7 @@ export function livePadding(
+ 
+   if (hasHeight) {
+     const bottom = Math.max(0, chrome.bottom);
+-    if ((stageHeightPx - bottom) / stageHeightPx >= MIN_OPEN_SHARE) pad.bottom = bottom;
++    pad.bottom = bottom;
+   }
+   return pad;
+ }
