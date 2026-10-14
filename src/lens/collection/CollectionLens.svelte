@@ -155,8 +155,22 @@
         />
       {/if}
       <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
+    {:else if lens.point}
+      {@const pt = lens.point}
+      <p data-testid="collection-point">
+        {#if pt.loading}
+          Reading the value…
+        {:else}
+          Value at {pt.lngLat[1].toFixed(3)}, {pt.lngLat[0].toFixed(3)}: <b>{pt.text}</b>
+        {/if}
+      </p>
+      <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
     {:else}
-      <p>Click a cell on the map to see its value.</p>
+      <p>
+        {lens.mapInputs.raster
+          ? "Click the map to see the value at that point."
+          : "Click a cell on the map to see its value."}
+      </p>
     {/if}
     {#if lens.itemDescription}
       <p class="description">{lens.itemDescription}</p>

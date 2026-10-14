@@ -7,6 +7,10 @@
 // `distribution.ts` for where the bins come from and `lib/ui/Legend.svelte` for the drawing (the
 // bar colours come from the ramp's own stops there, never a second ramp here).
 
+/** the bar count a legend histogram has: what `binValues` bins a hex layer's column into, and what a
+ * raster item asks titiler's `/cog/statistics` for, so the two kinds of layer draw alike. */
+export const DEFAULT_HISTOGRAM_BINS = 40;
+
 export interface Histogram {
   /** the bin count actually used (may be less than requested if the value range degenerates). */
   binCount: number;
@@ -24,7 +28,10 @@ export interface Histogram {
  * but still valid "distribution" (a flat point at that value), rather than dividing by a
  * `max - min` of zero.
  */
-export function binValues(values: readonly number[], binCount = 40): Histogram {
+export function binValues(
+  values: readonly number[],
+  binCount = DEFAULT_HISTOGRAM_BINS,
+): Histogram {
   const finite = values.filter((v) => Number.isFinite(v));
   if (finite.length === 0) return { binCount: 0, counts: [], min: 0, max: 0 };
   const min = Math.min(...finite);

@@ -60,6 +60,21 @@ import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
 import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
 import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
 import {
+  createHistogramCache,
+  createTitilerHistogramSource,
+  rasterHistogramKey,
+  type HistogramCache,
+} from "../../lib/raster/histogram";
+import { createTitilerValueSource, type ValueSource } from "../../lib/raster/point";
+import { createLatestRead, pointInBounds, wrapLon } from "../../lib/raster/pointRead";
+import { colorForValue } from "../../lib/raster/ramps";
+import { DEFAULT_HISTOGRAM_BINS, type Histogram } from "../../lib/map/density";
+import {
+  installRasterInteraction,
+  type RasterInteractionMap,
+} from "../../lib/map/layers/rasterValue";
+import { announce } from "../../lib/ui/announcer";
+import {
   createCogExtentCache,
   itemSourceBounds,
   type CogExtentCache,
@@ -95,7 +110,9 @@ import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
   formatCellValue,
+  formatRasterValue,
   itemLabel,
+  rasterDomainOf,
   type CollectionMapInputs,
 } from "./mapInputs";
 
@@ -126,6 +143,10 @@ export interface CollectionLensDeps {
   rescale?: RescaleCache;
   /** the COG footprint reader (titiler `/cog/info`, cached); default the module cache. */
   cogExtent?: CogExtentCache;
+  /** the legend histogram of a raster item (titiler `/cog/statistics`, cached); default the module cache. */
+  histogram?: HistogramCache;
+  /** the value under the pointer of a raster item (titiler `/cog/point`); default stock titiler. */
+  valueSource?: ValueSource;
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
    * dimmed), read reactively; `null`/absent = no filter. */
   insideFids?: () => ReadonlySet<number> | null;
@@ -142,6 +163,19 @@ export interface CellSpeciesView {
   /** how many species the models cover in the group. */
   modeled: number;
   share: GroupShare;
+}
+
+/** the value of a raster item at a clicked position (`/cog/point`), for the legend marker and the Details tool. */
+export interface RasterPoint {
+  collection: string;
+  item: string;
+  /** [lon, lat] as clicked. */
+  lngLat: [number, number];
+  /** `null` = no data (or not read yet, while `loading`). */
+  value: number | null;
+  loading: boolean;
+  /** the value as text with the item's unit ("87%", "no data"); "" while loading. */
+  text: string;
 }
 
 /** one value of the item's `metric` dimension at the clicked cell (richness / uncertainty ...). */
@@ -181,6 +215,8 @@ export interface CollectionLens {
   readonly values: ValueColumn | null;
   /** the clicked cell (mirrors the store, reactively). */
   readonly cell: CellSelection | null;
+  /** the clicked position of a raster (COG) item with its value; `null` for none (or a hex item). */
+  readonly point: RasterPoint | null;
   /** the public species list's load state (`idle` when the collection publishes none). */
   readonly speciesPhase: "idle" | "loading" | "ready" | "error";
   readonly speciesError: LoadError | null;
@@ -223,8 +259,8 @@ async function defaultFetchStyle(url: string): Promise<unknown | null> {
   }
 }
 
-async function defaultFetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url);
+async function defaultFetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(url, signal ? { signal } : undefined);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -436,6 +472,103 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
   const extentPending = $derived(extentUrl !== null && extent?.url !== extentUrl);
 
+  // --- a raster's legend histogram: titiler's `/cog/statistics` over the item's own range, once per (COG, band)
+  // (`raster/histogram.ts`, a display-only read like the rescale above). A fixed-range item (AquaMaps,
+  // a manifest rescale) costs this one request; an `auto` item reads its range first (above), then this
+  // over that range: the range is the histogram's own parameter, so the two cannot share one call.
+  // While it loads, or when it fails, the legend simply has no histogram. -----------------------------
+  const histogramCache =
+    deps.histogram ?? createHistogramCache(createTitilerHistogramSource(defaultFetchJson));
+  const rasterHistKey = $derived.by(() => {
+    const cog = rasterAssetOf(drawItem);
+    const dom = rasterDomainOf(drawItem, entry?.collection ?? null);
+    return cog && dom ? rasterHistogramKey(cog.url, cog.bidx, dom, DEFAULT_HISTOGRAM_BINS) : null;
+  });
+  let rasterHist = $state.raw<{ key: string; h: Histogram } | null>(null);
+  $effect(() => {
+    const key = rasterHistKey;
+    const cog = untrack(() => rasterAssetOf(drawItem));
+    const range = untrack(() => rasterDomainOf(drawItem, entry?.collection ?? null));
+    if (!key || !cog || !range) return;
+    let cancelled = false;
+    void histogramCache
+      .get({ cogUrl: cog.url, bidx: cog.bidx, range, bins: DEFAULT_HISTOGRAM_BINS })
+      .then((h) => {
+        if (!cancelled && h) rasterHist = { key, h };
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
+  // never the previous layer's shape while this one loads
+  const rasterHistogram = $derived(
+    rasterHistKey !== null && rasterHist?.key === rasterHistKey ? rasterHist.h : null,
+  );
+
+  // --- the value of a raster item at the clicked position (`/cog/point`, behind `ValueSource`) -------
+  const valueSource = deps.valueSource ?? createTitilerValueSource(defaultFetchJson);
+  let rasterPoint = $state.raw<{
+    collection: string;
+    item: string;
+    lngLat: [number, number];
+    value: number | null;
+    loading: boolean;
+  } | null>(null);
+  // the COG and band the active item draws, as one key: a read for another key is dropped
+  const cogKey = $derived.by(() => {
+    const cog = rasterAssetOf(item);
+    return cog ? `${cog.url}#${cog.bidx ?? 1}` : null;
+  });
+  async function readPoint(lngLat: [number, number], signal: AbortSignal): Promise<number | null> {
+    const cog = untrack(() => rasterAssetOf(item));
+    const key = untrack(() => cogKey);
+    if (!cog) return null;
+    const v = await valueSource.pointValue({
+      domain: "collection",
+      // 5 decimals (about a metre): the same pixel asks the same URL, and the URL stays short
+      lon: Math.round(wrapLon(lngLat[0]) * 1e5) / 1e5,
+      lat: Math.round(lngLat[1] * 1e5) / 1e5,
+      cogUrl: cog.url,
+      ...(cog.bidx === undefined ? {} : { bidx: cog.bidx }),
+      signal,
+    });
+    if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");
+    return v;
+  }
+  function setPointValue(ll: [number, number], value: number | null): void {
+    const p = rasterPoint;
+    if (!p || p.lngLat[0] !== ll[0] || p.lngLat[1] !== ll[1]) return;
+    rasterPoint = { ...p, value, loading: false };
+  }
+  // the clicked position follows the item (another band or taxon: the same place, this layer's value);
+  // another collection, or a hex item, drops it
+  const reread = createLatestRead<[number, number], number | null>(readPoint, setPointValue);
+  $effect(() => {
+    const key = cogKey;
+    const it = item;
+    const e = entry;
+    untrack(() => {
+      const p = rasterPoint;
+      if (!p) return;
+      if (!key || !it || !e || p.collection !== e.id) {
+        reread.cancel();
+        rasterPoint = null;
+        return;
+      }
+      if (p.item === it.id) return;
+      rasterPoint = { ...p, item: it.id, value: null, loading: true };
+      reread.run(p.lngLat);
+    });
+  });
+  const rasterPointView = $derived.by((): RasterPoint | null => {
+    const p = rasterPoint;
+    if (!p || !entry || !item || p.collection !== entry.id || p.item !== item.id) return null;
+    return {
+      ...p,
+      text: p.loading ? "" : formatRasterValue(p.value, mapInputs.legend?.unit ?? ""),
+    };
+  });
+
   // --- the collection's style (a MapLibre fill layer; the ramp is read out of it) ------------------
   let styleToken = 0;
   $effect(() => {
@@ -644,7 +777,13 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   // --- what the map draws ------------------------------------------------------------------------
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
-    const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
+    const rp = rasterPoint;
+    const marker =
+      rp && entry && item && rp.collection === entry.id && rp.item === item.id && !rp.loading
+        ? rp.value
+        : cell && entry && item && cell.collection === entry.id
+          ? cell.value
+          : null;
     // the legend names the surface on screen: the downscaled one is not the collection's own native one
     const legendEntry =
       entry && isRegistry
@@ -656,6 +795,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       style: styleJson,
       values,
       marker,
+      histogram: rasterHistogram,
       cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
     });
     // a raster is held back until its footprint is known (the legend and the summaries stay)
@@ -705,6 +845,47 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         if (!e || !it) return;
         store.set({ collection: e.id, item: it.id, fid, value, lngLat });
       },
+    });
+    return () => interaction.destroy();
+  });
+
+  // a raster item: the value under the pointer (hover, debounced) and at a click, see
+  // `lib/map/layers/rasterValue.ts` (its request budget: `lib/raster/pointRead.ts`)
+  const hasRaster = $derived(mapInputs.raster !== null);
+  $effect(() => {
+    const handle = deps.mapHandle();
+    if (!handle || !hasRaster) return;
+    const unit = () => untrack(() => mapInputs.legend?.unit ?? "");
+    const interaction = installRasterInteraction(handle.map as unknown as RasterInteractionMap, {
+      read: readPoint,
+      outside: (ll) =>
+        !pointInBounds(
+          ll[0],
+          ll[1],
+          untrack(() => bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null)),
+        ),
+      format: (v) => formatRasterValue(v, unit()),
+      subject: () => untrack(() => (item ? itemLabel(item) : "")),
+      color: (v) => {
+        const stops = untrack(() => mapInputs.legend?.stops ?? []);
+        if (stops.length < 2) return null;
+        return colorForValue(
+          stops.map((s) => s.color),
+          v,
+          stops[0].value,
+          stops[stops.length - 1].value,
+        );
+      },
+      isOwned: () => deps.isOwned?.() === true || untrack(() => selStore.sel.lens) !== "collection",
+      onClickStart: (ll) => {
+        const e = untrack(() => entry);
+        const it = untrack(() => item);
+        if (!e || !it) return;
+        reread.cancel();
+        rasterPoint = { collection: e.id, item: it.id, lngLat: ll, value: null, loading: true };
+      },
+      onClickValue: setPointValue,
+      announce,
     });
     return () => interaction.destroy();
   });
@@ -812,6 +993,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     get cell() {
       return cell;
     },
+    get point() {
+      return rasterPointView;
+    },
     get speciesPhase() {
       return speciesPhase;
     },
@@ -869,6 +1053,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     selectDim,
     clearCell() {
       store.set(null);
+      reread.cancel();
+      rasterPoint = null;
     },
     reload() {
       clearCatalogCache(deps.loadOptions?.cache);

@@ -7,7 +7,7 @@
 import { hexAssetOf, rangeAssetOf, rasterAssetOf, valuesAssetOf } from "../../lib/catalog/assets";
 import type { CollectionEntry } from "../../lib/catalog/load";
 import { collectionRamp, rampStops, valueDomain } from "../../lib/catalog/ramp";
-import type { StacItem } from "../../lib/catalog/types";
+import type { StacCollection, StacItem } from "../../lib/catalog/types";
 import type { ValueColumn } from "../../lib/catalog/values";
 import type { HexLayerSpec } from "../../lib/map/layers/hex";
 import { titilerTileTemplate } from "../../lib/map/layers/titiler";
@@ -18,6 +18,7 @@ import type { RangeLayerSpec, RasterLayerSpec } from "../../lib/map/types";
 import { PALETTES } from "../../lib/state/types";
 import type { Palette } from "../../lib/state/types";
 import { paletteStopsWithFallback, type LegendStop } from "../../lib/raster/ramps";
+import { unitLabel } from "../../lib/raster/pointRead";
 
 export interface CollectionLegend {
   /** `continuous`: a ramp over the item's value range. `presence`: a vector range (one swatch, "range
@@ -30,7 +31,9 @@ export interface CollectionLegend {
   swatch?: string;
   /** what the values are (`sdm:value_unit`); "" when the item says nothing. */
   unit: string;
-  /** the density of the item's values across the whole layer (hex items); `null` for a raster. */
+  /** the density of the item's values across the whole layer: binned from the Parquet column (hex
+   * items) or read once from the tile server (raster items, `/cog/statistics`); `null` while it is
+   * loading, when it failed, or for a vector range. */
   histogram: Histogram | null;
   /** the clicked cell's value (a vertical line on the histogram + ramp); `null` for none. */
   marker: number | null;
@@ -87,9 +90,34 @@ export function formatCellValue(v: number): string {
   return v.toFixed(2);
 }
 
+/** a raster item's value read at a point (`/cog/point`) as text: the number to three significant
+ * figures with the item's unit ("87%", "0.00072 n/km²"), "no data" for a nodata pixel or a failed read. */
+export function formatRasterValue(v: number | null | undefined, unit: string): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "no data";
+  const n = formatCollectionValue(v);
+  const u = unitLabel(unit);
+  return !u ? n : u === "%" ? `${n}%` : `${n} ${u}`;
+}
+
 function unitOf(item: StacItem, entry: CollectionEntry): string {
   const u = item.properties?.["sdm:value_unit"] ?? entry.collection?.["sdm:value_unit"];
   return typeof u === "string" && u !== "unitless" ? u : "";
+}
+
+/** the `[min, max]` a raster item's colours and legend span: the asset's own rescale unless the item
+ * states a value range (a rescale read from the tile server lands there); `null` for an asset that
+ * asks for `rescale: "auto"` and has not been read yet. The legend histogram is asked for exactly
+ * this range, so the bars line up with the ramp. */
+export function rasterDomainOf(
+  item: StacItem | null,
+  collection: StacCollection | null,
+): [number, number] | null {
+  const cog = rasterAssetOf(item);
+  if (!item || !cog) return null;
+  const hasOwnRange = Array.isArray(item.properties?.["atlas:value_range"]);
+  if (cog.rescale === "auto" && !hasOwnRange) return null;
+  const rescale = Array.isArray(cog.rescale) ? cog.rescale : null;
+  return rescale && !hasOwnRange ? rescale : valueDomain(item, collection);
 }
 
 export function collectionMapInputs(args: {
@@ -101,11 +129,13 @@ export function collectionMapInputs(args: {
   values: ValueColumn | null;
   /** the clicked cell's value for THIS item, else null. */
   marker: number | null;
+  /** a raster item's whole-layer histogram once read (`/cog/statistics`), else null. */
+  histogram?: Histogram | null;
   /** a raster item's COG footprint (`/cog/info`), which restricts the tiles MapLibre requests to it;
    * absent/`null` = unknown (draw unbounded, as before). */
   cogBounds?: [number, number, number, number] | null;
 }): CollectionMapInputs {
-  const { entry, item, style, values, marker, cogBounds } = args;
+  const { entry, item, style, values, marker, cogBounds, histogram } = args;
   if (!entry?.collection || !item) return EMPTY_COLLECTION_INPUTS;
   const collection = entry.collection;
   const domain = valueDomain(item, collection);
@@ -150,10 +180,8 @@ export function collectionMapInputs(args: {
   if (cog) {
     // an asset that asks for `rescale: "auto"` draws once the range has been read (the lens puts it
     // in `atlas:value_range`); until then there is nothing honest to paint or to put in the legend
-    const hasOwnRange = Array.isArray(item.properties?.["atlas:value_range"]);
-    if (cog.rescale === "auto" && !hasOwnRange) return EMPTY_COLLECTION_INPUTS;
-    const rescale = Array.isArray(cog.rescale) ? cog.rescale : null;
-    const rasterDomain: [number, number] = rescale && !hasOwnRange ? rescale : domain;
+    const rasterDomain = rasterDomainOf(item, collection);
+    if (!rasterDomain) return EMPTY_COLLECTION_INPUTS;
     // titiler colours by a NAMED colormap, so a raster item uses the asset's own (when it is one of
     // the app's four ramps) else the default; a collection style is a MapLibre expression titiler
     // cannot take
@@ -186,7 +214,7 @@ export function collectionMapInputs(args: {
         subtitle: lt.subtitle,
         stops: rampStops(colors, rasterDomain),
         unit: unitOf(item, entry),
-        histogram: null,
+        histogram: histogram ?? null,
         marker: marker !== null && Number.isFinite(marker) ? marker : null,
       },
     };
