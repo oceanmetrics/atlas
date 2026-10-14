@@ -44,5 +44,6 @@
   "opacity": "mdiOpacity",
   "chevronRight": "mdiChevronRight",
   "arrowUp": "mdiArrowUp",
-  "arrowDown": "mdiArrowDown"
+  "arrowDown": "mdiArrowDown",
+  "zoomToLayer": "mdiFitToScreenOutline"
 }

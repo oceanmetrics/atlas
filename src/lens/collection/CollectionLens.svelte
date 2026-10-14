@@ -202,6 +202,12 @@
     {expandedRow}
     {onExpandedRowChange}
     placeLayers={overlays ? placeLayers : undefined}
+    zoom={{
+      disabled: !lens.canZoomToLayer,
+      onZoom: () => lens.zoomToLayer(),
+      auto: lens.autoZoom,
+      onAutoChange: (on) => lens.setAutoZoom(on),
+    }}
   >
     {#snippet speciesField()}
       <div class="collection-field" data-testid="collection-field">

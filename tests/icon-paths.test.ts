@@ -79,6 +79,8 @@ const SPEC_ICON_NAMES = [
   "chevronRight",
   "arrowUp",
   "arrowDown",
+  // WP14: "Zoom to layer" (Layers panel's Data row, the legend card)
+  "zoomToLayer",
 ];
 
 // SVG path command characters and allowed symbols (see tests/glyphs.test.ts for a real parser;

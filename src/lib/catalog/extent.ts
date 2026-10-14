@@ -13,7 +13,12 @@ import type { StacCollection } from "./types";
  * are clamped to Web Mercator's range.
  */
 export function extentBounds(collection: StacCollection | null): CameraBoundsInput | null {
-  const box = collection?.extent?.spatial?.bbox?.[0];
+  return boxToBounds(collection?.extent?.spatial?.bbox?.[0]);
+}
+
+/** a STAC bbox (`[w, s, e, n]` or the 6-number form) as a camera frame, validated and re-expressed as
+ * {@link extentBounds} does; `null` for anything unusable. */
+export function boxToBounds(box: unknown): CameraBoundsInput | null {
   if (!Array.isArray(box) || box.length < 4) return null;
   const nums = box.map(Number);
   if (!nums.every(Number.isFinite)) return null;

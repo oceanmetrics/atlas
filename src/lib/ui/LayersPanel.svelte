@@ -17,6 +17,16 @@
     /** shown after the row name, e.g. "— nothing selected"; ignored unless `empty`. */
     hint?: string;
   }
+
+  /** the Data row's camera controls (WP14). */
+  export interface ZoomToLayerControl {
+    /** the layer has no extent to fit (nothing drawn): the button is disabled. */
+    disabled: boolean;
+    onZoom: () => void;
+    /** "Auto-zoom to layer" is on. */
+    auto: boolean;
+    onAutoChange: (on: boolean) => void;
+  }
 </script>
 
 <script lang="ts">
@@ -37,6 +47,7 @@
   import { tick, type Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import Popover from "./Popover.svelte";
+  import Switch from "./Switch.svelte";
   // P5 fix (post-merge finding, e2e/shell.a11y.spec.ts "exactly one live region"): `move()`/
   // `reset()` below used to hold their own local `announce` STATE and render a second, private
   // `<p aria-live>` -- a real SC 4.1.3 regression against this app's own rule (announcer.ts's own
@@ -87,6 +98,9 @@
      * credits). A snippet, so this lib component never imports `src/places/`; omitted = the row is
      * just its visible/opacity/reorder controls. */
     placeLayers?: Snippet;
+    /** WP14: "Zoom to layer" and "Auto-zoom to layer" for the Data row (the lens owns the camera and the
+     * saved choice). Omitted = the row has neither. */
+    zoom?: ZoomToLayerControl;
   }
 
   let {
@@ -99,6 +113,7 @@
     expandedRow,
     onExpandedRowChange,
     placeLayers,
+    zoom,
   }: Props = $props();
 
   /** the one row this panel EXPANDS -- "Data" (the lens's own layer). Every other group is
@@ -267,6 +282,20 @@
             <span class="hint" id={hintId}>{rState.hint}</span>
           {/if}
 
+          {#if zoom && entry.id === DATA_ROW_ID}
+            <button
+              type="button"
+              class="zoom-btn"
+              aria-label="Zoom to layer"
+              data-tooltip="Zoom to layer"
+              data-testid="zoom-to-layer"
+              disabled={zoom.disabled}
+              onclick={zoom.onZoom}
+            >
+              <Icon name="zoomToLayer" size={16} />
+            </button>
+          {/if}
+
           <Popover label={`${label} opacity`} triggerClass="opacity-btn" align="right">
             {#snippet trigger()}
               <Icon name="opacity" size={13} />
@@ -319,6 +348,18 @@
             </button>
           </span>
         </div>
+
+        {#if zoom && entry.id === DATA_ROW_ID}
+          <div class="auto-zoom-row" data-testid="auto-zoom-row">
+            <Switch
+              label="Auto-zoom to layer"
+              variant="quiet"
+              checked={zoom.auto}
+              onchange={zoom.onAutoChange}
+            />
+            <span>Auto-zoom to layer</span>
+          </div>
+        {/if}
 
         {#if entry.id === "data-overlays" && placeLayers}
           <div class="row-body" data-testid="place-layers-body">
@@ -609,6 +650,39 @@
   /* UI-11 (round 3): the CSS-only `[data-tooltip]` hover/focus tooltip is now ONE global utility
      (`src/lib/ui/tooltip.css`, imported once at the app root) -- this was a second, `.move-btn`-
      scoped copy of the identical rule `shell.css`'s own `.tool[data-tooltip]` also carried. */
+
+  /* WP14: the Data row's "Zoom to layer" button, quiet like the move buttons beside it */
+  .zoom-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    flex: none;
+  }
+  .zoom-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .zoom-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+  .auto-zoom-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-2) var(--space-1) calc(var(--space-2) + 20px);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: calc(-1 * var(--space-1));
+  }
 
   .row-body {
     padding: 0 var(--space-2) var(--space-2);

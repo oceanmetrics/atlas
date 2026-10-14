@@ -34,6 +34,8 @@ import {
   type ValuesAsset,
 } from "../../lib/catalog/assets";
 import { extentBounds } from "../../lib/catalog/extent";
+import { layerExtent } from "../../lib/catalog/layerExtent";
+import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
 import {
   likelyCountIndex,
   likelySpeciesText,
@@ -147,6 +149,8 @@ export interface CollectionLensDeps {
   histogram?: HistogramCache;
   /** the value under the pointer of a raster item (titiler `/cog/point`); default stock titiler. */
   valueSource?: ValueSource;
+  /** where the "Auto-zoom to layer" choice is kept; default the browser's localStorage. */
+  storage?: Pick<Storage, "getItem" | "setItem"> | null;
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
    * dimmed), read reactively; `null`/absent = no filter. */
   insideFids?: () => ReadonlySet<number> | null;
@@ -240,6 +244,13 @@ export interface CollectionLens {
   readonly rangeLoading: boolean;
   /** true when that read failed (the layer is then not drawn). */
   readonly rangeFailed: boolean;
+  /** true when the active layer has an extent the camera can fit (the "Zoom to layer" button's enabled state). */
+  readonly canZoomToLayer: boolean;
+  /** "Auto-zoom to layer": a change of layer flies the camera to the new layer's extent (a browser setting). */
+  readonly autoZoom: boolean;
+  setAutoZoom(on: boolean): void;
+  /** fly the camera to the active layer's extent (the shell's fit path, centred in the open area). */
+  zoomToLayer(): void;
   /** the dimension values still reachable, per dimension key (`availableValues`). */
   isAvailable(dimKey: string, value: string): boolean;
   /** hand the taxon on screen to the Species lens. */
@@ -760,7 +771,32 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     });
   });
 
-  // --- the default camera: the collection's own extent, once, unless the URL carries a `map=` ---------
+  // --- the camera: the layer's own extent (WP14) -------------------------------------------------------
+  // `layerExtent` picks the frame per kind of item (hex: the collection's extent; registry: the surface's
+  // box; nc / gm COGs: the cached `/cog/info.geojson` footprint; else the collection's). The button flies
+  // there at any time; "Auto-zoom to layer" (a browser setting, default on) does it when the layer changes.
+  // The first layer of a page that opened with `?map=` never moves the camera (the URL is the view), and a
+  // fit is a programmatic move: it never writes `map=` (the writer only records the user's own moves).
+  const autoStorage = (() => {
+    if (deps.storage !== undefined) return deps.storage;
+    try {
+      return typeof window === "undefined" ? null : window.localStorage;
+    } catch {
+      return null; // storage blocked
+    }
+  })();
+  let autoZoom = $state(loadAutoZoom(autoStorage));
+  const layerFrame = $derived(
+    layerExtent({
+      item,
+      collection: entry?.collection ?? null,
+      cogBounds: extent && extent.url === extentUrl ? extent.bounds : null,
+    }),
+  );
+  function fitTo(bounds: NonNullable<typeof layerFrame>["bounds"]): void {
+    deps.mapHandle()?.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
+  }
+  // the first fit of a page: with auto-zoom on it is the first layer's (below), else the collection's extent
   let fitted = false;
   $effect(() => {
     if (fitted || selStore.sel.lens !== "collection") return;
@@ -768,10 +804,32 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const coll = entry?.collection;
     if (!handle || !coll) return;
     fitted = true; // first load only: a later collection switch never moves the camera
+    if (untrack(() => autoZoom)) return; // the layer's own frame, once the item resolves
     if (untrack(() => selStore.sel.map)) return; // `map=` wins
     const bounds = extentBounds(coll);
     if (!bounds) return;
     handle.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
+  });
+  // auto-zoom: fly to a layer's frame once (a COG waits for its footprint); a layer in the same frame as
+  // the last fit (another season of one hex grid) leaves the camera where the user put it
+  let seenLayer = false;
+  let lastFrame: string | null = null;
+  $effect(() => {
+    if (selStore.sel.lens !== "collection") return;
+    const frame = layerFrame;
+    const handle = deps.mapHandle();
+    const on = autoZoom;
+    const waiting = extentPending;
+    if (!item || !frame || !handle || waiting) return;
+    untrack(() => {
+      const first = !seenLayer;
+      seenLayer = true;
+      const key = `${entry?.id ?? ""}|${boundsKey(frame.bounds)}`;
+      if (key === lastFrame) return;
+      const hasMapParam = !!selStore.sel.map;
+      lastFrame = key;
+      if (shouldAutoZoom({ on, first, hasMapParam })) fitTo(frame.bounds);
+    });
   });
 
   // --- what the map draws ------------------------------------------------------------------------
@@ -1034,6 +1092,20 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         c: undefined,
         i: undefined,
       });
+    },
+    get canZoomToLayer() {
+      return layerFrame !== null;
+    },
+    get autoZoom() {
+      return autoZoom;
+    },
+    setAutoZoom(on) {
+      autoZoom = on;
+      saveAutoZoom(autoStorage, on);
+    },
+    zoomToLayer() {
+      const frame = layerFrame;
+      if (frame) fitTo(frame.bounds);
     },
     isAvailable(dimKey, value) {
       const dim = view.dims.find((d) => d.key === dimKey);
