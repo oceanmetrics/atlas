@@ -66,6 +66,15 @@ PMTILES = "application/vnd.pmtiles"
 JSON_T  = "application/json"
 STYLE_T = "application/vnd.mapbox.style+json"
 MD_T    = "text/markdown"
+PNG_T   = "image/png"
+
+
+def thumbnail_asset(title: str) -> dict:
+  """thumbnail.png next to collection.json; add_file_info fills file:size and file:checksum when the file exists."""
+  return {"href": "./thumbnail.png", "type": PNG_T, "roles": ["thumbnail"], "title": title}
+
+
+PREVIEW_LINK = {"rel": "preview", "href": "./thumbnail.png", "type": PNG_T, "title": "Thumbnail"}
 
 
 # ---- helpers ----
@@ -247,6 +256,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
           {"name": c, "type": "double", "description": indicator_column_description(c)} for c in values_h3_columns],
       },
       **species_assets,
+      "thumbnail": thumbnail_asset("Thumbnail: ecoregion-weighted species richness, all species, summer"),
       "style": {
         "href": "./styles/default.json", "type": STYLE_T, "roles": ["style"],
         "title": "MapLibre fill layer, Spectral reversed on feature-state value (0..1)",
@@ -261,6 +271,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods, field dictionary and credits"},
       {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
       {"rel": "pmtiles", "href": "./hex.pmtiles", "type": PMTILES, "pmtiles:layers": ["hex"]},
+      PREVIEW_LINK,
       {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
        "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},
@@ -372,6 +383,7 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
                                        {"name": "aphia_id", "type": "int32"}, {"name": "prob", "type": "float"},
                                        {"name": "class", "type": "string"}]},
   }
+  assets["thumbnail"] = thumbnail_asset("Thumbnail: 2x2 panel of four species probability surfaces, summer")
   for key, info in tables.items():
     assets[key] = {"href": f"./{key}.parquet", "type": PARQUET, "roles": ["data"],
                    "title": info["title"], "atlas:key_column": "FID", "table:row_count": n_hex,
@@ -419,6 +431,7 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods and access notes"},
       {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
       {"rel": "pmtiles", "href": HEX_PUBLIC_HREF, "type": PMTILES, "pmtiles:layers": ["hex"]},
+      PREVIEW_LINK,
       {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
        "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},

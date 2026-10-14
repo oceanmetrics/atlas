@@ -16,7 +16,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import docs, grid, stac, taxa
+from . import docs, grid, stac, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
@@ -134,6 +134,9 @@ def build_indicators(raw: Path = RAW_DIR, out: Path = STAGING, skip_tiles: bool 
   log(f"cell_species.parquet: {len(cell_sp):,} rows; species.parquet: {len(species)} species, "
       f"{int((species['common_name'] != '').sum())} with an English common name")
 
+  png, small = thumbs.indicators_thumbnail(hexg, values, dest / "thumbnail.png")
+  log(f"thumbnails: {png.name} {png.stat().st_size:,} B, {small.name} {small.stat().st_size:,} B")
+
   # stac
   bbox = [round(float(x), 6) for x in hexg.total_bounds]
   dtypes = {k: ("string" if v == "string" or v.startswith("large_string") else "double") for k, v in pa_types(dest / "values.parquet").items()}
@@ -225,7 +228,11 @@ def build_species(raw: Path = RAW_DIR, out: Path = STAGING) -> dict:
   cell = pd.concat(longs, ignore_index=True)
   write_parquet(cell, dest / "cell_species.parquet")
 
-  hexg_bbox = [round(float(x), 6) for x in grid.read_hex(rp["fid"]).total_bounds]
+  hexg = grid.read_hex(rp["fid"])
+  panel = thumbs.species_panel_columns(taxa_df)
+  png, small = thumbs.species_thumbnail(hexg, pd.read_parquet(dest / "prob_summer.parquet"), panel, dest / "thumbnail.png")
+  log(f"thumbnails: {png.name} {png.stat().st_size:,} B, {small.name} {small.stat().st_size:,} B ({', '.join(panel)})")
+  hexg_bbox = [round(float(x), 6) for x in hexg.total_bounds]
   rows = taxa_df.assign(aphia_id=taxa_df["aphia_id"].astype(int)).to_dict("records")
   nhex = len(prob)
   coll = stac.species_collection(hexg_bbox, rows, nhex, len(cell), tables)

@@ -170,3 +170,15 @@ def test_readme_and_agents_mention_the_species_list():
   readme, agents = docs.indicators_readme([], counts), docs.indicators_agents(counts)
   for text in (readme, agents):
     assert "cell_species.parquet" in text and "species.parquet" in text and "common_name" in text and "1,234" in text
+
+
+def test_readme_lists_every_collection_asset_and_the_credits_funders():
+  # regression: the live README predated hex_centroids; every asset key must be named, funders match the JSON
+  cols = list(ranges())
+  c = stac.indicators_collection(BBOX, cols, {}, cols, 3, 10, {"bytes": 1}, species_rows={"cell_species": 7, "species": 2})
+  readme = docs.indicators_readme([], {"n_hex": 3, "n_values_cols": 2, "n_null_richness": 0, "n_cell_species": 7, "n_species": 2})
+  assert set(c["assets"]) == {"hex", "values", "hex_h3", "values_h3", "cell_species", "species", "hex_centroids", "thumbnail", "style"}
+  for key in c["assets"]:
+    assert f"| `{key}` |" in readme, key
+  assert c["atlas:funders"] == ["NOAA IOOS MBON", "MMA"]
+  assert "Funders: NOAA IOOS MBON, MMA" in readme and "supported by MMA and MBON" in readme
