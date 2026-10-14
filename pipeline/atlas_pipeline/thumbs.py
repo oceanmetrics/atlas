@@ -11,7 +11,7 @@ small (rashid PTL-VIZ-001 asks for a thumbnail asset per collection).
 from __future__ import annotations
 
 import io
-import zipfile
+import warnings
 from pathlib import Path
 
 import geopandas as gpd
@@ -28,6 +28,7 @@ from .docs import SPECTRAL_11_REV  # noqa: E402
 
 BACKGROUND = "#05294d"
 LAND_EDGE  = "#9db4cc"
+LAND_FILL  = "#0c3a68"
 TEXT       = "#e8f0f8"
 SIZE       = (1200, 800)
 SMALL_W    = 400
@@ -63,10 +64,12 @@ def _pad(bounds, frac: float = 0.03):
   return w - dx, s - dy, e + dx, n + dy
 
 
-def _draw(ax, hexg: gpd.GeoDataFrame, values: pd.Series, bounds, coast, edge: float = 0.0) -> None:
+def _draw(ax, hexg: gpd.GeoDataFrame, values: pd.Series, bounds, coast, edge: float = 0.4) -> None:
   hexg = hexg.assign(_v=values.to_numpy())
   hexg = hexg[hexg["_v"].notna()]
   ax.set_facecolor(BACKGROUND)
+  if coast is not None and len(coast):
+    coast.plot(ax=ax, color=LAND_FILL, linewidth=0)
   if len(hexg):
     hexg.plot(column="_v", ax=ax, cmap=CMAP, vmin=0, vmax=1, linewidth=edge, edgecolor="face", rasterized=True)
   if coast is not None and len(coast):
@@ -74,7 +77,9 @@ def _draw(ax, hexg: gpd.GeoDataFrame, values: pd.Series, bounds, coast, edge: fl
   w, s, e, n = bounds
   ax.set_xlim(w, e)
   ax.set_ylim(s, n)
-  ax.set_aspect(1 / np.cos(np.radians((s + n) / 2)))
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore", UserWarning)   # "ignoring fixed x limits": the view is widened on purpose
+    ax.set_aspect(1 / np.cos(np.radians((s + n) / 2)), adjustable="datalim")   # fill the panel, widen the view
   ax.set_axis_off()
 
 
@@ -110,7 +115,7 @@ def _figure(size: tuple[int, int], nrows: int = 1, ncols: int = 1):
   return fig, axes
 
 
-def _colorbar(fig, label: str, rect=(0.02, 0.04, 0.2, 0.02)) -> None:
+def _colorbar(fig, label: str, rect=(0.03, 0.075, 0.2, 0.015)) -> None:
   cax = fig.add_axes(rect)
   sm = plt.cm.ScalarMappable(cmap=CMAP, norm=plt.Normalize(0, 1))
   cb = fig.colorbar(sm, cax=cax, orientation="horizontal", ticks=[0, 0.5, 1])
