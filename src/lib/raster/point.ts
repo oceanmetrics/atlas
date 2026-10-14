@@ -38,7 +38,7 @@ export interface ValueSource {
 export function assertSpeciesValueRequest(req: { domain: string }): void {
   if (req.domain !== "species" && req.domain !== "collection") {
     throw new Error(
-      `raster/point.ts: /cog/point may only serve species or collection raster values, got domain "${req.domain}" — ` +
+      `raster/point.ts: /cog/point may only serve species values or collection raster values, got domain "${req.domain}" — ` +
         "scores values must come from Parquet (engine/ + sql/), never a tile pixel (plan D4).",
     );
   }

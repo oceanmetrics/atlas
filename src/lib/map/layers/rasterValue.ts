@@ -131,7 +131,10 @@ export function installRasterInteraction(
         unitLabel: coordText(ll),
         detailsLink: true,
       };
-      card.setLngLat(ll).setHTML(valuePopupHtml(body)).addTo(map as never);
+      card
+        .setLngLat(ll)
+        .setHTML(valuePopupHtml(body))
+        .addTo(map as never);
       opts.announce?.(valuePopupAnnounceText(body));
     } else pushCardLine(ll, text);
   };

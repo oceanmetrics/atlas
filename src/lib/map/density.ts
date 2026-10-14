@@ -28,10 +28,7 @@ export interface Histogram {
  * but still valid "distribution" (a flat point at that value), rather than dividing by a
  * `max - min` of zero.
  */
-export function binValues(
-  values: readonly number[],
-  binCount = DEFAULT_HISTOGRAM_BINS,
-): Histogram {
+export function binValues(values: readonly number[], binCount = DEFAULT_HISTOGRAM_BINS): Histogram {
   const finite = values.filter((v) => Number.isFinite(v));
   if (finite.length === 0) return { binCount: 0, counts: [], min: 0, max: 0 };
   const min = Math.min(...finite);
@@ -119,8 +116,9 @@ export function histogramBars(
  * The marker's label. Precision follows the legend axis so a small-range layer is not flattened:
  * integer when the domain span is >= 10 (the app's own cases -- 0-93, 7.5-52.7, 1-100 -- where it
  * is the popup value line's `Math.round`, so the legend never shows a raw "33.0930431598879" beside
- * a popup that says "Score 33"), one decimal when the span is < 10, two when it is < 1. No domain
- * (or a zero-width one) falls back to the integer. `null` (no label) for a non-finite/absent value.
+ * a popup that says "Score 33"), one decimal when the span is < 10, two when it is < 1, and three
+ * significant figures when it is < 0.1 (a density surface spanning 0.0004 to 0.008 would otherwise
+ * read "0.00"). No domain (or a zero-width one) falls back to the integer. `null` (no label) for a non-finite/absent value.
  */
 export function formatMarkerValue(
   value: number | null | undefined,
@@ -128,6 +126,10 @@ export function formatMarkerValue(
 ): string | null {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   const span = domain ? Math.abs(domain.max - domain.min) : Infinity;
+  if (span > 0 && span < 0.1) {
+    const s = Number(value.toPrecision(3));
+    return s !== 0 && Math.abs(s) < 1e-3 ? s.toExponential(2) : String(s);
+  }
   const dp = span >= 10 || !(span > 0) ? 0 : span >= 1 ? 1 : 2;
   return dp === 0 ? String(Math.round(value)) : value.toFixed(dp);
 }

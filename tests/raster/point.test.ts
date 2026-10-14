@@ -75,3 +75,37 @@ describe("createTitilerValueSource", () => {
     expect(called).toBe(false);
   });
 });
+
+describe("WP14: a Collections raster item's value (domain collection, band)", () => {
+  it("the point URL carries bidx after the url, and none for band-less callers", () => {
+    expect(titilerPointUrl(DEFAULT_TITILER_CONFIG, -70.3, 42.3, COG_URL, 2)).toBe(
+      `${DEFAULT_TITILER_HOST}/cog/point/-70.3,42.3?url=${encodeURIComponent(COG_URL)}&bidx=2`,
+    );
+    expect(titilerPointUrl(DEFAULT_TITILER_CONFIG, 1, 2, COG_URL)).not.toContain("bidx");
+  });
+  it("the collection domain is served, with the band and the abort signal handed to the transport", async () => {
+    const seen: { url: string; signal?: AbortSignal }[] = [];
+    const source = createTitilerValueSource(async (url, signal) => {
+      seen.push({ url, signal });
+      return { values: [0.34] };
+    });
+    const ctrl = new AbortController();
+    const v = await source.pointValue({
+      domain: "collection",
+      lon: -70.3,
+      lat: 42.3,
+      cogUrl: COG_URL,
+      bidx: 2,
+      signal: ctrl.signal,
+    });
+    expect(v).toBe(0.34);
+    expect(seen[0].url).toContain("&bidx=2");
+    expect(seen[0].signal).toBe(ctrl.signal);
+  });
+  it("a masked (nodata) pixel answers values [null]: null, shown as no data", async () => {
+    const source = createTitilerValueSource(async () => ({ values: [null] }));
+    await expect(
+      source.pointValue({ domain: "collection", lon: 0, lat: 0, cogUrl: COG_URL }),
+    ).resolves.toBeNull();
+  });
+});
