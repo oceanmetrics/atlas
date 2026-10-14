@@ -1,0 +1,24 @@
+{
+  "id": "hex-fill",
+  "type": "fill",
+  "source": "hex",
+  "source-layer": "hex",
+  "paint": {
+    "fill-color": [
+      "case",
+      ["==", ["feature-state", "value"], null],
+      "rgba(0,0,0,0)",
+      [
+        "interpolate",
+        ["linear"],
+        ["feature-state", "value"],
+        0.0,
+        "#112233",
+        0.5,
+        "#445566",
+        1.0,
+        "#778899"
+      ]
+    ]
+  }
+}

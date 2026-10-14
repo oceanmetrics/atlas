@@ -54,6 +54,8 @@ describe("Shell.svelte never statically imports a lens/places .svelte panel comp
   it("every lens/places panel component IS reached, but only dynamically", () => {
     const dynamic = dynamicImportsOf(SHELL_SVELTE);
     for (const mod of [
+      "../lens/collection/CollectionLens.svelte",
+      "../lens/collection/CollectionLegend.svelte",
       "../lens/species/SpeciesLens.svelte",
       "../lens/species/SpeciesPicker.svelte",
       "../lens/species/SpeciesLegend.svelte",
@@ -69,6 +71,7 @@ describe("Shell.svelte never statically imports a lens/places .svelte panel comp
   it("the species/places data-layer modules stay static (not svelte files, so not gated here)", () => {
     const statics = staticImportsOf(SHELL_SVELTE);
     expect(statics).toContain("../lens/species/state.svelte");
+    expect(statics).toContain("../lens/collection/state.svelte");
     expect(statics).toContain("../places/placesMap.svelte");
   });
 
@@ -77,5 +80,15 @@ describe("Shell.svelte never statically imports a lens/places .svelte panel comp
       'import SpeciesLens from "../lens/species/SpeciesLens.svelte";\nexport const x = SpeciesLens;\n';
     const statics = staticImportsOf(seeded).filter(isLensOrPlacesSvelteImport);
     expect(statics).toContain("../lens/species/SpeciesLens.svelte");
+  });
+});
+
+describe("hyparquet stays a lazy chunk behind the collection lens", () => {
+  it("only lib/catalog/values.ts names it, and only through a dynamic import()", () => {
+    const src = readFileSync("src/lib/catalog/values.ts", "utf8");
+    expect(staticImportsOf(src).filter((s) => s.startsWith("hyparquet"))).toEqual([]);
+    expect(dynamicImportsOf(src)).toEqual(
+      expect.arrayContaining(["hyparquet", "hyparquet-compressors"]),
+    );
   });
 });

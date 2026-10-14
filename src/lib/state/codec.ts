@@ -7,6 +7,7 @@
 // R3 (round-2 plan §5 U4): `layers=`'s parse/format live in the map domain's own layer-stack model
 // (`../map/layerStack.ts`), not duplicated here — this module just calls them, exactly like every
 // other field's parser.
+import { validateCatalogBase } from "../catalog/base";
 import { formatLayerStack, parseLayerStack } from "../map/layerStack";
 import { NO_ALIAS_LOOKUP, rewriteLegacyParams, type AliasLookup } from "./legacy";
 import {
@@ -29,13 +30,14 @@ export interface UrlLike {
 
 // --- shared write-side helper: readable, paste-able values (§4) --------------------------------
 
-/** un-escape `%2C` -> `,` and `%3A` -> `:` AFTER `URLSearchParams` serializes — both characters are
- * legal, unreserved-enough in a query/fragment that no server or parser needs them escaped, and a
+/** un-escape `%2C` -> `,`, `%3A` -> `:` and `%2F` -> `/` AFTER `URLSearchParams` serializes — all
+ * three are legal, unreserved-enough in a query/fragment that no server or parser needs them escaped
+ * (`/` appears in the `catalog=` URL), and a
  * link a person reads and pastes keeps them raw (same call CalCOFI Explorer made, §4). Parsing needs
  * no matching "re-escape" step: `URLSearchParams` reads a literal `,`/`:` in a value identically to
  * its percent-encoded form, since neither is a `&`/`=` delimiter. */
 function prettyEncode(params: URLSearchParams): string {
-  return params.toString().replace(/%2C/g, ",").replace(/%3A/g, ":");
+  return params.toString().replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%2F/g, "/");
 }
 
 // --- per-field parsers: each returns a clamped value, never throws -----------------------------
@@ -149,6 +151,9 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     theme: parseEnum(aliasTheme(params.get("theme")), THEMES, DEFAULT_SEL.theme),
     tour: parseEnum(params.get("tour"), ["on", "off"] as const, DEFAULT_SEL.tour),
     zl: parseZoomToLayer(params.get("zl")),
+    c: cleanString(params.get("c")),
+    i: cleanString(params.get("i")),
+    catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     pl: cleanString(hashParams.get("pl")),
     t: cleanString(hashParams.get("t")),
   };
@@ -196,6 +201,9 @@ export function formatSel(sel: Sel): { search: string; hash: string } {
   if (sel.theme !== DEFAULT_SEL.theme) params.set("theme", sel.theme);
   if (sel.tour !== DEFAULT_SEL.tour) params.set("tour", sel.tour);
   if (sel.zl === false) params.set("zl", "0");
+  if (sel.c) params.set("c", sel.c);
+  if (sel.i) params.set("i", sel.i);
+  if (sel.catalog) params.set("catalog", sel.catalog);
 
   const hashParams = new URLSearchParams();
   if (sel.pl) hashParams.set("pl", sel.pl);

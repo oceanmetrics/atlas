@@ -109,6 +109,10 @@
   // it") -- it never imports a `.svelte` file itself, so it stays a static import even though every
   // lens PANEL component below is now lazy (see "lazy lens/panel chunks" below).
   import { createSpeciesLens } from "../lens/species/state.svelte";
+  // the Collections lens' reactive core (catalog -> collection -> item -> hex feature state). Static for
+  // the same reason as the species lens: its map inputs must exist whether or not its panel (a lazy
+  // chunk below) has ever mounted. hyparquet stays a lazy chunk INSIDE it (lib/catalog/values.ts).
+  import { createCollectionLens } from "../lens/collection/state.svelte";
   // atlas-6 step 1: the Places panel mounts here (the shell's one reserved panel slot); it never
   // touches MapLibre directly -- `placesMap` is the reactive bridge this file's own composeStyle
   // effect (below) folds into the ONE `selection` input, per docs/map.md. `placesMap.svelte.ts` is
@@ -538,12 +542,22 @@
     isPhone: () => isPhone,
   });
 
+  // the Collections lens: a plain call like the species lens above. A place pick/draw session owns map
+  // clicks while it is active (`placesMap.interactionOwned`), so a hex click never fights it.
+  const collectionLens = createCollectionLens({
+    selStore,
+    mapHandle: () => mapHandle,
+    isOwned: () => placesMap.interactionOwned,
+  });
+
   // --- page title: the ONE writer (tests/shell/documentTitle.test.ts's source scan pins that) -------
   $effect(() => {
     document.title =
       sel.lens === "species" && speciesLens.docTitle
         ? speciesLens.docTitle
-        : `${sel.lens === "species" ? "Species" : "Collections"} · OceanMetrics Atlas`;
+        : sel.lens === "collection" && collectionLens.itemTitle
+          ? `${collectionLens.itemTitle} · OceanMetrics Atlas`
+          : `${sel.lens === "species" ? "Species" : "Collections"} · OceanMetrics Atlas`;
   });
 
   // 0.10.79 size-budget fix round: the RUNTIME `places/model.ts` module (see the type-only import
@@ -591,7 +605,13 @@
   // P1 fix: hoisted out of the template (it used to be a `{@const}` inline where the legend chip
   // rendered) so BOTH the floating placement and the "full" detent's inline-in-sheet placement can
   // read the SAME value without recomputing it or duplicating the lens/kind branch.
-  const phoneLegend = $derived(sel.lens === "species" ? speciesLens.mapInputs.legend : null);
+  const phoneLegend = $derived(
+    sel.lens === "species"
+      ? speciesLens.mapInputs.legend
+      : sel.lens === "collection"
+        ? collectionLens.mapInputs.legend
+        : null,
+  );
 
   // the header context (`panelHeaderTitle`, tools.ts): the panel/sheet header says what is being
   // SHOWN, not the spine entry's name. Species: the model's legend title alone.
@@ -599,9 +619,13 @@
     layer: phoneLegend?.title ?? null,
     unit: null,
     subject:
-      sel.lens === "species" ? speciesLens.card?.common || speciesLens.card?.sci || null : null,
+      sel.lens === "species"
+        ? speciesLens.card?.common || speciesLens.card?.sci || null
+        : collectionLens.itemTitle,
     tableSubject:
-      sel.lens === "species" ? speciesLens.card?.common || speciesLens.card?.sci || null : null,
+      sel.lens === "species"
+        ? speciesLens.card?.common || speciesLens.card?.sci || null
+        : collectionLens.itemTitle,
     placeCount: places.length,
     lastClicked: null,
   });
@@ -638,7 +662,7 @@
       const asset = speciesLens.mapInputs.asset;
       return asset?.type === "cog" ? asset.url : null;
     }
-    return null;
+    return collectionLens.mapInputs.cogUrl;
   });
   const downloadCogDisabledReason = $derived(
     downloadCogUrl
@@ -678,7 +702,9 @@
   }
   // the long description of the current layer, when it says something the legend title does not:
   // `null` for species (no per-model description published); the collection lens supplies its own.
-  const phoneLegendDescription = $derived<string | null>(null);
+  const phoneLegendDescription = $derived<string | null>(
+    sel.lens === "collection" ? collectionLens.itemDescription : null,
+  );
   const downloadDescription = $derived(phoneLegendDescription);
 
   // usability M4: "the default camera frames Canada; panel/sheet cover the study area" -- the
@@ -1007,7 +1033,13 @@
     // re-run (and the basemap actually appear) when the CARTO fetch resolves late.
     basemapStyle: basemapStyles[resolvedTheme],
     projection: sel.proj,
-    raster: sel.lens === "species" ? speciesLens.mapInputs.raster : null,
+    hex: sel.lens === "collection" ? collectionLens.mapInputs.hex : null,
+    raster:
+      sel.lens === "species"
+        ? speciesLens.mapInputs.raster
+        : sel.lens === "collection"
+          ? collectionLens.mapInputs.raster
+          : null,
     range: sel.lens === "species" ? speciesLens.mapInputs.range : null,
     overlays: [],
     selection: placesSelection,
@@ -1100,6 +1132,10 @@
   // no visible closed state) so e2e/shell.cls.spec.ts's skeleton/hydrated geometry-equality gate
   // never sees a new box shape.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let CollectionLensPanelComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let CollectionLegendComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let SpeciesLensPanelComp = $state<Component<any> | null>(null);
   // the species lens' "Table" tool body -- lazy ON-DEMAND (activeTool==="table", below), same
   // convention as PlacesComp, not part of the eager species-UI-group effect further down (a species
@@ -1160,6 +1196,21 @@
   function closePhoneSearch(): void {
     phoneSearchOpen = false;
   }
+
+  // the Collections lens' panel and legend chunks start together the moment the lens is selected
+  $effect(() => {
+    if (sel.lens !== "collection") return;
+    if (!CollectionLensPanelComp) {
+      import("../lens/collection/CollectionLens.svelte")
+        .then((mod) => (CollectionLensPanelComp = mod.default))
+        .catch(() => announceChunkFailure("the collections panel"));
+    }
+    if (!CollectionLegendComp) {
+      import("../lens/collection/CollectionLegend.svelte")
+        .then((mod) => (CollectionLegendComp = mod.default))
+        .catch(() => announceChunkFailure("the collection legend"));
+    }
+  });
 
   // one trigger for the whole species UI group -- all four chunks start downloading together the
   // moment the lens becomes "species" (a deep link included, since `sel` resolves from the URL
@@ -1604,6 +1655,13 @@
         {#if sel.lens === "species" && SpeciesLegendComp}
           {@const Comp = SpeciesLegendComp}
           <Comp legend={phoneLegend} tilesDown={health.isDown("tiler")} />
+        {:else if sel.lens === "collection" && CollectionLegendComp}
+          {@const Comp = CollectionLegendComp}
+          <Comp
+            legend={phoneLegend}
+            tilesDown={health.isDown("tiler")}
+            isRaster={!!collectionLens.mapInputs.raster}
+          />
         {/if}
       </LegendChip>
     {/if}
@@ -1626,6 +1684,23 @@
         {#if PlacesComp}
           {@const Comp = PlacesComp}
           <Comp {sel} {selStore} {mapHandle} mapStore={placesMap} />
+        {:else}
+          <p>{TOOL_BODY[activeTool]}</p>
+        {/if}
+      {:else if sel.lens === "collection" && (activeTool === "layers" || activeTool === "details")}
+        {#if CollectionLensPanelComp}
+          {@const Comp = CollectionLensPanelComp}
+          <Comp
+            lens={collectionLens}
+            {layerStack}
+            {onLayerStackChange}
+            {sel}
+            {selStore}
+            {mapHandle}
+            {expandedRow}
+            onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
+            part={activeTool === "details" ? "details" : "layers"}
+          />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
         {/if}
@@ -1729,6 +1804,15 @@
     {@const Comp = SpeciesLegendComp}
     <div class="lens-legend-region">
       <Comp legend={speciesLens.mapInputs.legend} tilesDown={health.isDown("tiler")} />
+    </div>
+  {:else if sel.lens === "collection" && CollectionLegendComp && collectionLens.mapInputs.legend}
+    {@const Comp = CollectionLegendComp}
+    <div class="lens-legend-region">
+      <Comp
+        legend={collectionLens.mapInputs.legend}
+        tilesDown={health.isDown("tiler")}
+        isRaster={!!collectionLens.mapInputs.raster}
+      />
     </div>
   {/if}
 </main>

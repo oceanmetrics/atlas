@@ -68,6 +68,13 @@ export interface Sel {
   layers?: readonly LayerStackEntry[];
   theme: Theme;
   tour: Tour;
+  /** the Collections lens' active collection id (`?c=`); `undefined` = the first available one. */
+  c?: string;
+  /** the active item id within that collection (`?i=`); `undefined` = its default item. The item's
+   * own `atlas:dims` say which value each dimension selector shows (`catalog/dims.ts`). */
+  i?: string;
+  /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
+  catalog?: string;
   /** R3-W8 item 2: the species lens' "Zoom to layer on change" preference — `true` (default, never
    * written) refits the camera to whatever input/representation the viewer just picked
    * (`data/camera.ts`'s `refitOnInputChange`); `false` writes `zl=0` so the viewer can flip between
@@ -98,6 +105,9 @@ export const QUERY_KEYS = [
   "theme",
   "tour",
   "zl",
+  "c",
+  "i",
+  "catalog",
 ] as const;
 
 /** hash keys: places and the report title only — a fragment is never sent to a server or a
@@ -176,6 +186,9 @@ export const DEFAULT_SEL: Sel = {
   // malformed `?theme=` falls back to. See docs/usability.md p3 and "Ben's items" (theme default).
   theme: "dark",
   tour: "on",
+  c: undefined,
+  i: undefined,
+  catalog: undefined,
   zl: true,
   pl: undefined,
   t: undefined,

@@ -1,0 +1,55 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "id": "shark_summer_richness",
+  "collection": "biotrack_indicators",
+  "properties": {
+    "title": "Richness of sharks, summer",
+    "datetime": null,
+    "atlas:dims": {
+      "group": "shark",
+      "season": "summer",
+      "metric": "richness"
+    },
+    "atlas:metric": "richness",
+    "atlas:value_range": [0.0, 0.9],
+    "sdm:value_unit": "unitless",
+    "sdm:value_range": [0, 1]
+  },
+  "assets": {
+    "values": {
+      "href": "../values.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "atlas:key_column": "FID",
+      "atlas:value_column": "shark_summer_richness",
+      "table:columns": [
+        {
+          "name": "FID",
+          "type": "int64"
+        },
+        {
+          "name": "shark_summer_richness",
+          "type": "double"
+        }
+      ]
+    },
+    "hex": {
+      "href": "../hex.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "pmtiles:layers": ["hex"],
+      "atlas:id_field": "FID"
+    }
+  },
+  "links": [
+    {
+      "rel": "collection",
+      "href": "../collection.json"
+    },
+    {
+      "rel": "self",
+      "href": "./shark_summer_richness.json"
+    }
+  ]
+}

@@ -61,9 +61,13 @@ describe("paletteStopsWithFallback — one case per palette in the picker (M2)",
     expect(paletteStopsWithFallback(boot, "spectral_r")).toEqual(SPECTRAL_R_11);
   });
 
-  it("spectral_r: unpublished is still null -- this palette has no fallback anchor (never needs one today)", () => {
-    expect(paletteStopsWithFallback({ palettes: {} }, "spectral_r")).toBeNull();
-    expect(paletteStopsWithFallback(null, "spectral_r")).toBeNull();
+  it("spectral_r: unpublished falls back to Spectral reversed, 11 stops (a catalog collection has no boot bundle)", () => {
+    for (const boot of [{ palettes: {} }, null]) {
+      const stops = paletteStopsWithFallback(boot, "spectral_r");
+      expect(stops).toHaveLength(11);
+      expect(stops?.[0].toLowerCase()).toBe("#5e4fa2");
+      expect(stops?.[10].toLowerCase()).toBe("#9e0142");
+    }
   });
 
   for (const name of ["viridis", "cividis", "magma"] as const) {

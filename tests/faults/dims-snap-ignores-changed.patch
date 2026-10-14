@@ -1,0 +1,12 @@
+diff --git a/src/lib/catalog/dims.ts b/src/lib/catalog/dims.ts
+index 71b14f7..76b74eb 100644
+--- a/src/lib/catalog/dims.ts
++++ b/src/lib/catalog/dims.ts
+@@ -145,7 +145,6 @@ export function snapItem(
+   let bestScore = -1;
+   for (const item of items) {
+     const have = itemDims(item);
+-    if (changed && wanted[changed] !== undefined && have[changed] !== wanted[changed]) continue;
+     const score = Object.entries(wanted).filter(([k, v]) => have[k] === v).length;
+     if (score > bestScore) {
+       best = item;

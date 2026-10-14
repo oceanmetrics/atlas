@@ -3,8 +3,26 @@
 ## 0.1.0
 
 OceanMetrics Atlas: forked 2026-10-14 from MarineSensitivity/atlas 0.10.88 and stripped to a core that
-a STAC catalog will drive. Milestone 1 (the strip) is below; the catalog loader, the generic
-collection lens and hex painting follow under this same version.
+a STAC catalog will drive. The strip is first below; the catalog loader, the generic Collections lens
+and hex painting follow.
+
+- **The Collections lens (new, the default).** Picks a collection from the catalog (grouped
+  OceanMetrics / MarineSensitivity v7 / MarineSensitivity v8) and shows one selector per dimension of
+  that collection (for BioTrack: group, season, metric, derived from its `cube:dimensions`), a legend,
+  and a credits strip (citation with DOI, license, principal investigators, funders, a link to the
+  methods README; never an e-mail address). A collection that cannot be reached is listed as
+  "unavailable" and never breaks the rest.
+- **Hex painting.** A collection's hex grid is ONE PMTiles archive of geometry + `FID`; values come from
+  a Parquet column read with hyparquet (only the `FID` and the item's column) and paint by MapLibre
+  feature state. Changing group, season or metric re-reads one column and recolours; the grid is never
+  refetched. Hover shows a cell's value; click selects it (outlined, marked on the legend, and published
+  to `cellSelection` for the species-list panel). The legend spans the item's own value range and shows
+  the layer's histogram. A collection's `styles/default.json` supplies the ramp, else Spectral reversed.
+- **Raster items** (cloud-optimized GeoTIFF assets) render through the existing titiler layer.
+- **URL grammar.** `?c=<collection id>&i=<item id>` (plus `?catalog=<https url>` to read another catalog
+  base, e.g. a staging folder served with CORS + Range). The default view writes nothing; an unknown
+  `c` or `i` falls back to the default. Changing one selector snaps the others to the nearest item
+  that exists. `VITE_CATALOG_BASE` overrides the origin at build time.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

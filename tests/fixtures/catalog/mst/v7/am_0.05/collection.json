@@ -1,0 +1,14 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "id": "am_0.05",
+  "title": "AquaMaps 0.05 degree",
+  "description": "external child",
+  "license": "CC-BY-NC-4.0",
+  "links": [
+    {
+      "rel": "item",
+      "href": "./items/Fis-1.json"
+    }
+  ]
+}

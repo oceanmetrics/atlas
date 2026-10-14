@@ -206,6 +206,30 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/analytics/logUrl.wiring.test.ts"],
   },
   {
+    id: "hex-promoteid-dropped",
+    patch: "tests/faults/hex-promoteid-dropped.patch",
+    describe:
+      "hexSource() drops `promoteId: FID` -- the vector features' ids are no longer the hex FID, so " +
+      "setFeatureState({id}) keys on nothing and the whole hex layer silently paints transparent",
+    gate: ["npx", "vitest", "run", "tests/map/hex.test.ts", "-t", "promoteId"],
+  },
+  {
+    id: "catalog-base-accepts-http",
+    patch: "tests/faults/catalog-base-accepts-http.patch",
+    describe:
+      "validateCatalogBase() stops requiring https -- a crafted ?catalog=http://... link could " +
+      "redirect every catalog data read to an arbitrary plain-http origin",
+    gate: ["npx", "vitest", "run", "tests/catalog/base.test.ts"],
+  },
+  {
+    id: "dims-snap-ignores-changed",
+    patch: "tests/faults/dims-snap-ignores-changed.patch",
+    describe:
+      "snapItem() no longer requires the dimension the viewer just changed to agree -- choosing a " +
+      "taxon with no item at the current season could jump to a different taxon entirely",
+    gate: ["npx", "vitest", "run", "tests/catalog/dims.test.ts", "-t", "snapItem"],
+  },
+  {
     id: "analytics-ga-id-baked",
     patch: "tests/faults/analytics-ga-id-baked.patch",
     describe:

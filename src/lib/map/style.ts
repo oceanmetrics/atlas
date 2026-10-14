@@ -21,6 +21,13 @@ import { SELECTION_COLOR } from "./colors";
 import { rasterLayer, rasterSource } from "./layers/raster";
 import { rangeLayer, rangeSource } from "./layers/ranges";
 import {
+  HEX_SOURCE_ID,
+  hexFillLayer,
+  hexSelectedLayer,
+  hexSource,
+  type HexLayerSpec,
+} from "./layers/hex";
+import {
   GAZETTEER_SOURCE_ID,
   gazetteerFillLayer,
   gazetteerLineLayer,
@@ -154,6 +161,7 @@ export const LAYER_ORDER = [
   "basemap-roads",
   "basemap-labels",
   "hex",
+  "hex-selected",
   "raster",
   "range",
   "overlay",
@@ -186,6 +194,7 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   range: "data-raster",
   overlay: "data-raster",
   hex: "data-raster",
+  "hex-selected": "data-raster",
   "gazetteer-fill": "data-places",
   "gazetteer-line": "data-places",
   "selection-fill": "data-places",
@@ -201,7 +210,7 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-boundaries": ["basemap-boundaries"],
   "basemap-roads": ["basemap-roads"],
   "basemap-labels": ["basemap-labels"],
-  "data-raster": ["hex", "raster", "range", "overlay"],
+  "data-raster": ["hex", "hex-selected", "raster", "range", "overlay"],
   "data-places": ["gazetteer-fill", "gazetteer-line", "selection-fill", "selection-line"],
 };
 
@@ -262,7 +271,9 @@ export interface ComposeStyleInput {
   /** `globe` (the shipped default) or `mercator`; travels IN the style, so a projection change is
    * one more `setStyle(diff)` rather than a second imperative API the lenses have to remember. */
   projection?: Projection;
-  /** the score raster (atlas-4) or a species COG surface (atlas-5). */
+  /** a catalog collection's hex grid, painted by feature state (`layers/hex.ts`). */
+  hex?: HexLayerSpec | null;
+  /** a species COG surface (atlas-5) or a collection's cloud-optimized GeoTIFF. */
   raster?: RasterLayerSpec | null;
   /** a species PMTiles range/presence fill (atlas-5's ranges branch) — `null` for none. */
   range?: RangeLayerSpec | null;
@@ -407,6 +418,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     cartoHasSymbolLayer = cartoStyleHasSymbolLayer(carto);
   }
 
+  if (input.hex) {
+    sources[HEX_SOURCE_ID] = hexSource(input.hex);
+    roled.push({ role: "hex", layer: hexFillLayer(input.hex) });
+    roled.push({ role: "hex-selected", layer: hexSelectedLayer(input.hex) });
+  }
   if (input.raster) {
     sources[input.raster.id] = rasterSource(input.raster);
     roled.push({ role: "raster", layer: rasterLayer(input.raster) });
