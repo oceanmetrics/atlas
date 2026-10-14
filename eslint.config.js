@@ -16,6 +16,8 @@ export default ts.config(
       "playwright-report",
       "test-results",
       "node_modules",
+      "pipeline/.venv", // uv creates it on `uv run`; third-party JS inside
+      "pipeline/cache",
       // vendored copy of @oceanmetrics/places (see its provenance headers); kept diff-able with upstream
       "src/lib/gazetteer/vendor",
       "tests/fixtures/**/dist", // built fixture output, not source
