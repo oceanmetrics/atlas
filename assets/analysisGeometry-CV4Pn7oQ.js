@@ -1,0 +1,1 @@
+import{d as e,l as t}from"./placeCodec-BlYCoPf2.js";function n(n){return t(e(n))}export{n as t};
