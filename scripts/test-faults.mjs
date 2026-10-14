@@ -48,7 +48,8 @@ export const FAULTS = [
   {
     id: "species-sort-ascending",
     patch: "tests/faults/species-sort-ascending.patch",
-    describe: "speciesInCell() sorts by probability ascending -- the least likely species lead the list",
+    describe:
+      "speciesInCell() sorts by probability ascending -- the least likely species lead the list",
     gate: ["npx", "vitest", "run", "tests/catalog/species.test.ts", "-t", "speciesInCell"],
   },
   {
