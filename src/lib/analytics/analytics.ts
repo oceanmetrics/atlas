@@ -50,10 +50,6 @@ import {
 } from "./pageLocation";
 import { createBrowserTransport, noopTransport, type Transport } from "./transport";
 
-/** the production GA4 measurement ID (one id across every MarineSensitivity product; see
- * `msens::.MS_GA_ID`, analytics.R:44). */
-export const GA_MEASUREMENT_ID = "G-9HW6L751XG";
-
 /** `app`/`app_name` on every event — content_group is what varies with preview mode (below), not
  * this (plan atlas-2 `analytics/` contract: "content_group atlas / atlas-preview"). */
 const APP_NAME = "atlas";
@@ -73,6 +69,8 @@ export interface AnalyticsOptions {
   appVersion: string;
   /** true on the preview host -> `content_group = "atlas-preview"`; false -> `"atlas"`. */
   preview: boolean;
+  /** the GA4 measurement id (`VITE_GA_ID`, see `gaId.ts`); unset/empty -> the GA4 leg is OFF: no
+   * `gtag` call is ever made. No id ships in this repo. The Sheet-log leg is independent of it. */
   measurementId?: string;
   /** `VITE_LOG_URL`; unset/empty -> the Sheet leg is a silent no-op (GA4 still receives events if
    * not a webdriver session). */
@@ -112,7 +110,7 @@ export interface Analytics {
    * value. A no-op for a `navigator.webdriver` session, same as `track()`. */
   updateLocation(loc: LocationLike): void;
   /** R3-B15 (Opus eyes-on review, 2026-09-25): `preview` is only known once `resolveSession()`
-   * (`src/lib/release/session.ts`) settles, which is ASYNC — `createAnalytics()`'s own `opts.preview`
+   * (an async preview-host session check, none exists in OceanMetrics Atlas) settles — `createAnalytics()`'s own `opts.preview`
    * is necessarily a guess (`Shell.svelte`/`Report.svelte` both construct with `preview: false`,
    * before the session fetch has even started) that must be corrected once the real answer is in,
    * or `content_group` reads `"atlas"` on the review host for the rest of the session. Updates
@@ -209,14 +207,15 @@ function defaultUserAgent(): string {
  * phase's app entry) owns the instance and its lifetime. */
 export function createAnalytics(opts: AnalyticsOptions): Analytics {
   const webdriver = (opts.isWebdriver ?? defaultIsWebdriver)();
-  const measurementId = opts.measurementId ?? GA_MEASUREMENT_ID;
+  const measurementId = opts.measurementId ?? "";
   // R3-B15: mutable — `updatePreview()` below corrects both once the real, async session answer
   // is in (see that method's own doc on `Analytics`).
   let contentGroup = opts.preview ? "atlas-preview" : "atlas";
   const logUrl = opts.logUrl ?? "";
   const transport = opts.transport ?? (logUrl ? createBrowserTransport() : noopTransport());
   const now = opts.now ?? Date.now;
-  const gtag = opts.gtag ?? defaultGtag();
+  // no measurement id -> the GA4 leg is a true no-op (and `window.gtag`/`dataLayer` are never installed)
+  const gtag: GtagFn = measurementId ? (opts.gtag ?? defaultGtag()) : () => {};
   const batchSize = opts.batchSize ?? DEFAULT_BATCH;
   const flushIntervalMs = opts.flushIntervalMs ?? DEFAULT_INTERVAL_MS;
 

@@ -9,18 +9,22 @@ import { QUERY_KEYS } from "../../src/lib/state/types";
 describe("buildPageLocation / buildPagePath — never the hash, never an unlisted query key", () => {
   it("rebuilds origin + path + allow-listed query, dropping nothing that is allowed", () => {
     const loc: LocationLike = {
-      origin: "https://marinesensitivity.org",
+      origin: "https://oceanmetrics.io",
       pathname: "/atlas/",
-      search: "?ver=v9&lens=species&sp=ms_merge%7CWORMS%3A137209",
+      search: "?lens=species&proj=mercator&sp=ms_merge%7CWORMS%3A137209",
     };
     expect(buildPageLocation(loc)).toBe(
-      "https://marinesensitivity.org/atlas/?ver=v9&lens=species&sp=ms_merge%7CWORMS%3A137209",
+      "https://oceanmetrics.io/atlas/?lens=species&proj=mercator&sp=ms_merge%7CWORMS%3A137209",
     );
   });
 
   it("buildPagePath omits the origin (matches ms_log_header()'s page column)", () => {
-    const loc: LocationLike = { origin: "https://x.test", pathname: "/atlas/", search: "?ver=v9" };
-    expect(buildPagePath(loc)).toBe("/atlas/?ver=v9");
+    const loc: LocationLike = {
+      origin: "https://x.test",
+      pathname: "/atlas/",
+      search: "?proj=mercator",
+    };
+    expect(buildPagePath(loc)).toBe("/atlas/?proj=mercator");
   });
 
   it("produces no trailing '?' when nothing survives the allow-list", () => {
@@ -33,21 +37,21 @@ describe("buildPageLocation / buildPagePath — never the hash, never an unliste
     const loc: LocationLike = {
       origin: "https://x.test",
       pathname: "/atlas/",
-      search: "?ver=v9&secret_token=abc123&lens=scores",
+      search: "?proj=mercator&secret_token=abc123&lens=collection",
     };
     const out = buildPageLocation(loc);
     expect(out).not.toContain("secret_token");
     expect(out).not.toContain("abc123");
-    expect(out).toBe("https://x.test/atlas/?ver=v9&lens=scores");
+    expect(out).toBe("https://x.test/atlas/?lens=collection&proj=mercator");
   });
 
   it("respects a caller-supplied allow-list narrower than QUERY_KEYS", () => {
     const loc: LocationLike = {
       origin: "https://x.test",
       pathname: "/atlas/",
-      search: "?ver=v9&lens=scores",
+      search: "?lens=collection&proj=mercator",
     };
-    expect(buildPageLocation(loc, ["ver"])).toBe("https://x.test/atlas/?ver=v9");
+    expect(buildPageLocation(loc, ["proj"])).toBe("https://x.test/atlas/?proj=mercator");
   });
 
   it("the default allow-list is exactly state/types.ts's QUERY_KEYS (single source of truth)", () => {
@@ -68,14 +72,14 @@ describe("buildPageLocation / buildPagePath — never the hash, never an unliste
     const locWithHash: LocationLike & { hash: string } = {
       origin: "https://x.test",
       pathname: "/atlas/",
-      search: "?ver=v9",
+      search: "?proj=mercator",
       hash: "#pl=z.pa.1,2,3~t=Sensitive%20Report%20Title",
     };
     const out = buildPageLocation(locWithHash);
     expect(out).not.toContain("#");
     expect(out).not.toContain("pl=z.pa");
     expect(out).not.toContain("Sensitive");
-    expect(out).toBe("https://x.test/atlas/?ver=v9");
+    expect(out).toBe("https://x.test/atlas/?proj=mercator");
   });
 
   it("hash-only keys (pl, t) are never in the query allow-list to begin with", () => {

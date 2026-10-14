@@ -12,12 +12,12 @@ const FULL: UiState = {
   dock: "left",
   size: 420,
   detent: "full",
-  expandedRow: "data-zones",
+  expandedRow: "data-raster",
 };
 
 describe("formatUi / parseUi: round trip (v4)", () => {
   it("round-trips every tool, including details", () => {
-    for (const tool of ["layers", "details", "table", "report"] as const) {
+    for (const tool of ["layers", "details", "table", "places"] as const) {
       expect(parseUi(formatUi({ ...FULL, tool }))).toEqual({ ...FULL, tool });
     }
   });
@@ -35,20 +35,20 @@ describe("formatUi / parseUi: round trip (v4)", () => {
   });
 
   it("round-trips every expandedRow, including null (neither row expanded)", () => {
-    for (const expandedRow of ["data-raster", "data-zones", null] as const) {
+    for (const expandedRow of ["data-raster", null] as const) {
       expect(parseUi(formatUi({ ...FULL, expandedRow }))).toEqual({ ...FULL, expandedRow });
     }
   });
 
   // R4-D: the report-tab field is retired; a fresh token has 6 fields and carries none.
   it("a fresh v4 token has six fields and no report-tab field", () => {
-    expect(formatUi(FULL)).toBe("4.t.l.420.f.z");
+    expect(formatUi(FULL)).toBe("4.t.l.420.f.d");
     expect(formatUi(FULL).split(".")).toHaveLength(6);
   });
 
   it("a pre-R4-D v4 token (seven fields) still parses; its report-tab field is ignored", () => {
-    expect(parseUi("4.r.l.420.f.z.2")).toEqual({ ...FULL, tool: "report" });
-    expect(parseUi("4.r.l.420.f.z.anything")).toEqual({ ...FULL, tool: "report" });
+    expect(parseUi("4.r.l.420.f.d.2")).toEqual({ ...FULL, tool: "places" });
+    expect(parseUi("4.r.l.420.f.d.anything")).toEqual({ ...FULL, tool: "places" });
   });
 
   it("round-trips the panel size boundaries", () => {
@@ -135,7 +135,7 @@ describe("parseUi: version-3 backward compatibility (R4-B mapping)", () => {
 
   it("tab=info on another tool does not change that tool", () => {
     expect(parseUi("3.t.r.380.h.d.i.1")?.tool).toBe("table");
-    expect(parseUi("3.r.r.380.h.d.i.2")).toMatchObject({ tool: "report" });
+    expect(parseUi("3.r.r.380.h.d.i.2")).toMatchObject({ tool: "places" });
     expect(parseUi("3.r.r.380.h.d.i.2")).not.toHaveProperty("reportTab");
   });
 
@@ -165,10 +165,10 @@ describe("parseUi: version-1 backward compatibility (the retired 'flower' rail t
     });
   });
 
-  it("a v1 token naming the old 'places' tool code opens Report on the places tab", () => {
+  it("a v1 token naming the old 'places' tool code opens the Places tool", () => {
     expect(parseUi("1.p.r.380.h.d")).toEqual({
       ...BASE,
-      tool: "report",
+      tool: "places",
       dock: "right",
     });
   });
@@ -177,7 +177,7 @@ describe("parseUi: version-1 backward compatibility (the retired 'flower' rail t
     for (const [code, tool] of [
       ["l", "layers"],
       ["t", "table"],
-      ["r", "report"],
+      ["r", "places"],
     ] as const) {
       expect(parseUi(`1.${code}.r.380.h.n`)).toEqual({
         ...BASE,
@@ -203,10 +203,10 @@ describe("parseUi: version-1 backward compatibility (the retired 'flower' rail t
 });
 
 describe("parseUi: version-2 backward compatibility (the retired 'places' rail tool)", () => {
-  it("a v2 token naming the old 'places' tool code opens Report on the places tab", () => {
+  it("a v2 token naming the old 'places' tool code opens the Places tool", () => {
     expect(parseUi("2.p.r.380.h.d.i")).toEqual({
       ...BASE,
-      tool: "report",
+      tool: "places",
       dock: "right",
     });
   });
@@ -219,7 +219,7 @@ describe("parseUi: version-2 backward compatibility (the retired 'places' rail t
   it("a v2 token naming any OTHER (still-current) tool maps straight across", () => {
     for (const [code, tool] of [
       ["t", "table"],
-      ["r", "report"],
+      ["r", "places"],
     ] as const) {
       expect(parseUi(`2.${code}.r.380.h.n.l`)).toEqual({
         ...BASE,

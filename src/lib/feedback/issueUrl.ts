@@ -1,5 +1,5 @@
 // atlas-8 Deliverable 4 ("Beta feedback"): "Report a problem" opens a prefilled GitHub issue in
-// `MarineSensitivity/atlas` -- zero backend, the same fallback CalCOFI Explorer used (plan atlas-8's
+// `oceanmetrics/atlas` -- zero backend, the same fallback CalCOFI Explorer used (plan atlas-8's
 // own citation). Every field a report needs to be actionable (app version + git SHA, the release,
 // the lens, the page URL, user agent, viewport, theme, a short template) is composed HERE, in one
 // pure function the caller (src/shell/Shell.svelte) calls with a snapshot of the current view -- this
@@ -46,7 +46,7 @@ export interface FeedbackContext {
   theme: string;
 }
 
-const ISSUE_BASE = "https://github.com/MarineSensitivity/atlas/issues/new";
+const ISSUE_BASE = "https://github.com/oceanmetrics/atlas/issues/new";
 const LABELS = "beta-feedback";
 // GitHub silently truncates a `new/…` issue URL somewhere around 8 KB; staying comfortably under
 // that keeps every identifier intact even on a browser whose user agent string runs long.

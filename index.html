@@ -3,47 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Scores · MarineSensitivity Atlas</title>
-    <meta name="description" content="Scores, species, places and reports for U.S. marine areas." />
+    <title>OceanMetrics Atlas</title>
+    <meta
+      name="description"
+      content="OceanMetrics Atlas: species distribution model products, places and their credits, for U.S. marine areas."
+    />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-
-    <!--
-      atlas-3 step 3: fonts. The ONE display weight the first frame needs (headlines are never
-      lighter than Bold, guide p. 5) is preloaded -- the budget has room (spec.md §12: the display
-      face's 2-weight budget is <= 20 KB gzip; this one file is ~10 KB).
-
-      Measured fix (e2e/shell.cls.spec.ts caught it): the body face (Carlito) also needs preloading,
-      not just the display face. `font-display: swap` shows the fallback for however long the
-      request takes, however short -- fonts.css's metric overrides make that fallback match
-      Carlito's OWN box model closely, but not perfectly, on every platform (they are tuned to
-      Arial, which is what `sans-serif` resolves to on Windows and Linux/Liberation Sans, but not
-      quite what it resolves to on macOS). Preloading both weights wins the race often enough that
-      the browser already has Carlito by the time it paints, so the mismatched fallback is never
-      actually painted at all -- measured CLS = 0 with this in place, nonzero without it. The
-      lens switch's PRESSED state is bold body text (Segmented.svelte, untouched here), which is
-      why Bold matters in the first frame too, not just Regular.
-    -->
-    <link
-      rel="preload"
-      as="font"
-      type="font/woff2"
-      href="./src/lib/brand/fonts/jost-bold-latin.woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      as="font"
-      type="font/woff2"
-      href="./src/lib/brand/fonts/carlito-regular-latin.woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      as="font"
-      type="font/woff2"
-      href="./src/lib/brand/fonts/carlito-bold-latin.woff2"
-      crossorigin
-    />
 
     <!--
       critical CSS, inlined so the shell paints before any JavaScript bundle loads or parses (plan
@@ -79,8 +44,7 @@
       alias) still asks `matchMedia`. It reads ONLY `location.search` and `matchMedia` and writes
       ONLY `document.documentElement.dataset.theme` -- no localStorage, no fetch, nothing else --
       so there is no flash of the wrong theme and no other side effect.
-      tests/shell/theme-preboot.test.ts runs this exact script (extracted from this file, like
-      tests/release/inline-early-fetch.test.ts does for the early-fetch script below) through the
+      tests/shell/theme-preboot.test.ts runs this exact script (extracted from this file) through the
       same case table `resolveTheme` is tested against, and asserts the two never disagree; it
       also asserts the script touches nothing but that one dataset key.
     -->
@@ -110,237 +74,6 @@
           theme = "navy";
         }
         document.documentElement.dataset.theme = theme;
-      })();
-    </script>
-
-    <!--
-      early-fetch: kicks off the registry (latest.txt, versions.json) and session.json before the
-      app bundle even starts parsing (CalCOFI Explorer's index.html:159-163 pattern,
-      atlas-refs/"calcofi explore review.md" §2), then chains {ver}/manifest.json and
-      {ver}/app/boot.json off the release this host is allowed to render. Everything lands on
-      window.__early as promises; nothing here throws — a missing file (GitHub Pages has no
-      session.json; {ver}/app/boot.json does not exist until atlas-1) or a network error is
-      swallowed and resolved to a safe default, never left as an unhandled rejection (the Playwright
-      smoke spec asserts zero console errors).
-
-      Two rules this script exists to enforce, both security-shaped:
-
-      1. Release files are ABSOLUTE bucket URLs (DATA_BASE below, plan D6's `dataBase()`), never
-         same-origin and never relative: the app is mounted at /atlas/ on one host and /{ver}/atlas/
-         on the other, so a relative `fetch(ver + "/manifest.json")` both 404s (it produced
-         /v9/atlas/v9/manifest.json) and makes the data origin depend on the mount point.
-         session.json is the ONE same-origin fetch, by design (plan D6).
-      2. The public host renders PUBLIC releases only. A restricted release (v7b/v8/v9 today, per
-         versions.json's `access`) is fetched only when the same-origin session says
-         `preview: true`; otherwise the request is never made and the app falls through to
-         latest.txt's release, recording the denial on window.__early.denied. Unknown version, a row
-         with no `access`, or an unreadable versions.json all fail CLOSED.
-
-      This duplicates src/lib/release/{version,session,access,dataBase}.ts on purpose: it must run
-      with zero bundle before any `import` is possible. Those modules are the source of truth; this
-      copy is driven through the SAME case table by tests/release/inline-early-fetch.test.ts (which
-      runs this very script in a node:vm sandbox), so the two cannot drift silently.
-    -->
-    <script>
-      (function () {
-        var VERSION_RE = /^v[0-9]+[a-z]?$/;
-        // derived from VERSION_RE, not a second hardcoded literal — see
-        // src/lib/release/version.ts's PATH_VERSION_RE for why (drift).
-        var PATH_VERSION_RE = new RegExp("^/(" + VERSION_RE.source.slice(1, -1) + ")/");
-        // mirrors PUBLIC_DATA_BASE in src/lib/release/dataBase.ts (path-style S3; the bare
-        // …/{ver}/… path without the marine-atlas/ prefix answers 403).
-        var DATA_BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
-
-        function versionFromPath(pathname) {
-          var m = PATH_VERSION_RE.exec(pathname);
-          return m ? m[1] : null;
-        }
-        function versionFromQuery(search) {
-          var v = new URLSearchParams(search).get("ver");
-          return v && VERSION_RE.test(v) ? v : null;
-        }
-        function fetchJSON(url) {
-          return fetch(url, { cache: "no-cache" }).then(function (r) {
-            if (!r.ok) throw new Error(url + " " + r.status);
-            return r.json();
-          });
-        }
-
-        // --- registry (bucket, starts immediately) ----------------------------------------
-        var latest = fetch(DATA_BASE + "latest.txt", { cache: "no-cache" })
-          .then(function (r) {
-            if (!r.ok) throw new Error("latest.txt " + r.status);
-            return r.text();
-          })
-          .then(function (t) {
-            t = t.trim();
-            // never stash something that isn't actually a version label — a misconfigured host
-            // returning e.g. an error page for a missing latest.txt must not leak into
-            // window.__early.version (see src/lib/release/version.ts's isVersionLabel).
-            if (!VERSION_RE.test(t)) throw new Error("latest.txt is not a version label");
-            return t;
-          })
-          .catch(function () {
-            return null;
-          });
-        // mirrors src/lib/release/access.ts's normalizeRegistry(): the LIVE file is
-        // {"versions":[...]}; a bare array is accepted too; anything else is unreadable (not
-        // "empty"), which fails closed to latest.txt's version alone.
-        function normalizeRegistry(body) {
-          if (Array.isArray(body)) return body;
-          if (body && typeof body === "object" && Array.isArray(body.versions)) {
-            return body.versions;
-          }
-          return null;
-        }
-        var versions = fetchJSON(DATA_BASE + "versions.json")
-          .then(normalizeRegistry)
-          .catch(function () {
-            return null;
-          });
-
-        // --- session.json: the one same-origin fetch, and the one door into preview (D6) ----
-        // started now, but only AWAITED when a restricted release is in play (below), so the
-        // public path never blocks on it. 404 / network error / bad JSON / no preview key = public.
-        var session = fetch("session.json", { cache: "no-cache" })
-          .then(function (r) {
-            if (!r.ok) return { preview: false, raw: null };
-            return r
-              .json()
-              .then(function (body) {
-                return {
-                  preview: !!(body && typeof body === "object" && body.preview === true),
-                  raw: body,
-                };
-              })
-              .catch(function () {
-                return { preview: false, raw: null };
-              });
-          })
-          .catch(function () {
-            return { preview: false, raw: null };
-          });
-
-        // --- the access gate (mirrors src/lib/release/access.ts) ----------------------------
-        function accessOf(rows, ver) {
-          if (!ver || !Array.isArray(rows)) return "unknown";
-          for (var i = 0; i < rows.length; i++) {
-            var row = rows[i];
-            if (row && typeof row === "object" && row.ver === ver) {
-              return row.access === "public" ? "public" : "restricted";
-            }
-          }
-          return "unknown";
-        }
-        // pathVer: the path names a version (`/v9/atlas/`) — the PREVIEW host's URL shape, the only
-        // place Caddy serves session.json. session.ver outranks the path (see previewVer below), so
-        // the session must be read there even for a public candidate. The PUBLIC host's own shape
-        // (`/atlas/`, with or without ?ver=) still never waits unless a restricted release is in play.
-        function requiresSession(rows, requested, lat, pathVer) {
-          if (pathVer) return true;
-          if (!Array.isArray(rows)) return false; // unreadable: latest.txt only, session irrelevant
-          return accessOf(rows, requested) === "restricted" || accessOf(rows, lat) === "restricted";
-        }
-        // mirrors src/lib/release/resolveVer.ts's previewVer()/candidateVer(): in preview mode the
-        // version is the one in session.ver and the path AND ?ver= are both ignored — Caddy already
-        // decided which release this path may show by routing here at all, so re-deriving it from
-        // the URL would let a stray ?ver= on a preview tab ask for a DIFFERENT release. Not trusted
-        // unless it is itself a well-formed label, and it still goes through check() below: a
-        // session cannot name a version the registry does not list.
-        function previewVer(sess) {
-          if (!sess || sess.preview !== true) return null;
-          var raw = sess.raw;
-          if (!raw || typeof raw !== "object") return null;
-          var v = raw.ver;
-          return typeof v === "string" && VERSION_RE.test(v) ? v : null;
-        }
-        // returns null when allowed, else the denial reason
-        function check(ver, rows, lat, sess) {
-          if (!ver) return "unknown-version";
-          if (!Array.isArray(rows)) return ver && ver === lat ? null : "registry-unreadable";
-          var a = accessOf(rows, ver);
-          if (a === "public") return null;
-          if (a === "unknown") return "unknown-version";
-          return sess && sess.preview === true ? null : "restricted";
-        }
-        function decide(requested, lat, rows, sess) {
-          var candidate = previewVer(sess) || requested || lat;
-          if (!candidate) return { ver: null, denied: null };
-          var reason = check(candidate, rows, lat, sess);
-          if (!reason) return { ver: candidate, denied: null };
-          var denied = { ver: candidate, reason: reason };
-          if (lat && lat !== candidate && !check(lat, rows, lat, sess)) {
-            return { ver: lat, denied: denied }; // fall through to latest, denial recorded
-          }
-          return { ver: null, denied: denied };
-        }
-
-        // --- dataBase (mirrors src/lib/release/dataBase.ts) ---------------------------------
-        function normalizeDataBase(value) {
-          if (typeof value !== "string" || !value) return null;
-          var url;
-          try {
-            url = new URL(value);
-          } catch (e) {
-            return null; // relative or unparseable would mean same-origin: never accepted
-          }
-          if (url.protocol !== "https:") return null;
-          if (url.username || url.password) return null;
-          if (url.search || url.hash) return null;
-          return url.pathname.slice(-1) === "/" ? url.href : url.href + "/";
-        }
-        function dataBase(ver, sess) {
-          if (!sess || sess.preview !== true) return DATA_BASE;
-          var raw = sess.raw;
-          if (!raw || typeof raw !== "object") return DATA_BASE;
-          var d = raw.data;
-          if (typeof d === "string") return normalizeDataBase(d) || DATA_BASE;
-          if (d && typeof d === "object" && ver) return normalizeDataBase(d[ver]) || DATA_BASE;
-          return DATA_BASE;
-        }
-
-        // --- resolve, gate, then (and only then) fetch the release --------------------------
-        var pathVer = versionFromPath(location.pathname);
-        var requested = pathVer || versionFromQuery(location.search);
-
-        var decision = Promise.all([latest, versions]).then(function (r) {
-          var lat = r[0];
-          var rows = r[1];
-          var gated = requiresSession(rows, requested, lat, pathVer)
-            ? session
-            : Promise.resolve(null);
-          return gated.then(function (sess) {
-            var d = decide(requested, lat, rows, sess);
-            d.base = dataBase(d.ver, sess);
-            return d;
-          });
-        });
-
-        function releaseJSON(path) {
-          return decision
-            .then(function (d) {
-              return d.ver ? fetchJSON(d.base + d.ver + "/" + path) : null;
-            })
-            .catch(function () {
-              return null; // {ver}/app/boot.json does not exist until atlas-1: a quiet null
-            });
-        }
-
-        window.__early = {
-          version: decision.then(function (d) {
-            return d.ver;
-          }),
-          denied: decision.then(function (d) {
-            return d.denied;
-          }),
-          base: decision.then(function (d) {
-            return d.base;
-          }),
-          versions: versions,
-          session: session,
-          manifest: releaseJSON("manifest.json"),
-          boot: releaseJSON("app/boot.json"),
-        };
       })();
     </script>
 
@@ -392,39 +125,8 @@
     <div id="shell" class="app">
       <header class="topbar" data-tour="topbar">
         <span data-tour="brand" style="display: flex; align-items: center; gap: var(--space-2)">
-          <!-- R5: the wave-in-hexagon mark, inlined identically to
-               src/lib/brand/WaveHexMark.svelte's own render (see that file's header) so the
-               pre-hydration skeleton paints the real mark, not a placeholder -- width/height are
-               explicit attributes, so its box is byte-identical to the hydrated twin regardless of
-               which stylesheet (this inline one, or the component's scoped one) resolves first. -->
-          <svg
-            class="wavehex"
-            viewBox="0 0 64 64"
-            width="28"
-            height="28"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path class="wavehex-bg" d="M32 3 57.1 17.5v29L32 61 6.9 46.5v-29Z" />
-            <path
-              class="wavehex-wave"
-              d="M6.9 40c6-7 13-7 19-1s14 7 21 0 8-4 10.2-2.5v10L32 61 6.9 46.5Z"
-            />
-            <path class="wavehex-crest" d="M10 30.5c5-6 11-6 16.5-1s13 6 19.5-.5 7-3.5 9-2.5" />
-            <path class="wavehex-ring" d="M32 3 57.1 17.5v29L32 61 6.9 46.5v-29Z" />
-          </svg>
-          <h1 class="brand-title" id="app-title">Marine Sensitivity Atlas</h1>
+          <h1 class="brand-title" id="app-title">OceanMetrics Atlas</h1>
         </span>
-
-        <button
-          type="button"
-          class="chip"
-          id="sk-version-chip"
-          data-tour="version-chip"
-          data-control="version-chip"
-          aria-hidden="true"
-          tabindex="-1"
-        ></button>
 
         <div
           class="sk-seg"
@@ -434,7 +136,7 @@
           data-control="lens-switch"
           aria-hidden="true"
         >
-          <span class="is-pressed">Scores</span>
+          <span class="is-pressed">Collections</span>
           <span>Species</span>
         </div>
 
@@ -551,14 +253,12 @@
           id="map"
           class="map"
           role="img"
-          aria-label="Map of U.S. marine areas"
+          aria-label="Map of marine data layers"
           aria-describedby="map-table-equivalent"
           data-tour="map"
         ></div>
-        <!-- fix list #9: mirrors Shell.svelte's own hydrated markup, so the pointer to the zones
-             table exists even in the brief pre-hydration skeleton window. -->
         <p id="map-table-equivalent" class="visually-hidden">
-          Every zone's score is also in the Zones table, under the Table tool.
+          The values shown on the map are also available as text under the Table and Details tools.
         </p>
 
         <nav
@@ -569,7 +269,7 @@
           data-tour="rail"
           data-control="rail"
         >
-          <!-- R4-B: the spine has FOUR entries (Layers, Details, Table, Report) and is attached to the
+          <!-- R4-B: the spine has FOUR entries (Layers, Details, Table, Places) and is attached to the
                panel's outer edge -- on the LEFT by default (shell.css `.rail-region`/`.panel-region`
                read `--rail-offset`); the skeleton mirrors both. -->
           <div class="sk-rail" aria-hidden="true">
@@ -612,12 +312,12 @@
                    e2e/shell.cls.spec.ts's geometry-equality gate actually matches against the real
                    LayersPanel (measured at 1280px with no boot.json: 4 fields 66px, one switch row
                    24px, the layers-control section 43px, 12px gaps --
-                   src/lens/scores/LayersPanel.svelte). The legend (once a `sk-legend-note`
+                   src/lib/ui/LayersPanel.svelte). The legend (once a `sk-legend-note`
                    placeholder here, for the "not published yet" note) moved OUT of this panel
                    entirely in the atlas-4/5 defect fix -- it is the shell's own floating region
-                   over the map now (ScoresLegend.svelte), which the skeleton does not model at all
+                   over the map now (the lens legends), which the skeleton does not model at all
                    (same as the species lens' pre-existing floating legend never has been). -->
-              <span hidden>Layers, palette and outline options arrive in a later phase.</span>
+              <span hidden>Layers and options arrive in a later phase.</span>
               <div class="sk-field"></div>
               <div class="sk-field"></div>
               <div class="sk-field"></div>
@@ -631,7 +331,7 @@
     </div>
 
     <noscript>
-      This app needs JavaScript to render the map, scores and species. Please enable it.
+      This app needs JavaScript to render the map and species. Please enable it.
     </noscript>
 
     <script type="module" src="/src/main.ts"></script>

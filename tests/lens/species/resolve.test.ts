@@ -172,16 +172,13 @@ describe("the canonical URL", () => {
     expect(search).not.toContain("mdl_key");
   });
 
-  it("keeps the lens's own `out` default rather than writing the scores one into the link", () => {
-    expect(
-      canonicalUrl({ search: "?mdl_seq=54383", hash: "" }, { sp: "54383", in: MERGED_IN }).search,
-    ).not.toContain("out=");
-    expect(
-      canonicalUrl(
-        { search: "?mdl_seq=54383&out=ecoregion", hash: "" },
-        { sp: "54383", in: MERGED_IN },
-      ).search,
-    ).toContain("out=ecoregion");
+  it("never writes a retired scores-era key (out, ver) into the link", () => {
+    const { search } = canonicalUrl(
+      { search: "?mdl_seq=54383&out=ecoregion&ver=v9", hash: "" },
+      { sp: "54383", in: MERGED_IN },
+    );
+    expect(search).not.toContain("out=");
+    expect(search).not.toContain("ver=");
   });
 
   it("omits in= for the merged model and rep= for the default representation", () => {

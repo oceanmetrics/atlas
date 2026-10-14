@@ -4,7 +4,6 @@
 // hash for places + title only; `,`/`:` left un-escaped for a readable, paste-able link; every field
 // written only when it differs from its default; an unknown key or a malformed value never throws —
 // it is ignored / clamped to the default instead.
-import { isVersionLabel } from "../release/version";
 // R3 (round-2 plan §5 U4): `layers=`'s parse/format live in the map domain's own layer-stack model
 // (`../map/layerStack.ts`), not duplicated here — this module just calls them, exactly like every
 // other field's parser.
@@ -13,13 +12,11 @@ import { NO_ALIAS_LOOKUP, rewriteLegacyParams, type AliasLookup } from "./legacy
 import {
   DEFAULT_SEL,
   LENSES,
-  OUTLINES,
   PALETTES,
   PROJECTIONS,
   REPRESENTATIONS,
   THEMES,
   defaultLens,
-  defaultOut,
   type Lens,
   type MapView,
   type Sel,
@@ -53,7 +50,7 @@ function parseEnum<T extends string>(v: string | null, allowed: readonly T[], fa
   return v !== null && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
 }
 
-/** the gallery/mockups' own theme-name convention (`navy`/`paper`, docs/design/mockups/*.html) as
+/** the legacy theme-name convention (`navy`/`paper`) as
  * aliases of the real app's `dark`/`light` (atlas-8 fix). index.html's inline pre-paint script
  * carries the identical alias table (it must run before this module's bundle parses); both are
  * driven through the same case rows in tests/shell/theme-preboot.test.ts and
@@ -65,10 +62,6 @@ export const THEME_ALIASES: Readonly<Record<string, "dark" | "light">> = {
 
 function aliasTheme(v: string | null): string | null {
   return v !== null && v in THEME_ALIASES ? THEME_ALIASES[v] : v;
-}
-
-function parseVersionLike(v: string | null): string | undefined {
-  return v !== null && isVersionLabel(v) ? v : undefined;
 }
 
 /** `us`: default true (US-only); only `"0"` (exactly) turns it off — any other value, including
@@ -87,7 +80,7 @@ function parseZoomToLayer(v: string | null): boolean {
   return v !== "0";
 }
 
-const SEL_TOKEN_RE = /^(cell:[^:,]+|zone:[^:,]+:[^:,]+|place:\d+)$/;
+const SEL_TOKEN_RE = /^place:\d+$/;
 
 function parseSelToken(v: string | null): string | undefined {
   return v !== null && SEL_TOKEN_RE.test(v) ? v : undefined;
@@ -111,7 +104,7 @@ function parseNum(s: string): number | null {
 
 /** `map=lon,lat,zoom` (3 fields) or `map=lon,lat,zoom,bearing,pitch` (5 fields, travelling
  * together); any other field count, or any non-numeric field, is malformed and clamps to `undefined`
- * (falls back to the `area` preset). */
+ * (falls back to the default camera). */
 function parseMapView(v: string | null): MapView | undefined {
   if (v === null) return undefined;
   const parts = v.split(",");
@@ -138,22 +131,16 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
 
   const sp = cleanString(params.get("sp"));
   const lens: Lens = parseEnum(params.get("lens"), LENSES, defaultLens(sp));
-  const out = parseEnum(params.get("out"), OUTLINES, defaultOut(lens));
 
   return {
-    ver: parseVersionLike(params.get("ver")),
     lens,
-    lyr: cleanString(params.get("lyr")),
     pal: parseEnum(params.get("pal"), PALETTES, DEFAULT_SEL.pal),
-    unit: cleanString(params.get("unit")) ?? DEFAULT_SEL.unit,
-    area: cleanString(params.get("area")) ?? DEFAULT_SEL.area,
     map: parseMapView(params.get("map")),
     proj: parseEnum(params.get("proj"), PROJECTIONS, DEFAULT_SEL.proj),
     sp,
     in: cleanString(params.get("in")) ?? DEFAULT_SEL.in,
     rep: parseEnum(params.get("rep"), REPRESENTATIONS, DEFAULT_SEL.rep),
     us: parseUs(params.get("us")),
-    out,
     obis: parseFlag(params.get("obis")),
     sel: parseSelToken(params.get("sel")),
     show: parseList(params.get("show")),
@@ -191,21 +178,15 @@ export function parseSel(loc: UrlLike, alias: AliasLookup = NO_ALIAS_LOOKUP): Se
 export function formatSel(sel: Sel): { search: string; hash: string } {
   const params = new URLSearchParams();
 
-  if (sel.ver !== undefined) params.set("ver", sel.ver);
   const lensDefault = defaultLens(sel.sp);
   if (sel.lens !== lensDefault) params.set("lens", sel.lens);
-  if (sel.lyr) params.set("lyr", sel.lyr);
   if (sel.pal !== DEFAULT_SEL.pal) params.set("pal", sel.pal);
-  if (sel.unit !== DEFAULT_SEL.unit) params.set("unit", sel.unit);
-  if (sel.area !== DEFAULT_SEL.area) params.set("area", sel.area);
   if (sel.map) params.set("map", formatMapView(sel.map));
   if (sel.proj !== DEFAULT_SEL.proj) params.set("proj", sel.proj);
   if (sel.sp) params.set("sp", sel.sp);
   if (sel.in !== DEFAULT_SEL.in) params.set("in", sel.in);
   if (sel.rep !== DEFAULT_SEL.rep) params.set("rep", sel.rep);
   if (sel.us === false) params.set("us", "0");
-  const outDefault = defaultOut(sel.lens);
-  if (sel.out !== outDefault) params.set("out", sel.out);
   if (sel.obis === true) params.set("obis", "1");
   if (sel.sel) params.set("sel", sel.sel);
   if (sel.show.length > 0) params.set("show", sel.show.join(","));
@@ -233,8 +214,8 @@ export function formatSel(sel: Sel): { search: string; hash: string } {
  * would write at least one field back, meaning `loc` differs from the app's own default view. This
  * is "is this a deep link" in exactly this module's own vocabulary (`formatSel`'s header: "writing
  * ONLY fields that differ from their default"), never a second, hand-rolled notion of it — a caller
- * that wants "did the visitor arrive via a link that names something" (WelcomeModal.svelte's M5 fix:
- * a deep link must never be interrupted by the first-timer welcome modal) calls this instead of
+ * that wants "did the visitor arrive via a link that names something" (the first-timer welcome must never
+ * interrupt a deep link) calls this instead of
  * re-deriving it from `location.search`/`.hash` directly.
  */
 export function hasViewState(loc: UrlLike): boolean {

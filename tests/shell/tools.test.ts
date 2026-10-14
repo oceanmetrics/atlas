@@ -1,5 +1,5 @@
 // atlas-3 step 3, spec.md §5.1 / R4-B: the spine is FOUR controls, the SAME four, in the SAME order,
-// on every viewport AND every lens: Layers, Details, Table, Report (control-grammar.md). This pins src/shell/tools.ts's data against that rule directly,
+// on every viewport AND every lens: Layers, Details, Table, Places. This pins src/shell/tools.ts's data against that rule directly,
 // and also closes the loop on the ONE piece of text index.html's static skeleton duplicates by hand
 // (its default "Layers" panel body): if this drifts from TOOL_BODY.layers, the CLS gate would
 // eventually catch the resulting height mismatch in a real browser, but this test catches the TEXT
@@ -18,9 +18,9 @@ import {
 } from "../../src/shell/tools";
 import { legacyToolFromParams } from "../../src/lib/state/legacy";
 
-describe("TOOL_ORDER: the spine is Layers, Details, Table, Report -- in that order", () => {
+describe("TOOL_ORDER: the spine is Layers, Details, Table, Places -- in that order", () => {
   it("has exactly these four tools, in this exact order (spec.md §5.1)", () => {
-    expect(TOOL_ORDER).toEqual(["layers", "details", "table", "report"]);
+    expect(TOOL_ORDER).toEqual(["layers", "details", "table", "places"]);
   });
 
   it("every tool has a label and a body sentence -- nothing is missing", () => {
@@ -63,22 +63,22 @@ describe("Details uses one icon in both lenses", () => {
 });
 
 describe("toolTakesFullStage: only Table takes the whole stage", () => {
-  it("table yes; layers, details and report no", () => {
+  it("table yes; layers, details and places no", () => {
     expect(TOOL_ORDER.filter(toolTakesFullStage)).toEqual(["table"]);
   });
 });
 
 describe("panelHeaderTitle: the header says what is shown, not the tool name", () => {
   const ctx: PanelContext = {
-    layer: "Score",
-    unit: "Raster cells",
+    layer: "Richness",
+    unit: "Hex cells",
     subject: "Cell 3058375",
     tableSubject: "2 places · Zones",
     placeCount: 3,
     lastClicked: "Cell 3058375",
   };
   it("layers: <layer> · <unit>", () => {
-    expect(panelHeaderTitle("layers", ctx)).toBe("Score · Raster cells");
+    expect(panelHeaderTitle("layers", ctx)).toBe("Richness · Hex cells");
   });
   it("details: the clicked subject or the species", () => {
     expect(panelHeaderTitle("details", ctx)).toBe("Cell 3058375");
@@ -86,11 +86,11 @@ describe("panelHeaderTitle: the header says what is shown, not the tool name", (
   it("table: its subject line", () => {
     expect(panelHeaderTitle("table", ctx)).toBe("2 places · Zones");
   });
-  it("report: N places, else Last clicked place, else the tool label", () => {
-    expect(panelHeaderTitle("report", ctx)).toBe("3 places");
-    expect(panelHeaderTitle("report", { ...ctx, placeCount: 1 })).toBe("1 place");
-    expect(panelHeaderTitle("report", { ...ctx, placeCount: 0 })).toBe("Last clicked place");
-    expect(panelHeaderTitle("report", { ...ctx, placeCount: 0, lastClicked: null })).toBe("Report");
+  it("places: N places, else Last clicked place, else the tool label", () => {
+    expect(panelHeaderTitle("places", ctx)).toBe("3 places");
+    expect(panelHeaderTitle("places", { ...ctx, placeCount: 1 })).toBe("1 place");
+    expect(panelHeaderTitle("places", { ...ctx, placeCount: 0 })).toBe("Last clicked place");
+    expect(panelHeaderTitle("places", { ...ctx, placeCount: 0, lastClicked: null })).toBe("Places");
   });
   it("falls back to the tool label when nothing is known", () => {
     const empty: PanelContext = {
@@ -104,18 +104,18 @@ describe("panelHeaderTitle: the header says what is shown, not the tool name", (
     expect(panelHeaderTitle("layers", empty)).toBe("Layers");
     expect(panelHeaderTitle("details", empty)).toBe("Details");
     expect(panelHeaderTitle("table", empty)).toBe("Table");
-    expect(panelHeaderTitle("layers", { ...empty, layer: "Score" })).toBe("Score");
+    expect(panelHeaderTitle("layers", { ...empty, layer: "Richness" })).toBe("Richness");
   });
 });
 
 describe("legacyToolFromParams: ?tool= legacy values (R4-B)", () => {
   const q = (s: string) => legacyToolFromParams(new URLSearchParams(s));
-  it("tool=flower opens Details; tool=places opens Report", () => {
+  it("tool=flower opens Details; tool=report (the retired Report tool) opens Places", () => {
     expect(q("tool=flower")).toBe("details");
-    expect(q("tool=places")).toBe("report");
+    expect(q("tool=report")).toBe("places");
   });
   it("the four current names pass through; anything else is absent", () => {
-    for (const t of ["layers", "details", "table", "report"]) expect(q(`tool=${t}`)).toBe(t);
+    for (const t of ["layers", "details", "table", "places"]) expect(q(`tool=${t}`)).toBe(t);
     expect(q("tool=bogus")).toBeNull();
     expect(q("")).toBeNull();
   });

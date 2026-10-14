@@ -26,35 +26,19 @@ import {
   type RoledLayer,
 } from "../../src/lib/map/style";
 import type { CartoStyleLike } from "../../src/lib/map/layers/basemap";
-import { zoneUnitsFromBoot, zoneUnitsWithOutline } from "../../src/lib/map/layers/zones";
 import {
   OUTSIDE_PRA_COLORMAP,
   titilerMaskTileTemplate,
   titilerTileTemplate,
 } from "../../src/lib/map/layers/titiler";
 import { OVERLAY_RASTER_OPACITY, SCORE_RASTER_OPACITY } from "../../src/lib/map/layers/raster";
-import type {
-  SourceSpecification,
-  StyleSpecification,
-  ZoneUnitSpec,
-} from "../../src/lib/map/types";
+import type { SourceSpecification, StyleSpecification } from "../../src/lib/map/types";
 import {
   MISTAGGED_BASEMAP_LAYER,
   UNGROUPED_BASEMAP_LAYER,
   UNORDERED_ROLED_LAYER,
 } from "../fixtures/map/faults";
 import { defaultLayerStackEntries, moveLayerStackEntry } from "../../src/lib/map/layerStack";
-
-const PRA: ZoneUnitSpec = {
-  unit: "programarea",
-  pmtiles: "https://s3.example/zones/programarea/zones.pmtiles",
-  sourceLayer: "programarea",
-};
-const ECO: ZoneUnitSpec = {
-  unit: "ecoregion",
-  pmtiles: "https://s3.example/zones/ecoregion/zones.pmtiles",
-  sourceLayer: "ecoregion",
-};
 
 const SCORE = {
   id: "r_lyr",
@@ -85,19 +69,19 @@ const FAKE_CARTO_STYLE: CartoStyleLike = {
 describe("orderLayers", () => {
   it("sorts by the declared order regardless of the order layers were built in", () => {
     const roled: RoledLayer[] = [
-      { role: "zone-line", layer: { id: "a_ln", type: "line", source: "s" } },
+      { role: "selection-line", layer: { id: "sel_ln", type: "line", source: "s" } },
       { role: "background", layer: { id: "bg", type: "background" } },
       { role: "raster", layer: { id: "r", type: "raster", source: "s" } },
     ];
-    expect(orderLayers(roled).map((l) => l.id)).toEqual(["bg", "r", "a_ln"]);
+    expect(orderLayers(roled).map((l) => l.id)).toEqual(["bg", "r", "sel_ln"]);
   });
 
-  it("is stable within a role (boot's unit order survives)", () => {
+  it("is stable within a role (insertion order survives)", () => {
     const roled: RoledLayer[] = [
-      { role: "zone-line", layer: { id: "programarea_ln", type: "line", source: "s" } },
-      { role: "zone-line", layer: { id: "ecoregion_ln", type: "line", source: "s" } },
+      { role: "overlay", layer: { id: "first_ov", type: "raster", source: "s" } },
+      { role: "overlay", layer: { id: "second_ov", type: "raster", source: "s" } },
     ];
-    expect(orderLayers(roled).map((l) => l.id)).toEqual(["programarea_ln", "ecoregion_ln"]);
+    expect(orderLayers(roled).map((l) => l.id)).toEqual(["first_ov", "second_ov"]);
   });
 
   it("SEEDED FAULT: a layer whose role is not in LAYER_ORDER throws, naming the layer", () => {
@@ -112,17 +96,17 @@ describe("orderLayers", () => {
     expect(() => orderLayers([UNGROUPED_BASEMAP_LAYER])).toThrowError(/basemap-seafloor-relief/);
   });
 
-  it("SEEDED FAULT: a basemap layer mistagged with a later role sorts AFTER the zone data it should sit under", () => {
+  it("SEEDED FAULT: a basemap layer mistagged with a later role sorts AFTER the data layer it should sit under", () => {
     const roled: RoledLayer[] = [
       { role: "basemap-land", layer: { id: "basemap-background", type: "background" } },
       MISTAGGED_BASEMAP_LAYER,
-      { role: "zone-fill", layer: { id: "programarea_fill", type: "fill", source: "s" } },
+      { role: "raster", layer: { id: "data_raster", type: "raster", source: "s" } },
     ];
     const ids = orderLayers(roled).map((l) => l.id);
     // proves the order gate has teeth: if composeStyle's merge loop ever tagged a CARTO layer with
-    // the wrong role, it would land AFTER the zone data instead of under it — exactly the "CARTO
-    // layers placed after the zone layers" regression this fixture stands in for.
-    expect(ids.indexOf("basemap-water")).toBeGreaterThan(ids.indexOf("programarea_fill"));
+    // the wrong role, it would land AFTER the data instead of under it — exactly the "CARTO layers
+    // placed after the data layers" regression this fixture stands in for.
+    expect(ids.indexOf("basemap-water")).toBeGreaterThan(ids.indexOf("data_raster"));
   });
 
   it("the declared order is the documented one (basemap first, selection on top, background at the bottom)", () => {
@@ -133,9 +117,12 @@ describe("orderLayers", () => {
     expect(LAYER_ORDER[LAYER_ORDER.length - 1]).toBe("selection-line");
     expect(LAYER_ORDER.indexOf("basemap-land")).toBeLessThan(LAYER_ORDER.indexOf("raster"));
     expect(LAYER_ORDER.indexOf("basemap-labels")).toBeLessThan(LAYER_ORDER.indexOf("raster"));
-    expect(LAYER_ORDER.indexOf("raster")).toBeLessThan(LAYER_ORDER.indexOf("zone-fill"));
-    expect(LAYER_ORDER.indexOf("zone-fill")).toBeLessThan(LAYER_ORDER.indexOf("zone-line"));
-    expect(LAYER_ORDER.indexOf("zone-line")).toBeLessThan(LAYER_ORDER.indexOf("zone-label"));
+    // the collection's hex fill is data, like the raster, so it sits under the gazetteer/selection
+    expect(LAYER_ORDER.indexOf("hex")).toBeLessThan(LAYER_ORDER.indexOf("gazetteer-fill"));
+    expect(LAYER_ORDER.indexOf("raster")).toBeLessThan(LAYER_ORDER.indexOf("gazetteer-fill"));
+    expect(LAYER_ORDER.indexOf("gazetteer-line")).toBeLessThan(
+      LAYER_ORDER.indexOf("selection-fill"),
+    );
   });
 });
 
@@ -291,12 +278,6 @@ describe("composeStyle", () => {
     expect(s.layers.map((l) => l.id)).toEqual(["background"]);
   });
 
-  it("`basemap: null` still composes with zones/raster — the report's print surface", () => {
-    const s = composeStyle({ theme: "paper", basemap: null, zones: [PRA] });
-    expect(s.layers.map((l) => l.id)).toEqual(["background", "programarea_ln"]);
-    expect(s.sources.basemap).toBeUndefined();
-  });
-
   it("defaults to the globe projection and carries it IN the style (plan atlas-4 §5.3)", () => {
     expect(composeStyle({ theme: "navy", basemap: null }).projection).toEqual({ type: "globe" });
     expect(
@@ -305,13 +286,23 @@ describe("composeStyle", () => {
   });
 
   it("removing the raster removes exactly that layer — nothing cascades", () => {
-    const withRaster = composeStyle({ theme: "navy", basemap: null, raster: SCORE, zones: [PRA] });
-    const without = composeStyle({ theme: "navy", basemap: null, raster: null, zones: [PRA] });
-    expect(withRaster.layers.map((l) => l.id)).toEqual(["background", "r_lyr", "programarea_ln"]);
-    expect(without.layers.map((l) => l.id)).toEqual(["background", "programarea_ln"]);
+    const selection = { features: { type: "FeatureCollection" as const, features: [] } };
+    const withRaster = composeStyle({ theme: "navy", basemap: null, raster: SCORE, selection });
+    const without = composeStyle({ theme: "navy", basemap: null, raster: null, selection });
+    expect(withRaster.layers.map((l) => l.id)).toEqual([
+      "background",
+      "r_lyr",
+      "selection-fill",
+      "selection-line",
+    ]);
+    expect(without.layers.map((l) => l.id)).toEqual([
+      "background",
+      "selection-fill",
+      "selection-line",
+    ]);
   });
 
-  it("orders the full stack: basemap, raster, overlay, fills, lines, labels, selection", () => {
+  it("orders the full stack: basemap, raster, overlay, selection", () => {
     const s = composeStyle({
       theme: "navy",
       basemapStyle: FAKE_CARTO_STYLE,
@@ -329,23 +320,6 @@ describe("composeStyle", () => {
           visible: false,
         },
       ],
-      zones: [
-        {
-          ...PRA,
-          fill: {
-            keyProperty: "programarea_key",
-            stops: [{ key: "GAA", color: "#111111" }],
-            defaultColor: "lightgrey",
-            opacity: 0.7,
-            outlineColor: "white",
-          },
-          labels: {
-            points: { type: "FeatureCollection", features: [] },
-            textProperty: "key",
-          },
-        },
-        ECO,
-      ],
       selection: { features: { type: "FeatureCollection", features: [] } },
     });
     expect(s.layers.map((l) => l.id)).toEqual([
@@ -354,10 +328,6 @@ describe("composeStyle", () => {
       "basemap-water",
       "r_lyr",
       "outside_pra_lyr",
-      "programarea_fill",
-      "programarea_ln",
-      "ecoregion_ln",
-      "programarea_lbl",
       "selection-fill",
       "selection-line",
     ]);
@@ -367,7 +337,7 @@ describe("composeStyle", () => {
     const s = composeStyle({
       theme: "navy",
       basemap: null,
-      zones: [PRA],
+      raster: SCORE,
       selection: { features: { type: "FeatureCollection", features: [] } },
     });
     const line = s.layers.find((l) => l.id === "selection-line");
@@ -403,22 +373,8 @@ describe("composeStyle", () => {
     });
   });
 
-  it("no basemap and no zone labels: glyphs is undefined (no stray font fetch)", () => {
-    expect(composeStyle({ theme: "navy", basemap: null, zones: [PRA] }).glyphs).toBeUndefined();
-  });
-
-  it("a zone label alone sets glyphs, even with no basemap", () => {
-    const withLabels = composeStyle({
-      theme: "navy",
-      basemap: null,
-      zones: [
-        {
-          ...PRA,
-          labels: { points: { type: "FeatureCollection", features: [] }, textProperty: "key" },
-        },
-      ],
-    });
-    expect(withLabels.glyphs).toContain("{fontstack}");
+  it("no basemap: glyphs is undefined (no stray font fetch)", () => {
+    expect(composeStyle({ theme: "navy", basemap: null, raster: SCORE }).glyphs).toBeUndefined();
   });
 
   const CARTO_WITH_LABELS: CartoStyleLike = {
@@ -426,8 +382,8 @@ describe("composeStyle", () => {
     layers: [...(FAKE_CARTO_STYLE.layers ?? []), { id: "place_label", type: "symbol" }],
   };
 
-  it("the basemap alone sets glyphs (CARTO's own place/road labels), even with no zone labels", () => {
-    const s = composeStyle({ theme: "navy", basemapStyle: CARTO_WITH_LABELS, zones: [PRA] });
+  it("the basemap alone sets glyphs (CARTO's own place/road labels)", () => {
+    const s = composeStyle({ theme: "navy", basemapStyle: CARTO_WITH_LABELS });
     expect(s.glyphs).toBe(CARTO_WITH_LABELS.glyphs);
   });
 
@@ -445,9 +401,9 @@ describe("composeStyle", () => {
     expect(s.glyphs).toBe("https://override.example/{fontstack}/{range}.pbf");
   });
 
-  it("`basemap: null` composes a map with no basemap at all (the report's print surface)", () => {
-    const s = composeStyle({ theme: "paper", basemap: null, zones: [PRA] });
-    expect(s.layers.map((l) => l.id)).toEqual(["background", "programarea_ln"]);
+  it("`basemap: null` composes a map with no basemap at all", () => {
+    const s = composeStyle({ theme: "paper", basemap: null });
+    expect(s.layers.map((l) => l.id)).toEqual(["background"]);
     expect(s.sources.basemap).toBeUndefined();
   });
 
@@ -461,86 +417,10 @@ describe("composeStyle", () => {
   });
 });
 
-// G-25 fix (docs/parity.html): `Sel.out` used to round-trip in the URL with nothing reading it --
-// `out=none` still drew the Program-Area outline. `Shell.svelte` now runs every `zones` array
-// through `zoneUnitsWithOutline()` before it reaches `composeStyle()` (rule-level cases live in
-// tests/map/zones.test.ts); this is the integration proof, on the REAL composed style, of the
-// task's own acceptance rule: "out=none -> no zone line layer (or visibility: none), the default
-// -> present".
-describe("composeStyle + zoneUnitsWithOutline (G-25: Sel.out reaches the rendered style)", () => {
-  it('out="none": the zone-line layer is present in the style but visibility: "none" (never removed -- CLAUDE.md: no addLayer/setLayoutProperty after the fact)', () => {
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      zones: zoneUnitsWithOutline([PRA], "none"),
-    });
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    expect(line).toBeDefined();
-    expect(line && "layout" in line ? line.layout : null).toEqual({ visibility: "none" });
-  });
-
-  it('the default outline ("programarea" for the scores lens) renders the line, visible', () => {
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      zones: zoneUnitsWithOutline([PRA], "programarea"),
-    });
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    expect(line).toBeDefined();
-    expect(line && "layout" in line ? line.layout : null).toEqual({ visibility: "visible" });
-  });
-
-  it("a hidden outline never hides the SAME unit's choropleth fill (a separate layer/paint property)", () => {
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      zones: zoneUnitsWithOutline(
-        [
-          {
-            ...PRA,
-            fill: {
-              keyProperty: "programarea_key",
-              stops: [{ key: "GAA", color: "#111111" }],
-              defaultColor: "lightgrey",
-              opacity: 0.7,
-              outlineColor: "white",
-            },
-          },
-        ],
-        "none",
-      ),
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    expect(fill).toBeDefined();
-    expect(line && "layout" in line ? line.layout : null).toEqual({ visibility: "none" });
-  });
-
-  // m8 (review round 1): "no release ever publishes a second, ecoregion-outline unit" is scoped to
-  // SELECTABLE units (`boot.units[]`, what `zoneUnitsWithOutline`/`out=` picks from) -- it is not a
-  // claim about ecoregion PMTiles existing at all. R3 orchestrator audit item 2 separately draws a
-  // standalone, always-on ecoregion outline read from the release's MANIFEST
-  // (`ecoregionZoneUnitFromManifest`, `Shell.svelte`'s `ecoregionUnit`), appended OUTSIDE this
-  // function's `zones` input entirely (see `e2e/layers.spec.ts`'s "ecoregion boundaries" describe
-  // block) -- `composeStyle` here never sees it, so this test's claim is unaffected by it.
-  it('out="ecoregion" on a release that only publishes programarea: the SAME hidden-line result as "none" -- not a bug, plan D17 (no release ever publishes a second, SELECTABLE ecoregion-outline unit)', () => {
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      zones: zoneUnitsWithOutline([PRA], "ecoregion"),
-    });
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    expect(line).toBeDefined();
-    expect(line && "layout" in line ? line.layout : null).toEqual({ visibility: "none" });
-    // no ecoregion unit was ever IN `zones` to begin with -- nothing composed, not merely hidden.
-    expect(s.layers.some((l) => l.id === "ecoregion_ln")).toBe(false);
-  });
-});
-
 // R3 (round-2 plan §5 U4, docs/usability.md §7 R3): the layer STACK — reordering basemap sub-roles
 // relative to the data, and dimming/hiding a whole group. `composeStyle` still returns ONE style
 // object (CLAUDE.md's "one composed style" rule); `layerStack` is one more plain input, exactly
-// like `zones`/`raster`/`selection` above.
+// like `raster`/`selection` above.
 describe("composeStyle + layerStack (R3: the layer stack model)", () => {
   // a fuller CARTO-shaped fixture than FAKE_CARTO_STYLE — one layer per basemap sub-role, so a
   // reorder/opacity/visibility assertion below can tell every bucket apart.
@@ -712,184 +592,6 @@ describe("composeStyle + layerStack (R3: the layer stack model)", () => {
     expect(r && "paint" in r ? r.paint : null).toMatchObject({ "raster-opacity": 0.15 });
   });
 
-  // M5 fix (Opus 5.5 review): a REAL choropleth fill (`stops.length > 0`) classifies as role
-  // "choropleth" -> group `data-raster` ("the lens's data"), NOT `data-zones` (the outline) — in
-  // zone/choropleth mode the choropleth IS the visible data, and the "Data" row must control it
-  // exactly like it controls the raster in cell mode. `data-zones` now only ever holds the
-  // OUTLINE/labels/query-fill-placeholder, so dimming it scales the LINE alone.
-  it("M5: dimming data-zones scales the outline LINE only — a real choropleth fill is data-raster's concern now", () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-zones" ? { ...e, opacity: 0.4 } : e,
-    );
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [
-        {
-          ...PRA,
-          fill: {
-            keyProperty: "programarea_key",
-            stops: [{ key: "GAA", color: "#111111" }],
-            defaultColor: "lightgrey",
-            opacity: 0.7,
-            outlineColor: "white",
-          },
-        },
-      ],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    const fillPaint = fill && "paint" in fill ? (fill.paint as Record<string, number>) : null;
-    const linePaint = line && "paint" in line ? (line.paint as Record<string, number>) : null;
-    // the choropleth fill is UNTOUCHED by data-zones' opacity (it belongs to data-raster now,
-    // still at its own default 1 in this test) -- its own spec opacity (0.7) survives unscaled.
-    expect(fillPaint?.["fill-opacity"]).toBe(0.7);
-    // the line's own opacity for "programarea" is 1 (ZONE_LINE_STYLE.programarea), so 1 x 0.4 = 0.4.
-    expect(linePaint?.["line-opacity"]).toBeCloseTo(0.4);
-  });
-
-  it("M5: a real choropleth fill IS scaled by dimming data-raster (the Data row), not data-zones", () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-raster" ? { ...e, opacity: 0.4 } : e,
-    );
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [
-        {
-          ...PRA,
-          fill: {
-            keyProperty: "programarea_key",
-            stops: [{ key: "GAA", color: "#111111" }],
-            defaultColor: "lightgrey",
-            opacity: 0.7,
-            outlineColor: "white",
-          },
-        },
-      ],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    const fillPaint = fill && "paint" in fill ? (fill.paint as Record<string, number>) : null;
-    const linePaint = line && "paint" in line ? (line.paint as Record<string, number>) : null;
-    // toBeCloseTo, not toBe: 0.7 * 0.4 floats to 0.27999999999999997 in JS, and the property under
-    // test is "scaled, not replaced" -- not byte-exact float reproduction.
-    expect(fillPaint?.["fill-opacity"]).toBeCloseTo(0.28);
-    // the outline LINE is untouched (data-zones stays at its own default opacity 1 here).
-    expect(linePaint?.["line-opacity"]).toBe(1);
-  });
-
-  it("M5: the INVISIBLE query-fill placeholder (no real fill spec) stays zone-fill/data-zones, unlike a real choropleth", () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-zones" ? { ...e, opacity: 0.5 } : e,
-    );
-    const queryFillUnit = zoneUnitsFromBoot({
-      units: [{ fld: "programarea_key", pmtiles: PRA.pmtiles, source_layer: "programarea" }],
-    })[0];
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [queryFillUnit],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    // fill-opacity 0 x 0.5 = 0 -- scaled by data-zones (its own group), proving the placeholder is
-    // classified "zone-fill", not "choropleth".
-    expect(fill && "paint" in fill ? fill.paint : null).toMatchObject({ "fill-opacity": 0 });
-  });
-
-  // review round 2 ("new observation" on M5): hiding "Zone outlines" (data-zones) used to ALSO
-  // hide the invisible query-fill placeholder (`layout.visibility: "none"`), which MapLibre
-  // excludes from `queryRenderedFeatures` -- so zone click/pick silently stopped working the
-  // moment a viewer hid the outline row, even though the placeholder was never visible anyway.
-  // Decision: the query fill stays COMPOSED and queryable regardless of data-zones' own
-  // visibility; `fill-opacity: 0` alone already keeps it invisible.
-  it("M5 decision: hiding data-zones does NOT hide the invisible query fill -- it stays queryable (no layout.visibility)", () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-zones" ? { ...e, visible: false } : e,
-    );
-    const queryFillUnit = zoneUnitsFromBoot({
-      units: [{ fld: "programarea_key", pmtiles: PRA.pmtiles, source_layer: "programarea" }],
-    })[0];
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [queryFillUnit],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    expect(fill).toBeDefined();
-    expect((fill as { layout?: { visibility?: string } } | undefined)?.layout?.visibility).not.toBe(
-      "none",
-    );
-    // the REAL outline line, by contrast, DOES respect data-zones' own visibility -- only the
-    // always-invisible query fill gets the exception.
-    const line = s.layers.find((l) => l.id === "programarea_ln");
-    expect((line as { layout?: { visibility?: string } } | undefined)?.layout?.visibility).toBe(
-      "none",
-    );
-  });
-
-  // the OTHER half of the same decision: a REAL choropleth (unlike the query fill) is simply
-  // hidden when the viewer hides "Data" (data-raster) -- no exception, since nothing else depends
-  // on reading through it the way pick-mode depends on the query fill.
-  it('M5 decision: hiding data-raster ("Data") DOES hide a real choropleth fill -- no exception, it is the visible data', () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-raster" ? { ...e, visible: false } : e,
-    );
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [
-        {
-          ...PRA,
-          fill: {
-            keyProperty: "programarea_key",
-            stops: [{ key: "GAA", color: "#111111" }],
-            defaultColor: "lightgrey",
-            opacity: 0.7,
-            outlineColor: "white",
-          },
-        },
-      ],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    expect((fill as { layout?: { visibility?: string } } | undefined)?.layout?.visibility).toBe(
-      "none",
-    );
-  });
-
-  // B1 fix, the exact regression the review names: EVERY zone unit (including one with no `fill`
-  // spec at all) carries an INVISIBLE query fill (`layers/zones.ts#queryFillFor`, B3 0.10.26:
-  // `fill-opacity: 0`, `defaultColor: QUERY_FILL_COLOR` -- a near-black placeholder so pick-mode can
-  // query a zone's interior). A REPLACING opacity implementation turns that `0` into the stack's own
-  // opacity, painting every such zone visibly in `QUERY_FILL_COLOR` -- this asserts it stays 0 at any
-  // stack opacity, using `zoneUnitsFromBoot`'s own placeholder (no explicit `fill` spec passed in).
-  it("B1 regression: a zone's own INVISIBLE query fill (fill-opacity 0) stays 0 at any data-zones opacity — never painted visible", () => {
-    const stack = defaultLayerStackEntries().map((e) =>
-      e.id === "data-zones" ? { ...e, opacity: 0.5 } : e,
-    );
-    const queryFillUnit = zoneUnitsFromBoot({
-      units: [{ fld: "programarea_key", pmtiles: PRA.pmtiles, source_layer: "programarea" }],
-    })[0];
-    expect(queryFillUnit.fill?.opacity).toBe(0); // sanity: the placeholder really is invisible
-    const s = composeStyle({
-      theme: "navy",
-      basemap: null,
-      layerStack: stack,
-      zones: [queryFillUnit],
-    });
-    const fill = s.layers.find((l) => l.id === "programarea_fill");
-    expect(fill && "paint" in fill ? fill.paint : null).toMatchObject({ "fill-opacity": 0 });
-  });
-
-  // B1 fix: the selection ring's per-CELL `["get","opacity"]` expression (places/cellSquares.ts's
-  // "show analysis cells" toggle, atlas-6 Deliverable 2) must still be evaluated PER FEATURE after
-  // dimming — a replacing implementation collapses it to a single flat number, losing the per-cell
-  // coverage-weighted opacity entirely.
   it("B1 regression: dimming data-places wraps the per-cell cellOpacity expression, never replaces it", () => {
     const stack = defaultLayerStackEntries().map((e) =>
       e.id === "data-places" ? { ...e, opacity: 0.5 } : e,

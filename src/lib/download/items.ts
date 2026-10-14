@@ -48,13 +48,7 @@ const MAP_SVG: DownloadItemSpec = {
 
 /**
  * The Download menu's items for the current view. Order matches the brief's own listing (Map PNG,
- * Map SVG, Data layer GeoTIFF, Vector data GeoJSON). "Program areas · GeoJSON" is deliberately
- * NEVER included: no published release carries a complete Program-Area geometry asset in
- * `boot.json`/the manifest today (`src/lib/zones/programAreaNames.ts`'s own header note: the
- * canonical geometry lives only in a laptop-side `.gpkg`, never published to the bundle) -- the
- * brief's own instruction is to leave the item out rather than fake it from loaded PMTiles tiles,
- * which would silently ship a viewport-cropped "complete" geometry. See this round's report for
- * what publishing `app/zones/programarea.geojson` would take.
+ * Map SVG, Data layer GeoTIFF, Vector data GeoJSON).
  */
 export function buildDownloadItems(ctx: DownloadItemsContext): DownloadItemSpec[] {
   const items: DownloadItemSpec[] = [MAP_PNG, MAP_SVG];

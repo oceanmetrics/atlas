@@ -88,15 +88,20 @@ describe("footerLines", () => {
 
   it("puts the title+unit on line 1 and the app/version/canonical-url on the LAST line (2 lines, no description)", () => {
     const lines = footerLines({
-      title: "Sensitivity",
-      unit: "score",
+      title: "Richness",
+      unit: "species",
       ver: "v9",
-      url: "https://marinesensitivity.org/atlas/?lyr=sensitivity&theme=dark",
+      url: "https://oceanmetrics.io/atlas/?lens=collection&theme=dark",
     });
     expect(lines).toEqual([
-      "Sensitivity · score",
-      "MarineSensitivity Atlas · v9 · https://marinesensitivity.org/atlas/?lyr=sensitivity",
+      "Richness · species",
+      "OceanMetrics Atlas · v9 · https://oceanmetrics.io/atlas/?lens=collection",
     ]);
+  });
+
+  it("omits the release segment entirely when there is no release (a collection)", () => {
+    const lines = footerLines({ title: "Richness", ver: null, url: "https://x/atlas/" });
+    expect(lines).toEqual(["Richness", "OceanMetrics Atlas · https://x/atlas/"]);
   });
 
   it("omits the unit separator when unit is absent", () => {
@@ -118,7 +123,7 @@ describe("footerLines", () => {
     expect(lines[1]).toBe(
       "Combined score of extinction risk per species category and primary productivity",
     );
-    expect(lines[2]).toBe("MarineSensitivity Atlas · v9 · https://x/atlas/");
+    expect(lines[2]).toBe("OceanMetrics Atlas · v9 · https://x/atlas/");
   });
 
   it("omits the description line when null/undefined (2 lines)", () => {

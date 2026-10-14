@@ -16,7 +16,7 @@
 // per row -- edit a cell to add or remove someone, no redeploy).
 //
 // Script properties: GITHUB_TOKEN (optional; fine-grained, contents + issues on
-// MarineSensitivity/atlas) enables the public issue; DRIVE_FOLDER_ID (optional; default: a folder
+// oceanmetrics/atlas) enables the public issue; DRIVE_FOLDER_ID (optional; default: a folder
 // made beside the Sheet, "atlas feedback").
 //
 // CORS: the app POSTs `text/plain` JSON so the request stays a simple request (this endpoint
@@ -46,7 +46,7 @@ var FEEDBACK_HEADER = [
   "issue_url",
   "status",
 ];
-var REPO = "MarineSensitivity/atlas";
+var REPO = "oceanmetrics/atlas";
 var BRANCH = "main";
 var MAX_PER_HOUR = 20;
 var MAX_TEXT = 4000;

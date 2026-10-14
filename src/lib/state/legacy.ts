@@ -59,19 +59,19 @@ export function rewriteLegacyParams(
 
 /** the four tools the spine offers (mirrors `src/shell/tools.ts`'s `ToolName`; duplicated as a
  * plain union because `src/lib/` never imports from `src/shell/`). */
-export type LegacyToolName = "layers" | "details" | "table" | "report";
+export type LegacyToolName = "layers" | "details" | "table" | "places";
 
 /**
- * R4-B: map a `?tool=` value to today's tool. `tool=flower` (the retired Flower rail tool, and the
- * Layers pane's old "Flower plot" tab) -> `details`; `tool=places` (folded into Report, R3-W8 item
- * 5) -> `report`; the four current names pass straight through; anything else is `null` (absent --
- * a malformed value falls through, it is never an error). `tool` is not a `Sel` key, so this is a
- * separate reader the shell calls once at boot, and only when no `ui=` token supplied a tool.
+ * map a `?tool=` value to today's tool. `tool=flower` (the retired Flower rail tool) -> `details`;
+ * `tool=report` (the retired Report tool, whose body was the Places flow) -> `places`; the four
+ * current names pass straight through; anything else is `null` (absent -- a malformed value falls
+ * through, it is never an error). `tool` is not a `Sel` key, so this is a separate reader the shell
+ * calls once at boot, and only when no `ui=` token supplied a tool.
  */
 export function legacyToolFromParams(params: URLSearchParams): LegacyToolName | null {
   const raw = params.get("tool");
   if (raw === "flower") return "details";
-  if (raw === "places") return "report";
-  if (raw === "layers" || raw === "details" || raw === "table" || raw === "report") return raw;
+  if (raw === "report") return "places";
+  if (raw === "layers" || raw === "details" || raw === "table" || raw === "places") return raw;
   return null;
 }

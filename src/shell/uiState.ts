@@ -38,7 +38,7 @@ export const UI_TOKEN_VERSION = "4";
  * string literals, duplicated here rather than imported -- importing a `.svelte` file's module
  * script from a plain `.ts` file is the same friction `shell/tools.ts`'s own header documents).
  * `null` = neither row expanded. */
-export type UiExpandedRow = "data-raster" | "data-zones" | null;
+export type UiExpandedRow = "data-raster" | null;
 
 export interface UiState {
   tool: ToolName;
@@ -57,11 +57,12 @@ const TOOL_CODE: Record<ToolName, string> = {
   layers: "l",
   details: "d",
   table: "t",
-  report: "r",
+  places: "p",
 };
-const CODE_TOOL: Partial<Record<string, ToolName>> = Object.fromEntries(
-  Object.entries(TOOL_CODE).map(([tool, code]) => [code, tool as ToolName]),
-);
+const CODE_TOOL: Partial<Record<string, ToolName>> = {
+  ...Object.fromEntries(Object.entries(TOOL_CODE).map(([tool, code]) => [code, tool as ToolName])),
+  r: "places", // the MarineSensitivity atlas' retired Report tool (its body was the Places flow)
+};
 
 const DOCK_CODE: Record<Dock, string> = { left: "l", right: "r" };
 const CODE_DOCK: Partial<Record<string, Dock>> = { l: "left", r: "right" };
@@ -73,11 +74,10 @@ const CODE_DETENT: Partial<Record<string, SheetDetent>> = { p: "peek", h: "half"
 
 const ROW_CODE: Record<Exclude<UiExpandedRow, null>, string> = {
   "data-raster": "d",
-  "data-zones": "z",
 };
 const CODE_ROW: Partial<Record<string, UiExpandedRow>> = {
   d: "data-raster",
-  z: "data-zones",
+  z: null, // the retired Outlines row (older links) reads as "nothing expanded"
   n: null,
 };
 
@@ -127,7 +127,7 @@ function parseUiV4(parts: string[]): UiState | null {
  * `l` with the retired `info` tab -> `details`. `tabCode` is undefined for v1 (no tab field). */
 function legacyTool(toolCode: string, tabCode: string | undefined): ToolName | null {
   if (toolCode === "f") return "details";
-  if (toolCode === "p") return "report";
+  if (toolCode === "p" || toolCode === "r") return "places";
   const tool = CODE_TOOL[toolCode];
   if (!tool) return null;
   return tool === "layers" && tabCode === "i" ? "details" : tool;

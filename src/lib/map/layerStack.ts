@@ -1,6 +1,6 @@
 // R3 (2026-09-24, Ben's decision, `docs/usability.md` §7 R3 / round-2 plan §5 U4/§10): "one Layers
 // panel that IS the stack, the data row expanding into today's controls — PLUS the ability to
-// change the stacking of data layers (Program Areas, the score raster) relative to map layers
+// change the stacking of data layers (the collection's hex/raster layer) relative to map layers
 // (place names, bathymetry): some map layers belong on top of, some underneath, a semi-transparent
 // data layer."
 //
@@ -32,15 +32,14 @@ export const BASEMAP_GROUPS = [
 ] as const;
 export type BasemapGroupId = (typeof BASEMAP_GROUPS)[number];
 
-/** the lens's data, in draw order today: the score/species raster (+ its species range fill —
- * folded into ONE row, "the lens's data", per the deliverable's own "raster (score or species)"
- * wording), the Program-Area choropleth/outlines, and the places/selection highlight. `data-places`
+/** the lens's data, in draw order today: the collection's hex fill / raster (+ a species range fill —
+ * folded into ONE row, "the lens's data"), and the places/selection highlight. `data-places`
  * folds in what the deliverable lists separately as "places (outline, cells, pick highlight)" AND
  * "selection": both draw through the SAME `selection-fill`/`selection-line` pair in `style.ts`
  * (one GeoJSON source, `SELECTION_SOURCE_ID`) — there is no second source/layer pair to split them
  * across two independently-orderable rows without a deeper refactor of `places/` and the click/pick
  * wiring, which is out of R3's scope. Flagged for the Opus review, per this task's own instructions. */
-export const DATA_GROUPS = ["data-raster", "data-zones", "data-places"] as const;
+export const DATA_GROUPS = ["data-raster", "data-places"] as const;
 export type DataGroupId = (typeof DATA_GROUPS)[number];
 
 export type LayerGroupId = BasemapGroupId | DataGroupId;
@@ -65,15 +64,6 @@ export const LAYER_GROUP_LABEL: Record<LayerGroupId, string> = {
   "basemap-roads": "Roads & buildings",
   "basemap-labels": "Place labels",
   "data-raster": "Data",
-  // "Outlines," not "Program Areas" (M5 fix, Opus 5.5 review): a REAL choropleth (computed
-  // values) now classifies as role "choropleth" -> group `data-raster` (`style.ts`'s own M5
-  // comment) — this group only ever holds the OUTLINE (`zone-line`) + the invisible B3 query-fill
-  // placeholder + the zone name labels, never the visible data itself, so a label naming the one
-  // release-specific unit ("Program Areas") would be wrong the moment a release publishes a
-  // DIFFERENT outline-only unit. Orchestrator hand-off (Opus UI review of main, 2026-09-25): "the
-  // word 'zone' must not leak into the UI" -- was "Zone outlines"; the model's own id (`data-zones`)
-  // is unaffected, this is display text only.
-  "data-zones": "Outlines",
   // "Selection", never a label containing the word "Places" -- the tool rail already has a
   // button named exactly "Places" (`src/shell/tools.ts`), and this row's own move buttons carry
   // its label INSIDE their aria-label ("Move {label} up/down…"); a label containing "Places" made
@@ -92,7 +82,6 @@ export const LAYER_GROUP_ENABLED: Record<LayerGroupId, boolean> = {
   "basemap-roads": true,
   "basemap-labels": true,
   "data-raster": true,
-  "data-zones": true,
   "data-places": true,
 };
 
@@ -121,7 +110,6 @@ export const LAYER_GROUP_IN_PANEL: Record<LayerGroupId, boolean> = {
   "basemap-roads": false,
   "basemap-labels": true,
   "data-raster": true,
-  "data-zones": true,
   "data-places": true,
 };
 
@@ -138,7 +126,6 @@ export const DEFAULT_LAYER_STACK: readonly LayerGroupId[] = [
   "basemap-roads",
   "basemap-labels",
   "data-raster",
-  "data-zones",
   "data-places",
 ];
 
@@ -181,19 +168,13 @@ function insertMissingAtDefaultPosition(out: LayerStackEntry[]): LayerStackEntry
 }
 
 /**
- * review round 2 (re-check of M7): `moveLayerStackEntry` rejects any SINGLE move that would
- * invert `data-raster`/`data-zones`/`data-places`' relative order or pass `data-places`' own
- * position — but a `layers=` URL can name every group explicitly, in ANY order, bypassing that
- * incremental check entirely (`?layers=data-places,data-zones,data-raster` put Selection at the
- * very BOTTOM, under the raster, and only "Reset layers" repaired it — the live bug the re-check
- * found). This is the one place that GUARANTEES the final order regardless of how `entries`
- * arrived: `data-places` is pinned to the very end (moved there if it is not already); if
- * `data-raster`/`data-zones` are both present and inverted, their two array SLOTS are swapped (not
- * the whole array reordered), so a token that only gets the data order wrong keeps every basemap
- * row exactly where it named it. Returns the SAME reference when the order was already correct.
- * `DATA_RELATIVE_ORDER` is declared further down this file, near `moveLayerStackEntry` -- fine to
- * reference here (a `const`, but by the time this function is actually CALLED the whole module has
- * finished evaluating top to bottom). */
+ * `moveLayerStackEntry` rejects any SINGLE move that would pass `data-places`' own position — but a
+ * `layers=` URL can name every group explicitly, in ANY order, bypassing that incremental check
+ * entirely (`?layers=data-places,data-raster` would put Selection at the very BOTTOM, under the
+ * data). This is the one place that GUARANTEES the final order regardless of how `entries` arrived:
+ * `data-places` is pinned to the very end (moved there if it is not already). Returns the SAME
+ * reference when the order was already correct.
+ */
 function enforceDataOrder(entries: readonly LayerStackEntry[]): readonly LayerStackEntry[] {
   let out = entries;
   const placesIdx = out.findIndex((e) => e.id === "data-places");
@@ -201,13 +182,6 @@ function enforceDataOrder(entries: readonly LayerStackEntry[]): readonly LayerSt
     const copy = [...out];
     const [places] = copy.splice(placesIdx, 1);
     copy.push(places);
-    out = copy;
-  }
-  const rasterIdx = out.findIndex((e) => e.id === "data-raster");
-  const zonesIdx = out.findIndex((e) => e.id === "data-zones");
-  if (rasterIdx !== -1 && zonesIdx !== -1 && rasterIdx > zonesIdx) {
-    const copy = [...out];
-    [copy[rasterIdx], copy[zonesIdx]] = [copy[zonesIdx], copy[rasterIdx]];
     out = copy;
   }
   return out;
@@ -339,9 +313,8 @@ function isExpression(v: unknown): v is [string, ...unknown[]] {
 /**
  * Multiplies an existing opacity-like paint value by `k` — **B1 fix (Opus 5.5 review)**: the
  * group's opacity slider SCALES whatever the layer already had, it never REPLACES it. Before this
- * fix, dimming "Program Areas" to k painted every Program Area a near-black `QUERY_FILL_COLOR` at
- * opacity k (every zone unit carries an invisible query fill at `fill-opacity: 0`, B3 0.10.26 —
- * replacing 0 with k makes it visible); the score raster read 0.6 at 100% opacity but 0.95 (its
+ * fix, dimming a group to k painted a layer that carried an invisible fill at `fill-opacity: 0` at
+ * opacity k (replacing 0 with k makes it visible); the score raster read 0.6 at 100% opacity but 0.95 (its
  * OWN default) at a 95%-opacity slider, non-monotonic; the selection ring's per-cell `["get","opacity"]` expression
  * (places/cellSquares.ts) was overwritten outright; every CARTO zoom-`interpolate` opacity was
  * flattened to a constant. `k=1` is a pure no-op: returns `existing` UNCHANGED (not even a
@@ -398,8 +371,7 @@ export function scaleOpacity(existing: unknown, k: number): unknown {
 
 /**
  * Applies one stack entry's `visible`/`opacity` onto one already-built layer — never by removing it
- * or by calling `setLayoutProperty` after the fact (CLAUDE.md: "one composed style"; the SAME
- * technique `layers/zones.ts#zoneUnitsWithOutline` already uses for `out=`'s line visibility). Pure:
+ * or by calling `setLayoutProperty` after the fact (CLAUDE.md: "one composed style"). Pure:
  * returns a new object, never mutates `layer`.
  *
  * `entry.visible === false` sets `layout.visibility: "none"` regardless of type (every MapLibre
@@ -493,7 +465,7 @@ export function parseLayerStack(v: string | null): LayerStackEntry[] | null {
   }
   insertMissingAtDefaultPosition(out);
   // review round 2: a token can name every group explicitly, in an order that violates
-  // data-raster < data-zones < data-places (`moveLayerStackEntry`'s own incremental rejection
+  // data-places last (`moveLayerStackEntry`'s own incremental rejection
   // never sees a URL-supplied token at all) -- enforce it here too, the same guarantee
   // `normalizeLayerStack` gives a hand-built `layerStack` that bypasses this parser entirely.
   const ordered = [...enforceDataOrder(out)];
@@ -523,24 +495,14 @@ export function formatLayerStack(
 
 // --- reordering (the panel's ▲▼ / drag) -----------------------------------------------------------
 
-/** the three DATA groups' own fixed relative order — see `moveLayerStackEntry`'s header (M7). */
-const DATA_RELATIVE_ORDER: readonly DataGroupId[] = ["data-raster", "data-zones", "data-places"];
-
 /** move the entry at `from` to `to` (clamped), returning a NEW array — the panel's ▲/▼ buttons and
  * drag-reorder both funnel through this one function, so there is exactly one reorder rule to test.
  *
- * **M7 fix (Opus 5.5 review)**: the three DATA groups keep a FIXED relative order
- * (`data-raster < data-zones < data-places`) no matter what `from`/`to` asks for — before this fix,
- * "Selection" (`data-places`) could end up BELOW a basemap group (e.g. "Land & water"), breaking
- * the exact property R3 exists to guarantee: "the selection ring is never hidden by the layer it
- * selects" (`style.ts#LAYER_ORDER`'s own header). `data-places` is additionally PINNED: it can
- * never be `from` (an attempt to move IT returns `entries` unchanged) and nothing else can move to
- * or past its own position (so it stays the topmost entry structurally, not merely by convention).
- * Basemap groups, and `data-raster`/`data-zones` relative to basemap groups, still move freely —
- * only the DATA-vs-DATA relative order is fixed. An attempted move that would invert
- * `data-raster`/`data-zones` anyway (both still strictly below `data-places`) is rejected outright
- * (returns `entries` unchanged) rather than silently clamped to some other position — a caller
- * (the panel) is expected to disable the button that would produce it in the first place.
+ * **M7 fix (Opus 5.5 review)**: `data-places` ("Selection") is PINNED: it can never be `from`
+ * (an attempt to move IT returns `entries` unchanged) and nothing else can move to or past its own
+ * position (so it stays the topmost entry structurally, not merely by convention) — the property R3
+ * exists to guarantee: "the selection ring is never hidden by the layer it selects"
+ * (`style.ts#LAYER_ORDER`'s own header). Basemap groups and `data-raster` move freely.
  */
 export function moveLayerStackEntry(
   entries: readonly LayerStackEntry[],
@@ -556,13 +518,6 @@ export function moveLayerStackEntry(
   const out = [...entries];
   const [moved] = out.splice(from, 1);
   out.splice(clampedTo, 0, moved);
-  // reject a move that inverts data-raster/data-zones' own relative order (the one pair the
-  // data-places pin above does not already rule out).
-  const wantOrder = DATA_RELATIVE_ORDER.filter((id) => out.some((e) => e.id === id));
-  const gotOrder = out
-    .map((e) => e.id)
-    .filter((id): id is DataGroupId => (DATA_RELATIVE_ORDER as readonly string[]).includes(id));
-  if (gotOrder.join(",") !== wantOrder.join(",")) return [...entries];
   return out;
 }
 

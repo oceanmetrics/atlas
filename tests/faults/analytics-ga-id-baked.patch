@@ -1,0 +1,13 @@
+diff --git a/src/lib/analytics/analytics.ts b/src/lib/analytics/analytics.ts
+index 989ab4d..f373f41 100644
+--- a/src/lib/analytics/analytics.ts
++++ b/src/lib/analytics/analytics.ts
+@@ -207,7 +207,7 @@ function defaultUserAgent(): string {
+  * phase's app entry) owns the instance and its lifetime. */
+ export function createAnalytics(opts: AnalyticsOptions): Analytics {
+   const webdriver = (opts.isWebdriver ?? defaultIsWebdriver)();
+-  const measurementId = opts.measurementId ?? "";
++  const measurementId = opts.measurementId ?? "G-0000000000";
+   // R3-B15: mutable — `updatePreview()` below corrects both once the real, async session answer
+   // is in (see that method's own doc on `Analytics`).
+   let contentGroup = opts.preview ? "atlas-preview" : "atlas";

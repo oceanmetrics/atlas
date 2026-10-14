@@ -77,11 +77,9 @@
   --mma-crimson: #6e110f;
 
   /* --- type ---------------------------------------------------------------------------------- */
-  /* Century Gothic is a licensed Monotype face: local() only, NEVER redistributed. The self-hosted
-     open fallback (TeX Gyre Adventor or Jost, atlas-3 step 2) carries the same geometric metrics. */
-  --font-display:
-    "Century Gothic", CenturyGothic, "TeX Gyre Adventor", "URW Gothic", Jost, sans-serif;
-  --font-body: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
+  /* a neutral system font stack for now (the OceanMetrics brand face is not chosen yet). */
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --text-xs: 12px; /* legends, motif captions, table meta */

@@ -9,20 +9,19 @@
   import type { GeoPackageConsentRequest } from "../lib/geo/upload/parsers/geopackage";
   import { geoPackageRuntime } from "../lib/geo/upload/engineRuntime";
   import type { MapHandle } from "../lib/map/map";
-  import type { DataEngineContext } from "./dataEngine";
+  import type { EngineLike } from "../lib/geo/upload/engineRuntime";
   import { noopTrack, placeUploadParams, type Track } from "./analytics";
 
   interface Props {
     mapHandle: MapHandle | undefined;
-    /** `undefined` when no release is resolved yet -- the study-area check is then SKIPPED, same
-     * as an absent `NormalizeOptions.studyArea` (normalize.ts's own documented behaviour). */
-    dataEngine: (() => Promise<DataEngineContext>) | undefined;
+    /** reaches the one lazily-booted DuckDB engine a `.gpkg` is read through (`places/engine.ts`). */
+    getEngine: () => Promise<EngineLike>;
     onAdd: (places: NormalizedPlace[]) => void;
     /** Deliverable 7: counts and buckets only -- see analytics.ts's own header. */
     track?: Track;
   }
 
-  let { mapHandle, dataEngine, onAdd, track = noopTrack }: Props = $props();
+  let { mapHandle, getEngine, onAdd, track = noopTrack }: Props = $props();
 
   let refusal = $state<Refusal | null>(null);
   let busy = $state(false);
@@ -44,16 +43,10 @@
 
   async function normalize(input: { name: string; bytes: Uint8Array }, options: NormalizeOptions) {
     const mod = await import("../lib/geo/upload/normalize");
-    // Q2, 0.10.52: this used to hardcode `runtime: null` unconditionally -- `askGeoPackageConsent`
-    // still asked, but `parseGeoPackage` then always threw `geopackageNoRuntime` regardless of the
-    // answer, so every `.gpkg` was refused since 0.10.47 no matter what. `geoPackageRuntime()`
-    // (`lib/geo/upload/engineRuntime.ts`) wraps this panel's own `dataEngine` accessor -- the SAME
-    // DuckDB engine `ResultsPanel`/the study-area check already boot -- so a `.gpkg` is read through
-    // the app's one real connection. `dataEngine` is `undefined` only in the brief window before a
-    // release version is resolved (see this component's own prop doc); `runtime: null` in exactly
-    // that case is what makes `geopackageNoRuntime`'s message honest rather than permanently wrong.
-    const engineFn = dataEngine; // a local `const` so TS keeps the narrowing inside the closure below
-    const runtime = engineFn ? geoPackageRuntime(async () => (await engineFn()).engine) : null;
+    // `geoPackageRuntime()` (`lib/geo/upload/engineRuntime.ts`) wraps the lazy engine accessor, so a
+    // `.gpkg` is read through the app's one real DuckDB connection; nothing boots until the first
+    // `.gpkg` is actually dropped and consent given.
+    const runtime = geoPackageRuntime(getEngine);
     return mod.normalizeUpload(input, options, {
       geoPackage: { consent: askGeoPackageConsent, runtime },
     });
@@ -64,30 +57,10 @@
   }
 
   // `onAdd` (Places.svelte's `addEnteredPlaces`) already announces success once the place is
-  // actually added to `#pl=` — this only announces the FAILURE paths that end here instead.
+  // actually added to `#pl=` -- this only announces the FAILURE paths that end here instead.
   async function finalize(places: NormalizedPlace[]) {
-    if (!dataEngine) {
-      onAdd(places);
-      trackOutcome(places.length, "ok");
-      return;
-    }
-    try {
-      const ctx = await dataEngine();
-      const { checkTouchesStudyArea } = await import("./studyArea");
-      const outside = await checkTouchesStudyArea(ctx, places);
-      if (outside) {
-        refusal = outside;
-        trackOutcome(places.length, "refused");
-        return;
-      }
-      onAdd(places);
-      trackOutcome(places.length, "ok");
-    } catch {
-      // the release grid/engine failing to boot must never block adding an otherwise-valid place
-      // (D7b's clip is a refinement on top of a geometrically valid upload, not a precondition).
-      onAdd(places);
-      trackOutcome(places.length, "ok");
-    }
+    onAdd(places);
+    trackOutcome(places.length, "ok");
   }
 
   async function handleFile(file: File) {

@@ -142,9 +142,8 @@ describe("LAYER_GROUP_IN_PANEL (R3: hidden basemap rows stay full model citizens
     expect(LAYER_GROUP_IN_PANEL["basemap-labels"]).toBe(true);
   });
 
-  it("every data group (Selection, Outlines, Data) stays listed", () => {
+  it("every data group (Selection, Data) stays listed", () => {
     expect(LAYER_GROUP_IN_PANEL["data-raster"]).toBe(true);
-    expect(LAYER_GROUP_IN_PANEL["data-zones"]).toBe(true);
     expect(LAYER_GROUP_IN_PANEL["data-places"]).toBe(true);
   });
 
@@ -222,17 +221,7 @@ describe("normalizeLayerStack", () => {
   // would then rank `data-places` BELOW the raster, painting Selection under everything else.
   it("a complete stack with data-places NOT last is repaired -- moved to the very end", () => {
     const def = defaultLayerStackEntries();
-    const violating = [def[7], ...def.slice(0, 7)]; // data-places moved to the FRONT
-    const out = normalizeLayerStack(violating);
-    expect(out.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
-  });
-
-  it("a complete stack with data-zones before data-raster is repaired -- their two slots swap, everything else untouched", () => {
-    const def = defaultLayerStackEntries();
-    const raster = def.findIndex((e) => e.id === "data-raster");
-    const zones = def.findIndex((e) => e.id === "data-zones");
-    const violating = [...def];
-    [violating[raster], violating[zones]] = [violating[zones], violating[raster]];
+    const violating = [def[6], ...def.slice(0, 6)]; // data-places moved to the FRONT
     const out = normalizeLayerStack(violating);
     expect(out.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
   });
@@ -420,7 +409,6 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
       "basemap-roads",
       "data-raster",
       "basemap-labels",
-      "data-zones",
       "data-places",
     ]);
     const token = formatLayerStack(entries)!;
@@ -452,7 +440,7 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
   });
 
   it("a partial token naming a LATE group still reconstructs every earlier default id in order", () => {
-    // only "data-places" is named -- every basemap group AND data-raster/data-zones must land
+    // only "data-places" is named -- every basemap group AND data-raster must land
     // BEFORE it, in their own default order, not all piled after it.
     const parsed = parseLayerStack("data-places:h")!;
     expect(parsed.map((e) => e.id)).toEqual(DEFAULT_LAYER_STACK);
@@ -460,12 +448,12 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
   });
 
   it("two non-adjacent named groups: the ones between them still land in default order", () => {
-    // basemap-land and data-zones named, in DEFAULT order already -- everything else (bathymetry,
-    // boundaries, roads, labels, data-raster, data-places) must reconstruct around them correctly.
-    const parsed = parseLayerStack("basemap-land:o80,data-zones:h")!;
+    // basemap-land and basemap-roads named, in DEFAULT order already -- everything else (bathymetry,
+    // boundaries, labels, data-raster, data-places) must reconstruct around them correctly.
+    const parsed = parseLayerStack("basemap-land:o80,basemap-roads:h")!;
     expect(parsed.map((e) => e.id)).toEqual(DEFAULT_LAYER_STACK);
     expect(parsed.find((e) => e.id === "basemap-land")?.opacity).toBe(0.8);
-    expect(parsed.find((e) => e.id === "data-zones")?.visible).toBe(false);
+    expect(parsed.find((e) => e.id === "basemap-roads")?.visible).toBe(false);
   });
 
   // review round 2 (re-check of M7): the live bug the re-check found -- a crafted URL naming the
@@ -473,17 +461,17 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
   // parseLayerStack (it only ever repaired MISSING ids, never checked the ones actually present),
   // so composeStyle would rank data-places BELOW the raster: Selection painted under the score
   // raster, and only "Reset layers" (which discards the whole token) repaired it.
-  it("a crafted URL naming data-places, data-zones, data-raster (reversed) is repaired to the correct data order", () => {
-    // this token names only the 3 data groups (reversed); the other 5 (basemap) are MISSING and
+  it("a crafted URL naming data-places, data-raster (reversed) is repaired to the correct data order", () => {
+    // this token names only the 2 data groups (reversed); the other 5 (basemap) are MISSING and
     // get inserted at their own default positions too (M2) -- repairing BOTH defects at once lands
     // on exactly DEFAULT_LAYER_STACK, which parseLayerStack's own contract reports as `null` ("no
     // deviation from default"), not a returned array that happens to equal it token-for-token.
-    expect(parseLayerStack("data-places,data-zones,data-raster")).toBeNull();
+    expect(parseLayerStack("data-places,data-raster")).toBeNull();
     // proved directly, bypassing the null-collapse, by keeping one real deviation (an explicit
     // opacity) so the repaired result is NOT the bare default and its order is inspectable.
-    const parsed = parseLayerStack("data-places,data-zones:o50,data-raster")!;
+    const parsed = parseLayerStack("data-places,data-raster:o50")!;
     expect(parsed.map((e) => e.id)).toEqual(DEFAULT_LAYER_STACK);
-    expect(parsed.find((e) => e.id === "data-zones")?.opacity).toBe(0.5);
+    expect(parsed.find((e) => e.id === "data-raster")?.opacity).toBe(0.5);
   });
 
   it("a garbage opacity flag is ignored (falls back to 1), never thrown", () => {
@@ -520,7 +508,6 @@ describe("moveLayerStackEntry", () => {
       "basemap-labels",
       "basemap-land",
       "data-raster",
-      "data-zones",
       "data-places",
     ]);
   });
@@ -537,7 +524,7 @@ describe("moveLayerStackEntry", () => {
     expect(moveLayerStackEntry(entries, 99, 0)).toEqual(entries);
   });
 
-  // --- M7 fix (Opus 5.5 review): data-places pinned, data-raster<data-zones<data-places fixed ----
+  // --- M7 fix (Opus 5.5 review): data-places pinned ----
 
   it("data-places can never be moved — any attempt to move IT returns entries unchanged", () => {
     const entries = defaultLayerStackEntries();
@@ -555,15 +542,7 @@ describe("moveLayerStackEntry", () => {
     expect(ids(moved)[ids(moved).length - 2]).toBe("basemap-land");
   });
 
-  it("a move that would invert data-raster/data-zones' relative order is rejected outright", () => {
-    const entries = defaultLayerStackEntries();
-    const zonesIdx = entries.findIndex((e) => e.id === "data-zones");
-    const rasterIdx = entries.findIndex((e) => e.id === "data-raster");
-    // move data-zones to BEFORE data-raster's own position -- would invert the fixed pair.
-    expect(moveLayerStackEntry(entries, zonesIdx, rasterIdx - 1)).toEqual(entries);
-  });
-
-  it("basemap groups can still move freely relative to data-raster/data-zones (only DATA-vs-DATA is fixed)", () => {
+  it("basemap groups can still move freely relative to data-raster (only data-places is pinned)", () => {
     const entries = defaultLayerStackEntries();
     // basemap-labels (index 4) above data-raster (index 5) -- Ben's own example move, still legal.
     const moved = moveLayerStackEntry(entries, 4, 5);
@@ -574,7 +553,6 @@ describe("moveLayerStackEntry", () => {
       "basemap-roads",
       "data-raster",
       "basemap-labels",
-      "data-zones",
       "data-places",
     ]);
   });
@@ -601,16 +579,9 @@ describe("canMoveLayerStackEntry", () => {
 
   it("the entry directly below data-places cannot move any further up -- clamps to a no-op at the boundary", () => {
     const entries = defaultLayerStackEntries();
-    const zonesIdx = entries.findIndex((e) => e.id === "data-zones"); // directly below data-places
+    const rasterIdx = entries.findIndex((e) => e.id === "data-raster"); // directly below data-places
     const placesIdx = entries.findIndex((e) => e.id === "data-places");
-    expect(canMoveLayerStackEntry(entries, zonesIdx, placesIdx)).toBe(false);
-  });
-
-  it("a move that would invert data-raster/data-zones' relative order returns false", () => {
-    const entries = defaultLayerStackEntries();
-    const zonesIdx = entries.findIndex((e) => e.id === "data-zones");
-    const rasterIdx = entries.findIndex((e) => e.id === "data-raster");
-    expect(canMoveLayerStackEntry(entries, zonesIdx, rasterIdx - 1)).toBe(false);
+    expect(canMoveLayerStackEntry(entries, rasterIdx, placesIdx)).toBe(false);
   });
 
   it("moving to the SAME position (from === to, after clamping) returns false", () => {
@@ -663,7 +634,7 @@ describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", 
       "basemap-boundaries": false,
       "basemap-roads": true,
     };
-    const entries = defaultLayerStackEntries(); // land, bathymetry, boundaries, roads, labels, raster, zones, places
+    const entries = defaultLayerStackEntries(); // land, bathymetry, boundaries, roads, labels, raster, places
     const next = moveLayerStackEntryVisible(entries, "basemap-roads", "down", inPanel);
     const ids = next.map((e) => e.id);
     // roads hopped down past both hidden rows to sit directly below land (its nearest VISIBLE
@@ -673,14 +644,10 @@ describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", 
     expect(canMoveLayerStackEntryVisible(entries, "basemap-roads", "down", inPanel)).toBe(true);
   });
 
-  it("the pin/fixed-order rules still apply through the hop -- Outlines (data-zones) has NO legal move either direction against its two REAL visible neighbours", () => {
+  it("the pin rule still applies through the hop -- Data (data-raster) cannot move up past the pinned Selection", () => {
     const entries = defaultLayerStackEntries();
     // up: its only visible neighbour above is data-places, which is pinned (never a valid target).
-    expect(canMoveLayerStackEntryVisible(entries, "data-zones", "up", LAYER_GROUP_IN_PANEL)).toBe(
-      false,
-    );
-    // down: swapping past data-raster would invert the fixed raster < zones < places order.
-    expect(canMoveLayerStackEntryVisible(entries, "data-zones", "down", LAYER_GROUP_IN_PANEL)).toBe(
+    expect(canMoveLayerStackEntryVisible(entries, "data-raster", "up", LAYER_GROUP_IN_PANEL)).toBe(
       false,
     );
   });

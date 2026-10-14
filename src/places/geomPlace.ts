@@ -2,7 +2,7 @@
 // `#pl=` (Deliverable 3): `analysisGeometry()` FIRST (unwrap, then decode(encode(...))) so the
 // place this app holds is ALREADY what a shared link will reproduce -- "what is displayed is what
 // is analyzed" starts the moment a place is created, not at share time.
-import { analysisGeometry } from "../lib/analysis/place";
+import { analysisGeometry } from "../lib/geo/analysisGeometry";
 import { clampName, type GeomPlace } from "../lib/geo/placeCodec";
 import type { AreaGeometry } from "../lib/geo/types";
 

@@ -25,7 +25,7 @@ export function tilerServiceDef(host: string = DEFAULT_TITILER_HOST): ServiceDef
     url: `${host}/healthz`,
     hostLabel: bareHost(host),
     displayName: "Map tiles",
-    whatBreaks: "Scores and species rasters cannot be drawn",
+    whatBreaks: "Raster layers cannot be drawn",
     stillWorks: "places, tables and reports from already-loaded data still work",
   };
 }
@@ -49,7 +49,7 @@ export function dataServiceDef(ver: string, base?: string): ServiceDef {
     url,
     hostLabel: bareHost(url),
     displayName: "Release data",
-    whatBreaks: "New releases and cell/species data cannot be loaded",
+    whatBreaks: "Species data cannot be loaded",
     stillWorks: "the current map view and already-loaded panels still work",
   };
 }

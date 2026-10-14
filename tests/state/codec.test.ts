@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { formatSel, hasViewState, parseSel, type UrlLike } from "../../src/lib/state/codec";
 import {
-  DEFAULT_OUT_BY_LENS,
   DEFAULT_SEL,
   defaultLens,
-  defaultOut,
   isPlacesSelectionEmpty,
   resolveTheme,
   type Sel,
@@ -35,9 +33,9 @@ describe("formatSel: emits ONLY non-default fields (the seeded fault: a default 
   });
 });
 
-describe("lens: default 'scores', or 'species' when sp is present", () => {
-  it("parses to 'scores' with no sp", () => {
-    expect(parseSel(EMPTY).lens).toBe("scores");
+describe("lens: default 'collection', or 'species' when sp is present", () => {
+  it("parses to 'collection' with no sp", () => {
+    expect(parseSel(EMPTY).lens).toBe("collection");
   });
 
   it("parses to 'species' when sp is present and lens is unset", () => {
@@ -45,74 +43,37 @@ describe("lens: default 'scores', or 'species' when sp is present", () => {
   });
 
   it("an explicit lens overrides the sp-derived default", () => {
-    expect(parseSel({ search: "?sp=whale-x&lens=scores", hash: "" }).lens).toBe("scores");
+    expect(parseSel({ search: "?sp=whale-x&lens=collection", hash: "" }).lens).toBe("collection");
   });
 
   it("formatSel omits lens when it equals the sp-derived default", () => {
-    // out must also be set to ITS (species-lens) default here, or it would be written too —
-    // covered on its own in the "out" describe block below.
-    expect(
-      formatSel({ ...DEFAULT_SEL, sp: "whale-x", lens: "species", out: defaultOut("species") })
-        .search,
-    ).toBe("?sp=whale-x");
+    expect(formatSel({ ...DEFAULT_SEL, sp: "whale-x", lens: "species" }).search).toBe(
+      "?sp=whale-x",
+    );
   });
 
   it("formatSel writes lens when it does NOT equal the sp-derived default", () => {
-    const search = formatSel({ ...DEFAULT_SEL, sp: "whale-x", lens: "scores" }).search;
-    expect(search).toContain("lens=scores");
+    const search = formatSel({ ...DEFAULT_SEL, sp: "whale-x", lens: "collection" }).search;
+    expect(search).toContain("lens=collection");
   });
 
   it("an unrecognized lens value falls back to the (contextual) default", () => {
-    expect(parseSel({ search: "?lens=bogus", hash: "" }).lens).toBe("scores");
+    expect(parseSel({ search: "?lens=bogus", hash: "" }).lens).toBe("collection");
     expect(parseSel({ search: "?sp=x&lens=bogus", hash: "" }).lens).toBe("species");
   });
 });
 
-describe("out: default is 'per lens' (defaultOut), pinned so a change is a deliberate diff", () => {
-  it("defaultOut('scores') is 'programarea'", () => {
-    expect(defaultOut("scores")).toBe("programarea");
-  });
-
-  it("defaultOut('species') is 'none'", () => {
-    expect(defaultOut("species")).toBe("none");
-  });
-
-  it("parses the scores-lens default with no out key", () => {
-    expect(parseSel(EMPTY).out).toBe("programarea");
-  });
-
-  it("parses the species-lens default with no out key", () => {
-    expect(parseSel({ search: "?lens=species", hash: "" }).out).toBe("none");
-  });
-
-  it("an explicit out overrides the lens-derived default", () => {
-    expect(parseSel({ search: "?out=ecoregion", hash: "" }).out).toBe("ecoregion");
-  });
-
-  it("an unrecognized out value falls back to the lens-derived default", () => {
-    expect(parseSel({ search: "?out=bogus", hash: "" }).out).toBe("programarea");
-  });
-
-  it("formatSel omits out when it equals the lens-derived default", () => {
-    expect(formatSel({ ...DEFAULT_SEL, lens: "species", out: "none" }).search).toBe(
-      "?lens=species",
-    );
-  });
-
-  it("parse and format both read DEFAULT_OUT_BY_LENS — the ONE table (fix round 1)", () => {
-    for (const [lens, out] of Object.entries(DEFAULT_OUT_BY_LENS) as [
-      keyof typeof DEFAULT_OUT_BY_LENS,
-      string,
-    ][]) {
-      // defaultOut() itself reads only the table
-      expect(defaultOut(lens)).toBe(out);
-      // parseSel's contextual default (no `out` key) matches the table for every lens
-      expect(parseSel({ search: `?lens=${lens}`, hash: "" }).out).toBe(out);
-      // formatSel omits `out` exactly when it equals the table's entry for that lens
-      expect(formatSel({ ...DEFAULT_SEL, lens, out: out as Sel["out"] }).search).toBe(
-        lens === DEFAULT_SEL.lens ? "" : `?lens=${lens}`,
-      );
+describe("retired keys (ver, lyr, unit, area, out): ignored, never round-tripped", () => {
+  it("parse drops them and format never writes them back", () => {
+    const sel = parseSel({
+      search: "?ver=v9&lyr=extrisk_bird&unit=ecoregion&area=GEO&out=ecoregion&pal=viridis",
+      hash: "",
+    });
+    expect(sel.pal).toBe("viridis");
+    for (const k of ["ver", "lyr", "unit", "area", "out"]) {
+      expect((sel as unknown as Record<string, unknown>)[k]).toBeUndefined();
     }
+    expect(formatSel(sel).search).toBe("?pal=viridis");
   });
 });
 
@@ -221,20 +182,12 @@ describe("resolveTheme: the tri-state Sel.theme -> the two renderable brand them
 });
 
 describe("isPlacesSelectionEmpty: the Layers pane's Selection row dims when Sel.sel is unset", () => {
-  it("undefined (no cell/zone/place selection) is empty", () => {
+  it("undefined (no place selection) is empty", () => {
     expect(isPlacesSelectionEmpty(undefined)).toBe(true);
   });
 
   it("an empty string is empty", () => {
     expect(isPlacesSelectionEmpty("")).toBe(true);
-  });
-
-  it("a cell selection is NOT empty", () => {
-    expect(isPlacesSelectionEmpty("cell:12345")).toBe(false);
-  });
-
-  it("a zone selection is NOT empty", () => {
-    expect(isPlacesSelectionEmpty("zone:programarea:GOM")).toBe(false);
   });
 
   it("a drawn/uploaded place selection is NOT empty", () => {
@@ -256,7 +209,7 @@ describe("isPlacesSelectionEmpty: the Layers pane's Selection row dims when Sel.
   });
 
   it("a sel pick with zero places is still NOT empty (sel alone is enough, as before)", () => {
-    expect(isPlacesSelectionEmpty("cell:12345", 0)).toBe(false);
+    expect(isPlacesSelectionEmpty("place:2", 0)).toBe(false);
   });
 });
 
@@ -316,53 +269,32 @@ describe("obis: default false (off); only obis=1 turns it on", () => {
   });
 });
 
-describe("ver / lyr / unit / area / in / sp: free-form strings, structural clamping only", () => {
-  it("ver accepts a well-formed version label and rejects garbage", () => {
-    expect(parseSel({ search: "?ver=v9", hash: "" }).ver).toBe("v9");
-    expect(parseSel({ search: "?ver=latest", hash: "" }).ver).toBeUndefined();
-    expect(parseSel({ search: "?ver=../etc", hash: "" }).ver).toBeUndefined();
-  });
-
-  it("lyr/unit/area/in/sp round-trip an arbitrary opaque string", () => {
-    const sel = parseSel({
-      search: "?lyr=extrisk_bird&unit=ecoregion&area=GEO&in=raw_ds_1&sp=whale-x",
-      hash: "",
-    });
-    expect(sel.lyr).toBe("extrisk_bird");
-    expect(sel.unit).toBe("ecoregion");
-    expect(sel.area).toBe("GEO");
+describe("in / sp: free-form strings, structural clamping only", () => {
+  it("in/sp round-trip an arbitrary opaque string", () => {
+    const sel = parseSel({ search: "?in=raw_ds_1&sp=whale-x", hash: "" });
     expect(sel.in).toBe("raw_ds_1");
     expect(sel.sp).toBe("whale-x");
-  });
-
-  it("unit and area fall back to their defaults on an empty value", () => {
-    expect(parseSel({ search: "?unit=&area=", hash: "" }).unit).toBe("cell");
-    expect(parseSel({ search: "?unit=&area=", hash: "" }).area).toBe("FULL");
   });
 
   it("in falls back to its default ('merged') on an empty value", () => {
     expect(parseSel({ search: "?in=", hash: "" }).in).toBe("merged");
   });
 
-  it("lyr/sp fall back to undefined (their default) on an empty value", () => {
-    expect(parseSel({ search: "?lyr=&sp=", hash: "" }).lyr).toBeUndefined();
-    expect(parseSel({ search: "?lyr=&sp=", hash: "" }).sp).toBeUndefined();
+  it("sp falls back to undefined (its default) on an empty value", () => {
+    expect(parseSel({ search: "?sp=", hash: "" }).sp).toBeUndefined();
   });
 });
 
-describe("sel: cell:<id> | zone:<unit>:<key> | place:<n>, clamps anything else", () => {
-  it("accepts each documented shape", () => {
-    expect(parseSel({ search: "?sel=cell:12345", hash: "" }).sel).toBe("cell:12345");
-    expect(parseSel({ search: "?sel=zone:programarea:GEO", hash: "" }).sel).toBe(
-      "zone:programarea:GEO",
-    );
+describe("sel: place:<n>, clamps anything else (cell/zone tokens belonged to the retired scores lens)", () => {
+  it("accepts a place token", () => {
     expect(parseSel({ search: "?sel=place:3", hash: "" }).sel).toBe("place:3");
   });
 
-  it("clamps a malformed token to undefined rather than passing it through", () => {
+  it("clamps a malformed or retired token to undefined rather than passing it through", () => {
     expect(parseSel({ search: "?sel=bogus", hash: "" }).sel).toBeUndefined();
     expect(parseSel({ search: "?sel=place:abc", hash: "" }).sel).toBeUndefined();
-    expect(parseSel({ search: "?sel=zone:onlyone", hash: "" }).sel).toBeUndefined();
+    expect(parseSel({ search: "?sel=cell:12345", hash: "" }).sel).toBeUndefined();
+    expect(parseSel({ search: "?sel=zone:programarea:GEO", hash: "" }).sel).toBeUndefined();
   });
 });
 
@@ -414,7 +346,7 @@ describe("layers: the R3 layer stack (deltas against the default, via ../map/lay
   it("a reordered + dimmed stack round-trips", () => {
     const loc = {
       search:
-        "?layers=basemap-land,basemap-bathymetry,basemap-boundaries,data-raster:o50,basemap-roads,basemap-labels,data-zones,data-places",
+        "?layers=basemap-land,basemap-bathymetry,basemap-boundaries,data-raster:o50,basemap-roads,basemap-labels,data-places",
       hash: "",
     };
     const sel = parseSel(loc);
@@ -425,7 +357,6 @@ describe("layers: the R3 layer stack (deltas against the default, via ../map/lay
       "data-raster",
       "basemap-roads",
       "basemap-labels",
-      "data-zones",
       "data-places",
     ]);
     expect(sel.layers?.find((e) => e.id === "data-raster")?.opacity).toBe(0.5);
@@ -523,9 +454,9 @@ describe("readability: `,` and `:` are un-escaped in the emitted URL", () => {
   });
 
   it("a colon inside sel is not percent-encoded", () => {
-    const { search } = formatSel({ ...DEFAULT_SEL, sel: "zone:programarea:GEO" });
+    const { search } = formatSel({ ...DEFAULT_SEL, sel: "place:2" });
     expect(search).not.toContain("%3A");
-    expect(search).toBe("?sel=zone:programarea:GEO");
+    expect(search).toBe("?sel=place:2");
   });
 });
 
@@ -596,17 +527,17 @@ describe("an injected AliasLookup is honoured for the sp/in legacy rewrite", () 
   });
 });
 
-describe("defaultLens/defaultOut are pure (used identically by parse and format)", () => {
+describe("defaultLens is pure (used identically by parse and format)", () => {
   it("defaultLens", () => {
-    expect(defaultLens(undefined)).toBe("scores");
+    expect(defaultLens(undefined)).toBe("collection");
     expect(defaultLens("x")).toBe("species");
   });
 });
 
-// M5 fix (docs/usability.md): WelcomeModal.svelte's own "is this a deep link" check -- must agree
+// "is this a deep link" -- must agree
 // EXACTLY with formatSel's own "differs from default" rule (a hand-rolled second definition is
 // exactly how the two could silently drift).
-describe("hasViewState — WelcomeModal.svelte's 'is this a deep link' check (M5)", () => {
+describe("hasViewState — 'is this a deep link' (a deep link must never be interrupted by a first-timer welcome)", () => {
   it("the bare default URL (no query, no hash) carries no view state", () => {
     expect(hasViewState(EMPTY)).toBe(false);
     expect(hasViewState({ search: "", hash: "" })).toBe(false);
@@ -616,8 +547,8 @@ describe("hasViewState — WelcomeModal.svelte's 'is this a deep link' check (M5
     expect(hasViewState({ search: "?lens=species&sp=54241", hash: "" })).toBe(true);
   });
 
-  it("a scores cell selection carries view state", () => {
-    expect(hasViewState({ search: "?sel=cell:123", hash: "" })).toBe(true);
+  it("a place selection carries view state", () => {
+    expect(hasViewState({ search: "?sel=place:1", hash: "" })).toBe(true);
   });
 
   it("a places hash alone (no query) carries view state", () => {

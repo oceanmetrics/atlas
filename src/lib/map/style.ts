@@ -26,14 +26,6 @@ import {
   gazetteerLineLayer,
   gazetteerSource,
 } from "./layers/gazetteer";
-import {
-  zoneFillLayer,
-  zoneHighlightLayer,
-  zoneLabelLayer,
-  zoneLineLayer,
-  zoneSources,
-  zonesNeedGlyphs,
-} from "./layers/zones";
 // R3 layer stack model (round-2 plan §5 U4, docs/usability.md §7 R3): the user-reorderable/
 // dimmable GROUPS a merged CARTO layer or a data layer belongs to. `layerStack.ts` is the pure
 // model (classify/apply/codec); this file only CONSUMES it — composeStyle still returns ONE style
@@ -58,7 +50,6 @@ import type {
   SelectionSpec,
   SourceSpecification,
   StyleSpecification,
-  ZoneUnitSpec,
 } from "./types";
 
 /** every merged CARTO source/layer id gets this prefix — CARTO's own style.json literally has a
@@ -133,9 +124,9 @@ function isPlainNameField(field: unknown): boolean {
   return Array.isArray(field) && field[0] === "get" && field[1] === "name" && field.length === 2;
 }
 
-/** does the fetched CARTO style itself carry a symbol layer (its own place/road labels)? Distinct
- * from `zonesNeedGlyphs()`, which is about a ZONE label — `composeStyle()` fetches glyphs when
- * either is true, since CARTO's own style needs its own font range the moment it draws at all. */
+/** does the fetched CARTO style itself carry a symbol layer (its own place/road labels)?
+ * `composeStyle()` fetches glyphs when it does, since CARTO's own style needs its own font range the
+ * moment it draws at all. */
 export function cartoStyleHasSymbolLayer(carto: CartoStyleLike): boolean {
   return (carto.layers ?? []).some((l) => l.type === "symbol");
 }
@@ -162,19 +153,10 @@ export const LAYER_ORDER = [
   "basemap-boundaries",
   "basemap-roads",
   "basemap-labels",
+  "hex",
   "raster",
   "range",
   "overlay",
-  // M5 fix (Opus 5.5 review): a zone's CHOROPLETH fill (real computed values, `zoneFillLayer(u)`
-  // when `u.fill.stops.length > 0`) belongs to `data-raster` ("the lens's data"), not `data-zones`
-  // (the outline) — in zone/choropleth mode (`unit=programarea`) the raster is `null` and the
-  // choropleth IS the visible data the "Data" row's eye/opacity must control, exactly like the
-  // raster does in cell mode. The invisible B3 query-fill placeholder (`stops: []`, every unit
-  // always carries one for pick-mode) stays `zone-fill`/`data-zones` — it is not real data.
-  "choropleth",
-  "zone-fill",
-  "zone-line",
-  "zone-label",
   // gazetteer-places: the "Pick from gazetteer" tile polygons sit just under the selection
   // highlight, in the same `data-places` group (the Layers panel's "Selection" row), so the picked
   // place's pink outline always draws over them.
@@ -192,9 +174,8 @@ export interface RoledLayer {
 }
 
 /** which stack GROUP each fine `LayerRole` belongs to — `undefined` (background only) means "never
- * part of the user-facing stack; always bottom." `raster`/`range`/`overlay` fold into ONE group
- * (`data-raster`, "the lens's data") and the three zone roles into `data-zones`, matching
- * `layerStack.ts`'s own doc comment on why `data-places` folds "places" and "selection" together. */
+ * part of the user-facing stack; always bottom." `hex`/`raster`/`range`/`overlay` fold into ONE group
+ * (`data-raster`, "the lens's data"), matching `layerStack.ts`'s own doc comment on why `data-places` folds "places" and "selection" together. */
 const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   "basemap-land": "basemap-land",
   "basemap-bathymetry": "basemap-bathymetry",
@@ -204,10 +185,7 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   raster: "data-raster",
   range: "data-raster",
   overlay: "data-raster",
-  choropleth: "data-raster",
-  "zone-fill": "data-zones",
-  "zone-line": "data-zones",
-  "zone-label": "data-zones",
+  hex: "data-raster",
   "gazetteer-fill": "data-places",
   "gazetteer-line": "data-places",
   "selection-fill": "data-places",
@@ -223,8 +201,7 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-boundaries": ["basemap-boundaries"],
   "basemap-roads": ["basemap-roads"],
   "basemap-labels": ["basemap-labels"],
-  "data-raster": ["raster", "range", "overlay", "choropleth"],
-  "data-zones": ["zone-fill", "zone-line", "zone-label"],
+  "data-raster": ["hex", "raster", "range", "overlay"],
   "data-places": ["gazetteer-fill", "gazetteer-line", "selection-fill", "selection-line"],
 };
 
@@ -285,7 +262,6 @@ export interface ComposeStyleInput {
   /** `globe` (the shipped default) or `mercator`; travels IN the style, so a projection change is
    * one more `setStyle(diff)` rather than a second imperative API the lenses have to remember. */
   projection?: Projection;
-  zones?: readonly ZoneUnitSpec[];
   /** the score raster (atlas-4) or a species COG surface (atlas-5). */
   raster?: RasterLayerSpec | null;
   /** a species PMTiles range/presence fill (atlas-5's ranges branch) — `null` for none. */
@@ -371,7 +347,7 @@ function selectionLayers(sel: SelectionSpec): RoledLayer[] {
 }
 
 /**
- * Compose the whole style: background ⊕ basemap ⊕ raster ⊕ overlays ⊕ zones ⊕ selection.
+ * Compose the whole style: background ⊕ basemap ⊕ raster ⊕ overlays ⊕ selection.
  *
  * This is the ONE entry point a lens uses to change what the map shows. A lens never touches
  * MapLibre: it recomputes its inputs, calls this, and hands the result to {@link applyStyle}.
@@ -391,7 +367,6 @@ function selectionLayers(sel: SelectionSpec): RoledLayer[] {
  */
 export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   const basemap = input.basemap === undefined ? basemapForTheme(input.theme) : input.basemap;
-  const zones = input.zones ?? [];
   const overlays = input.overlays ?? [];
 
   const sources: Record<string, SourceSpecification> = {};
@@ -445,30 +420,6 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     roled.push({ role: "overlay", layer: rasterLayer(overlay) });
   }
 
-  Object.assign(sources, zoneSources(zones));
-  for (const u of zones) {
-    const fill = zoneFillLayer(u);
-    // M5 fix: a REAL choropleth (computed values, `stops.length > 0`) is "the lens's data," role
-    // "choropleth" (group `data-raster`) — the invisible B3 query-fill placeholder every unit
-    // always carries (`stops: []`, pick-mode's own interior hit-test) stays "zone-fill"
-    // (`data-zones`, the outline group), since it is not real data a viewer would dim/hide.
-    if (fill) {
-      const role = (u.fill?.stops.length ?? 0) > 0 ? "choropleth" : "zone-fill";
-      roled.push({ role, layer: fill });
-    }
-    // U5: the outline's own stroke colour is theme-aware (`ZONE_OUTLINE_STROKE_BY_THEME`) --
-    // `zoneLineLayer` now takes the resolved theme to pick it.
-    roled.push({ role: "zone-line", layer: zoneLineLayer(u, input.theme) });
-  }
-  for (const u of zones) {
-    const label = zoneLabelLayer(u);
-    if (label) roled.push({ role: "zone-label", layer: label });
-  }
-  for (const u of zones) {
-    const highlight = zoneHighlightLayer(u);
-    if (highlight) roled.push({ role: "selection-line", layer: highlight });
-  }
-
   if (input.gazetteer) {
     sources[GAZETTEER_SOURCE_ID] = gazetteerSource(input.gazetteer);
     roled.push({ role: "gazetteer-fill", layer: gazetteerFillLayer(input.gazetteer) });
@@ -498,20 +449,7 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     const group = ROLE_GROUP[role];
     const entry = group ? groupById.get(group) : undefined;
     if (!entry) return { role, layer };
-    // M5 decision (review round 2's "new observation"): role "zone-fill" is, by construction,
-    // ALWAYS the invisible B3 query-fill placeholder now (`composeStyle`'s own zone loop below
-    // gives a REAL choropleth role "choropleth" -> group `data-raster` instead) -- so toggling
-    // "Outlines" (data-zones) invisible must not ALSO make this layer un-queryable
-    // (MapLibre excludes `visibility: "none"` layers from `queryRenderedFeatures`), or zone
-    // click/pick silently stops working the moment a viewer hides the outline row. It stays
-    // COMPOSED and hit-testable regardless of the group's own visibility; `fill-opacity: 0`
-    // already keeps it invisible on screen either way, so nothing is drawn that was not drawn
-    // before. The OTHER half of the same observation -- hiding "Data" (data-raster) in zone mode
-    // hides a REAL choropleth, its own hit-test target -- is simply correct as-is: a hidden
-    // choropleth is a choropleth a viewer asked not to see, not a hit-test surface anything
-    // still depends on (unlike the always-invisible query fill, nothing else reads through it).
-    const styledEntry = role === "zone-fill" ? { ...entry, visible: true } : entry;
-    return { role, layer: applyLayerGroupStyling(layer, styledEntry) };
+    return { role, layer: applyLayerGroupStyling(layer, entry) };
   });
 
   const style: StyleSpecification = {
@@ -524,10 +462,10 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   // style; absent when the fetch failed (EMPTY_BASEMAP_STYLE has no sprite).
   if (cartoSprite) style.sprite = cartoSprite;
   // a symbol layer exists whenever CARTO's OWN style contributed one (its place/road labels — true
-  // any time the fetch succeeded) OR a zone label does; an unused `glyphs` key costs nothing, but
-  // keeping it conditional makes "a style with no labels at all fetches no font range" (e.g. a
-  // failed fetch + no zone labels) an assertable property.
-  if (cartoHasSymbolLayer || zonesNeedGlyphs(zones)) {
+  // any time the fetch succeeded); an unused `glyphs` key costs nothing, but keeping it conditional
+  // makes "a style with no labels at all fetches no font range" (a failed fetch) an assertable
+  // property.
+  if (cartoHasSymbolLayer) {
     style.glyphs = input.glyphs ?? cartoGlyphs ?? GLYPHS_URL;
   }
   return style;

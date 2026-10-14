@@ -23,7 +23,8 @@ export interface FooterInfo {
   title: string;
   /** the value's unit, e.g. "score", "1-100" -- omitted when the surface has none worth stating. */
   unit?: string;
-  ver: string;
+  /** the pinned release (species lens only); omitted for a collection, which has no release. */
+  ver?: string | null;
   /** the app's own share URL, e.g. `location.href` -- ALREADY absolute (this module never strips
    * the origin now, and never reads `location` itself -- the same "inject, don't read the live
    * page" rule `src/lib/analytics` follows, so this stays Node-testable). */
@@ -65,13 +66,12 @@ export function titleWithUnit(title: string, unit?: string): string {
 }
 
 /** 2 or 3 lines: title(+unit), an optional long-description line, then
- * "MarineSensitivity Atlas · {ver} · {canonical share URL}" -- CalCOFI's own 3-line stamp minus
- * the per-panel "datasets" line (this app's release already names its own datasets in
- * `boot.json`/the manifest, not per-figure). `ver` is already the `^v[0-9]+[a-z]?$`-shaped label
- * the rest of the app uses (`src/lib/release/version.ts`) -- never prefixed with a second "v" here. */
+ * "OceanMetrics Atlas · {ver} · {canonical share URL}" (the `{ver} · ` part only when there is a
+ * release) -- CalCOFI's own 3-line stamp minus the per-panel "datasets" line. `ver` is already the
+ * `^v[0-9]+[a-z]?$`-shaped label -- never prefixed with a second "v" here. */
 export function footerLines(info: FooterInfo): string[] {
   const first = titleWithUnit(info.title, info.unit);
-  const last = `MarineSensitivity Atlas · ${info.ver} · ${canonicalShareUrl(info.url)}`;
+  const last = `OceanMetrics Atlas · ${info.ver ? `${info.ver} · ` : ""}${canonicalShareUrl(info.url)}`;
   return info.description ? [first, info.description, last] : [first, last];
 }
 

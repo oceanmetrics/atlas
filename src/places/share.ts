@@ -1,4 +1,4 @@
-// places/share.ts -- Deliverable 6: "Copy link shows what the link carries (release, lens, layer,
+// places/share.ts -- Deliverable 6: "Copy link shows what the link carries (lens, layer,
 // camera, n places) and its length." The length/simplification-ladder math already exists
 // (`geo/placeCodec.ts`'s `fitPlacesToUrl`, atlas-2) -- this module is the panel's own summary of
 // the REST of the URL, which `fitPlacesToUrl` deliberately knows nothing about (it only sees a
@@ -11,7 +11,6 @@ import type { Sel } from "../lib/state/types";
 import type { Place } from "../lib/geo/placeCodec";
 
 export interface ShareSummary {
-  ver: string | null;
   lens: string;
   layer: string | null;
   hasCamera: boolean;
@@ -22,16 +21,15 @@ export interface ShareSummary {
  * `fitPlacesToUrl`'s concern (placeCodec.ts), not this. */
 export function summarizeShare(sel: Sel, places: readonly Place[]): ShareSummary {
   return {
-    ver: sel.ver ?? null,
     lens: sel.lens,
-    layer: sel.lyr ?? sel.sp ?? null,
+    layer: sel.sp ?? null,
     hasCamera: !!sel.map,
     nPlaces: places.length,
   };
 }
 
 export function describeShareSummary(s: ShareSummary): string {
-  const parts = [s.ver ? `release ${s.ver}` : "the current release", `the ${s.lens} lens`];
+  const parts = [`the ${s.lens} lens`];
   if (s.layer) parts.push(`layer "${s.layer}"`);
   if (s.hasCamera) parts.push("the current map view");
   parts.push(`${s.nPlaces} place${s.nPlaces === 1 ? "" : "s"}`);

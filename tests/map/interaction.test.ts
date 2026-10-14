@@ -8,27 +8,9 @@ import {
   mapClick,
   studyAreaFromBoot,
   studyAreasFromBoot,
-  zoneAtPoint,
-  zoneHitFromFeatures,
   type QueriedFeature,
 } from "../../src/lib/map/interaction";
 import { cellFromLonLat } from "../../src/lib/grid/grid";
-import type { ZoneUnitSpec } from "../../src/lib/map/types";
-
-const UNITS: ZoneUnitSpec[] = [
-  {
-    unit: "programarea",
-    pmtiles: "https://s3.example/zones/pa/zones.pmtiles",
-    sourceLayer: "programarea",
-    fill: {
-      keyProperty: "programarea_key",
-      stops: [],
-      defaultColor: "lightgrey",
-      opacity: 0.7,
-      outlineColor: "white",
-    },
-  },
-];
 
 /** usa05 (v1-v7): 3103 x 2006 from xmin 141.10 on a 0-360 frame. */
 const USA05_BOOT = {
@@ -94,41 +76,6 @@ describe("flyToStudyArea", () => {
   });
 });
 
-describe("zoneHitFromFeatures", () => {
-  const feature = (id: string, props: Record<string, unknown>): QueriedFeature => ({
-    layer: { id },
-    properties: props,
-  });
-
-  it("resolves the unit from the layer id and reads that unit's key property", () => {
-    expect(
-      zoneHitFromFeatures(
-        [
-          feature("programarea_fill", {
-            programarea_key: "GAA",
-            programarea_name: "Gulf of America",
-          }),
-        ],
-        UNITS,
-      ),
-    ).toEqual({ unit: "programarea", key: "GAA", name: "Gulf of America" });
-  });
-
-  it("falls back to the key when the tile carries no name", () => {
-    expect(
-      zoneHitFromFeatures([feature("programarea_ln", { programarea_key: "MDA" })], UNITS)?.name,
-    ).toBe("MDA");
-  });
-
-  it("ignores a feature from a layer that is not one of these units", () => {
-    expect(zoneHitFromFeatures([feature("basemap", { programarea_key: "GAA" })], UNITS)).toBeNull();
-  });
-
-  it("no features means no zone, not an empty-string key", () => {
-    expect(zoneHitFromFeatures([], UNITS)).toBeNull();
-  });
-});
-
 describe("mapClick", () => {
   const fakeMap = (features: QueriedFeature[]) => ({
     queryRenderedFeatures: vi.fn(() => features),
@@ -138,18 +85,8 @@ describe("mapClick", () => {
   it("computes the cell id with the RELEASE's grid — the same lon/lat differs per grid", () => {
     const map = fakeMap([]);
     const lngLat = { lng: -160.2, lat: 55.3 };
-    const usa05 = mapClick(
-      map,
-      lngLat,
-      { x: 10, y: 20 },
-      { grid: gridFromBoot(USA05_BOOT), units: [] },
-    );
-    const global05 = mapClick(
-      map,
-      lngLat,
-      { x: 10, y: 20 },
-      { grid: gridFromBoot(GLOBAL05_BOOT), units: [] },
-    );
+    const usa05 = mapClick(map, lngLat, { x: 10, y: 20 }, { grid: gridFromBoot(USA05_BOOT) });
+    const global05 = mapClick(map, lngLat, { x: 10, y: 20 }, { grid: gridFromBoot(GLOBAL05_BOOT) });
     expect(usa05.cellId).toBe(cellFromLonLat(-160.2, 55.3, gridFromBoot(USA05_BOOT)));
     expect(global05.cellId).toBe(cellFromLonLat(-160.2, 55.3, gridFromBoot(GLOBAL05_BOOT)));
     // the regression this rule exists for: the same click is a DIFFERENT cell on the two grids.
@@ -162,38 +99,21 @@ describe("mapClick", () => {
       map,
       { lng: 10, lat: 50 },
       { x: 1, y: 1 },
-      {
-        grid: gridFromBoot(USA05_BOOT),
-        units: [],
-      },
+      { grid: gridFromBoot(USA05_BOOT) },
     );
     expect(click.cellId).toBeNull();
   });
 
-  it("queries only the zone layers, and returns the hit alongside the cell id", () => {
-    const map = fakeMap([
-      { layer: { id: "programarea_fill" }, properties: { programarea_key: "GAA" } },
-    ]);
+  it("returns the click's lngLat alongside the cell id, and never queries rendered features", () => {
+    const map = fakeMap([]);
     const click = mapClick(
       map,
       { lng: -160.2, lat: 55.3 },
       { x: 10, y: 20 },
-      {
-        grid: gridFromBoot(USA05_BOOT),
-        units: UNITS,
-      },
+      { grid: gridFromBoot(USA05_BOOT) },
     );
-    expect(map.queryRenderedFeatures).toHaveBeenCalledWith(
-      { x: 10, y: 20 },
-      { layers: ["programarea_fill", "programarea_ln"] },
-    );
-    expect(click.zone?.key).toBe("GAA");
+    expect(map.queryRenderedFeatures).not.toHaveBeenCalled(); // zones are gone: no layer to query
     expect(click.lngLat).toEqual({ lng: -160.2, lat: 55.3 });
-  });
-
-  it("with no units there is nothing to query — and no query is made", () => {
-    const map = fakeMap([]);
-    expect(zoneAtPoint(map, { x: 1, y: 1 }, [])).toBeNull();
-    expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+    expect(click.cellId).not.toBeNull();
   });
 });

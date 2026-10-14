@@ -101,7 +101,7 @@ localStorage.setItem("atlas.feedback_url", "https://script.google.com/macros/s/.
 
 Unset (the build default): the dialog still works — every field, the screenshot, the annotator —
 but "Send" stays disabled and the dialog says so. The zero-backend fallback, **"Open as GitHub
-issue"**, opens a prefilled `github.com/MarineSensitivity/atlas/issues/new` link built from the
+issue"**, opens a prefilled `github.com/oceanmetrics/atlas/issues/new` link built from the
 CURRENT form state (`src/lib/feedback/githubIssue.ts`, labelled with the chosen `kind`) and copies
 the screenshot (if kept) to the clipboard so it can be pasted into the issue — GitHub's `new/…` URL
 cannot embed an image directly.
@@ -127,19 +127,19 @@ ported from CalCOFI Explorer's own generator
 (`../../CalCOFI/calcofi4r/R/feedback.R#cc_feedback_script()`) and adapted to atlas's payload shape
 and its two rules (the kind IS the label; a restricted release gets no public issue). Setup:
 
-1. **Create the Sheet** as `ben@oceanmetrics.io` (R6's owner decision) — e.g. "Atlas feedback".
+1. **Create the Sheet** under the maintainer account — e.g. "Atlas feedback".
    Add two tabs:
    - **`feedback`** — first row exactly the header `Code.gs`'s own `FEEDBACK_HEADER` constant
      defines (`ts, id, app, kind, title, text, email, url, release, version, sha, lens, viewport,
 theme, user_agent, website, restricted, image_url, issue_url, status`).
-   - **`recipients`** — `A1 = "email"`, one address per row. Seed it with the two R6 addresses:
-     `ben@oceanmetrics.io` and `timothy.white@boem.gov`. Edit a cell to add or remove someone later
+   - **`recipients`** — `A1 = "email"`, one address per row. Seed it with the maintainers'
+     addresses (kept in the Sheet, never in this repo). Edit a cell to add or remove someone later
      — no redeploy needed.
 2. **Extensions → Apps Script**, delete the default `Code.gs` stub, paste the contents of this
    repo's `scripts/feedback/Code.gs` verbatim.
 3. **Project Settings → Script properties**:
    - `GITHUB_TOKEN` (optional but expected in production) — a fine-grained personal access token
-     scoped to `MarineSensitivity/atlas` only, with **Contents: Read and write** and **Issues: Read
+     scoped to `oceanmetrics/atlas` only, with **Contents: Read and write** and **Issues: Read
      and write** permissions. Without it, every submission still reaches the Sheet and mail; the
      `status` column says `"issue skipped: no GITHUB_TOKEN"`.
    - `DRIVE_FOLDER_ID` (optional) — a Drive folder id to file screenshots under. Without it, the
@@ -147,7 +147,7 @@ theme, user_agent, website, restricted, image_url, issue_url, status`).
 4. **Deploy → New deployment → type "Web app"** — execute as **Me**, who has access **Anyone**.
    Copy the `/exec` URL.
 5. **Give the app the URL**: set it as the repository variable `VITE_FEEDBACK_URL` in
-   `MarineSensitivity/atlas`'s GitHub Pages workflow so the built site picks it up.
+   `oceanmetrics/atlas`'s GitHub Pages workflow so the built site picks it up.
    `.github/workflows/pages.yml`'s `checks` job already builds with two env vars on its
    `npx vite build` step (`VITE_SEAL`/`VITE_AGENCY`, plan D10) — add the new one alongside them,
    exactly this shape:
@@ -182,7 +182,7 @@ routes that exact URL with Playwright, asserting the posted JSON body (the hash-
 
 > What is sent: your text, this view's release and lens, the viewport and theme, and the screenshot
 > (unless you turn it off) — the page link only if you tick the box above. It goes to the team by
-> mail and, on a public release, as a public GitHub issue in `MarineSensitivity/atlas` labelled
+> mail and, on a public release, as a public GitHub issue in `oceanmetrics/atlas` labelled
 > `{kind}` — filed either way, whether or not you give an email. Your email, if you give one, never
 > appears in the issue; it stays in the team's own mail and sheet, with a copy sent back to you.
 > This release being under review is the one case no public issue is filed at all.

@@ -1,18 +1,16 @@
 <script lang="ts">
-  // atlas-3 step 3: the hydrated shell. Reads and writes view state ONLY through src/lib/state
-  // (createSelStore -> history.replaceState, never pushState -- CLAUDE.md "URL-is-the-view"; see
+  // The hydrated shell. Reads and writes view state ONLY through src/lib/state (createSelStore ->
+  // history.replaceState, never pushState -- CLAUDE.md "URL-is-the-view"; see
   // tests/shell/shell-invariants.test.ts's source-scan guard, the same technique
-  // tests/state/invariants.test.ts already uses for sel.svelte.ts). No data and no lens logic
-  // beyond the lens switch itself (atlas-4/5 own that): every rail tool's panel body is a one-line
-  // placeholder. atlas-map added the MAP -- basemap by theme plus the release's zone outlines,
-  // composed through src/lib/map and nothing more; the panels, legend and choropleth are the
-  // lenses' own composeStyle inputs (docs/map.md).
+  // tests/state/invariants.test.ts already uses for sel.svelte.ts). The map is composed through
+  // src/lib/map and nothing more; the legend and layers are the lenses' own composeStyle inputs
+  // (docs/map.md).
   //
   // This file owns NO scoped CSS for the shell's own layout/topbar chrome -- it imports shell.css
   // as a plain global stylesheet (the SAME file index.html's inline critical CSS `@import`s), so
   // there is exactly one source for every geometry value the CLS gate depends on. The real
-  // src/lib/ui/* components below (Rail, Panel, Sheet, Segmented, About, VersionBadge, Announcer)
-  // bring their own scoped styles and are used only by import, per this step's instructions.
+  // src/lib/ui/* components below (Rail, Panel, Sheet, Segmented, Announcer) bring their own scoped
+  // styles and are used only by import.
   import { onMount, tick, type Component } from "svelte";
   import "./shell.css";
   import {
@@ -23,25 +21,17 @@
     type PanelContext,
     type ToolName,
   } from "./tools";
-  import { placesSubjectHeader } from "../lens/scores/species";
   import { legacyToolFromParams } from "../lib/state/legacy";
   import { DETAILS_LINK_ATTR } from "../lib/map/popup";
   // R3-W8 item 3: the `ui=` token's parse/format core — see that module's own header for what it
   // carries and why it is a separate token from Sel's own query keys.
   import { formatUi, parseUi, type UiExpandedRow } from "./uiState";
   import type { LayerGroupId } from "../lib/map/layerStack";
-  // R5: the wave-in-hexagon mark replaces the old two-file "wave in a circle" pair
-  // (mst-mark.svg/mst-mark-dark.svg, kept vendored only for history -- Report.svelte moved to
-  // this same component too) -- inline, so ONE definition serves both themes through
-  // --border-accent rather than a `.mark--navy`/`.mark--paper` display:none swap.
-  import WaveHexMark from "../lib/brand/WaveHexMark.svelte";
   import Icon from "../lib/ui/Icon.svelte";
   import Rail from "../lib/ui/Rail.svelte";
   import Panel from "../lib/ui/Panel.svelte";
   import Sheet from "../lib/ui/Sheet.svelte";
   import Segmented from "../lib/ui/Segmented.svelte";
-  import type { ReportFlowSlots } from "./ReportPane.svelte";
-  import VersionBadge from "../lib/ui/VersionBadge.svelte";
   import Announcer from "../lib/ui/Announcer.svelte";
   import Toast from "../lib/ui/Toast.svelte";
   import Honeycomb from "../lib/ui/Honeycomb.svelte";
@@ -72,7 +62,7 @@
   } from "../lib/ui/sheetGeometry";
   import { createSelStore } from "../lib/state/sel.svelte";
   import { formatSel } from "../lib/state/codec";
-  import { DEFAULT_SEL, defaultOut, resolveTheme, type LayerStackEntry } from "../lib/state/types";
+  import { resolveTheme, type LayerStackEntry } from "../lib/state/types";
   import { createMap, type MapHandle } from "../lib/map/map";
   import { composeStyle, BASEMAP_LAYER_PREFIX } from "../lib/map/style";
   // R3 (round-2 plan §5 U4): the layer stack — resolved here (the SAME resolved object both
@@ -84,28 +74,15 @@
     BASEMAP_ATTRIBUTION,
     type CartoStyleLike,
   } from "../lib/map/layers/basemap";
-  import { zoneUnitsFromBoot, zoneUnitsWithOutline } from "../lib/map/layers/zones";
-  // R3 orchestrator audit item 2: the standalone ecoregion outline, read from the release's
-  // MANIFEST (never `boot.units[]`, which stays exactly one row per D17) -- a plain `.ts` reader,
-  // not a `.svelte` SFC, so it is exempt from `tests/shell/lazy-lens-imports.test.ts`'s static-
-  // import ban the same way `state.svelte.ts` already is (that file's own header explains why).
   import {
-    ecoregionZoneUnitFromManifest,
-    fullSubregion,
-    layerByKey,
-    unitOptions,
-  } from "../lens/scores/boot";
-  // R3-W2: the Download menu's `?lyr=` fallback -- the SAME rule `state.svelte.ts#lyr` applies
-  // (an unset/unknown metric key resolves to the release's own composite default), a plain `.ts`
-  // reader like `boot.ts` above, exempt from the lazy-lens-runtime-import ban for the same reason.
-  import { effectiveLyr } from "../lens/scores/fallback";
-  import { studyAreaFromBoot, type StudyArea } from "../lib/map/interaction";
+    FALLBACK_FULL_STUDY_AREA,
+    studyAreaFromBoot,
+    type StudyArea,
+  } from "../lib/map/interaction";
+  import { MST_SPECIES_VER, loadMstBoot } from "../lib/release/mst";
   import {
-    INITIAL_AREA_CAMERA_STATE,
     paddedStudyAreaCenter,
     phoneDefaultCamera,
-    shouldFlyToArea,
-    type AreaCameraState,
     type ChromePadding,
     type Viewport,
   } from "../lib/map/camera";
@@ -116,6 +93,7 @@
   } from "../lib/map/chromePadding";
   import { createAnalytics } from "../lib/analytics/analytics";
   import { analyticsLogUrl } from "../lib/analytics/logUrl";
+  import { analyticsGaId } from "../lib/analytics/gaId";
   // atlas-8 Deliverable 4 (beta feedback, zero backend -- CLAUDE.md/GATES.md's "the CalCOFI
   // zero-backend fallback"): both pure functions take a snapshot the caller builds -- neither ever
   // reads `location`/`window.location` itself (tests/feedback/noHash.test.ts's source-scan gate).
@@ -131,14 +109,6 @@
   // it") -- it never imports a `.svelte` file itself, so it stays a static import even though every
   // lens PANEL component below is now lazy (see "lazy lens/panel chunks" below).
   import { createSpeciesLens } from "../lens/species/state.svelte";
-  // 0.10.21 fix 1 -- type-only (erased at build time, never pulls the scores lens' runtime module
-  // into the static bundle): the scores lens' equivalent of `createSpeciesLens` above, EXCEPT the
-  // runtime module is loaded dynamically, keyed on `sel.lens === "scores"` (see "lazy lens/panel
-  // chunks" below) -- unlike species' `state.svelte.ts`, it pulls in `mapInputs.ts`/`boot.ts`/
-  // `raster.ts`/`zoneFill.ts` (`state.svelte.ts`'s own header explains why that weight must stay
-  // out of a species-only session's bundle). `tests/shell/lazy-lens-imports.test.ts` asserts this
-  // file never imports the RUNTIME module statically.
-  import type { ScoresLens as ScoresLensState } from "../lens/scores/state.svelte";
   // atlas-6 step 1: the Places panel mounts here (the shell's one reserved panel slot); it never
   // touches MapLibre directly -- `placesMap` is the reactive bridge this file's own composeStyle
   // effect (below) folds into the ONE `selection` input, per docs/map.md. `placesMap.svelte.ts` is
@@ -146,11 +116,9 @@
   // same reason `state.svelte.ts` does above: `placesSelection` (below) reads it unconditionally,
   // even when the Places PANEL itself (`../places/Places.svelte`, lazy) has never been opened.
   import { createPlacesMapStore } from "../places/placesMap.svelte";
-  // R3-W2: the Download menu -- `places/model.ts#placesFromHash` (never a second parser of `sel.pl`)
-  // gives it the current places list for "Selected places · GeoJSON"'s enabled/disabled state.
-  // R3-W8 item 5 fix round: the SAME decode also feeds `reportSubjects()` below (`addPlace` is the
-  // generic mutation `addZonePlace`/a drawn place both bottom out in -- see `lastClicked.ts`'s own
-  // header for why "Add to places" reuses it rather than a bespoke cell-place path).
+  // The Download menu -- `places/model.ts#placesFromHash` (never a second parser of `sel.pl`)
+  // gives it the current places list for "Selected places · GeoJSON"'s enabled/disabled state, and
+  // the Places tab's header its count.
   //
   // 0.10.79 size-budget fix round: `places/model.ts` pulls in the FULL `geo/placeCodec.ts` (the
   // g1 codec, incl. `simplify.ts`'s Douglas-Peucker + `unwrap.ts`) as a VALUE import -- that whole
@@ -158,33 +126,22 @@
   // static-file list) because this file imported `addPlace`/`hashFromPlaces`/`placesFromHash`
   // statically, even though none of it is needed before the Places tab/Download menu/"Add to
   // places" click ever happens. Type-only import here (erased at build time); the runtime module
-  // loads through `loadPlacesModel()` below, the SAME dynamic-import-cached-behind-a-`$state`
-  // convention `lastClickedLabelFn` already uses.
+  // loads through `loadPlacesModel()` below, a dynamic import cached behind a `$state`.
   import type {
     addPlace as AddPlaceFn,
     hashFromPlaces as HashFromPlacesFn,
     placesFromHash as PlacesFromHashFn,
   } from "../places/model";
-  import { lastClickedInPlaces, reportSubjects } from "../lib/state/subjects";
-  // `lastClicked.ts`/`lastClickedPlace.ts` are BOTH reached only through a dynamic `import()`
-  // (`lastClickedLabelFn`, below, and `onAddLastClicked()`'s own `import()`) -- `lastClicked.ts`
-  // looks cheap on its own, but its transitive imports (`places/zoneStats.ts#paLabel` pulls in
-  // `lib/analysis/queries.ts` and `lib/zones/programAreaNames.ts`; `lens/scores/boot.ts#zoneRows`
-  // pulls in `lib/map/layers/zones.ts`) pushed the 450 KB static-critical-path budget over by a
-  // few KB when statically imported -- none of it is needed before the Report tool's own panel
-  // body ever renders. Type-only import (erased at build time) for the function's own shape.
-  import type { lastClickedLabel as LastClickedLabelFn } from "../lens/scores/lastClicked";
   // type-only (erased at build time) -- DownloadMenu.svelte's RUNTIME module is loaded dynamically
   // (see `openDownload()`, below, and that file's own "LAZY" header note): its map-capture/SVG/
   // COG-fetch logic pushed the static "before first interaction" budget to 449.9/450.0 KB gzip
   // when statically imported (measured) -- a download is never needed before first interaction,
   // the exact case `scripts/size-budget.mjs`'s rule exists for.
   import type DownloadMenu from "./DownloadMenu.svelte";
-  import type { ResolvedTheme, ZoneUnitSpec } from "../lib/map/types";
-  // U6 (round 2): Report -- pure decision logic (report.ts) + the tour's step DATA (tour.ts, no
-  // driver.js). Both are small/dependency-free, so both stay ordinary static imports; only the
-  // TOUR RUNTIME (tourRuntime.ts, which imports driver.js) is a dynamic import() -- see
-  // `beginTour()` below and that file's own header.
+  import type { ResolvedTheme } from "../lib/map/types";
+  // the tour's step DATA (tour.ts, no driver.js) is small and dependency-free, so it stays an
+  // ordinary static import; only the TOUR RUNTIME (tourRuntime.ts, which imports driver.js) is a
+  // dynamic import() -- see `beginTour()` below and that file's own header.
   import { tourStepsForLens, type TourActions } from "./tour";
   import type { Lens } from "../lib/state/types";
 
@@ -207,19 +164,13 @@
   // Retry. It never polls on its own (brief: "Do not poll continuously while everything is fine").
   const health = createHealthStore();
 
-  // a minimal Analytics instance (analytics.ts's own header: the GA4 `<script>` LOADER tag is a
-  // later phase's job; `track()` calls made before it lands simply queue into `dataLayer` the way
-  // GA4's own snippet already expects — see analytics.ts). `preview: false` here is a necessary
-  // GUESS -- the session fetch (`window.__early.session`) has not resolved yet at construction
-  // time -- corrected by `analytics.updatePreview()` in the boot `onMount` below once it does
-  // (R3-B15; every event tracked before that point, on a public-by-default guess, is the same
-  // trade-off `page_location` already makes for the inline early-fetch script's own timing).
-  // round 2, Q7 fix: `logUrl` was never passed here, so the Sheet-log beacon (docs/analytics.md)
-  // could never fire no matter what Ben set `VITE_LOG_URL` to -- see src/lib/analytics/logUrl.ts.
+  // the privacy-safe analytics module, OFF unless configured: with no `VITE_GA_ID` / `VITE_LOG_URL`
+  // at build time `track()` is a no-op (docs/analytics.md).
   const analytics = createAnalytics({
     appVersion: __APP_VERSION__,
     preview: false,
     logUrl: analyticsLogUrl(),
+    measurementId: analyticsGaId(),
   });
 
   // --- theme: the SAME rule as index.html's pre-paint script, kept live afterward -------------
@@ -260,22 +211,16 @@
   // URL view state.
   // R3-W8 item 3: restored from a shared link's `ui=` token when present (`initialUi`, above) —
   // "layers" (unchanged) otherwise.
-  // R4-B: a legacy `?tool=flower` / `?tool=places` (legacy.ts) opens Details / Report when no `ui=`
+  // a legacy `?tool=flower` / `?tool=report` (legacy.ts) opens Details / Places when no `ui=`
   // token supplied a tool.
   let activeTool = $state<ToolName>(
     initialUi?.tool ?? legacyToolFromParams(new URLSearchParams(location.search)) ?? "layers",
   );
   const railItems = $derived(buildRailItems());
 
-  // R4-B: the panel/sheet header says what is being SHOWN, not the spine entry's name
-  // (control-grammar.md rule 6) -- `panelHeaderTitle` (tools.ts, unit-tested) is the one rule; the
-  // context it reads is assembled just below `lastClickedRowLabel`, where those values exist.
-
-  // R3-W8 item 5 fix round: "The Table: when there is no selection, add a line... with a button
-  // that opens that tab". R4-D: the Report tool is one flow, so this just opens the tool.
-  function openReportPlaces() {
-    selectTool("report");
-  }
+  // the panel/sheet header says what is being SHOWN, not the spine entry's name --
+  // `panelHeaderTitle` (tools.ts, unit-tested) is the one rule; the context it reads is assembled
+  // below, where `phoneLegend` and `places` exist.
 
   // R3-W8 item 3: the Layers pane's own expanded row (`LibLayersPanel`'s controlled-row-expansion
   // pair) — lifted here (rather than left as that component's own internal state) so Share can read
@@ -371,15 +316,10 @@
     panelRef?.expand();
   }
 
-  // --- top bar: version chip, lens switch, search, Share / Report / Help / theme ---------------
+  // --- top bar: lens switch, search, Share / Help / theme --------------------------------------
   function onLensChange(value: string) {
-    const lens = value === "species" ? "species" : "scores";
-    // `out`'s default is per-lens (state/types.ts's `defaultOut`); there is no outline control
-    // yet (atlas-4/5), so an explicit lens switch also resets `out` to the new lens's default --
-    // otherwise the PREVIOUS lens's default value lingers and formatSel writes it as if the user
-    // had chosen it on purpose (e.g. `out=programarea` surviving a switch to Species, whose own
-    // default is "none" -- the seeded case in e2e/shell.url-state.spec.ts).
-    selStore.set({ lens, out: defaultOut(lens) });
+    const lens = value === "species" ? "species" : "collection";
+    selStore.set({ lens });
   }
 
   // R3-W8 item 3 (Ben, 2026-09-25): "when clicking Share, the link should include all the same UI
@@ -397,7 +337,7 @@
   // narrower two-value shape the `ui=` token actually encodes, so this narrows explicitly rather
   // than widening the token's own type to match.
   function toUiExpandedRow(id: LayerGroupId | null): UiExpandedRow {
-    return id === "data-raster" || id === "data-zones" ? id : null;
+    return id === "data-raster" ? id : null;
   }
 
   function shareUrl(): string {
@@ -425,20 +365,6 @@
       });
     }
   }
-
-  // UI-16 (round 3, Opus 5.5 eyes-on review): the phone ⋯ menu's own quick "Report" action
-  // (`onReport()`, its `reportAction()`-driven "open a recent report straight away, or the
-  // chooser") is REMOVED -- desktop never had an equivalent top-bar button, only the rail's own
-  // "Report" tool (`selectTool("report")`, below), so this was the one ⋯-vs-desktop mismatch the
-  // review named. `ReportTool.svelte` (the rail tool's own panel body) already calls the SAME
-  // `reportAction()`/`recordRecentReport()` pair independently ("a shortcut to open a report for
-  // whatever is already selected", that file's own header) the moment it opens, so nothing here
-  // loses functionality -- the smart-open behaviour just now lives in the ONE place both viewports
-  // already share, instead of a second copy only the phone's quick action reached.
-
-  // R2 (docs/usability.md §7): "About this release" moved from the on-map bottom-left card into
-  // the top bar (`data-control="about"`, TopBarActions.svelte) -- there is no longer a stub `onHelp`
-  // here pointing a keyboard/AT user at it; U6's own real Help menu (below) owns `onHelp` outright.
 
   // --- Help menu (U6, round 2) ---------------------------------------------------------------------
   // A non-modal disclosure (Popover.svelte's own dismiss-on-outside-click/Esc pattern, inlined here
@@ -561,90 +487,20 @@
     return () => clearTimeout(t);
   });
 
-  let versionPickerOpen = $state(false);
-  function onVersionClick() {
-    versionPickerOpen = true;
-  }
-
-  // --- the on-map About card's release note (spec.md §9): the seal itself is About.svelte's own
-  // concern (gated on VITE_SEAL/VITE_AGENCY, already wired in that component) -- this only reads
-  // the resolved version off window.__early, the same global VersionBadge.svelte reads.
-  interface Early {
-    version: Promise<string | null>;
-    // P round 2 fix (health.svelte.ts#probeData's `base` param): the SAME resolved data origin
-    // index.html's early-fetch script used for its OWN `app/boot.json` fetch -- reading it back
-    // here (never re-deriving it) means the health probe can never disagree with what actually
-    // loaded, preview session prefix included.
-    base?: Promise<string | null>;
-    boot?: Promise<unknown>;
-    // atlas-4: the scores lens' raster/overlay/legend inputs come from `manifest.overlays`
-    // (boot.json carries no `overlays` key today) -- read the same global VersionBadge.svelte and
-    // index.html's inline script already publish, never a second fetch.
-    manifest?: Promise<unknown>;
-    // atlas-4 step 3: the release picker (D15) reads the SAME `versions.json` rows and denial
-    // record index.html's inline early-fetch script already resolved -- never a second fetch.
-    versions?: Promise<EarlyVersionRow[] | null>;
-    denied?: Promise<{ ver: string; reason: string } | null>;
-    // R3-B15: the SAME same-origin `session.json` result index.html's early-fetch script already
-    // resolved (D6's "the one door into preview") -- never a second fetch, and never awaited on
-    // the public path (this is read only once it has already settled on its own).
-    session?: Promise<{ preview: boolean }>;
-  }
-  // structurally identical to src/lib/release/access.ts's own `VersionRow` -- NOT imported from
-  // it: this file must never import src/lib/release (tests/shell/shell-invariants.test.ts's
-  // source-scan guard) since the early-fetch script is the ONE place that logic runs before any
-  // bundle parses; the shell only ever reads window.__early's already-resolved values.
-  interface EarlyVersionRow {
-    ver?: string;
-    status?: string;
-    access?: string;
-    released?: string;
-  }
-  let earlyVersion = $state<string | null>(null);
-  // P10: docsHref moved below `releaseRestricted` -- it now needs to know the release's access
-  // level, which that derived value (and `currentVersionRow`) computes.
+  // --- the pinned MST release the Species lens reads ----------------------------------------------
+  // OceanMetrics Atlas has no release registry (no latest.txt / versions.json / session.json); the
+  // Species lens still reads one fixed MarineSensitivity release (`lib/release/mst.ts`) until the MST
+  // collections are read through the STAC catalog.
+  const earlyVersion: string = MST_SPECIES_VER;
   let boot = $state<unknown>(null);
-  let manifest = $state<unknown>(null);
-  let versions = $state<EarlyVersionRow[] | null>(null);
-  let denied = $state<{ ver: string; reason: string } | null>(null);
   onMount(() => {
-    const early = (window as unknown as { __early?: Early }).__early;
-    // V3 trigger (a), tiler half: the titiler origin is a fixed constant -- no need to wait on
-    // anything resolving first.
+    // V3 trigger (a): the tiler origin is a fixed constant -- no need to wait on anything resolving
+    // first; the data origin is probed once the pinned release is known.
     health.probeTiler();
-    early?.version
-      .then((v) => {
-        earlyVersion = v;
-        // V3 trigger (a), data half: only once the release itself is known. P round 2 fix: probe
-        // the SAME resolved base `early.base` carries (the one index.html's own fetch of
-        // app/boot.json used), not always the public bucket -- falls back to no base (the public
-        // bucket URL) if `early.base` is absent or itself rejects.
-        if (v) {
-          const base = early.base ?? Promise.resolve(null);
-          base.then((b) => health.probeData(v, b ?? undefined)).catch(() => health.probeData(v));
-        }
-      })
-      .catch(() => {});
-    // boot.json is the map's only data source at this step (Tier 0, plan D3): the zone units and
-    // their PMTiles archives. A missing/404 boot (no release has published app/boot.json until
-    // atlas-1) leaves `boot` null and the map paints basemap-only -- never an error.
-    early?.boot?.then((b) => (boot = b)).catch(() => {});
-    early?.manifest?.then((m) => (manifest = m)).catch(() => {});
-    early?.versions?.then((v) => (versions = v)).catch(() => {});
-    // a denied version (e.g. the public host + ?ver=v9) auto-opens the picker so the "why" is
-    // visible without a click -- D15's e2e gate: "shows the notice", not "shows it once asked".
-    early?.denied
-      ?.then((d) => {
-        denied = d;
-        if (d) versionPickerOpen = true;
-      })
-      .catch(() => {});
-    // R3-B15: `analytics` was constructed above with `preview: false` (a necessary guess -- the
-    // session fetch was still in flight at that point) -- correct it once the real answer lands,
-    // same `window.__early.session` result index.html's own early-fetch script already resolved.
-    // `.catch(() => {})` matches every other `early.*` read here: a rejected/absent session is
-    // simply left at the constructor's public default, never a thrown error.
-    early?.session?.then((s) => analytics.updatePreview(s.preview === true)).catch(() => {});
+    health.probeData(earlyVersion);
+    // boot.json carries the species lens' dataset index and palettes; a missing/404 boot leaves
+    // `boot` null and the species lens degrades (never an error).
+    void loadMstBoot(earlyVersion).then((b) => (boot = b));
   });
 
   // --- the map (atlas-map): mounted under the panels, one MapLibre instance ---------------------
@@ -658,16 +514,11 @@
   // deep-linked selected place's outline restores regardless of which tool is active.
   const placesMap = createPlacesMapStore({ selStore });
 
-  // outline-only, on purpose: labels, choropleth fills and the score raster are the LENS's
-  // composeStyle inputs (atlas-4/5), not the shell's. `src/lib/map/layers/zones.ts` already builds
-  // all three -- see docs/map.md.
-  const zoneUnits = $derived<ZoneUnitSpec[]>(zoneUnitsFromBoot(boot));
-
   // atlas-5: the species lens' reactive core. A plain call, not a component -- state.svelte.ts's
   // own header explains why (the same "wiring only, rules live in plain modules" split
-  // src/lib/state/sel.svelte.ts already documents). `mapHandle`/`boot`/`earlyVersion` are read
-  // through getters so the closures below always see the CURRENT value, not the one captured at
-  // this call site (all three settle asynchronously, after this line runs).
+  // src/lib/state/sel.svelte.ts already documents). `mapHandle`/`boot` are read through getters so
+  // the closures below always see the CURRENT value, not the one captured at this call site (both
+  // settle asynchronously, after this line runs).
   const speciesLens = createSpeciesLens({
     selStore,
     ver: () => earlyVersion,
@@ -687,37 +538,16 @@
     isPhone: () => isPhone,
   });
 
-  // --- page title: the ONE writer (spec.md/atlas-3 step 3 deliverable 4; atlas-8 fix) -----------
-  // Used to be two independent `$effect`s -- this one and species/state.svelte.ts's own -- each
-  // with different reactive dependencies (`sel.lens` here, species-card state there), so either
-  // could re-fire and stomp the other's title depending on Svelte's own effect-scheduling order.
-  // `speciesLens.docTitle` is still computed in state.svelte.ts (it needs that module's card/`in`
-  // state); this is the only place anything assigns `document.title`, and
-  // tests/shell/documentTitle.test.ts's source scan pins that.
+  // --- page title: the ONE writer (tests/shell/documentTitle.test.ts's source scan pins that) -------
   $effect(() => {
     document.title =
       sel.lens === "species" && speciesLens.docTitle
         ? speciesLens.docTitle
-        : `${sel.lens === "species" ? "Species" : "Scores"} · MarineSensitivity Atlas`;
+        : `${sel.lens === "species" ? "Species" : "Collections"} · OceanMetrics Atlas`;
   });
 
-  // 0.10.21 fix 1 -- the scores lens' own composeStyle contribution (raster, overlays, zone
-  // fills/highlights, selection, the floating legend), now a lens-level store
-  // (`../lens/scores/state.svelte`'s `createScoresLens()`) the shell instantiates whenever
-  // `sel.lens === "scores"` -- NOT a `bind:mapExtra` prop `ScoresLens.svelte` (the PANEL body)
-  // used to own. `Panel.svelte` renders its children only while `!geometry.collapsed`
-  // (`src/lib/ui/Panel.svelte`), so a collapsed desktop panel used to mean `ScoresLens.svelte`
-  // never mounted at all -- `mapExtra` stayed `{}` forever and the score raster (and its floating
-  // legend) never painted, even though the map itself was fully visible (the owner's live 0.10.17
-  // report; `e2e/scores.collapsed-panel.spec.ts` is the regression gate). Rule: map inputs belong
-  // to a lens-level store the shell instantiates whenever the lens is selected; the panel renders
-  // UI only. `null` before the lazy chunk resolves (see "lazy lens/panel chunks" below) --
-  // every read of it below is null-safe and falls back to "the shell's own base view", same as
-  // the old `{}` default did.
-  let scoresLens = $state<ScoresLensState | null>(null);
-
   // 0.10.79 size-budget fix round: the RUNTIME `places/model.ts` module (see the type-only import
-  // above), loaded once, right after mount -- same convention as `lastClickedLabelFn` below. `null`
+  // above), loaded once, right after mount -- same lazy-import convention as the lens chunks below. `null`
   // until it resolves; every reader below falls back to "no explicit places yet", which is the same
   // state `sel.pl` being absent already produces, so there is no new empty-state to design for.
   let placesModel = $state<{
@@ -740,39 +570,10 @@
     void loadPlacesModel();
   });
 
-  // R3-W8 item 5 fix round (Ben, verbatim): the ONE `reportSubjects()` result the Places tab's own
-  // "Last clicked" row, the Report tab's own sentence, and the Table's subject line all read --
-  // `reportPlaces` is a fresh `placesFromHash(sel.pl)` decode (the same pattern ScoresLens.svelte/
-  // SpeciesLens.svelte/TablePanel.svelte already each call independently, never a shared cache
-  // that could silently go stale against a later `sel.pl` write).
-  const reportPlaces = $derived(placesModel ? placesModel.placesFromHash(sel.pl) : []);
-  const reportSubject = $derived(reportSubjects(sel, reportPlaces));
-  // the Last-clicked slot is a SCORES-lens concept only (a clicked cell/Program Area) -- the
-  // Species lens' own map click sets a different kind of selection entirely (which species surface
-  // is shown), never `sel.sel`'s cell:/zone: shape, so this reads `null` (row hidden) there.
-  const lastClickedSelection = $derived(
-    sel.lens === "scores" ? (scoresLens?.selection ?? null) : null,
-  );
-  // lazy lens/panel chunks (same convention as ScoresLensComp/VersionPickerModalComp below): loads
-  // unconditionally, right after mount (nothing here is gated on `sel.lens`/`activeTool`, so there
-  // is no single "first opens the Report tool" moment to gate on either) -- `null` until it
-  // resolves, which the row already treats as "hide" (see `lastClickedRowLabel`'s own fallback).
-  let lastClickedLabelFn = $state<typeof LastClickedLabelFn | null>(null);
-  $effect(() => {
-    if (!lastClickedLabelFn) {
-      import("../lens/scores/lastClicked").then(
-        (mod) => (lastClickedLabelFn = mod.lastClickedLabel),
-      );
-    }
-  });
-  const lastClickedRowLabel = $derived(
-    lastClickedLabelFn ? lastClickedLabelFn(lastClickedSelection, boot) : null,
-  );
-
-  // R4-D: the Report tool's Last-clicked row shows only a click that is not already in the list.
-  const reportLastClickedLabel = $derived(
-    lastClickedInPlaces(lastClickedSelection, reportPlaces) ? null : lastClickedRowLabel,
-  );
+  // the explicit places list (`placesFromHash(sel.pl)`), decoded fresh from the URL state -- never a
+  // shared cache that could silently go stale against a later `sel.pl` write. Empty until the lazy
+  // `places/model.ts` module resolves.
+  const places = $derived(placesModel ? placesModel.placesFromHash(sel.pl) : []);
 
   // R4-B: the popup's "Details" link opens the Details tool. The popup is a MapLibre-owned div
   // outside Svelte, so ONE delegated click handler on `document` covers every popup of either lens.
@@ -787,59 +588,22 @@
     return () => document.removeEventListener("click", onDocClick);
   });
 
-  async function onAddLastClicked() {
-    const selection = lastClickedSelection;
-    if (!selection) return;
-    const [{ placeFromLastClicked }, model] = await Promise.all([
-      import("../lens/scores/lastClickedPlace"),
-      loadPlacesModel(),
-    ]);
-    const place = placeFromLastClicked(selection, boot);
-    if (!place) return;
-    // R3-W8 item 5 fix round: appends through the SAME generic `addPlace()` mutation
-    // `addZonePlace()`/a drawn or typed place already bottoms out in (`places/model.ts`) -- never
-    // a second, bespoke "add" path. Writes ONLY `pl`, deliberately never touching `sel` (unlike
-    // Places.svelte's own `writePlaces()`, which also selects the newly-added place): the
-    // Last-clicked row must keep showing the SAME subject afterward, per item 5's own selection
-    // model ("a most recently selected slot that can be updated with subsequent selection").
-    const result = model.addPlace(reportPlaces, place);
-    if (!result.ok) {
-      notify(result.reason ?? "Couldn't add that to places.", { tone: "error" });
-      return;
-    }
-    selStore.set({ pl: model.hashFromPlaces(result.places) || undefined });
-    notify("Added to places.");
-  }
-
   // P1 fix: hoisted out of the template (it used to be a `{@const}` inline where the legend chip
   // rendered) so BOTH the floating placement and the "full" detent's inline-in-sheet placement can
   // read the SAME value without recomputing it or duplicating the lens/kind branch.
-  const phoneLegend = $derived(
-    sel.lens === "species" ? speciesLens.mapInputs.legend : (scoresLens?.mapExtra.legend ?? null),
-  );
+  const phoneLegend = $derived(sel.lens === "species" ? speciesLens.mapInputs.legend : null);
 
-  // R4-B: the header context (`panelHeaderTitle`, tools.ts). Scores: the layer's short legend title
-  // and the spatial unit's label ("Score · Raster cells"); Species: the model's legend title alone.
-  // Details: the last-clicked label (Scores) or the species' name (Species). Table: its subject
-  // line. Report: the explicit place count, else the last click.
+  // the header context (`panelHeaderTitle`, tools.ts): the panel/sheet header says what is being
+  // SHOWN, not the spine entry's name. Species: the model's legend title alone.
   const panelContext = $derived<PanelContext>({
     layer: phoneLegend?.title ?? null,
-    unit:
-      sel.lens === "scores" && scoresLens
-        ? (unitOptions(boot).find((o) => o.value === scoresLens?.unit)?.label ?? null)
-        : null,
+    unit: null,
     subject:
-      sel.lens === "species"
-        ? speciesLens.card?.common || speciesLens.card?.sci || null
-        : lastClickedRowLabel,
+      sel.lens === "species" ? speciesLens.card?.common || speciesLens.card?.sci || null : null,
     tableSubject:
-      sel.lens === "species"
-        ? speciesLens.card?.common || speciesLens.card?.sci || null
-        : reportSubject.kind === "places"
-          ? placesSubjectHeader(reportSubject.items.length)
-          : lastClickedRowLabel,
-    placeCount: reportPlaces.length,
-    lastClicked: lastClickedRowLabel,
+      sel.lens === "species" ? speciesLens.card?.common || speciesLens.card?.sci || null : null,
+    placeCount: places.length,
+    lastClicked: null,
   });
   const panelTitle = $derived(panelHeaderTitle(activeTool, panelContext));
 
@@ -856,52 +620,35 @@
       8,
   );
 
-  // R3-W2: the Download menu's per-lens context -- built from data every lens ALREADY resolves
-  // (the current layer row, the active species pill/asset), never a second read of `sel.lyr`/`sel.in`
-  // against a different rule than the one that actually painted the map. `effectiveLyr` (never raw
-  // `sel.lyr`) is the SAME fallback `state.svelte.ts#lyr` applies -- an unset/unknown `?lyr=` still
-  // resolves to the release's own composite default, matching what the raster ACTUALLY paints.
-  const downloadLyr = $derived(effectiveLyr(sel.lyr, boot));
-  // Fix round (Opus 5.5 eyes-on review, D3): this used to read `layerByKey(...)?.label` directly
-  // -- `boot.layers[].label` is the layer's LONG description (~190 chars for `primprod`), not a
-  // title. `phoneLegend.title` (below) is the SAME short label the Layer select and the legend
-  // chip already show (`mapInputs.ts`'s own `title`, `metricKeyLabel()`/the manifest's short
-  // `metricLabels` preferred over the long `layer.label`) -- reused here, never re-derived, so the
-  // download title can never drift from what the app is already displaying.
+  // the Download menu's per-lens context -- built from data every lens ALREADY resolves (the active
+  // species pill/asset), never a second read of the state against a different rule than the one
+  // that actually painted the map. `phoneLegend.title` is the SAME short label the legend chip
+  // already shows, reused here so the download title can never drift from what the app displays.
   const downloadTitle = $derived(
-    sel.lens === "species"
-      ? (speciesLens.card?.sci ?? "Species")
-      : (phoneLegend?.title ?? downloadLyr ?? "Score"),
+    sel.lens === "species" ? (speciesLens.card?.sci ?? "Species") : (phoneLegend?.title ?? "Layer"),
   );
   const downloadLegendStops = $derived(
     phoneLegend && "stops" in phoneLegend ? phoneLegend.stops : [],
   );
   const downloadUnit = $derived(
-    sel.lens === "scores"
-      ? "score"
-      : phoneLegend && "unit" in phoneLegend
-        ? phoneLegend.unit
-        : undefined,
+    phoneLegend && "unit" in phoneLegend ? phoneLegend.unit : undefined,
   );
   const downloadCogUrl = $derived.by(() => {
     if (sel.lens === "species") {
       const asset = speciesLens.mapInputs.asset;
       return asset?.type === "cog" ? asset.url : null;
     }
-    const layer = layerByKey(boot, downloadLyr);
-    return layer ? (fullSubregion(layer)?.cog ?? null) : null;
+    return null;
   });
   const downloadCogDisabledReason = $derived(
     downloadCogUrl
       ? undefined
       : sel.lens === "species"
         ? (speciesLens.mapInputs.notice ?? "no surface selected for this input")
-        : "no COG published for this metric/subregion",
+        : "no COG published for this layer",
   );
   const downloadMetricOrMdlKey = $derived(
-    sel.lens === "species"
-      ? (speciesLens.bar?.pills.find((p) => p.active)?.mdlKey ?? null)
-      : downloadLyr,
+    sel.lens === "species" ? (speciesLens.bar?.pills.find((p) => p.active)?.mdlKey ?? null) : null,
   );
   const downloadPlaces = $derived(placesModel ? placesModel.placesFromHash(sel.pl) : []);
   // `typeof DownloadMenu` (not `Component<any>`, unlike the other lazy chunks below) -- this is the
@@ -929,68 +676,10 @@
       .then((mod) => (DownloadMenuComp = mod.default))
       .catch(() => announceChunkFailure("the download menu"));
   }
-  // R3-B5 (Opus eyes-on review, 2026-09-25): the scores lens' current layer own long description
-  // (`boot.layers[].label`), when the release publishes one that says something `phoneLegend.title`
-  // does not already say -- the SAME dedupe rule `LayersPanel.svelte`'s `currentLayerDescription`
-  // applies, kept in sync deliberately (both compare against the SAME short-vs-long fallback chain,
-  // `mapInputs.ts`'s own `title` derivation). Shown in the phone legend modal instead of leaving
-  // that space blank (`LegendChip.svelte`'s `description` prop); `null` for species (no per-model
-  // description published) or before a layer has resolved.
-  const phoneLegendDescription = $derived.by(() => {
-    if (sel.lens !== "scores" || !scoresLens) return null;
-    const layer = layerByKey(boot, scoresLens.lyr);
-    const desc = layer?.label ?? null;
-    if (desc === null) return null;
-    return desc === (phoneLegend?.title ?? null) ? null : desc;
-  });
-
-  // R3-W2 fix round (Opus 5.5 eyes-on review, D3): the Download menu's footer, optional second
-  // line -- reuses `phoneLegendDescription` verbatim (declared just above; it is ALREADY deduped
-  // against `phoneLegend.title` there -- `null` when the description would just repeat the title,
-  // the release publishes none, or the lens is species). Never a second, independent read of
-  // `layer?.label` here -- one place decides "is this description worth showing at all". Declared
-  // AFTER `phoneLegendDescription` on purpose: `npm run check` (svelte-aware, unlike plain `tsc`)
-  // flags a `const` referenced before its OWN declaration even when the read only happens inside a
-  // closure Svelte invokes later (a `$derived` callback) -- the runtime would have been fine, but
-  // the static check is not, so source order here matters.
-  const downloadDescription = $derived(sel.lens === "scores" ? phoneLegendDescription : null);
-
-  // G-25 fix: `Sel.out`'s ONE effect on the map, applied to whichever `zones` array (the shell's
-  // own outline-only `zoneUnits`, or the scores lens' richer `scoresLens.mapExtra.zones`) is about
-  // to reach `composeStyle()` below -- see `zoneUnitsWithOutline`'s own header. This is the ONLY
-  // place `sel.out` touches the map; BOTH `composeStyle()` call sites (the automation seam and the
-  // reactive effect, below) read THIS, never `zoneUnits`/`scoresLens.mapExtra.zones` directly, so
-  // the outline choice can never drift between the two. 0.10.21 fix 1: gated EXPLICITLY on
-  // `sel.lens === "scores"` -- species must never receive the scores lens' zones (choropleth
-  // fills/highlights), which used to be true only incidentally, because `ScoresLens.svelte` was
-  // never mounted on a species view in the first place.
-  const zonesForStyle = $derived<ZoneUnitSpec[]>(
-    zoneUnitsWithOutline(
-      sel.lens === "scores" ? (scoresLens?.mapExtra.zones ?? zoneUnits) : zoneUnits,
-      sel.out,
-    ),
-  );
-
-  // R3 orchestrator audit item 2: the standalone ecoregion outline (black, 3px --
-  // `layers/zones.ts#ZONE_LINE_STYLE.ecoregion`, unchanged) drawn on every SCORES view,
-  // independent of `sel.unit`/`sel.out` -- `null` when the release's manifest has not loaded yet or
-  // does not publish one. Appended AFTER `zoneUnitsWithOutline()` (never fed through it): this is
-  // decoration, not the release's one selectable unit, so `sel.out` never hides it. Kept OUT of
-  // `zoneUnits`/`zonesForStyle` (Places/pick-mode's own inputs) so drawing it can never make
-  // "ecoregion" a pickable zone type by accident.
-  //
-  // m9 (review round 1): a release whose OWN `boot.units[]` already publishes an "ecoregion"
-  // selectable unit (so `zonesForStyle` already carries one, e.g. via `sel.out=ecoregion`) must
-  // not ALSO get this manifest-published outline appended -- `composeStyle` keys every zone unit's
-  // ids on `unit` (`ecoregion_ln`, …), so two "ecoregion" entries in the same `zones` array collide
-  // into duplicate layer ids and break the style. No release does this today (the manifest outline
-  // exists precisely BECAUSE no release has an ecoregion `boot` unit), but the guard is cheap and
-  // makes the combination structurally safe rather than "currently doesn't happen to occur."
-  const ecoregionUnit = $derived(
-    sel.lens === "scores" && !zonesForStyle.some((u) => u.unit === "ecoregion")
-      ? ecoregionZoneUnitFromManifest(manifest)
-      : null,
-  );
+  // the long description of the current layer, when it says something the legend title does not:
+  // `null` for species (no per-model description published); the collection lens supplies its own.
+  const phoneLegendDescription = $derived<string | null>(null);
+  const downloadDescription = $derived(phoneLegendDescription);
 
   // usability M4: "the default camera frames Canada; panel/sheet cover the study area" -- the
   // FALLBACK study area's own center+zoom never accounted for the panel/sheet's own reserved
@@ -1133,7 +822,7 @@
       // later effect corrects an EXPLICIT `?area=` to its real, unpadded boot-resolved camera once
       // boot arrives -- the merged precedence this round's own CHANGELOG entry documents: an
       // explicit `area=` always wins over this padded default fit).
-      area: initialStudyArea(studyAreaFromBoot(null, sel.area)),
+      area: initialStudyArea(FALLBACK_FULL_STUDY_AREA),
       projection: sel.proj,
       // URL-is-the-view: the camera goes back through selStore, i.e. history.replaceState, and
       // only for user-driven moves (src/lib/map/camera.ts).
@@ -1151,30 +840,16 @@
     const onMapError = (e: { error: unknown }) => health.reportMapError(e.error);
     handle.map.on("error", onMapError);
     const loaderTimeout = window.setTimeout(hideMapLoader, MAP_LOADING_TIMEOUT_MS);
-    // atlas-5 §6.5: the species click. The shared map's raw click event -- never a second map
-    // instance, never a second `on("click")` owner; a non-species lens ignores its own clicks
-    // inside `handleMapClick` itself (checks `sel.lens` first).
-    // atlas-8 review round 2, item M1: the scores lens' click now wires here too, the SAME shape
-    // as species' own click (each self-guards on `sel.lens`) -- a collapsed desktop panel, or the
-    // Places tool open, no longer stops a scores click from writing `sel=cell:`/`sel=zone:` and
-    // showing its popup, because neither depends on `ScoresLens.svelte` (the PANEL body) being
-    // mounted at all. `scoresLens` is null until its lazy chunk resolves (see "lazy lens/panel
-    // chunks" below) -- a click in that brief window is a no-op, same as before this fix.
-    //
-    // Dispatching unconditionally surfaced a SECOND collision while wiring this fix: a scores
-    // click during Places' OWN active pick mode / draw session wrote `sel=zone:...` (its own
-    // selection) over the top of the pick highlight the SAME click had just set
-    // (`placesMap.svelte.ts`'s own header explains why). `placesMap.interactionOwned` is Places'
-    // exclusive claim on clicks while one of those is active; the scores lens is skipped while it
-    // is true (species never writes `sel` from a click, so it is unaffected either way).
+    // the species click. The shared map's raw click event -- never a second map instance, never a
+    // second `on("click")` owner; a non-species lens ignores its own clicks inside
+    // `handleMapClick` itself (checks `sel.lens` first). The collection lens' hex layer owns its own
+    // click (`lib/map/layers/hex.ts`), which only fires while no place pick/draw session has
+    // claimed clicks (`placesMap.interactionOwned`).
     const onMapClick = (e: {
       lngLat: { lng: number; lat: number };
       point: { x: number; y: number };
     }) => {
       void speciesLens.handleMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat }, e.point);
-      if (!placesMap.interactionOwned) {
-        void scoresLens?.handleMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat }, e.point);
-      }
     };
     handle.map.on("click", onMapClick);
     // the map's public test/automation seam (docs/map.md): the handle plus the CURRENT composeStyle
@@ -1217,38 +892,6 @@
     };
   });
 
-  // --- the study-area camera: `sel.area` drives it on LOAD and on CHANGE, never the panel body ---
-  // The owner's 2026-09-24 defect: `?area=AK` rendered the default camera, live, in production.
-  // Root cause was two bugs stacked. (1) The map's INITIAL camera above (`area:
-  // studyAreaFromBoot(null, sel.area)`) is constructed against a literal `null` boot, on purpose —
-  // at `onMount` time `boot` (the `$state` a few lines up) has not resolved yet regardless of what
-  // is passed here (it settles from `early.boot.then(...)`, a separate microtask), so there was
-  // never a way to see the release's real `study_areas` row at construction time; only the baked
-  // `FALLBACK_FULL_STUDY_AREA` was ever reachable there. (2) The ONLY place anything called
-  // `handle.flyTo(area)` was `LayersPanel.svelte`'s `onchange` handler — the panel BODY (only
-  // mounted while a tool is open and, on desktop, the panel is not collapsed) — which never runs for
-  // a `sel.area` arriving from the URL on load. `docs/map.md`'s 0.10.21 rule exists for exactly this
-  // shape of bug: a map input must live in a lens/shell-level store the shell reads unconditionally,
-  // never panel-only UI.
-  //
-  // This effect is that store, at the shell level (`sel.area` is a top-level `Sel` field, not scores
-  // -specific — CLAUDE.md/docs/map.md's own convention: "map inputs are a plain store... independent
-  // of which tool/panel is open or collapsed"). It re-runs whenever `boot`, `mapHandle`, `sel.area`
-  // or `sel.map` changes and defers the fly/no-fly DECISION to `camera.ts#shouldFlyToArea` (a pure,
-  // unit-tested function — read its header for the exact precedence a later round touching the
-  // DEFAULT first-view camera must preserve). `LayersPanel.svelte`'s `onAreaChange` still writes
-  // `{ area: value, map: undefined }` to `sel` (so a shared link reproduces the choice, and clearing
-  // `map` is what lets THIS effect fly for it) — it no longer calls `mapHandle.flyTo` itself.
-  let areaCameraState: AreaCameraState = INITIAL_AREA_CAMERA_STATE;
-  $effect(() => {
-    if (!mapHandle || !boot) return; // nothing to resolve `sel.area` against yet
-    if (sel.map) return; // an explicit camera (a user's pan, or a pasted `?map=` link) always wins
-    const area = studyAreaFromBoot(boot, sel.area);
-    const decision = shouldFlyToArea(area.key, DEFAULT_SEL.area, areaCameraState);
-    areaCameraState = decision.next;
-    if (decision.fly) mapHandle.flyTo(area);
-  });
-
   // P2 round 2 (orchestrator, real-build eyes-on, 2026-09-24): "the fit must use the free area
   // above the sheet (its measured height at that detent, at load time), not [an estimated]
   // constant... re-fit once when the sheet's initial detent is known" -- `initialStudyArea` (map
@@ -1257,33 +900,24 @@
   // mounted yet at that point. `sheetGeom` (this file's own `ongeometry` binding, P1's addition)
   // reports the sheet's REAL `offsetHeight` shortly after -- this effect re-applies the fit ONCE,
   // with that real number, purely for accuracy (`chromePadding.ts#phonePaddingFromMeasured`'s own
-  // header: usually within ~15px of the estimate). Guarded to the DEFAULT area only and to fire at
-  // most once, so it can never race or compete with the `sel.area`-driven effect just above (a
-  // real `?area=` selection, or a user's own pan, always wins and this never touches either).
+  // header: usually within ~15px of the estimate). Guarded to the DEFAULT view only and to fire at
+  // most once (a user's own pan, or a pasted `?map=` link, always wins and this never touches it).
   //
   // P9: uses the SAME `phoneDefaultCamera` bbox fit `initialStudyArea` does above (never the old
   // boost-the-desktop-centroid math -- see that function's own comment for why it was replaced) --
   // just with the sheet's real measured height instead of the pre-mount estimate.
   //
-  // D5 fix (Opus 5.5 eyes-on review round 2, 2026-09-25): this refit used the SHEET's own measured
-  // height but never the floating legend chip's -- at the default "half" detent the ramp legend
-  // chip (always showing for the default Scores view, `phoneLegend` below) sat on top of the
-  // northern Gulf of Mexico Program Areas, and the sheet's own top edge cut the Florida Keys.
-  // `currentChromePadding()` already computes the SAME `chipShowing` boolean for every LATER
-  // (post-load) re-fit (V1 fix, above) -- this is the one remaining caller still calling
-  // `phonePaddingFromMeasured` bare. Gated additionally on `scoresLens` (the default lens) having
-  // loaded: `phoneLegend` reads `scoresLens?.mapExtra.legend`, and `scoresLens` itself is a
-  // DYNAMIC IMPORT (this file's own "0.10.21 fix 1" comment) -- firing before it resolves would
-  // silently compute `chipShowing: false` and reproduce the exact defect this fixes.
+  // D5 fix: this refit uses the SHEET's own measured height AND the floating legend chip's --
+  // `currentChromePadding()` computes the SAME `chipShowing` boolean for every LATER (post-load)
+  // re-fit.
   let refitOnceForMeasuredSheet = false;
   $effect(() => {
     if (refitOnceForMeasuredSheet) return;
     if (!isPhone || !mapHandle || !boot) return;
     if (sheetGeom.height <= 0) return; // Sheet.svelte has not reported a real measurement yet
-    if (sel.lens === "scores" && !scoresLens) return; // the legend chip's own source not loaded yet
-    if (sel.map || sel.area !== DEFAULT_SEL.area) return; // not the default padded first view
+    if (sel.map) return; // not the default padded first view
     refitOnceForMeasuredSheet = true;
-    const area = studyAreaFromBoot(boot, sel.area);
+    const area = studyAreaFromBoot(boot, "FULL");
     const viewport: Viewport = { width: window.innerWidth, height: window.innerHeight };
     const chipShowing = !!phoneLegend && legendChipMode(sheetGeom.detent) === "floating";
     const fit = phoneDefaultCamera(
@@ -1373,13 +1007,10 @@
     // re-run (and the basemap actually appear) when the CARTO fetch resolves late.
     basemapStyle: basemapStyles[resolvedTheme],
     projection: sel.proj,
-    zones: ecoregionUnit ? [...zonesForStyle, ecoregionUnit] : zonesForStyle,
-    raster:
-      sel.lens === "scores" ? (scoresLens?.mapExtra.raster ?? null) : speciesLens.mapInputs.raster,
+    raster: sel.lens === "species" ? speciesLens.mapInputs.raster : null,
     range: sel.lens === "species" ? speciesLens.mapInputs.range : null,
-    overlays: sel.lens === "scores" ? (scoresLens?.mapExtra.overlays ?? []) : [],
-    selection:
-      placesSelection ?? (sel.lens === "scores" ? (scoresLens?.mapExtra.selection ?? null) : null),
+    overlays: [],
+    selection: placesSelection,
     // gazetteer-places: the "Pick from gazetteer" tile polygons, only while that picker is on
     gazetteer: placesMap.gazetteer,
     layerStack,
@@ -1389,59 +1020,11 @@
     mapHandle?.applyStyle(composeStyle(composeStyleInput));
   });
 
-  // R2's About popover: "restricted watermark note". A plain inline lookup over the SAME
-  // `EarlyVersionRow[]` this file already holds off `window.__early.versions` -- never
-  // `src/lib/release/access.ts#accessOf` (tests/shell/shell-invariants.test.ts's source-scan gate:
-  // the shell reads the release resolution result off `window.__early`, never `src/lib/release`
-  // directly). `undefined`/no matching row/anything but the literal `"public"` reads as restricted,
-  // the same fail-closed rule that module's own `accessOf` follows.
-  const currentVersionRow = $derived(versions?.find((v) => v.ver === earlyVersion) ?? null);
-  const releaseRestricted = $derived(currentVersionRow?.access !== "public");
+  // the Help menu's Docs link and the About modal's changelog: this repo's own README / CHANGELOG.
+  const docsHref = "https://github.com/oceanmetrics/atlas#readme";
+  const changelogHref = "https://github.com/oceanmetrics/atlas/blob/main/CHANGELOG.md";
 
-  // P10: the Help menu's Docs link now points at THIS release's ATLAS CHAPTER of the docs book,
-  // not the book root -- Ben's Help > Docs on the live v7 app opened the book's Preface, not the
-  // Atlas guide he was looking for. `docs/apps/atlas.qmd` now exists and the docs CI publishes it
-  // per release as `apps/atlas.html` inside that release's own book directory: PUBLIC releases to
-  // `marinesensitivity.org/docs/{ver}/`, RESTRICTED ones only to the signed-in preview host (the
-  // `publish` job never stages a restricted book onto the public branch at all -- see
-  // `src/lib/release/docsUrl.ts`'s header). A release absent from `versions` (no matching row, or
-  // `earlyVersion` not yet resolved) falls back to the book's ROOT rather than guessing a
-  // `{ver}/apps/atlas.html` path that build may never have published.
-  //
-  // Structurally identical to `src/lib/release/docsUrl.ts`'s tested `atlasDocsUrl()` -- NOT
-  // imported from it: this file must never import src/lib/release (tests/shell/shell-invariants
-  // .test.ts's source-scan guard; see `releaseRestricted` just above for the same rule applied to
-  // access itself).
-  const docsHref = $derived(
-    !earlyVersion || !currentVersionRow
-      ? "https://marinesensitivity.org/docs/"
-      : releaseRestricted
-        ? `https://preview.marinesensitivity.org/docs/${earlyVersion}/apps/atlas.html`
-        : `https://marinesensitivity.org/docs/${earlyVersion}/apps/atlas.html`,
-  );
-
-  // UI-16 (round 3, Opus 5.5 eyes-on review): the About modal's "What changed" used to link the
-  // APP's own CHANGELOG.md (github.com/MarineSensitivity/atlas) -- the ATLAS CODE's history, not
-  // the DATA release the person is actually looking at. Structurally identical to `docsHref` just
-  // above (same public/restricted/unknown resolution, same "never import src/lib/release" rule),
-  // one chapter path swapped -- `src/lib/release/docsUrl.ts#releaseNotesUrl` is the tested,
-  // imported-from-a-test-only twin (`tests/release/docsUrl.test.ts`); this hand duplicate is what
-  // `TopBarActions.svelte` actually renders.
-  //
-  // R3-rr fix 4 (Opus 5.5 eyes-on review round 3, second pass, 2026-09-25): this pointed at
-  // `release_notes.html`, a 404 -- the docs book's chapter source is `releases.qmd`
-  // (`docs/_quarto.yml`), which quarto renders to `releases.html`
-  // (`docsUrl.ts#RELEASE_NOTES_CHAPTER_PATH`'s own header has the verification); `release_notes`
-  // was the unrelated `data/release_notes.yml` data file's name, not the chapter's own filename.
-  const releaseNotesHref = $derived(
-    !earlyVersion || !currentVersionRow
-      ? "https://marinesensitivity.org/docs/"
-      : releaseRestricted
-        ? `https://preview.marinesensitivity.org/docs/${earlyVersion}/releases.html`
-        : `https://marinesensitivity.org/docs/${earlyVersion}/releases.html`,
-  );
-
-  // --- Deliverable 4: "Report a problem" -> a prefilled GitHub issue, zero backend --------------
+  // --- "Report a problem" -> a prefilled GitHub issue, zero backend -------------------------------
   // `viewport` is the one field with no existing reactive source (unlike lens/ver/theme, all read
   // off `sel`/`earlyVersion`/`resolvedTheme` below) -- tracked the same way `isPhone` above is.
   let viewportW = $state(0);
@@ -1465,7 +1048,7 @@
   const feedbackCtx = $derived<FeedbackContext>({
     appVersion: __APP_VERSION__,
     appSha: __APP_SHA__,
-    ver: earlyVersion,
+    ver: sel.lens === "species" ? earlyVersion : null,
     lens: sel.lens,
     pageUrl: pageUrlFromLocation({
       origin: location.origin,
@@ -1480,12 +1063,6 @@
   // "open in new tab" still lands on a sensible zero-backend issue link even though a plain left
   // click now opens the dialog instead (onclick below always preventDefault()s it).
   const feedbackHref = $derived(feedbackIssueUrl(feedbackCtx));
-
-  // U3: the resolved release's `access` field, read off the SAME `versions` rows the release
-  // picker already resolves (above) -- never `src/lib/release/access.ts`'s `accessOf()`
-  // (tests/shell/shell-invariants.test.ts: this file may not import from ../lib/release at all).
-  // Only the literal "restricted" ever matters to the dialog (payload.ts's own contract).
-  const releaseAccess = $derived(versions?.find((v) => v.ver === earlyVersion)?.access);
 
   // U3 (round 2): "Send feedback" -- the SAME action, now opening a real dialog
   // (src/lib/feedback/FeedbackDialog.svelte, lazy) instead of navigating straight to the GitHub
@@ -1511,46 +1088,22 @@
     }
   }
 
-  // --- lazy lens/panel chunks (atlas-4 fix round 2, D13) ----------------------------------------
-  // Shell.svelte used to statically import every lens' panel component (ScoresLens,
-  // SpeciesLensPanel/Picker/Legend/NotFoundModal, Places, VersionPickerModal, WelcomeModal) --
-  // 450.4 KB gzip static, 0.4 KB over budget, and a species-only deep link downloaded the ENTIRE
-  // scores lens it never renders. Each becomes its own dynamic `import()` chunk, chosen by
-  // `sel.lens` (Places by `activeTool === "report"` instead, R3-W8 item 5 -- it mounts on either
-  // lens, as the Report pane's own default tab). This is
-  // the SAME dynamic-component pattern `TablePanel.svelte`/`Composition.svelte` already use for
-  // `Composition.svelte`/`Treemap.svelte` (a `Component<any>` held in `$state`, resolved by a
-  // `$effect`, rendered via `{@const Comp = ...}` -- `Component`'s real generic Props type is not
-  // importable from a plain module here any more than it is there). While a chunk is still in
-  // flight the template falls back to the EXISTING skeleton markup (`TOOL_BODY[activeTool]`'s
-  // placeholder text, or simply omitting an overlay/modal that has no visible closed state) so
-  // e2e/shell.cls.spec.ts's skeleton/hydrated geometry-equality gate never sees a new box shape.
-  // VersionPickerModal/WelcomeModal are app-wide chrome, not gated on `sel.lens` (see the comment
-  // by their own markup below) -- they load unconditionally, right after mount, same as
-  // `TablePanel.svelte`'s CompositionComponent; that still moves their bytes out of the entry's
-  // STATIC import graph (`scripts/size-budget.mjs` only walks `imports`, never `dynamicImports`),
-  // it just does not delay when the download starts.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ScoresLensComp = $state<Component<any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ScoresLegendComp = $state<Component<any> | null>(null);
-  // Q1 (atlas-8 P-round, 2026-09-24): the top-bar search field's Scores-lens content (Program Area
-  // + coordinate search, `search.ts`/`ScoresSearch.svelte`) -- lazy like every other scores chunk
-  // below, so a species-only session never downloads it (`tests/shell/lazy-lens-imports.test.ts`).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ScoresSearchComp = $state<Component<any> | null>(null);
+  // --- lazy lens/panel chunks (D13) ---------------------------------------------------------------
+  // Every lens panel is its own dynamic `import()` chunk, chosen by `sel.lens` (Places by
+  // `activeTool === "places"`) -- `scripts/size-budget.mjs` only walks STATIC `imports`, never
+  // `dynamicImports`, so none of these bytes count against the 450 KB "before first interaction"
+  // budget, and a species-only deep link never downloads the collection lens it does not render.
+  // Each is a `Component<any>` held in `$state`, resolved by a `$effect`, rendered via
+  // `{@const Comp = ...}` (`Component`'s real generic Props type is not importable from a plain
+  // module). While a chunk is still in flight the template falls back to the EXISTING skeleton
+  // markup (`TOOL_BODY[activeTool]`'s placeholder text, or simply omitting an overlay/modal that has
+  // no visible closed state) so e2e/shell.cls.spec.ts's skeleton/hydrated geometry-equality gate
+  // never sees a new box shape.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let SpeciesLensPanelComp = $state<Component<any> | null>(null);
-  $effect(() => {
-    if (activeTool === "report" && !ReportPaneComp) {
-      import("./ReportPane.svelte").then((mod) => (ReportPaneComp = mod.default));
-    }
-  });
-
-  // owner review item 7 (live 0.10.62): the species lens' "Table" tool body -- lazy ON-DEMAND
-  // (activeTool==="table", below), same convention as PlacesComp, not part of the
-  // eager species-UI-group effect further down (a species session that never opens Table should
-  // not download it).
+  // the species lens' "Table" tool body -- lazy ON-DEMAND (activeTool==="table", below), same
+  // convention as PlacesComp, not part of the eager species-UI-group effect further down (a species
+  // session that never opens Table should not download it).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let SpeciesInputsTableComp = $state<Component<any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1561,46 +1114,33 @@
   let NotFoundModalComp = $state<Component<any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let PlacesComp = $state<Component<any> | null>(null);
-  // R4-D: the Report tool's pane (ReportPane.svelte) imports `report.ts` -> `places/model` (the place
-  // codec), which pushed the static path past budget when imported eagerly -- lazy, like PlacesComp.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ReportPaneComp = $state<Component<any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let VersionPickerModalComp = $state<Component<any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let WelcomeModalComp = $state<Component<any> | null>(null);
-  // P1 (Opus eyes-on assessment, 2026-09-24): the phone-only search modal's own lazy chunk --
-  // loaded on first tap of the phone search button (below), the same "load on first open" idiom
-  // PlacesComp already uses, rather than a preemptive `$effect` -- a phone visitor
-  // who never opens search never pays for it.
+  // the phone-only search modal's own lazy chunk -- loaded on first tap of the phone search button
+  // (below), the same "load on first open" idiom, rather than a preemptive `$effect`: a phone
+  // visitor who never opens search never pays for it.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ModalComp = $state<Component<any> | null>(null);
   let phoneSearchOpen = $state(false);
   let phoneSearchBodyEl: HTMLDivElement | undefined = $state();
 
-  // item m5 (atlas-8 review round 2): none of the dynamic imports below had a `.catch` -- a chunk
-  // -load failure (a flaky network, an ad blocker, a stale service worker) left the promise
-  // REJECTED with nothing handling it (an unhandled-rejection console error) and the target
-  // `Comp` `$state` null FOREVER, with no word to the user why the lens/tool never rendered (the
-  // 0.10.17 symptom, one layer up: back then it was `scoresLens` null from a different cause).
-  // `announceChunkFailure()` tells the user; the guard needs no explicit "reset" beyond that --
-  // `.then()` never runs on a rejection, so the `Comp`/`scoresLens` state stays null exactly as it
-  // started, and the SAME `if (!Comp)` check already retries the next time this effect re-runs
-  // (a lens/tool switch away and back, which re-reads `sel.lens`/`activeTool` -- both already this
+  // none of the dynamic imports below is allowed to fail silently -- a chunk-load failure (a flaky
+  // network, an ad blocker, a stale service worker) left the promise REJECTED with nothing handling
+  // it and the target `Comp` `$state` null FOREVER, with no word to the user why the lens/tool never
+  // rendered. `announceChunkFailure()` tells the user; the guard needs no explicit "reset" beyond
+  // that -- `.then()` never runs on a rejection, so the `Comp` state stays null exactly as it
+  // started, and the SAME `if (!Comp)` check already retries the next time this effect re-runs (a
+  // lens/tool switch away and back, which re-reads `sel.lens`/`activeTool` -- both already this
   // effect's own trigger).
   function announceChunkFailure(what: string): void {
     notify(`Couldn't load ${what}. Try switching tools again.`, { tone: "error" });
   }
 
-  // P1 (Opus eyes-on assessment, 2026-09-24): the topbar `.search-field` -- which also hosts the
-  // species picker while the species lens is active -- is `topbar-desktop-only` (shell.css), and
-  // the ⋯ menu had nothing in its place: a phone visitor could not search a place at all, and in
-  // the species lens could not change species either. This opens the SAME content the desktop
-  // field renders, as a near-full-width modal, focused on open. Modal.svelte's native <dialog>
-  // `showModal()` only auto-focuses a descendant carrying `autofocus`, which neither the
-  // SpeciesPicker's own input nor the plain stub one below sets -- so focus is moved by hand,
-  // after `tick()` flushes both this component's OWN re-render (the lazy `ModalComp` arriving)
-  // and Modal.svelte's own mount effect that calls `showModal()`.
+  // the topbar `.search-field` -- which hosts the species picker while the species lens is active
+  // -- is `topbar-desktop-only` (shell.css), so a phone visitor needs a way in: this opens the SAME
+  // content the desktop field renders, as a near-full-width modal, focused on open. Modal.svelte's
+  // native <dialog> `showModal()` only auto-focuses a descendant carrying `autofocus`, which neither
+  // the SpeciesPicker's own input nor the plain stub one below sets -- so focus is moved by hand,
+  // after `tick()` flushes both this component's OWN re-render (the lazy `ModalComp` arriving) and
+  // Modal.svelte's own mount effect that calls `showModal()`.
   async function openPhoneSearch(): Promise<void> {
     phoneSearchOpen = true;
     if (!ModalComp) {
@@ -1620,55 +1160,6 @@
   function closePhoneSearch(): void {
     phoneSearchOpen = false;
   }
-
-  $effect(() => {
-    if (sel.lens !== "scores") return;
-    if (!ScoresLensComp) {
-      import("../lens/scores/ScoresLens.svelte")
-        .then((mod) => (ScoresLensComp = mod.default))
-        .catch(() => announceChunkFailure("the scores panel"));
-    }
-    // the floating legend (atlas-4 defect fix) -- its own chunk, same trigger as the panel's, so
-    // a scores deep link downloads both together rather than waiting on the panel to mount first.
-    if (!ScoresLegendComp) {
-      import("../lens/scores/ScoresLegend.svelte")
-        .then((mod) => (ScoresLegendComp = mod.default))
-        .catch(() => announceChunkFailure("the scores legend"));
-    }
-    // Q1: the top-bar search field's scores content -- same trigger as the two chunks above, so a
-    // scores deep link/session has it ready by the time the field is first focused.
-    if (!ScoresSearchComp) {
-      import("../lens/scores/ScoresSearch.svelte")
-        .then((mod) => (ScoresSearchComp = mod.default))
-        .catch(() => announceChunkFailure("the scores search"));
-    }
-    // 0.10.21 fix 1 -- the scores lens' MAP-INPUT store, loaded (and instantiated) the SAME way as
-    // the two chunks above, so it exists whenever `sel.lens === "scores"` regardless of whether
-    // the panel/sheet has ever mounted `ScoresLensComp` (this is the actual fix; the panel chunk
-    // above only owns UI). `boot`/`manifest` are read through getters so the lens always sees the
-    // CURRENT value, the same reason `createSpeciesLens`'s own deps are getters (above).
-    if (!scoresLens) {
-      import("../lens/scores/state.svelte")
-        .then((mod) => {
-          scoresLens = mod.createScoresLens({
-            selStore,
-            boot: () => boot,
-            manifest: () => manifest,
-            // item M1's `handleMapClick` needs both, the same getters `createSpeciesLens` above
-            // already reads for the identical reason: `ver`/`mapHandle` settle asynchronously,
-            // after this call site runs.
-            ver: () => earlyVersion,
-            mapHandle: () => mapHandle,
-            // P3 fix (Opus eyes-on review, 2026-09-24): `selectZone`'s bounds fit (search pick)
-            // used a flat 40px padding, blind to the sheet/docked panel actually covering the map
-            // — the SAME `currentChromePadding()` getter `createSpeciesLens` above already wires
-            // for its own bounds fit (V1/V4 fixes).
-            chromePadding: () => currentChromePadding(),
-          });
-        })
-        .catch(() => announceChunkFailure("the scores map layer"));
-    }
-  });
 
   // one trigger for the whole species UI group -- all four chunks start downloading together the
   // moment the lens becomes "species" (a deep link included, since `sel` resolves from the URL
@@ -1699,40 +1190,22 @@
     }
   });
 
-  // R3-W8 item 5: Places folded into the Report pane as its own (default) tab -- loaded whenever
-  // the Report tool opens, on EITHER tab, so the default "Places" tab never shows a blank flash
-  // while its chunk is still in flight the first time a viewer opens Report at all.
+  // Places is its own tool; its chunk loads whenever that tool opens, on either lens.
   $effect(() => {
-    if (activeTool === "report" && !PlacesComp) {
+    if (activeTool === "places" && !PlacesComp) {
       import("../places/Places.svelte")
         .then((mod) => (PlacesComp = mod.default))
         .catch(() => announceChunkFailure("the Places panel"));
     }
   });
 
-  // owner review item 7 (live 0.10.62): loaded only once the species lens' Table tool is actually
-  // opened -- same on-demand convention as places/report above.
+  // loaded only once the species lens' Table tool is actually opened -- same on-demand convention
+  // as places above.
   $effect(() => {
     if (sel.lens === "species" && activeTool === "table" && !SpeciesInputsTableComp) {
       import("../lens/species/SpeciesInputsTable.svelte")
         .then((mod) => (SpeciesInputsTableComp = mod.default))
         .catch(() => announceChunkFailure("the species inputs table"));
-    }
-  });
-
-  $effect(() => {
-    if (!VersionPickerModalComp) {
-      import("../lens/scores/VersionPickerModal.svelte")
-        .then((mod) => (VersionPickerModalComp = mod.default))
-        .catch(() => announceChunkFailure("the release picker"));
-    }
-  });
-
-  $effect(() => {
-    if (!WelcomeModalComp) {
-      import("../lens/scores/WelcomeModal.svelte")
-        .then((mod) => (WelcomeModalComp = mod.default))
-        .catch(() => announceChunkFailure("the welcome dialog"));
     }
   });
 </script>
@@ -1763,33 +1236,13 @@
 
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">
-    <WaveHexMark size={28} />
-    <h1 class="brand-title" id="app-title">Marine Sensitivity Atlas</h1>
+    <h1 class="brand-title" id="app-title">OceanMetrics Atlas</h1>
   </span>
-
-  <button
-    type="button"
-    class="chip"
-    data-tour="version-chip"
-    data-control="version-chip"
-    aria-haspopup="dialog"
-    onclick={onVersionClick}
-  >
-    <!-- D13 (Opus eyes-on assessment, 2026-09-24): the chevron ("version" -> mdiChevronDown, an
-         alias, icon-paths.ts) used to render FIRST, so it sat to the LEFT of "v7" -- every other
-         select-like control in the app (Select.svelte, the native Layer select) puts its chevron
-         AFTER the value, on the right. Text first, chevron last matches that convention; the
-         accessible name (this button's flattened text content, including the visually-hidden span
-         below) is unaffected by visual order. -->
-    <VersionBadge />
-    <Icon name="version" size={14} />
-    <span class="visually-hidden">Change release version</span>
-  </button>
 
   <div data-tour="lens-switch" data-control="lens-switch">
     <Segmented
       options={[
-        { value: "scores", label: "Scores" },
+        { value: "collection", label: "Collections" },
         { value: "species", label: "Species" },
       ]}
       value={sel.lens}
@@ -1810,19 +1263,6 @@
         onSetUsOnly={(enabled: boolean) => speciesLens.setUsOnly(enabled)}
         onSearchLogged={(query: string) => analytics.track("search_species", { query })}
         onFocusIndex={() => speciesLens.ensureTaxaIndex()}
-      />
-    {:else if sel.lens === "scores" && ScoresSearchComp && scoresLens}
-      <!-- Q1 (owner-reported defect, live 0.10.50): this used to be the SAME plain stub `<input>`
-           the final fallback below still is for every other lens -- typing here did nothing at
-           all. `scoresLens` (Shell.svelte's own lazily-created `createScoresLens()` instance, see
-           the `$effect` above) supplies the map/selection wiring; this field just resolves a match
-           into a `selectZone`/`selectCoordinate` call. -->
-      {@const SearchComp = ScoresSearchComp}
-      <SearchComp
-        {boot}
-        onSelectZone={(unit: string, key: string) => scoresLens?.selectZone(unit, key)}
-        onSelectCoord={(lon: number, lat: number) => void scoresLens?.selectCoordinate(lon, lat)}
-        onSelectRegion={(key: string) => scoresLens?.selectRegion(key)}
       />
     {:else}
       <input
@@ -1872,9 +1312,8 @@
       bind:this={downloadMenuRef}
       autoOpen={downloadAutoOpen}
       lens={sel.lens}
-      ver={earlyVersion}
+      ver={sel.lens === "species" ? earlyVersion : null}
       {mapHandle}
-      {boot}
       title={downloadTitle}
       description={downloadDescription}
       unit={downloadUnit}
@@ -1993,16 +1432,12 @@
        is a no-op when the desktop disclosure was never open, so this reuses that one function
        unchanged rather than wrapping it. -->
   <TopBarActions
-    {earlyVersion}
-    restricted={releaseRestricted}
-    releaseStatus={currentVersionRow?.status ?? null}
-    releaseDate={currentVersionRow?.released ?? null}
     appVersion={__APP_VERSION__}
     {feedbackHref}
     onFeedbackClick={openFeedback}
     {onShare}
     helpDocsHref={docsHref}
-    {releaseNotesHref}
+    {changelogHref}
     onTakeTour={onHelpTakeTour}
     {resolvedTheme}
     onToggleTheme={toggleTheme}
@@ -2065,18 +1500,14 @@
     id="map"
     class="map"
     role="img"
-    aria-label="Map of U.S. marine areas"
+    aria-label="Map of marine data layers"
     aria-describedby="map-table-equivalent"
     data-tour="map"
   ></div>
-  <!-- fix list #9 (SC 1.1.1): the map announces itself as an image and nothing more -- the
-       project's declared equivalent (docs/accessibility.md §3.1: "a sighted user reads colour-
-       by-value on the map; this table is the SAME ranking as text", ZonesTable.svelte) is four
-       keystrokes away behind the Table rail tool, and nothing in the map's own semantics said so.
-       This is the pointer; the equivalence itself is proven end to end by
-       e2e/keyboard-walk.spec.ts's step 1. -->
+  <!-- (SC 1.1.1): the map announces itself as an image and nothing more -- a sighted user reads
+       colour-by-value on the map; the same numbers are in the Table tool and the cell panel. -->
   <p id="map-table-equivalent" class="visually-hidden">
-    Every zone's score is also in the Zones table, under the Table tool.
+    The values shown on the map are also available as text under the Table and Details tools.
   </p>
 
   <!-- usability M4: a light loader until the first raster/basemap tile paints (8-21s measured,
@@ -2173,9 +1604,6 @@
         {#if sel.lens === "species" && SpeciesLegendComp}
           {@const Comp = SpeciesLegendComp}
           <Comp legend={phoneLegend} tilesDown={health.isDown("tiler")} />
-        {:else if sel.lens === "scores" && ScoresLegendComp}
-          {@const Comp = ScoresLegendComp}
-          <Comp legend={phoneLegend} tilesDown={health.isDown("tiler")} />
         {/if}
       </LegendChip>
     {/if}
@@ -2190,49 +1618,16 @@
     data-maximized={isPhone ? undefined : panelGeom.maximized}
     style={isPhone ? undefined : `--panel-size: ${panelGeom.size}px`}
   >
-    <!-- the ONE panel body: report (which now includes Places as its default tab, item 5) owns its
-         tool on either lens; otherwise the active lens decides what the tool's panel shows (the
-         scores lens takes every tool and falls back to the tool's own text; the species lens takes
-         "layers" only). -->
+    <!-- the ONE panel body: Places owns its tool on either lens; otherwise the active lens decides
+         what the tool's panel shows (the species lens takes "layers" and "details", plus its own
+         "table"). -->
     {#snippet panelBody()}
-      {#if activeTool === "report"}
-        <!-- R4-D: the Report tool is ONE flow (Places, Add a place, pinned footer), no sub-tabs.
-             Intercepted here, BEFORE the lens branches below, so this is the SAME panel on either
-             lens. `ReportPane` hands `Places.svelte` the footer lead / recents as snippets. -->
-        {#snippet placesContent(slots: ReportFlowSlots)}
-          {#if PlacesComp}
-            {@const Comp = PlacesComp}
-            <!-- P round deliverable 2 follow-up: `manifest` threads down to ResultsPanel.svelte's
-                 own Flower (the SAME flowerMaxComponentScore(manifest) the scores lens' Flower tab
-                 uses), so a custom place's/zone's flower ring is never a second, disagreeing
-                 source. -->
-            <Comp
-              {sel}
-              {selStore}
-              {boot}
-              {manifest}
-              {mapHandle}
-              {zoneUnits}
-              mapStore={placesMap}
-              lastClickedLabel={slots.lastClickedLabel}
-              onAddLastClicked={slots.onAddLastClicked}
-              footerLead={slots.footerLead}
-              recentsExtra={slots.recentsExtra}
-            />
-          {:else}
-            <p>Select, draw and upload tools arrive in a later phase.</p>
-          {/if}
-        {/snippet}
-        {#if ReportPaneComp}
-          {@const Pane = ReportPaneComp}
-          <Pane
-            {sel}
-            ver={earlyVersion}
-            places={placesContent}
-            subject={reportSubject}
-            lastClickedLabel={reportLastClickedLabel}
-            {onAddLastClicked}
-          />
+      {#if activeTool === "places"}
+        {#if PlacesComp}
+          {@const Comp = PlacesComp}
+          <Comp {sel} {selStore} {mapHandle} mapStore={placesMap} />
+        {:else}
+          <p>{TOOL_BODY[activeTool]}</p>
         {/if}
       {:else if sel.lens === "species" && (activeTool === "layers" || activeTool === "details")}
         {#if SpeciesLensPanelComp}
@@ -2272,32 +1667,6 @@
             bar={speciesLens.bar}
             loading={speciesLens.loading}
             cardError={!!speciesLens.cardError}
-          />
-        {:else}
-          <p>{TOOL_BODY[activeTool]}</p>
-        {/if}
-      {:else if sel.lens === "scores"}
-        {#if ScoresLensComp && scoresLens}
-          {@const Comp = ScoresLensComp}
-          <Comp
-            {sel}
-            {selStore}
-            {boot}
-            {manifest}
-            ver={earlyVersion}
-            {mapHandle}
-            {activeTool}
-            fallbackBody={TOOL_BODY[activeTool]}
-            lens={scoresLens}
-            {layerStack}
-            {onLayerStackChange}
-            compactFlower={isPhone && sheetGeom.detent === "half"}
-            {expandedRow}
-            onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
-            lastClickedLabel={lastClickedRowLabel}
-            onAddLastClicked={() => void onAddLastClicked()}
-            onOpenTable={() => selectTool("table")}
-            onOpenPlaces={openReportPlaces}
           />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
@@ -2361,11 +1730,6 @@
     <div class="lens-legend-region">
       <Comp legend={speciesLens.mapInputs.legend} tilesDown={health.isDown("tiler")} />
     </div>
-  {:else if sel.lens === "scores" && ScoresLegendComp}
-    {@const Comp = ScoresLegendComp}
-    <div class="lens-legend-region">
-      <Comp legend={scoresLens?.mapExtra.legend ?? null} tilesDown={health.isDown("tiler")} />
-    </div>
   {/if}
 </main>
 
@@ -2374,8 +1738,7 @@
   <Comp
     open={feedbackOpen}
     onclose={() => (feedbackOpen = false)}
-    ver={earlyVersion}
-    access={releaseAccess}
+    ver={sel.lens === "species" ? earlyVersion : null}
     lens={sel.lens}
     appVersion={__APP_VERSION__}
     appSha={__APP_SHA__}
@@ -2395,33 +1758,6 @@
     open={speciesLens.notFound !== null}
     reasons={speciesLens.notFound?.reasons ?? []}
     onclose={() => speciesLens.dismissNotFound()}
-  />
-{/if}
-
-<!-- atlas-4 step 3: app-wide chrome, not gated on `sel.lens` -- the release picker and the
-     welcome modal apply to either lens, exactly as the ported app's own modals did. Both load as
-     their own lazy chunk (see "lazy lens/panel chunks" above); until then neither renders anything
-     (a closed modal has no visible box), so there is nothing for the skeleton/hydrated geometry
-     gate to compare here. -->
-{#if VersionPickerModalComp}
-  {@const Comp = VersionPickerModalComp}
-  <Comp
-    open={versionPickerOpen}
-    onclose={() => (versionPickerOpen = false)}
-    {versions}
-    {denied}
-    currentVer={earlyVersion}
-    loc={{ search: location.search, hash: location.hash }}
-  />
-{/if}
-{#if WelcomeModalComp}
-  {@const Comp = WelcomeModalComp}
-  <Comp
-    tour={sel.tour}
-    onTakeTour={() => void beginTour()}
-    onSwitchToSpecies={() => onLensChange("species")}
-    {docsHref}
-    ver={earlyVersion}
   />
 {/if}
 
@@ -2446,7 +1782,6 @@
     <div
       class="search-field-phone"
       class:search-field-phone--species={sel.lens === "species"}
-      class:search-field-phone--scores={sel.lens === "scores"}
       bind:this={phoneSearchBodyEl}
     >
       <Icon name="search" size={16} />
@@ -2464,25 +1799,6 @@
             onSetUsOnly={(enabled: boolean) => speciesLens.setUsOnly(enabled)}
             onSearchLogged={(query: string) => analytics.track("search_species", { query })}
             onFocusIndex={() => speciesLens.ensureTaxaIndex()}
-          />
-        {:else if sel.lens === "scores" && ScoresSearchComp && scoresLens}
-          <!-- Q1: the SAME content as the desktop field above, closing the modal once a result is
-               picked (mirrors the species branch's own `closePhoneSearch()` call). -->
-          {@const SearchComp = ScoresSearchComp}
-          <SearchComp
-            {boot}
-            onSelectZone={(unit: string, key: string) => {
-              scoresLens?.selectZone(unit, key);
-              closePhoneSearch();
-            }}
-            onSelectCoord={(lon: number, lat: number) => {
-              void scoresLens?.selectCoordinate(lon, lat);
-              closePhoneSearch();
-            }}
-            onSelectRegion={(key: string) => {
-              scoresLens?.selectRegion(key);
-              closePhoneSearch();
-            }}
           />
         {:else}
           <input

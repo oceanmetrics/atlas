@@ -26,10 +26,6 @@ const BRAND_PREFIX = join("src", "lib", "brand"); // governed separately by chec
 // (not by directory) — plus the ramp-shape assertion below, so the exception cannot become a place
 // to hide a second palette.
 const MAP_COLORS_FILE = join("src", "lib", "map", "colors.ts");
-// atlas-7 step 2: the report's own twin of the map's one exception, for the identical reason (see
-// src/report/colors.ts's own header) -- a standalone SVG/canvas/MapLibre-style color with no
-// stylesheet to read a custom property from.
-const REPORT_COLORS_FILE = join("src", "report", "colors.ts");
 // U3 (round 2): the feedback annotator's own twin -- the three marker colours it draws directly
 // onto a <canvas> 2D context (src/lib/feedback/colors.ts's own header), which does not read a CSS
 // custom property either.
@@ -92,7 +88,6 @@ export function findRampLiteralsOutsideRamps(
     const rel = relative(rootDir, file);
     if (rel.startsWith(BRAND_PREFIX)) continue;
     if (rel === MAP_COLORS_FILE) continue;
-    if (rel === REPORT_COLORS_FILE) continue;
     if (rel === FEEDBACK_COLORS_FILE) continue;
     if (rel === DOWNLOAD_COLORS_FILE) continue;
     if (rel === RAMPS_FILE) continue;
@@ -148,11 +143,6 @@ describe("raster/ramps.ts is the only ramp/palette definition under src/ (brand/
     expect(RAMP_ARRAY_RE.test('export const rogue = ["#9E0142", "#D53E4F", "#3288BD"];')).toBe(
       true,
     );
-  });
-
-  it("the exempt REPORT colour file defines nothing ramp-shaped either", () => {
-    const content = readFileSync(join(REPO_ROOT, REPORT_COLORS_FILE), "utf8");
-    expect(RAMP_ARRAY_RE.test(content)).toBe(false);
   });
 
   it("the exempt FEEDBACK colour file defines nothing ramp-shaped either (3 marker colours, not a palette)", () => {

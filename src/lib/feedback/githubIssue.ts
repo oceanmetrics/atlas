@@ -9,7 +9,7 @@
 // (tests/feedback/noHash.test.ts's scan covers this whole directory).
 import type { FeedbackPayload } from "./payload";
 
-const ISSUE_BASE = "https://github.com/MarineSensitivity/atlas/issues/new";
+const ISSUE_BASE = "https://github.com/oceanmetrics/atlas/issues/new";
 // GitHub silently truncates a `new/…` issue URL somewhere around 8 KB -- same reasoning as
 // issueUrl.ts's own MAX_ISSUE_URL_LENGTH, applied to this dialog's own fields.
 export const MAX_GITHUB_ISSUE_URL_LENGTH = 7500;

@@ -18,11 +18,10 @@
 import type { LayerStackEntry } from "../map/layerStack";
 export type { LayerStackEntry } from "../map/layerStack";
 
-export type Lens = "scores" | "species";
+export type Lens = "collection" | "species";
 export type Palette = "spectral_r" | "viridis" | "cividis" | "magma";
 export type Projection = "globe" | "mercator";
 export type Representation = "native" | "model";
-export type Outline = "programarea" | "ecoregion" | "none";
 /** tri-state (fix round 1, atlas-3): `"auto"` is the default — never written to the URL — and
  * follows `prefers-color-scheme` at render time (`resolveTheme`, below); `"light"`/`"dark"` are
  * explicit OVERRIDES, and BOTH must round-trip (before this fix, `theme=light` was silently dropped
@@ -45,16 +44,8 @@ export interface MapView {
 }
 
 export interface Sel {
-  /** release version; public-host-only (see module header). `undefined` = "unset here". */
-  ver?: string;
   lens: Lens;
-  /** score layer `metric_key` (boot.metrics later); opaque string, no default written to the URL. */
-  lyr?: string;
   pal: Palette;
-  /** `"cell"` or a drawable unit key from `boot.units` (opaque here — the registry is atlas-1's). */
-  unit: string;
-  /** study-area camera preset key, applied only when `map` is absent. */
-  area: string;
   map?: MapView;
   proj: Projection;
   /** species key. */
@@ -64,9 +55,8 @@ export interface Sel {
   rep: Representation;
   /** `true` = US-only (default, `us` key omitted); `false` = include non-US (`us=0` written). */
   us: boolean;
-  out: Outline;
   obis: boolean;
-  /** `cell:<id>` | `zone:<unit>:<key>` | `place:<n>`. */
+  /** `place:<n>`: the place list entry highlighted on the map. */
   sel?: string;
   /** panel-visibility deltas against the shipped default (plan: "deltas", not an absolute list). */
   show: string[];
@@ -92,19 +82,14 @@ export interface Sel {
 /** query keys `formatSel`/`parseSel` know about, in the order they are written (stable, readable
  * URLs — not load-bearing for parsing, which is key-based via URLSearchParams). */
 export const QUERY_KEYS = [
-  "ver",
   "lens",
-  "lyr",
   "pal",
-  "unit",
-  "area",
   "map",
   "proj",
   "sp",
   "in",
   "rep",
   "us",
-  "out",
   "obis",
   "sel",
   "show",
@@ -122,41 +107,18 @@ export const HASH_KEYS = ["pl", "t"] as const;
 export const PALETTES: readonly Palette[] = ["spectral_r", "viridis", "cividis", "magma"];
 export const PROJECTIONS: readonly Projection[] = ["globe", "mercator"];
 export const REPRESENTATIONS: readonly Representation[] = ["native", "model"];
-export const OUTLINES: readonly Outline[] = ["programarea", "ecoregion", "none"];
 /** every value `theme=` may parse from, including `"auto"` (the default, read back identically to
  * an absent key — see `parseSel`). */
 export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
-export const LENSES: readonly Lens[] = ["scores", "species"];
+export const LENSES: readonly Lens[] = ["collection", "species"];
 
 /**
  * `lens`'s context-dependent default: `"species"` when a species key is present in the URL,
- * `"scores"` otherwise (key table: "`scores` (or `species` when `sp` is present)"). Shared between
- * `parseSel` and `formatSel` so a value that equals its OWN default is omitted symmetrically in both
- * directions — the property under test by the URL round-trip test.
+ * `"collection"` otherwise. Shared between `parseSel` and `formatSel` so a value that equals its OWN
+ * default is omitted symmetrically in both directions (the URL round-trip property).
  */
 export function defaultLens(sp: string | undefined): Lens {
-  return sp ? "species" : "scores";
-}
-
-/**
- * `out`'s context-dependent default: "per lens" (key table). Scores' primary spatial unit is the
- * Program Area, so outlines default on there; species maps default to none. This exact mapping is a
- * documented interpretation for this phase (no UI yet to confirm against) — pinned by a regression
- * test (tests/state/codec.test.ts) so a later, deliberate change to it is visible in a diff rather
- * than silent drift.
- *
- * ONE exported table (fix round 1): both `parseSel` (the contextual default when `out` is absent)
- * and `formatSel` (the "is this a default?" comparison) call `defaultOut`, which reads only this
- * table — so atlas-4/5 change the mapping in exactly one place, and
- * tests/state/codec.test.ts asserts parse and format agree with it for every `Lens`.
- */
-export const DEFAULT_OUT_BY_LENS: Record<Lens, Outline> = {
-  scores: "programarea",
-  species: "none",
-};
-
-export function defaultOut(lens: Lens): Outline {
-  return DEFAULT_OUT_BY_LENS[lens];
+  return sp ? "species" : "collection";
 }
 
 /**
@@ -194,19 +156,14 @@ export function isPlacesSelectionEmpty(sel: string | undefined, placeCount = 0):
  * not constants). Used both to seed a fresh `Sel` and as the "is this a default?" comparison for
  * every other field when formatting. */
 export const DEFAULT_SEL: Sel = {
-  ver: undefined,
-  lens: "scores",
-  lyr: undefined,
+  lens: "collection",
   pal: "spectral_r",
-  unit: "cell",
-  area: "FULL",
   map: undefined,
   proj: "globe",
   sp: undefined,
   in: "merged",
   rep: "native",
   us: true,
-  out: "programarea",
   obis: false,
   sel: undefined,
   show: [],
