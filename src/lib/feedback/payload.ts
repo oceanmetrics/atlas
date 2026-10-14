@@ -73,7 +73,8 @@ export interface FeedbackPayloadInput {
 }
 
 export interface FeedbackPayload {
-  app: "atlas";
+  /** the key the shared Ocean Metrics Apps Script knows this app by (its `APPS` map; an unknown app is refused). */
+  app: "oceanmetrics-atlas";
   kind: FeedbackKind;
   title: string;
   text: string;
@@ -97,7 +98,7 @@ export interface FeedbackPayload {
 export function buildFeedbackPayload(input: FeedbackPayloadInput): FeedbackPayload {
   const restricted = input.access === "restricted";
   const payload: FeedbackPayload = {
-    app: "atlas",
+    app: "oceanmetrics-atlas",
     kind: input.kind,
     title: input.title.trim().slice(0, MAX_TITLE_LENGTH),
     text: input.text.trim().slice(0, MAX_TEXT_LENGTH),

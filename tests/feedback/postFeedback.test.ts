@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { bodySaysOk } from "../../src/lib/feedback/postFeedback";
 import { postFeedback } from "../../src/lib/feedback/postFeedback";
 
 describe("postFeedback", () => {
@@ -31,5 +32,26 @@ describe("postFeedback", () => {
   it("resolves false (never throws) when fetch itself rejects -- network error, CORS, endpoint down", async () => {
     const doFetch = vi.fn().mockRejectedValue(new Error("network down"));
     await expect(postFeedback("https://x/exec", {}, doFetch)).resolves.toBe(false);
+  });
+
+  it("reads the Apps Script's JSON verdict: HTTP 200 with {ok:false} is a failure (2026-10-14: 'unknown app' came back as a Thanks)", async () => {
+    const refused = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => '{"ok":false,"error":"unknown app"}',
+    });
+    expect(await postFeedback("https://script.google.com/exec", { app: "x" }, refused)).toBe(false);
+    const accepted = vi
+      .fn()
+      .mockResolvedValue({ ok: true, text: async () => '{"ok":true,"id":"1"}' });
+    expect(await postFeedback("https://script.google.com/exec", { app: "x" }, accepted)).toBe(true);
+  });
+
+  it("keeps the HTTP verdict when the body is opaque or not JSON", async () => {
+    expect(await bodySaysOk({ ok: true })).toBe(true);
+    expect(await bodySaysOk({ ok: true, text: async () => "<html>redirect page</html>" })).toBe(
+      true,
+    );
+    expect(await bodySaysOk({ ok: true, text: async () => "{not json" })).toBe(true);
+    expect(await bodySaysOk({ ok: false, text: async () => '{"ok":true}' })).toBe(false);
   });
 });

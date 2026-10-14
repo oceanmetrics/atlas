@@ -17,7 +17,32 @@
 // (or a real browser's network panel) ever sees -- it silently looked like "the endpoint is
 // unreachable" instead of "the request was too big to keep alive." Dropping the flag removes the
 // quota entirely; there is no more competing navigation for it to survive.
-export type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean }>;
+export type FetchLike = (
+  url: string,
+  init?: RequestInit,
+) => Promise<{ ok: boolean; text?: () => Promise<string> }>;
+
+/**
+ * The Apps Script answers every POST with HTTP 200 and a JSON body `{ok, error?}` (after a redirect to
+ * script.googleusercontent.com), so an HTTP-level `ok` says nothing: an unknown app, a filled honeypot or
+ * a hit rate cap all come back as 200 `{ok:false}`. Read the body when the transport exposes it; an
+ * unreadable (opaque) body keeps the HTTP verdict. Exported for tests.
+ */
+export async function bodySaysOk(res: {
+  ok: boolean;
+  text?: () => Promise<string>;
+}): Promise<boolean> {
+  if (!res.ok) return false;
+  if (typeof res.text !== "function") return true;
+  try {
+    const body = (await res.text()).trim();
+    if (!body.startsWith("{")) return true;
+    const parsed = JSON.parse(body) as { ok?: unknown };
+    return parsed.ok !== false;
+  } catch {
+    return true;
+  }
+}
 
 /**
  * POST `payload` (JSON) to `url`. Returns whether it succeeded -- the caller falls back to the
@@ -36,7 +61,7 @@ export async function postFeedback(
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify(payload),
     });
-    return res.ok;
+    return await bodySaysOk(res);
   } catch {
     return false; // network error, CORS failure, endpoint down -- the caller falls back to GitHub
   }

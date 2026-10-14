@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- **Feedback reaches the sheet.** The dialog now sends `app: "oceanmetrics-atlas"`, the key the shared Ocean Metrics Apps Script registers, and reads the script's JSON verdict: a 200 `{ok:false}` (unknown app, honeypot, rate cap) now shows the failed state with the GitHub-issue fallback instead of "Thanks".
+
 OceanMetrics Atlas: forked 2026-10-14 from MarineSensitivity/atlas 0.10.88 and stripped to a core that
 a STAC catalog will drive. The strip is first below; the catalog loader, the generic Collections lens
 and hex painting follow.

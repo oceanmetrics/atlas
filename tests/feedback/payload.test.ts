@@ -139,8 +139,8 @@ describe("buildFeedbackPayload — size caps", () => {
 });
 
 describe("buildFeedbackPayload — the fixed fields every payload carries", () => {
-  it('app is always the literal "atlas"', () => {
-    expect(buildFeedbackPayload(BASE).app).toBe("atlas");
+  it('app is always the literal "oceanmetrics-atlas" (the shared Apps Script APPS key; "atlas" is refused as unknown)', () => {
+    expect(buildFeedbackPayload(BASE).app).toBe("oceanmetrics-atlas");
   });
 
   it("release/version/sha/lens/viewport/theme/user_agent map 1:1 from the input", () => {
