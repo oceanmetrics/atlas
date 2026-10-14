@@ -13,7 +13,6 @@
   // data-control/data-tour anchors and the "no history.pushState" invariant.
   import { onMount, tick } from "svelte";
   import Icon from "../lib/ui/Icon.svelte";
-  import About from "./About.svelte";
   import { nextRovingIndex } from "../lib/ui/roving";
   import { uid } from "../lib/ui/uid";
 
@@ -63,7 +62,14 @@
   }: Props = $props();
 
   // --- About popover-dialog -----------------------------------------------------------------
+  // About is a lazy chunk (its copy and links stay off the map page's static path, size budget): the
+  // first open imports it, then it mounts already open.
   let aboutOpen = $state(false);
+  let AboutDialog = $state<(typeof import("./About.svelte"))["default"] | null>(null);
+  async function openAbout() {
+    aboutOpen = true;
+    if (!AboutDialog) AboutDialog = (await import("./About.svelte")).default;
+  }
 
   // --- Send feedback: a real <a>, not only a button (Deliverable 4's original zero-JS rationale,
   // carried over from the old on-map link -- `feedbackHref` still works with JS disabled/failed).
@@ -115,7 +121,7 @@
     { label: "Share", icon: "share", run: () => onShare() },
     { label: "Download…", icon: "download", run: () => onOpenDownload() },
     { label: "Feedback", icon: "feedback", run: handleFeedback, href: feedbackHref },
-    { label: "About", icon: "info", run: () => (aboutOpen = true) },
+    { label: "About", icon: "info", run: () => void openAbout() },
     // `run` (not `href`): starts the tour directly, same as the desktop Help menu's own button --
     // never a link, so no `<a>`/no-op split like Docs below.
     // P7 (Opus eyes-on assessment, 2026-09-24): this used to reuse the "help" (?) glyph, so "Take
@@ -210,7 +216,7 @@
   aria-label="About"
   aria-haspopup="dialog"
   data-tooltip="About"
-  onclick={() => (aboutOpen = true)}
+  onclick={() => void openAbout()}
 >
   <Icon name="info" size={18} />
 </button>
@@ -271,13 +277,15 @@
   {/each}
 </div>
 
-<About
-  open={aboutOpen}
-  onclose={() => (aboutOpen = false)}
-  {appVersion}
-  {helpDocsHref}
-  {changelogHref}
-/>
+{#if AboutDialog}
+  <AboutDialog
+    open={aboutOpen}
+    onclose={() => (aboutOpen = false)}
+    {appVersion}
+    {helpDocsHref}
+    {changelogHref}
+  />
+{/if}
 
 <style>
   /* an explicit `[hidden]` override: this element sets its OWN `display` (flex, for the column

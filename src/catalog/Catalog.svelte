@@ -5,14 +5,8 @@
   import { onMount } from "svelte";
   import { loadCatalog, type AtlasCatalog, type LoadError } from "../lib/catalog/load";
   import { resolveCatalogBase } from "../lib/catalog/base";
-  import {
-    ABOUT_LINKS,
-    BRAND_CREDIT,
-    BRAND_NAME,
-    CITE_ATLAS,
-    CITE_COLLECTION_NOTE,
-    SUPPORTERS,
-  } from "../lib/brand/brand";
+  import { BRAND_CREDIT, BRAND_NAME, SUPPORTERS } from "../lib/brand/brand";
+  import { ABOUT_LINKS, CITE_ATLAS, CITE_COLLECTION_NOTE } from "../lib/brand/about";
   import { groupCards, type CardGroup } from "./model";
   import CollectionCard from "./CollectionCard.svelte";
 

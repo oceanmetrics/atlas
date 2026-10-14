@@ -1,18 +1,17 @@
 <script lang="ts">
   // The About dialog (opened from TopBarActions' About button and its phone ⋯ item): what the atlas is,
   // who supports it, where the related products live, how to cite it. Every string and link comes from
-  // `lib/brand/brand.ts`, the same file the catalog page footer and the map attribution read, so the
+  // `lib/brand/brand.ts` and `about.ts`, the same files the catalog page footer and the map attribution read, so the
   // credit line cannot drift. The app is the only thing here that varies per build (`appVersion`).
   import Modal from "../lib/ui/Modal.svelte";
+  import { BRAND_NAME, SUPPORTERS } from "../lib/brand/brand";
   import {
     ABOUT_DESCRIPTION,
     ABOUT_LINKS,
-    BRAND_NAME,
     CATALOG_PAGE_HREF,
     CITE_ATLAS,
     CITE_COLLECTION_NOTE,
-    SUPPORTERS,
-  } from "../lib/brand/brand";
+  } from "../lib/brand/about";
 
   interface Props {
     open: boolean;
