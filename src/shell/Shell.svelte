@@ -74,6 +74,7 @@
     BASEMAP_ATTRIBUTION,
     type CartoStyleLike,
   } from "../lib/map/layers/basemap";
+  import { BRAND_CREDIT } from "../lib/brand/brand";
   import {
     FALLBACK_FULL_STUDY_AREA,
     studyAreaFromBoot,
@@ -1287,7 +1288,7 @@
 
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">
-    <h1 class="brand-title" id="app-title">OceanMetrics Atlas</h1>
+    <h1 class="brand-title" id="app-title"><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span> <span class="wm-atlas">Atlas</span></h1>
   </span>
 
   <div data-tour="lens-switch" data-control="lens-switch">
@@ -1600,6 +1601,11 @@
     <a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre</a>
     <span aria-hidden="true">|</span>
     {BASEMAP_ATTRIBUTION}
+    <!-- WP5: the atlas' own credit line, with the basemap credit. Dropped on the phone (shell.css)
+         so the ODbL credit stays whole there; the About dialog and the catalog footer carry it. -->
+    <span class="brand-credit" data-testid="map-attribution-brand"
+      ><span aria-hidden="true">|</span> {BRAND_CREDIT}</span
+    >
     <!-- gazetteer-places, per-source credits: the Ocean Metrics gazetteer's own attribution, present
          exactly while gazetteer polygons are on the map (the picker's collection, or a `p.` place
          in the list that has loaded) -- placesMap.credits is empty otherwise. -->

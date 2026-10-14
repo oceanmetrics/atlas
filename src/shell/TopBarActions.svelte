@@ -13,7 +13,7 @@
   // data-control/data-tour anchors and the "no history.pushState" invariant.
   import { onMount, tick } from "svelte";
   import Icon from "../lib/ui/Icon.svelte";
-  import Modal from "../lib/ui/Modal.svelte";
+  import About from "./About.svelte";
   import { nextRovingIndex } from "../lib/ui/roving";
   import { uid } from "../lib/ui/uid";
 
@@ -271,54 +271,15 @@
   {/each}
 </div>
 
-<Modal open={aboutOpen} title="About OceanMetrics Atlas" onclose={() => (aboutOpen = false)}>
-  <dl class="meta">
-    <dt>App</dt>
-    <dd>OceanMetrics Atlas {appVersion}</dd>
-  </dl>
-  <div class="pop-links">
-    <a href={helpDocsHref} target="_blank" rel="noopener">Documentation</a>
-    <a href={changelogHref} target="_blank" rel="noopener">What changed</a>
-    <a href="https://github.com/oceanmetrics/atlas" target="_blank" rel="noopener">GitHub</a>
-  </div>
-  <p class="credits">
-    Built by
-    <a href="https://oceanmetrics.io" target="_blank" rel="noopener">Ocean Metrics LLC</a>.
-    Supported by BOEM and MBON.
-  </p>
-</Modal>
+<About
+  open={aboutOpen}
+  onclose={() => (aboutOpen = false)}
+  {appVersion}
+  {helpDocsHref}
+  {changelogHref}
+/>
 
 <style>
-  .meta {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-1) var(--space-3);
-    margin: 0 0 var(--space-3);
-  }
-  .meta dt {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-  }
-  .meta dd {
-    margin: 0;
-  }
-
-  .pop-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
-    margin: 0 0 var(--space-3);
-    font-size: var(--text-sm);
-  }
-
-  /* owner review item 4: the credits line -- same secondary-text treatment as `.restricted-note`'s
-     own surrounding copy, not styled as another link row (`.pop-links`). */
-  .credits {
-    margin: 0 0 var(--space-3);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-  }
-
   /* an explicit `[hidden]` override: this element sets its OWN `display` (flex, for the column
      layout below), and an author style with higher specificity than the plain `.more-menu` rule
      is needed to win over it -- the UA stylesheet's `[hidden] { display: none }` is lowest

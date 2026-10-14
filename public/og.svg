@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="OceanMetrics Atlas">
+  <title>OceanMetrics Atlas</title>
+  <rect width="1200" height="630" fill="#05294d" />
+  <path fill="#2fc7b8" fill-opacity="0.16" d="M0 470c120-60 240-60 360 0s240 60 360 0 240-60 360 0 90 20 120 0V630H0Z" />
+  <path fill="#2fc7b8" fill-opacity="0.12" d="M0 520c120-60 240-60 360 0s240 60 360 0 240-60 360 0 90 20 120 0V630H0Z" />
+  <g transform="translate(110 150) scale(4.6)">
+    <path fill="#05294d" d="M32 3 57.1 17.5v29L32 61 6.9 46.5v-29Z" />
+    <path fill="#2fc7b8" d="M6.9 40c6-7 13-7 19-1s14 7 21 0 8-4 10.2-2.5v10L32 61 6.9 46.5Z" />
+    <path fill="none" stroke="#e9dcb4" stroke-width="3.5" stroke-linecap="round" d="M10 30.5c5-6 11-6 16.5-1s13 6 19.5-.5 7-3.5 9-2.5" />
+    <path fill="none" stroke="#2fc7b8" stroke-width="3.5" stroke-linejoin="round" d="M32 3 57.1 17.5v29L32 61 6.9 46.5v-29Z" />
+  </g>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="450" y="260" font-size="96" font-weight="700" fill="#ffffff">Ocean<tspan fill="#2fc7b8">Metrics</tspan></text>
+    <text x="450" y="350" font-size="72" fill="#e9dcb4">Atlas</text>
+    <text x="450" y="420" font-size="28" fill="#c5d8e6">Species distribution model products, with their credits.</text>
+    <text x="450" y="468" font-size="26" fill="#c5d8e6">Supported by BOEM and MBON</text>
+  </g>
+</svg>
