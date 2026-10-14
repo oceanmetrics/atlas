@@ -62,9 +62,7 @@ export function overlayCircleLayer(spec: PlaceOverlaySpec): LayerSpecification {
 }
 
 /** the `[role, layer]` pairs of one overlay, by geometry kind (the roles are `style.ts` roles). */
-export function overlayLayers(
-  spec: PlaceOverlaySpec,
-): {
+export function overlayLayers(spec: PlaceOverlaySpec): {
   role: "place-overlay-fill" | "place-overlay-line" | "place-overlay-circle";
   layer: LayerSpecification;
 }[] {
