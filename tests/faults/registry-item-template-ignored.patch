@@ -1,0 +1,18 @@
+diff --git a/src/lib/catalog/registry/item.ts b/src/lib/catalog/registry/item.ts
+index a8eb733..56eb254 100644
+--- a/src/lib/catalog/registry/item.ts
++++ b/src/lib/catalog/registry/item.ts
+@@ -86,8 +86,11 @@ export function registryItem(
+         ...(template.unit ? { unit: template.unit } : {}),
+       },
+     ],
+-    "atlas:rescale": template.rescale,
+-    "atlas:colormap": template.colormap,
++    // SEEDED FAULT (tests/faults/registry-item-template-ignored.patch): the template's rescale and
++    // colormap never reach the COG asset, a constant does -- a collection that rescales differently
++    // draws with the wrong colours.
++    "atlas:rescale": [1, 100],
++    "atlas:colormap": "spectral_r",
+     "atlas:bidx": template.bidx,
+   };
+   const assets: Record<string, StacAsset> = { cog };

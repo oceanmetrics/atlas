@@ -1,0 +1,17 @@
+diff --git a/src/lib/catalog/registry/item.ts b/src/lib/catalog/registry/item.ts
+index a8eb733..0c85183 100644
+--- a/src/lib/catalog/registry/item.ts
++++ b/src/lib/catalog/registry/item.ts
+@@ -26,7 +26,11 @@ export function effectiveRep(
+   row: Pick<RegistryRow, "cogUrl005"> | null | undefined,
+   rep: Representation | string | undefined,
+ ): RegistryRep {
+-  return rep === "005" && row?.cogUrl005 ? "005" : "native";
++  // SEEDED FAULT (tests/faults/registry-rep-005-ignored.patch): the switch never leaves native, so
++  // `rep=005` draws the 0.5 degree surface under a "Downscaled" label.
++  void row;
++  void rep;
++  return "native";
+ }
+ 
+ /** the box of a row as a closed GeoJSON polygon ring. */

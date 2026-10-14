@@ -532,6 +532,23 @@ export const FAULTS = [
       "that can be counted inside a place",
     gate: ["npx", "vitest", "run", "tests/places/summary.test.ts", "-t", "non-finite"],
   },
+  // --- WP7 (registry-backed taxon collections: AquaMaps native 0.5 degree) --------------------------
+  {
+    id: "registry-item-template-ignored",
+    patch: "tests/faults/registry-item-template-ignored.patch",
+    describe:
+      "registryItem() draws every row with a constant rescale and colormap instead of the collection's " +
+      "item template -- a collection that rescales or colours differently is painted wrongly",
+    gate: ["npx", "vitest", "run", "tests/catalog/registry/item.test.ts"],
+  },
+  {
+    id: "registry-rep-005-ignored",
+    patch: "tests/faults/registry-rep-005-ignored.patch",
+    describe:
+      "effectiveRep() never leaves native -- rep=005 and the Downscaled switch keep drawing the 0.5 " +
+      "degree COG",
+    gate: ["npx", "vitest", "run", "tests/catalog/registry/item.test.ts"],
+  },
   // --- round 4, R4-B (the rail attaches to the panel; four tabs; left by default) ---------------
   // --- round 4, R4-D (the Report tool is one flow, no sub-tabs) ---------------------------------
   // --- round 4 CI-red follow-up (R4-ci): the globe's empty viewport query ----------------------

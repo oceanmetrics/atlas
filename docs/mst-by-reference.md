@@ -49,8 +49,7 @@ else the input's `mdl_key`) and the lens draws a vector fill filtered to that ke
 (presence)" legend (the shard carries no value column, so there is nothing to colour by). In the pinned
 v7 release every input that has a PMTiles also has a COG, so today the COG wins; the fill is for a
 release that publishes ranges only. A model with no registered file, or a vector range that names no
-tile layer, shows a sentence saying so instead of a layer (`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection does not exist yet (WP7); there is no
-placeholder row for it.
+tile layer, shows a sentence saying so instead of a layer (`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection is the atlas' own `aquamaps_native` (WP7): a registry-backed taxon collection, built from `atlas:taxa_registry` and `atlas:item_template` (`src/lib/catalog/registry/`, `src/lens/collection/registry.svelte.ts`); `?c=aquamaps_native&sp=<sp_key>&rep=native|005`.
 
 ## nc and gm: dimensions from a manifest (stopgap)
 

@@ -47,8 +47,8 @@ export function mstRefOf(entry: MstEntryLike | null | undefined): MstRef | null 
 /** picker titles that replace the STAC collection's own where it is ambiguous or too terse. The
  * titles are the atlas' wording; the STAC `description`, citation and license are shown untouched. */
 const TITLES: Record<string, string> = {
-  // the v7 `am_0.05` collection is the DOWNSCALED AquaMaps; the raw 0.5 degree collection does not
-  // exist yet (WP7), so the name has to say which one this is
+  // the v7 `am_0.05` collection is the DOWNSCALED AquaMaps; the raw 0.5 degree one is the atlas' own
+  // `aquamaps_native` (WP7), so the name has to say which one this is
   "msens-v7-am_0.05": "AquaMaps habitat suitability (0.05 degree)",
   "msens-v8-nc": "NOAA NCCOS seabird density (Atlantic and Pacific)",
   "msens-v8-gm": "NOAA SEFSC marine mammal and sea turtle density (Gulf of Mexico)",
