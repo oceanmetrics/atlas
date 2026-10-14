@@ -148,6 +148,14 @@ and hex painting follow.
   resolve against the README's own URL; "Open raw" links to the file. "License" opens a dialog with the SPDX id,
   its full name, a one-line plain-language summary (CC-BY-4.0, CC-BY-NC-3.0, CC0-1.0, public domain / US
   Government work, else "see the license link"), the collection's `license` links and the attribution to copy.
+- **Info dialog per place layer (WP11).** Each row of the "Place layers" list has an "i" button that opens a
+  dialog read from the layer's own `<gazetteer>/<slug>/collection.json` (the canonical host first, then the
+  path-style bucket URL; once per layer): title, description, feature count, place type, version, updated,
+  status (`gazetteer:status`: value, date, source, note), license (id, full name, summary, license links),
+  credit, providers and the upstream / source-layer links, links to the layer's page on
+  oceanmetrics.io/places and to `places.parquet` / `places.pmtiles`, and the README under a collapsed "Read
+  more" (rendered like Methods, "Open raw" included). A collection that cannot be read shows the manifest's
+  own fields (`index/layers.json`) and says the rest could not be loaded, with Retry.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

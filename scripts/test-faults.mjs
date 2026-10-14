@@ -501,6 +501,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/lib/markdown.test.ts"],
   },
   {
+    id: "layer-info-no-bucket-fallback",
+    patch: "tests/faults/layer-info-no-bucket-fallback.patch",
+    describe:
+      "a place layer's collection.json is asked of the canonical host only -- the host's 302 has no CORS, so " +
+      "the info dialog never gets the collection in a browser (no fallback to the bucket URL)",
+    gate: ["npx", "vitest", "run", "tests/gazetteer/layerInfo.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

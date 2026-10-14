@@ -109,3 +109,8 @@ A failed fetch never removes the token: the place stays in the link and the list
 - **Raster statistics (live 2026-10-14).** titiler-v8 now allows POST in its CORS preflight, so
   `/cog/statistics` answers a browser: a place over a raster item shows pixels, mean, min, max as
   "display-grid statistics", on the band the map draws (`bidx`).
+- **Layer info dialog (WP11).** The "i" button of a place-layer row (`PlaceLayerList.svelte`) opens
+  `LayerInfoModal.svelte`: `lib/gazetteer/layerInfo.ts` reads `<root>/<slug>/collection.json` (the canonical
+  host, then the path-style bucket URL, cached per slug) and `layerInfoModel` merges it with the manifest
+  row (tested against the published `gebco_undersea` and `boem_wind_planning_rescinded` collections,
+  `tests/fixtures/gazetteer/`). The places site's layer page is `https://oceanmetrics.io/places/l/<slug>`.

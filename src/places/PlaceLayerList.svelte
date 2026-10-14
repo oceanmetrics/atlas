@@ -5,11 +5,16 @@
   // `overlays.svelte.ts` / `overlays.ts`; this file only renders them.
   import type { PlaceOverlays } from "./overlays.svelte";
   import { swatchColor } from "./overlays";
+  import Icon from "../lib/ui/Icon.svelte";
+  import LayerInfoModal from "./LayerInfoModal.svelte";
 
   interface Props {
     overlays: PlaceOverlays;
   }
   let { overlays }: Props = $props();
+
+  // the layer whose info dialog is open (one dialog, re-pointed per layer; created on first use)
+  let infoSlug = $state<string | null>(null);
 
   const count = (n: number | null) => (n === null ? "" : n.toLocaleString("en-US"));
 </script>
@@ -36,7 +41,7 @@
           {#if group.label}<h5>{group.label}</h5>{/if}
           <ul>
             {#each group.layers as layer (layer.slug)}
-              <li>
+              <li class="row">
                 <label class="layer">
                   <input
                     type="checkbox"
@@ -48,6 +53,16 @@
                   <span class="label">{layer.label}</span>
                   {#if layer.n !== null}<span class="count">{count(layer.n)}</span>{/if}
                 </label>
+                <button
+                  type="button"
+                  class="info"
+                  aria-label={`About ${layer.label}`}
+                  aria-haspopup="dialog"
+                  data-testid="place-layer-info"
+                  onclick={() => (infoSlug = layer.slug)}
+                >
+                  <Icon name="info" size={14} />
+                </button>
               </li>
             {/each}
           </ul>
@@ -59,6 +74,15 @@
         >Hide all place layers</button
       >
     {/if}
+  {/if}
+
+  {#if infoSlug}
+    <LayerInfoModal
+      open={true}
+      slug={infoSlug}
+      manifest={overlays.manifestRow(infoSlug) ?? null}
+      onclose={() => (infoSlug = null)}
+    />
   {/if}
 
   {#if overlays.credits.length}
@@ -117,7 +141,35 @@
     display: flex;
     flex-direction: column;
   }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .info {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--icon-muted);
+    cursor: pointer;
+  }
+  .info:hover {
+    color: var(--text-primary);
+    background: var(--fill-control);
+  }
+  .info:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
   .layer {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: var(--space-2);

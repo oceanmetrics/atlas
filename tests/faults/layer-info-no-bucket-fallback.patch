@@ -1,0 +1,16 @@
+diff --git a/src/lib/gazetteer/layerInfo.ts b/src/lib/gazetteer/layerInfo.ts
+index d58b1e7..22cc174 100644
+--- a/src/lib/gazetteer/layerInfo.ts
++++ b/src/lib/gazetteer/layerInfo.ts
+@@ -20,7 +20,10 @@ export const placesLayerPage = (slug: string): string =>
+  * `catalog/base.ts` documents the same). Deduplicated (a staging override may make them one). */
+ export function collectionJsonUrls(slug: string, dataBase = gazetteerDataBase()): string[] {
+   const path = `${encodeURIComponent(slug)}/collection.json`;
+-  return [...new Set([`${GAZETTEER_ROOT}${path}`, `${dataBase}${path}`])];
++  // SEEDED FAULT (tests/faults/layer-info-no-bucket-fallback.patch): only the canonical host is asked,
++  // so a browser that cannot follow its 302 (no CORS) never reaches the collection.
++  void dataBase;
++  return [`${GAZETTEER_ROOT}${path}`];
+ }
+ 
+ export interface LayerCollection {

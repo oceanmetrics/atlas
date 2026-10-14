@@ -1,0 +1,181 @@
+{
+  "type": "Collection",
+  "id": "boem_wind_planning_rescinded",
+  "stac_version": "1.1.0",
+  "description": "Wind energy areas, call areas and proposed-sale areas that BOEM de-designated on 2025-07-30 (BOEM notice \"BOEM Rescinds Designated Wind Energy Areas on the Outer Continental Shelf\"). Two BOEM layers are combined: the dissolved outlines (`component` = outline) and the OCS blocks and sub-blocks that make them up (`component` = block). The whole layer is rescinded (layer status, also in collection.json): every row is `status` = rescinded, `status_date` = 2025-07-30; `status_upstream` (and the native `AREA_STATUS`) keeps BOEM's own, stale value (the Oregon areas are still marked Active). The outline layer holds one row with no geometry and no attributes (OBJECTID 2068); it is dropped. Built by build.py from 2 source layer(s).",
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Ocean Metrics gazetteer"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Ocean Metrics gazetteer"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Agent/LLM usage guide"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Human-readable documentation"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "./places.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "pmtiles:layers": ["boem_wind_planning_rescinded"]
+    },
+    {
+      "rel": "license",
+      "href": "https://www.usa.gov/publicdomain/label/1.0/",
+      "type": "text/html",
+      "title": "U.S. federal government work (BOEM), public domain; the AGOL items carry the usa.gov public-domain label."
+    },
+    {
+      "rel": "via",
+      "href": "https://www.boem.gov/newsroom/notes-stakeholders/boem-rescinds-designated-wind-energy-areas-outer-continental-shelf",
+      "type": "text/html",
+      "title": "Upstream publisher page"
+    },
+    {
+      "rel": "via",
+      "href": "https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/Wind_Planning_Area_Boundaries__BOEM_/FeatureServer/0",
+      "type": "text/html",
+      "title": "Source layer (outline)"
+    },
+    {
+      "rel": "via",
+      "href": "https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/Wind_Planning_Areas__BOEM_/FeatureServer/7",
+      "type": "text/html",
+      "title": "Source layer (block)"
+    }
+  ],
+  "stac_extensions": [
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
+  ],
+  "geoparquet:geometry_type": "MultiPolygon",
+  "geoparquet:feature_count": 3325,
+  "table:row_count": 3325,
+  "table:primary_geometry": "geometry",
+  "updated": "2026-10-14T09:19:39Z",
+  "pmtiles:min_zoom": 0,
+  "pmtiles:max_zoom": 7,
+  "pmtiles:tile_type": "mvt",
+  "pmtiles:center": [-74.53125, 37.71024, 7],
+  "pmtiles:layers": ["boem_wind_planning_rescinded"],
+  "gazetteer:authority": "BOEM",
+  "gazetteer:place_type": "planning_area",
+  "gazetteer:cadence": "weekly",
+  "gazetteer:attribution": "Bureau of Ocean Energy Management (BOEM), Office of Renewable Energy Programs (OREP), via MarineCadastre.gov. Public domain. Processed by Ocean Metrics.",
+  "gazetteer:provenance": {
+    "slug": "boem_wind_planning_rescinded",
+    "version": "1.1.0",
+    "built": "2026-10-14T08:37:28Z",
+    "record_count": 3325,
+    "dropped": [
+      "https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/Wind_Planning_Area_Boundaries__BOEM_/FeatureServer/0: dropped feature with no polygon (attributes: {'OBJECTID': 2068})"
+    ]
+  },
+  "gazetteer:status": {
+    "date": "2025-07-30",
+    "value": "rescinded",
+    "source": "https://www.boem.gov/newsroom/notes-stakeholders/boem-rescinds-designated-wind-energy-areas-outer-continental-shelf",
+    "note": "BOEM notice \"BOEM Rescinds Designated Wind Energy Areas on the Outer Continental Shelf\""
+  },
+  "gazetteer:status_history": [
+    {
+      "date": "2025-07-30",
+      "value": "rescinded",
+      "source": "https://www.boem.gov/newsroom/notes-stakeholders/boem-rescinds-designated-wind-energy-areas-outer-continental-shelf",
+      "note": "BOEM notice \"BOEM Rescinds Designated Wind Energy Areas on the Outer Continental Shelf\""
+    }
+  ],
+  "title": "BOEM offshore wind planning areas",
+  "extent": {
+    "spatial": {
+      "bbox": [[-158.663621, 20.776513, -72.002210756, 43.950633]]
+    },
+    "temporal": {
+      "interval": [[null, null]]
+    }
+  },
+  "license": "CC-PDDC",
+  "providers": [
+    {
+      "name": "Bureau of Ocean Energy Management (BOEM)",
+      "roles": ["producer", "licensor"],
+      "url": "https://www.boem.gov/renewable-energy"
+    },
+    {
+      "name": "NOAA Office for Coastal Management (MarineCadastre.gov)",
+      "roles": ["processor"],
+      "url": "https://hub.marinecadastre.gov"
+    },
+    {
+      "name": "Ocean Metrics LLC",
+      "roles": ["processor", "host"],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "assets": {
+    "places": {
+      "href": "./places.parquet",
+      "type": "application/vnd.apache.parquet",
+      "file:size": 1460042,
+      "file:checksum": "12201de985f63db9d46d52af96e776048035b95832fc11ee3f21a20ce12a28f0bb37",
+      "proj:code": "EPSG:4326",
+      "roles": ["data"]
+    },
+    "places-tiles": {
+      "href": "./places.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "boem_wind_planning_rescinded (vector tiles)",
+      "file:size": 434821,
+      "file:checksum": "1220220c7456637ab6a2215dcb0c1f3f37de1c5e3fee2aedd0fdc5d808a927c842b4",
+      "roles": ["visual"]
+    },
+    "styles/default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Default",
+      "file:size": 698,
+      "file:checksum": "1220ed2e8aa33943ddcf4b71d840e11638b9254dfa608c41edef02648973c5229198",
+      "roles": ["style", "default"]
+    },
+    "provenance": {
+      "href": "./provenance.json",
+      "type": "application/json",
+      "title": "Source provenance and change-detection record",
+      "file:size": 1947,
+      "file:checksum": "1220a3f0b60b5d0cfc8a7305a85841bed31e8c79d247f199b24c23325f4332269538",
+      "roles": ["metadata"]
+    },
+    "documentation": {
+      "href": "./README.md",
+      "type": "text/markdown",
+      "file:size": 6533,
+      "file:checksum": "1220cdee91da103af1a2dbed271a3f48ef7453aff314f2a7d08488c55a3ba02593e1",
+      "roles": ["documentation"]
+    },
+    "thumbnail": {
+      "href": "./places.thumb.jpg",
+      "type": "image/jpeg",
+      "roles": ["thumbnail"],
+      "file:size": 2023,
+      "file:checksum": "12201e37855a8637cbea03d58cbf184460c5c4960d03ef6768d30b094d5d8a8fff79"
+    }
+  }
+}
