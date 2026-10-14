@@ -549,6 +549,23 @@ export const FAULTS = [
       "degree COG",
     gate: ["npx", "vitest", "run", "tests/catalog/registry/item.test.ts"],
   },
+  // --- WP12 (AquaMaps from MarineSensitivity v8: both boxes in the row, v7 keys mapped) ------------
+  {
+    id: "registry-005-uses-native-bbox",
+    patch: "tests/faults/registry-005-uses-native-bbox.patch",
+    describe:
+      "registryItem() bounds the 0.05 degree surface with the native box -- tiles of the global " +
+      "downscale outside the native footprint are never requested",
+    gate: ["npx", "vitest", "run", "tests/catalog/registry/item.test.ts"],
+  },
+  {
+    id: "registry-v7-key-unmapped",
+    patch: "tests/faults/registry-v7-key-unmapped.patch",
+    describe:
+      "resolveRegistryKey() never maps a v7 key through sp_key_v7 -- an old ?sp= link lands on " +
+      "'not in this collection's registry'",
+    gate: ["npx", "vitest", "run", "tests/catalog/registry/item.test.ts"],
+  },
   // --- round 4, R4-B (the rail attaches to the panel; four tabs; left by default) ---------------
   // --- round 4, R4-D (the Report tool is one flow, no sub-tabs) ---------------------------------
   // --- round 4 CI-red follow-up (R4-ci): the globe's empty viewport query ----------------------
