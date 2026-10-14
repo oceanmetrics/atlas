@@ -1,0 +1,1 @@
+function e(e=document){let t=e.querySelector(`[data-control^="rail-"][aria-current="true"]`);return t?(t.click(),!0):!1}export{e as t};

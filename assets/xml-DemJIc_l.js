@@ -1,0 +1,2 @@
+var e=e=>{if(typeof DOMParser>`u`)throw Error(`no XML parser in this environment (pass deps.xmlParse)`);return new DOMParser().parseFromString(e,`text/xml`)};function t(e,t){let n=t(e),r=n.getElementsByTagName(`parsererror`)[0];if(r)throw Error(r.textContent?.trim().split(`
+`)[0]||`the XML stops part way`);if(!n.documentElement)throw Error(`the XML has no root element`);return n}export{t as n,e as t};
