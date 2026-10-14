@@ -1,0 +1,13 @@
+diff --git a/src/lib/catalog/species.ts b/src/lib/catalog/species.ts
+index 9ac87a5..5633a6d 100644
+--- a/src/lib/catalog/species.ts
++++ b/src/lib/catalog/species.ts
+@@ -199,7 +199,7 @@ export function inGroup(species: SpeciesInfo, group: string | undefined): boolea
+   const g = (group ?? "all").trim().toLowerCase();
+   if (g === "" || g === "all") return true;
+   if (g === "redlisted") return species.redlisted;
+-  return species.group.toLowerCase() === g;
++  return species.group === g;
+ }
+ 
+ /** how many species the models cover in `group` (the M of "N likely of M modeled"). */
