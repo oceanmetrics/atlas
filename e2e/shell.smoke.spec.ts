@@ -1,114 +1,58 @@
 import { expect, test } from "@playwright/test";
-import {
-  BUCKET,
-  collectConsoleErrors,
-  collectRequests,
-  mountUnder,
-  routeBucket,
-  routeSealFixture,
-  routeSession,
-} from "./hermetic";
+import { ATLAS_BASE, collectConsoleErrors, collectRequests, routeBucket } from "./hermetic";
 
 // atlas-0 Deliverable 5: the smoke spec. Runs against the built production bundle served by
 // `vite preview` (see playwright.config.ts webServer), across chromium/webkit/firefox.
 //
-// HERMETIC: the registry and every release file live in the S3 bucket, and this spec routes all of
-// them to fixtures (e2e/hermetic.ts) — no test here ever touches the live network. That also makes
-// the release-access gate (plan D6) testable end to end: the fixture registry marks v9 restricted,
-// and the assertions are about which requests the browser did and did not make.
+// HERMETIC: the catalog, the MarineSensitivity STAC, the gazetteer manifest and every map origin are
+// routed to fixtures (e2e/hermetic.ts) -- no test here ever touches the live network.
 
 test.describe("shell smoke", () => {
-  test("index.html paints the real shell (atlas-3 step 3) with zero console errors", async ({
-    page,
-  }) => {
+  test("index.html paints the real shell with zero console errors", async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
 
     await page.goto("/");
 
-    // the shell (top bar, tool rail, panel, map placeholder) is real by the time the page settles
-    // -- the static skeleton (index.html's own inlined critical CSS + markup) already painted an
-    // identical-geometry placeholder before this, which is what e2e/shell.cls.spec.ts measures.
+    // the shell (top bar, tool rail, panel, map) is real by the time the page settles -- the static
+    // skeleton (index.html's own inlined critical CSS + markup) already painted an identical-geometry
+    // placeholder before this, which is what e2e/shell.cls.spec.ts measures.
     await expect(page.locator(".topbar")).toBeVisible();
     await expect(page.locator("#rail-region")).toBeVisible();
     await expect(page.locator("#panel-region")).toBeVisible();
     await expect(page.locator("#map")).toBeVisible();
-    // "Scores"/"Species" (the lens switch, top bar) and "Table"/"Report" (two of the spine's four
-    // tools — R4-B: the spine is Layers, Details, Table, Report; R4-D: Report is one flow with Places
-    // at top) are each a real, visible, accessibly-named control in the hydrated shell.
-    for (const label of ["Scores", "Species"]) {
+    // "Collections"/"Species" (the lens switch, top bar) and the spine's four tools (Layers, Details,
+    // Table, Places) are each a real, visible, accessibly-named control in the hydrated shell.
+    for (const label of ["Collections", "Species"]) {
       await expect(page.locator(".topbar").getByRole("button", { name: label })).toBeVisible();
     }
-    for (const label of ["Details", "Table", "Report"]) {
+    for (const label of ["Layers", "Details", "Table", "Places"]) {
       await expect(page.locator("#rail-region").getByRole("button", { name: label })).toBeVisible();
     }
-
-    // latest.txt = v7, a public release: it renders, and no PREVIEW badge appears. VersionBadge.svelte
-    // (untouched by this step) still renders these exact classes.
-    await expect(page.locator(".ms-version")).toHaveText("v7");
-    await expect(page.locator(".ms-preview-badge")).toHaveCount(0);
+    // the retired lenses and chrome are really gone
+    for (const label of ["Scores", "Report"]) {
+      await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+    }
+    await expect(page.locator('[data-control="version-chip"]')).toHaveCount(0);
 
     expect(errors).toEqual([]);
   });
 
-  // report.html's own smoke coverage moved to e2e/report.spec.ts (atlas-7 steps 2-4): this file's
-  // one placeholder assertion (`#report-root[data-hydrated]`) described the atlas-7-step-1-era
-  // stub, which report-main.ts no longer sets -- the real document needs the hermetic bucket/
-  // session routing e2e/report.spec.ts already sets up, not a bare `page.goto`.
-});
-
-test.describe("release-access gate (plan D6)", () => {
-  test("public host + ?ver=v9: not one request under /v9/, falls through to latest", async ({
+  test("the catalog is read from the atlas base, and no release registry is ever asked for", async ({
     page,
   }) => {
-    const errors = collectConsoleErrors(page);
     const urls = collectRequests(page);
     await routeBucket(page);
-    await routeSession(page, null); // no session.json: this is the public host
 
-    await page.goto("/?ver=v9");
+    await page.goto("/?ver=v9"); // an old link: `ver` is retired and ignored
 
-    await expect(page.locator(".ms-version")).toHaveText("v7");
-    await expect(page.locator(".ms-preview-badge")).toHaveCount(0);
-
+    await expect(page.locator("#rail-region .rail")).toBeAttached();
+    await expect(page.getByRole("combobox", { name: "Collection" })).toBeVisible();
+    expect(urls).toContain(`${ATLAS_BASE}catalog.json`);
+    for (const retired of ["latest.txt", "versions.json", "session.json", "/manifest.json"]) {
+      expect(urls.filter((u) => u.includes(retired))).toEqual([]);
+    }
     expect(urls.filter((u) => u.includes("/v9/"))).toEqual([]);
-    expect(urls).toContain(`${BUCKET}v7/manifest.json`);
-    expect(errors).toEqual([]);
-  });
-
-  test("/v9/atlas/ + session.json {preview:true}: v9's manifest comes from the bucket base", async ({
-    page,
-  }) => {
-    const urls = collectRequests(page);
-    await routeBucket(page);
-    await mountUnder(page, "/v9/atlas/");
-    await routeSession(page, { preview: true }); // registered last: wins over the mount rewrite
-
-    await page.goto("/v9/atlas/");
-
-    await expect(page.locator(".ms-version")).toHaveText("v9");
-    await expect(page.locator(".ms-preview-badge")).toHaveText("PREVIEW");
-
-    // the exact absolute URL — not /v9/atlas/v9/manifest.json, and not any same-origin path.
-    expect(urls).toContain(`${BUCKET}v9/manifest.json`);
-    expect(urls.filter((u) => u.includes("/v9/atlas/v9/"))).toEqual([]);
-  });
-
-  test("/v9/atlas/ + session.json 404: no v9 request at all", async ({ page }) => {
-    const urls = collectRequests(page);
-    await routeBucket(page);
-    await mountUnder(page, "/v9/atlas/");
-    await routeSession(page, null);
-
-    await page.goto("/v9/atlas/");
-
-    await expect(page.locator(".ms-version")).toHaveText("v7");
-    await expect(page.locator(".ms-preview-badge")).toHaveCount(0);
-
-    expect(urls.filter((u) => u.startsWith(BUCKET) && u.includes("/v9/"))).toEqual([]);
-    expect(urls).toContain(`${BUCKET}v7/manifest.json`);
   });
 });
 
@@ -124,8 +68,6 @@ test.describe("a failed bundle load (atlas-3 handover item (b), fix list #14)", 
     page,
   }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await page.route("**/assets/*.js", (route) => route.abort());
 
     await page.goto("/");
@@ -145,8 +87,6 @@ test.describe("a failed bundle load (atlas-3 handover item (b), fix list #14)", 
 
   test("a bundle that DOES run never shows the fallback message", async ({ page }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
 
     await page.goto("/");
     await expect(page.locator("#rail-region .rail")).toBeAttached();

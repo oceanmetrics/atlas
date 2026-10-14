@@ -1,0 +1,171 @@
+{
+  "type": "Collection",
+  "id": "gebco_undersea",
+  "stac_version": "1.1.0",
+  "description": "Names, generic feature types and geometries of seafloor features (seamounts, canyons, banks, ridges, basins, guyots, fracture zones, trenches ...) approved by the IHO-IOC GEBCO Sub-Committee on Undersea Feature Names (SCUFN), from the NOAA NCEI / IHO DCDB Undersea_Features feature service. The service has three layers, one per geometry type (2,632 points, 1,128 lines, 1,652 polygons), all kept here with the per-row `geom_type` (MultiPoint, MultiLineString or MultiPolygon) and `component` (point, line, polygon). `FEATURE_ID`, the gazetteer's permanent feature number, is the id: a feature that the service serves as both a point and an extent (101 do) keeps `GEBCO:<FEATURE_ID>` on its polygon (else line) and gets `:point` or `:line` on the other rows. Built by build.py from 3 source layer(s).",
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Ocean Metrics gazetteer"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Ocean Metrics gazetteer"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Agent/LLM usage guide"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Human-readable documentation"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "./places.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "pmtiles:layers": ["gebco_undersea"]
+    },
+    {
+      "rel": "license",
+      "href": "https://www.gebco.net/data-products/undersea-feature-names",
+      "type": "text/html",
+      "title": "Attribution terms, no other restriction stated. ArcGIS item f09d579c68b84c5184fef1ac69ea7b24 licenseInfo and the GEBCO page (\"Data set acknowledgement\") both say: \"Please include the following citatio"
+    },
+    {
+      "rel": "via",
+      "href": "https://www.gebco.net/data-products/undersea-feature-names",
+      "type": "text/html",
+      "title": "Upstream publisher page"
+    },
+    {
+      "rel": "via",
+      "href": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Undersea_Features/FeatureServer/2",
+      "type": "text/html",
+      "title": "Source layer (polygon)"
+    },
+    {
+      "rel": "via",
+      "href": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Undersea_Features/FeatureServer/1",
+      "type": "text/html",
+      "title": "Source layer (line)"
+    },
+    {
+      "rel": "via",
+      "href": "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Undersea_Features/FeatureServer/0",
+      "type": "text/html",
+      "title": "Source layer (point)"
+    }
+  ],
+  "stac_extensions": [
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
+  ],
+  "geoparquet:geometry_type": "MultiLineString",
+  "geoparquet:feature_count": 5412,
+  "table:row_count": 5412,
+  "table:primary_geometry": "geometry",
+  "updated": "2026-10-08T17:36:01Z",
+  "pmtiles:min_zoom": 0,
+  "pmtiles:max_zoom": 8,
+  "pmtiles:tile_type": "mvt",
+  "pmtiles:center": [134.296875, 13.238984, 8],
+  "pmtiles:layers": ["gebco_undersea"],
+  "gazetteer:authority": "GEBCO",
+  "gazetteer:place_type": "undersea_feature",
+  "gazetteer:cadence": "monthly",
+  "gazetteer:attribution": "IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net. Served by the IHO Data Centre for Digital Bathymetry (IHO DCDB) and NOAA National Centers for Environmental Information (NCEI). Processed by Ocean Metrics.",
+  "gazetteer:provenance": {
+    "slug": "gebco_undersea",
+    "version": "1.0.1",
+    "built": "2026-10-08T17:08:22Z",
+    "record_count": 5412,
+    "dropped": []
+  },
+  "title": "GEBCO Gazetteer of Undersea Feature Names",
+  "extent": {
+    "spatial": {
+      "bbox": [[-180.0, -79.0, 180.0, 89.5757]]
+    },
+    "temporal": {
+      "interval": [[null, null]]
+    }
+  },
+  "license": "CC-BY-4.0",
+  "providers": [
+    {
+      "name": "IHO-IOC GEBCO Sub-Committee on Undersea Feature Names (SCUFN)",
+      "roles": ["producer", "licensor"],
+      "url": "https://www.gebco.net/data-products/undersea-feature-names"
+    },
+    {
+      "name": "IHO Data Centre for Digital Bathymetry (NOAA NCEI)",
+      "roles": ["processor"],
+      "url": "https://www.ncei.noaa.gov/iho-data-centre-digital-bathymetry"
+    },
+    {
+      "name": "Ocean Metrics LLC",
+      "roles": ["processor", "host"],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "assets": {
+    "places": {
+      "href": "./places.parquet",
+      "type": "application/vnd.apache.parquet",
+      "file:size": 2343433,
+      "file:checksum": "1220a77a96692dad910f30e375c272213c2846a7cf31398bb25177bde42c2d0f5f84",
+      "proj:code": "EPSG:4326",
+      "roles": ["data"]
+    },
+    "places-tiles": {
+      "href": "./places.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "gebco_undersea (vector tiles)",
+      "file:size": 6143962,
+      "file:checksum": "1220bea138af8eb88c470d9db38d6b0609390950265e10781696ac81262f1fc6bff7",
+      "roles": ["visual"]
+    },
+    "styles/default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Default",
+      "file:size": 1999,
+      "file:checksum": "12201eaf6504c35f2d273fa465153f05b9eaaa595c6179499c0350fb45fbd246049d",
+      "roles": ["style", "default"]
+    },
+    "provenance": {
+      "href": "./provenance.json",
+      "type": "application/json",
+      "title": "Source provenance and change-detection record",
+      "file:size": 3986,
+      "file:checksum": "122050ef5ada68171c3e42e8fcaf7af62f23b9d8d362eb3507458c49bce5e0d5da49",
+      "roles": ["metadata"]
+    },
+    "documentation": {
+      "href": "./README.md",
+      "type": "text/markdown",
+      "file:size": 5941,
+      "file:checksum": "122009b396f4b5a5dec9b59529009e4eed8cbb3905acebff498563a919cd5b42c940",
+      "roles": ["documentation"]
+    },
+    "thumbnail": {
+      "href": "./places.thumb.jpg",
+      "type": "image/jpeg",
+      "roles": ["thumbnail"],
+      "file:size": 22526,
+      "file:checksum": "1220b8eb7b032bb7cee66586b478e24dba1ef5b429d1e001164b7741a439fc85b8ee"
+    }
+  }
+}

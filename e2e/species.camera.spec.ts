@@ -15,7 +15,7 @@
 //      (`[-180, 53.15, 180, 73.75]`), so this test also exercises `narrowLongitude`'s point-probe
 //      narrowing (real value: only lon -170 holds data), not just a plain pass-through bbox.
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { routeBucket, waitForHydration } from "./hermetic";
 import { blockWasm, routeGlyphs, routeTitilerTiles } from "./map-hermetic";
 import {
   LEATHERBACK_SP,
@@ -191,10 +191,8 @@ test.describe("D8: selecting a model frames its extent, not the default study ar
     // reason, but with the `/cog/info` + `/cog/point` overrides inserted before `page.goto` ever
     // fires — the requests this whole fix depends on.
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
-    await routeSession(page, null); // v7 is public — no preview session needed
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page); // the wildcard, registered FIRST so the overrides below win
     await routeWalrusCogBoundsFallback(page);
@@ -238,10 +236,8 @@ test.describe("D8: selecting a model frames its extent, not the default study ar
     page,
   }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     await routeWalrusCogBoundsFallback(page);
@@ -524,7 +520,7 @@ test.describe("V4 fix: the species camera fills the free area under globe projec
     // later), which is exactly the shape a wide-range species' own published bbox takes.
     const BBOX: [number, number, number, number] = [130, 5, 230, 45];
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
     // registered AFTER routeSpeciesShards, so it wins (newest-registered-first) -- overrides just
     // this test's leatherback shard (tests/fixtures/species/v7/taxon/e1.json) with the SAME record
@@ -567,8 +563,6 @@ test.describe("V4 fix: the species camera fills the free area under globe projec
           }),
         }),
     );
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     await page.goto("/?mdl_seq=54241&ver=v7");
@@ -586,10 +580,8 @@ test.describe("V4 fix: the species camera fills the free area under globe projec
 
   test("the walrus's real (COG-bounds-narrowed) range fills the free area", async ({ page }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     await routeWalrusCogBoundsFallback(page);
@@ -736,10 +728,8 @@ test.describe("R3-A1: a wide-range model frames its IN-US portion, with a Zoom-t
     page,
   }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page); // the REAL, unmodified e1.json: merged.bbox null, assets: []
-    await routeSession(page, null); // v7 is public
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     // the leatherback's own /cog/info answer: a REAL, wide (130deg) but non-degenerate span (never
@@ -814,10 +804,8 @@ test.describe("R3-A1: a wide-range model frames its IN-US portion, with a Zoom-t
     page,
   }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page); // the REAL, unmodified e1.json: merged.bbox null, assets: []
-    await routeSession(page, null); // v7 is public
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     const LIVE_LEATHERBACK_COG_BOUNDS = [-180, -17.700000000000017, 180, 60.44999999999999];
@@ -943,10 +931,8 @@ test.describe("R3-A1: a wide-range model frames its IN-US portion, with a Zoom-t
     // OWN app/boot.json handler 404s by default; the custom, delayed handler registered LAST below
     // overrides that specifically, so latest.txt/versions.json/manifest.json/the taxon shard all
     // resolve at normal (hermetic, instant) speed and ONLY boot.json is late.
-    await routeBucket(page, "v7");
+    await routeBucket(page);
     await routeSpeciesShards(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     await page.route(
@@ -1010,10 +996,8 @@ test.describe("R3-rr fix 1, round 5: the phone 'US waters'/'Whole range' framing
     page,
   }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     const LIVE_LEATHERBACK_COG_BOUNDS = [-180, -17.700000000000017, 180, 60.44999999999999];
@@ -1066,10 +1050,8 @@ test.describe("R3-rr fix 1, round 5: the phone 'US waters'/'Whole range' framing
     page,
   }) => {
     await blockWasm(page);
-    await routeBucket(page, "v7", bootFor("v7"));
+    await routeBucket(page, bootFor("v7"));
     await routeSpeciesShards(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     const LIVE_LEATHERBACK_COG_BOUNDS = [-180, -17.700000000000017, 180, 60.44999999999999];

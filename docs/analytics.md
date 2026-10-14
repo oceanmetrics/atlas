@@ -1,5 +1,7 @@
 # Analytics: what code enforces, and the one thing it cannot
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The module (`src/lib/analytics/`) and its privacy rules still apply, but analytics are now OFF unless `VITE_GA_ID` / `VITE_LOG_URL` are set at build time. The `report` title, the Shiny `scores`/`species` apps, the `Atlas (preview)` page title and the Sheet it names are upstream (MarineSensitivity) details. The `?catalog=` and `?collection=` keys never reach a page location.
+
 `src/lib/analytics/` (plan atlas-2 `analytics/`, port of `msens::ga_js`) sends GA4 hits and a batched
 Sheet-log beacon. Every hit this module builds carries an explicit, sanitized `page_location` and a
 fixed `page_title` — never the live page's own href/fragment, never the live document title (see

@@ -1,5 +1,7 @@
 # Accessibility conformance note — Section 508 / WCAG 2.1 Level AA
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** This is the Section 508 / WCAG conformance note of MarineSensitivity Atlas 0.10.24 (map app, `report.html`, `gallery.html`). OceanMetrics Atlas has no report or gallery page and has not been re-evaluated: read it as the record of what the shared components (rail, panel, sheet, menus, dialogs, popups, legends) were held to, not as a statement about this app.
+
 **Product:** MarineSensitivity Atlas (`atlas`) — `index.html` (map app), `report.html` (print-first
 report), `gallery.html` (internal component gallery).
 **Version:** 0.10.24 (M8 content fixes on the 0.10.18 fix round) · **Date of this evaluation:**

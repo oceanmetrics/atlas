@@ -267,3 +267,88 @@ export function createTitilerBoundsSource(
     },
   };
 }
+
+// --- the COG's own footprint, for the raster SOURCE (WP11 item 4) -------------------------------------
+//
+// A different question from `cogBounds` above: that one answers "where should the CAMERA look" (and
+// narrows a degenerate whole-globe-width extent by probing the data); this one answers "which tiles may
+// MapLibre ask for", so it is the RAW footprint, never narrowed (a narrowed box would exclude real
+// data). A regional COG (the NOAA seabird surfaces cover one coast) 404s every tile outside it; with
+// the footprint as the source `bounds` MapLibre never requests them.
+//
+// It reads `/cog/info.geojson`, NOT `/cog/info`: `/cog/info`'s `bounds` are in the COG's OWN CRS
+// (checked live 2026-10-14: the NOAA seabird COGs are Oblique Mercator and answer metres,
+// `[-820443, -1234728, 1579556, 2045271]`), while the GeoJSON answer's `bbox` is always WGS84
+// (`[-87.02, 23.07, -52.27, 53.30]`), which is what a MapLibre source wants.
+
+/** `{host}/cog/info.geojson?url=<enc>`: the same encoding as every other `/cog/*` URL. */
+export function titilerInfoGeoJsonUrl(config: TitilerConfig, cogUrl: string): string {
+  return `${config.host}/cog/info.geojson?url=${encodeUrlReserved(cogUrl)}`;
+}
+
+/** the web-mercator latitude limit: titiler tiles end there, and MapLibre's bounds check wants it. */
+export const MERCATOR_MAX_LAT = 85.0511;
+
+/**
+ * `/cog/info.geojson`'s WGS84 `bbox` -> the `bounds` of a MapLibre raster source: finite, west < east and
+ * south < north, longitudes clamped to [-180, 180] and latitudes to the mercator limit. `null` for
+ * anything else (a malformed answer draws without a bound rather than with a wrong one).
+ */
+export function sourceBoundsOf(raw: unknown): [number, number, number, number] | null {
+  const b = (raw as { bbox?: unknown } | null)?.bbox;
+  if (!Array.isArray(b) || b.length !== 4) return null;
+  if (!b.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const [w, s, e, n] = b as number[];
+  const west = Math.max(-180, w);
+  const east = Math.min(180, e);
+  const south = Math.max(-MERCATOR_MAX_LAT, s);
+  const north = Math.min(MERCATOR_MAX_LAT, n);
+  if (!(west < east) || !(south < north)) return null;
+  return [west, south, east, north];
+}
+
+export interface CogExtentCache {
+  /** the COG's footprint (`/cog/info.geojson`), read once per COG; `null` when it cannot be read. */
+  get(cogUrl: string): Promise<[number, number, number, number] | null>;
+  /** how many COGs are cached (successes only; a failure is retried the next time it is asked for). */
+  readonly size: number;
+  /** how many `/cog/info.geojson` requests have been made. */
+  readonly requests: number;
+}
+
+export function createCogExtentCache(
+  fetchJson: BoundsJsonFetcher,
+  config: TitilerConfig = DEFAULT_TITILER_CONFIG,
+): CogExtentCache {
+  const done = new Map<string, [number, number, number, number]>();
+  const inflight = new Map<string, Promise<[number, number, number, number] | null>>();
+  let requests = 0;
+  return {
+    get(cogUrl) {
+      const hit = done.get(cogUrl);
+      if (hit) return Promise.resolve(hit);
+      const pending = inflight.get(cogUrl);
+      if (pending) return pending;
+      const p = (async () => {
+        requests++;
+        let raw: unknown;
+        try {
+          raw = await fetchJson(titilerInfoGeoJsonUrl(config, cogUrl));
+        } catch {
+          return null;
+        }
+        const b = sourceBoundsOf(raw);
+        if (b) done.set(cogUrl, b);
+        return b;
+      })().finally(() => inflight.delete(cogUrl));
+      inflight.set(cogUrl, p);
+      return p;
+    },
+    get size() {
+      return done.size;
+    },
+    get requests() {
+      return requests;
+    },
+  };
+}

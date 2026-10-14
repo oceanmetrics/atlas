@@ -1,7 +1,7 @@
 // R3-W8 item 3 (Ben, 2026-09-25): "when clicking Share, the link should include all the same UI
 // elements in their arrangement, eg on Layers pane." End-to-end proof of the `ui=` token's own
 // round trip (`src/shell/uiState.ts`, unit-tested in tests/shell/uiState.test.ts's parse/format
-// core): arrange the shell (dock bottom, expand the Outlines row, pick a real species input,
+// core): arrange the shell (dock right, collapse the Data row, pick a real species input,
 // untick "Zoom to layer on change"), click Share, then open the COPIED link in a fresh browser
 // context and confirm the same arrangement reappears -- not just that the token round-trips in
 // isolation. The species input + representation and the zoom-to-layer preference are already
@@ -50,7 +50,7 @@ async function clickShareAndCapture(page: Page): Promise<string> {
 }
 
 test.describe("R3-W8 item 3: Share reproduces the UI arrangement", () => {
-  test("dock right + Outlines expanded + FWS Range + zoom-to-layer off round-trip through a shared link", async ({
+  test("dock right + Data row collapsed + FWS Range + zoom-to-layer off round-trip through a shared link", async ({
     page,
     context,
   }) => {
@@ -65,11 +65,6 @@ test.describe("R3-W8 item 3: Share reproduces the UI arrangement", () => {
     await panelSurface.getByRole("button", { name: "Move panel to the right" }).click();
     await expect(page.locator("#panel-region")).toHaveAttribute("data-dock", "right");
 
-    // arrange 2: expand the "Outlines" row (LayersPanel.svelte's second expandable row).
-    const outlinesRow = page.getByRole("button", { name: "Outlines", exact: true });
-    await outlinesRow.click();
-    await expect(outlinesRow).toHaveAttribute("aria-expanded", "true");
-
     // arrange 3: pick "FWS Range" -- promoted to the top of the pane by item 1 -- reflected in the
     // ordinary `in=` URL state (not the `ui=` token).
     await page.locator('[data-testid="layer-pill"][data-key="rng_fws"]').click();
@@ -78,6 +73,13 @@ test.describe("R3-W8 item 3: Share reproduces the UI arrangement", () => {
     // arrange 4: untick "Zoom to layer on change" (item 2) -- reflected in `zl=0`.
     await page.locator('[data-testid="zoom-to-layer-toggle"]').uncheck();
     await expect(page).toHaveURL(/[?&]zl=0(&|$)/);
+
+    // arrange 2: collapse the "Data" row (LayersPanel.svelte's one expandable row; it starts open, and
+    // its body holds the pills above, so it is collapsed last).
+    const dataRow = page.getByRole("button", { name: "Data", exact: true });
+    await expect(dataRow).toHaveAttribute("aria-expanded", "true");
+    await dataRow.click();
+    await expect(dataRow).toHaveAttribute("aria-expanded", "false");
 
     const shared = await clickShareAndCapture(page);
     // R4-B: the `ui=` token is version 4 (the Details tool is a `tool` code, the `tab` field is
@@ -97,10 +99,13 @@ test.describe("R3-W8 item 3: Share reproduces the UI arrangement", () => {
 
       await expect(page2.locator("#panel-region")).toHaveAttribute("data-dock", "right");
       await expect(page2.locator("#rail-region")).toHaveAttribute("data-dock", "right");
-      await expect(page2.getByRole("button", { name: "Outlines", exact: true })).toHaveAttribute(
+      await expect(page2.getByRole("button", { name: "Data", exact: true })).toHaveAttribute(
         "aria-expanded",
-        "true",
+        "false",
       );
+      // the Data row is collapsed in the shared arrangement; its body (pills, zoom toggle) is there once
+      // it is opened, and the choices made before the share are in it
+      await page2.getByRole("button", { name: "Data", exact: true }).click();
       await expect(page2.locator('[data-testid="zoom-to-layer-toggle"]')).not.toBeChecked();
       await expect(page2.locator('[data-testid="layer-pill"][data-key="rng_fws"]')).toHaveClass(
         /active/,

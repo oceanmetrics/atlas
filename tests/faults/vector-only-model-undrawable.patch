@@ -1,0 +1,15 @@
+diff --git a/src/lib/catalog/mst/taxon.ts b/src/lib/catalog/mst/taxon.ts
+index 50a0fc5..96d7104 100644
+--- a/src/lib/catalog/mst/taxon.ts
++++ b/src/lib/catalog/mst/taxon.ts
+@@ -70,7 +70,9 @@ export function surfaceFor(card: TaxonCard, dsKey: string): SurfaceResult {
+   const cogs = input.assets.filter(isCog);
+   const asset = cogs.find((a) => a.rep === "model") ?? cogs[0];
+   if (!asset) {
+-    const vector = input.assets.find((a) => a.type === "pmtiles" && a.sourceLayer);
++    // SEEDED FAULT (tests/faults/vector-only-model-undrawable.patch): a vector-only model is "no-cog"
++    // again (the pre-WP11 "only raster surfaces are drawn here yet" notice).
++    const vector = undefined as (typeof input.assets)[number] | undefined;
+     if (!vector?.sourceLayer) return { ok: false, reason: "no-cog" };
+     return {
+       ok: true,

@@ -26,6 +26,8 @@
   import type { MapHandle } from "../../lib/map/map";
   import type { LayerGroupId } from "../../lib/map/layerStack";
   import { speciesCardErrorText } from "./data/card";
+  import PlaceLayerList from "../../places/PlaceLayerList.svelte";
+  import type { PlaceOverlays } from "../../places/overlays.svelte";
 
   interface Props {
     lens: SpeciesLens;
@@ -47,6 +49,9 @@
     /** R4-B: which spine entry this lens is rendering -- "layers" (the controls) or "details" (the
      * species card's descriptive content, formerly the Layers pane's "Species info" tab). */
     part?: "layers" | "details";
+    /** WP11: the gazetteer "Place layers" list, mounted through `LayersPanel`'s `placeLayers` snippet
+     * exactly as the Collections lens does (the overlays are drawn in either lens). */
+    overlays?: PlaceOverlays;
   }
 
   // `boot` stays a declared prop (Shell.svelte always passes it, and a lens prop this narrow is
@@ -63,6 +68,7 @@
     expandedRow,
     onExpandedRowChange,
     part = "layers",
+    overlays,
   }: Props = $props();
 
   function onProjChange(checked: boolean) {
@@ -113,6 +119,10 @@
     {/if}
   </div>
 {/snippet}
+{#snippet placeLayers()}
+  {#if overlays}<PlaceLayerList {overlays} />{/if}
+{/snippet}
+
 {#if part === "details"}
   {@render speciesInfoContent()}
 {:else}
@@ -123,6 +133,7 @@
     {rowState}
     {expandedRow}
     {onExpandedRowChange}
+    placeLayers={overlays ? placeLayers : undefined}
   >
     {#snippet speciesField()}
       <!-- R3-W8 item 1 (Ben, 2026-09-25): "promote the main data selection up" — the layer bar

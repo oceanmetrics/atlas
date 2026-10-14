@@ -161,7 +161,7 @@ describe("the one-line summary under a place row", () => {
   it("one cell is singular; pixels say pixels", () => {
     expect(summaryLine(row(cellStats([0.5])))).toBe("1 cell · mean 0.5 · min 0.5 · max 0.5");
     expect(summaryLine(row({ ...cellStats([1, 3]) }, "pixels"))).toBe(
-      "2 pixels · mean 2 · min 1 · max 3",
+      "2 pixels · mean 2 · min 1 · max 3 · display-grid statistics",
     );
   });
   it("an empty place and an all-no-value place say so, never 0 or NaN", () => {

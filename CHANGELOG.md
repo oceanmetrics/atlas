@@ -95,10 +95,71 @@ and hex painting follow.
   centroid (new `hex_centroids` asset of `biotrack_indicators`: `FID`, `lon`, `lat`, 27,841 rows, 0.6 MB,
   and `lib/geo/pip.ts`, ray casting that also handles holes and antimeridian-unwrapped places);
   raster items ask titiler `/cog/statistics` (display-grid statistics, labelled as such; the tile
-  server does not yet answer a browser's POST preflight, so these rows say so instead of a number).
+  server answers a browser's POST preflight since 2026-10-14, see WP11 below).
   The same rows are in the Table tool, with a CSV download.
 - **Only inside places.** A switch in the Places pane dims hex cells whose centroid is outside every
   place (feature state `inside`, opacity 0.15); `?filter=places`.
+
+- **Raster place summaries work in the browser (WP11).** The tile server now allows the POST preflight, so a
+  place over a raster item shows pixels, mean, min and max from titiler `/cog/statistics` (checked live:
+  Stellwagen Bank over the Arctic Tern density), labelled "display-grid statistics". A multi-band COG is
+  summarised on the band the map draws (`bidx`: coefficient of variation no longer shows the density's
+  numbers), and titiler's coverage-weighted pixel count is rounded to whole pixels.
+- **Place layers in both lenses (WP11).** The Species lens' Layers panel now carries the same "Place layers"
+  list, and `?ov=` works in either lens (the overlays were Collections-only).
+- **One popup where a place and a cell overlap (WP11).** A click on a gazetteer overlay feature that lies over
+  a hex cell opens ONE card: the place (name, status, "Add <name> to Places") on top and the cell's value
+  line ("Cell 11234: 0.76 · 7 likely species") under it; the cell is still selected (outline, legend marker,
+  Details). The hover tooltip merges the same way instead of stacking two. In the Species lens a click on
+  an overlay feature opens the place card only (click beside it to read the species value).
+- **No 404 tile noise for regional rasters (WP11).** A raster item reads its COG's WGS84 footprint once
+  (titiler `/cog/info.geojson`, cached per COG; `/cog/info` answers in the COG's own CRS, metres for the NOAA
+  seabird surfaces) and sets it as the MapLibre source `bounds`, so tiles outside the COG are never
+  requested (Arctic Tern density at zoom 3: 78 tile requests with 62 404s before, 4 and none after). The
+  camera's degenerate-extent handling is unchanged.
+- **Vector-only MarineSensitivity models are drawn (WP11).** A v7 taxon whose model for a collection is a
+  PMTiles range with no COG is drawn in the Collections lens as a presence fill (one colour, "range
+  (presence)" legend) instead of the "only raster surfaces are drawn here yet" notice. The shard has no
+  value column, so there is nothing to colour by. (The pinned v7 release gives every vector range a COG
+  twin, so the COG still wins there.)
+- **Unlisted collection by link (WP11).** `?collection=<https url of a collection.json>` loads ONE extra
+  collection into the picker, marked "(unlisted)" under "Unlisted (shared by link)", so a restricted
+  collection (the BioTrack per-species one) can be previewed through a private link before it is public;
+  a link with no `?c=` opens on it. Its items load from its own `items/` links and hex assets resolve
+  relative to it. The URL is validated like `?catalog=` (https only, no credentials, no fragment, a `.json`
+  path; a signed link's query is kept); an invalid one is ignored, an unreadable one is an "unavailable" row,
+  and a collection id the catalog already lists is not added twice. Like `catalog`, the key never reaches
+  analytics page locations.
+- **The inherited e2e suite is brought up to the current shell (WP11).** `e2e/` is green in chromium
+  (`npm run e2e:chromium`, 145 tests; a manual script, about 4 minutes on an idle laptop and 11 to 17 while it is busy, so not in CI): lenses Collections |
+  Species, rail tools Layers / Details / Table / Places, no Scores / Report / version chip / release
+  registry. Every spec is hermetic (`e2e/hermetic.ts` routes the catalog, the MarineSensitivity STAC,
+  the gazetteer manifest and the map origins to fixtures; the Species lens' fixtures are served under its
+  pinned `v7`). Specs of removed features (release-access gate, restricted-release feedback, the zones
+  table, the Program-Area first-view camera) are replaced by their current equivalents or removed. Three
+  defects the suite found are fixed: the index.html skeleton had no ensō mark (a 17 px wordmark shift on
+  hydration), `?ui=` link with the Data row collapsed reopened it, and the Playwright allowances were too
+  tight for a loaded machine (60 s per test, 15 s per expectation, 3 workers, one local retry).
+- **Docs sweep (WP11).** Every inherited page in `docs/` that is partly stale opens with a "Status in
+  OceanMetrics Atlas" note saying what no longer applies (scores, Program Areas, the Report, the release
+  registry, the gallery, fonts); no page is entirely about a removed feature, so none was deleted. The README's
+  Docs paragraph says so.
+- **Methods and License open as dialogs (WP11).** In the credits strip and on the catalog page, "Methods" (the
+  collection's `describedby` README, and any other markdown link) opens a dialog that fetches the file and
+  renders it (headings, lists, tables, code, links and images; a small renderer in `lib/markdown/`, loaded
+  only when a dialog opens, no new dependency). Raw HTML in a README is shown as text, never run; links open
+  in a new tab with `rel="noopener noreferrer"`, only `http(s)`/`mailto` survive, relative links and images
+  resolve against the README's own URL; "Open raw" links to the file. "License" opens a dialog with the SPDX id,
+  its full name, a one-line plain-language summary (CC-BY-4.0, CC-BY-NC-3.0, CC0-1.0, public domain / US
+  Government work, else "see the license link"), the collection's `license` links and the attribution to copy.
+- **Info dialog per place layer (WP11).** Each row of the "Place layers" list has an "i" button that opens a
+  dialog read from the layer's own `<gazetteer>/<slug>/collection.json` (the canonical host first, then the
+  path-style bucket URL; once per layer): title, description, feature count, place type, version, updated,
+  status (`gazetteer:status`: value, date, source, note), license (id, full name, summary, license links),
+  credit, providers and the upstream / source-layer links, links to the layer's page on
+  oceanmetrics.io/places and to `places.parquet` / `places.pmtiles`, and the README under a collapsed "Read
+  more" (rendered like Methods, "Open raw" included). A collection that cannot be read shows the manifest's
+  own fields (`index/layers.json`) and says the rest could not be loaded, with Retry.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

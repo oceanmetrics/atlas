@@ -51,10 +51,12 @@ import { mstRefOf } from "../../lib/catalog/mst/kinds";
 import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
 import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
 import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
+import { createCogExtentCache, type CogExtentCache } from "../../lib/raster/bounds";
 import {
   loadCatalog,
   loadItems,
   clearCatalogCache,
+  unlistedEntryId,
   type AtlasCatalog,
   type CollectionEntry,
   type LoadError,
@@ -103,6 +105,8 @@ export interface CollectionLensDeps {
   mst?: { items?: MstItemOptions; taxon?: import("../../lib/catalog/mst/items").TaxonLoadOptions };
   /** the display-rescale reader (titiler `/cog/statistics`, cached); default the module cache. */
   rescale?: RescaleCache;
+  /** the COG footprint reader (titiler `/cog/info`, cached); default the module cache. */
+  cogExtent?: CogExtentCache;
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
    * dimmed), read reactively; `null`/absent = no filter. */
   insideFids?: () => ReadonlySet<number> | null;
@@ -253,7 +257,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       phase = "loading";
       error = null;
     });
-    void loadCatalog({ ...deps.loadOptions, base }).then((res) => {
+    const extra = selStore.sel.collection;
+    void loadCatalog({
+      ...deps.loadOptions,
+      base,
+      ...(extra ? { extraCollections: [extra] } : {}),
+    }).then((res) => {
       if (token !== catalogToken) return;
       if (res.ok) {
         catalog = res.value;
@@ -267,7 +276,13 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
 
   const entries = $derived(catalog?.entries ?? []);
-  const entry = $derived(pickEntry(entries, selStore.sel.c));
+  // a `?collection=` link opens on its collection unless the link also says `?c=`
+  const entry = $derived(
+    pickEntry(
+      entries,
+      selStore.sel.c ?? (selStore.sel.collection ? unlistedEntryId(entries) : null) ?? undefined,
+    ),
+  );
 
   // --- MarineSensitivity collections ------------------------------------------------------------
   // taxon collections (v7) draw one taxon at a time (`mst.items`); nc / gm are dimension cubes whose
@@ -366,6 +381,24 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     rangeKey !== null && resolved?.key !== rangeKey && rangeFailedKey !== rangeKey,
   );
   const rangeFailed = $derived(rangeKey !== null && rangeFailedKey === rangeKey);
+
+  // --- a raster's footprint (`/cog/info`, once per COG): the source `bounds`, so a regional COG is never
+  // asked for tiles outside it (each would 404). The raster waits for the answer (one small request);
+  // an unreadable footprint draws unbounded rather than not at all. ------------------------------
+  const extentCache = deps.cogExtent ?? createCogExtentCache(defaultFetchJson);
+  let extent = $state.raw<{
+    url: string;
+    bounds: [number, number, number, number] | null;
+  } | null>(null);
+  const extentUrl = $derived(rasterAssetOf(item)?.url ?? null);
+  $effect(() => {
+    const url = extentUrl;
+    if (!url) return;
+    void extentCache.get(url).then((bounds) => {
+      if (untrack(() => extentUrl) === url) extent = { url, bounds };
+    });
+  });
+  const extentPending = $derived(extentUrl !== null && extent?.url !== extentUrl);
 
   // --- the collection's style (a MapLibre fill layer; the ramp is read out of it) ------------------
   let styleToken = 0;
@@ -576,7 +609,16 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
     const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
-    return collectionMapInputs({ entry, item: drawItem, style: styleJson, values, marker });
+    const inputs = collectionMapInputs({
+      entry,
+      item: drawItem,
+      style: styleJson,
+      values,
+      marker,
+      cogBounds: extent && extent.url === extentUrl ? extent.bounds : null,
+    });
+    // a raster is held back until its footprint is known (the legend and the summaries stay)
+    return extentPending && inputs.raster ? { ...inputs, raster: null } : inputs;
   });
 
   // --- the live map: painter + hover/click ---------------------------------------------------------
@@ -691,7 +733,13 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return typeof d === "string" && d.trim() ? d.trim() : null;
     },
     get drawable() {
-      return mapInputs.hex !== null || mapInputs.raster !== null;
+      // a raster held back for its footprint is still a drawable item (its legend is up)
+      return (
+        mapInputs.hex !== null ||
+        mapInputs.raster !== null ||
+        mapInputs.range !== null ||
+        (extentPending && mapInputs.legend !== null)
+      );
     },
     get valuesLoading() {
       return valuesLoading;

@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { mountUnder, routeBucket, routeSealFixture, routeSession } from "./hermetic";
+import { routeBucket } from "./hermetic";
 
 // atlas-8 Deliverable 4 (beta feedback, zero backend): the real "Report a problem" control, in a
 // real browser, with a real place drawn into the hash -- the one thing a unit test (which never
@@ -12,11 +12,9 @@ const SECRET_PLACE = "g1.test.SECRET-GEOMETRY-XYZ";
 
 async function gotoShellWithPlace(page: import("@playwright/test").Page) {
   await routeBucket(page);
-  await routeSession(page, null);
-  await routeSealFixture(page);
-  // `ver`/`lens`/`pal` in the query (none at their own default, so all three round-trip); the place
-  // lives ONLY in the hash, exactly like a real drawn place would (plan D8).
-  await page.goto(`/?ver=v7&lens=species&pal=viridis#pl=${SECRET_PLACE}`, {
+  // `lens`/`pal` in the query (neither at its own default, so both round-trip); the place lives ONLY
+  // in the hash, exactly like a real drawn place would (plan D8).
+  await page.goto(`/?lens=species&pal=viridis#pl=${SECRET_PLACE}`, {
     waitUntil: "networkidle",
   });
 }
@@ -47,7 +45,7 @@ test.describe("Report a problem: the control's href never carries the hash", () 
     expect(href).not.toContain("pl=");
     expect(href).not.toContain(SECRET_PLACE);
 
-    // the version, lens and query ARE kept -- only the fragment is stripped.
+    // the lens and query ARE kept -- only the fragment is stripped.
     const url = new URL(href as string);
     expect(url.hostname).toBe("github.com");
     expect(url.pathname).toBe("/oceanmetrics/atlas/issues/new");
@@ -57,13 +55,11 @@ test.describe("Report a problem: the control's href never carries the hash", () 
     expect(body).not.toContain("#");
     expect(body).not.toContain(SECRET_PLACE);
     expect(body).toContain("Lens: species");
-    expect(body).toContain("Release: v7");
 
     // the query the address bar actually shows (formatSel's own defaults-omitted form) is exactly
     // what the issue body's "URL:" line carries -- proving "query kept" against the REAL app, not
     // just a hand-built fixture.
     const addressBarQuery = await page.evaluate(() => window.location.search);
-    expect(addressBarQuery).toContain("ver=v7");
     expect(addressBarQuery).toContain("lens=species");
     expect(addressBarQuery).toContain("pal=viridis");
     const pageOriginAndPath = await page.evaluate(() => location.origin + location.pathname);
@@ -94,11 +90,11 @@ test.describe("Report a problem: the control's href never carries the hash", () 
     const before = await link.getAttribute("href");
     expect(issueBody(before as string)).toContain("Lens: species");
 
-    await page.locator(".topbar").getByRole("button", { name: "Scores" }).click();
+    await page.locator(".topbar").getByRole("button", { name: "Collections" }).click();
 
     await expect
       .poll(async () => issueBody((await link.getAttribute("href")) as string))
-      .toContain("Lens: scores");
+      .toContain("Lens: collection");
     // and the OLD value is gone -- this is a live recompute, not an appended second line.
     const after = await link.getAttribute("href");
     expect(issueBody(after as string)).not.toContain("Lens: species");
@@ -158,11 +154,9 @@ test.describe("Send feedback: the dialog (U3)", () => {
     page,
   }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await seedFeedbackEndpoint(page);
     const bodies = routeFakeFeedbackEndpoint(page);
-    await page.goto("/?ver=v7&lens=scores", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
 
     const dialog = await openFeedbackDialog(page);
     await expect(dialog.getByRole("heading", { name: "Feedback" })).toBeVisible();
@@ -212,11 +206,9 @@ test.describe("Send feedback: the dialog (U3)", () => {
     page,
   }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await seedFeedbackEndpoint(page);
     const bodies = routeFakeFeedbackEndpoint(page);
-    await page.goto(`/?ver=v7&lens=species#pl=${SECRET_PLACE}`, { waitUntil: "networkidle" });
+    await page.goto(`/?lens=species#pl=${SECRET_PLACE}`, { waitUntil: "networkidle" });
 
     const dialog = await openFeedbackDialog(page);
     await dialog.getByLabel(/what happened/i).fill("test");
@@ -232,11 +224,9 @@ test.describe("Send feedback: the dialog (U3)", () => {
 
   test('ticking "include my current view link" carries the hash', async ({ page }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await seedFeedbackEndpoint(page);
     const bodies = routeFakeFeedbackEndpoint(page);
-    await page.goto(`/?ver=v7&lens=species#pl=${SECRET_PLACE}`, { waitUntil: "networkidle" });
+    await page.goto(`/?lens=species#pl=${SECRET_PLACE}`, { waitUntil: "networkidle" });
 
     const dialog = await openFeedbackDialog(page);
     await dialog.getByLabel(/what happened/i).fill("test");
@@ -252,10 +242,8 @@ test.describe("Send feedback: the dialog (U3)", () => {
     page,
   }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     // deliberately no seedFeedbackEndpoint() -- an unconfigured build.
-    await page.goto("/?ver=v7&lens=scores", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
 
     const dialog = await openFeedbackDialog(page);
     await dialog.getByLabel(/what happened/i).fill("test");
@@ -268,34 +256,11 @@ test.describe("Send feedback: the dialog (U3)", () => {
     expect(href).toContain("labels=bug");
   });
 
-  test("a restricted release: the GitHub-issue fallback is absent, and the posted payload says so", async ({
-    page,
-  }) => {
-    await routeBucket(page);
-    await mountUnder(page, "/v9/atlas/");
-    await routeSession(page, { preview: true });
-    await routeSealFixture(page);
-    await seedFeedbackEndpoint(page);
-    const bodies = routeFakeFeedbackEndpoint(page);
-    await page.goto("/v9/atlas/?lens=scores", { waitUntil: "networkidle" });
-
-    const dialog = await openFeedbackDialog(page);
-    await expect(dialog.getByRole("link", { name: "Open as GitHub issue" })).toHaveCount(0);
-    await expect(dialog.getByText(/under review/i)).toBeVisible();
-
-    await dialog.getByLabel(/what happened/i).fill("test");
-    await dialog.getByRole("button", { name: "Send" }).click();
-    await expect.poll(() => bodies.length).toBe(1);
-    expect(bodies[0].restricted).toBe(true);
-  });
-
   test("keyboard walk: Tab reaches the form controls; Esc closes and returns focus to the opener", async ({
     page,
   }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
-    await page.goto("/?ver=v7&lens=scores", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
 
     const link = page.locator('[data-control="feedback"]');
     await link.focus();
@@ -319,9 +284,7 @@ test.describe("Send feedback: the dialog (U3)", () => {
 
   test("axe: zero serious/critical findings with the dialog open", async ({ page }) => {
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
-    await page.goto("/?ver=v7&lens=scores", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
     await openFeedbackDialog(page);
 
     const { violations } = await new AxeBuilder({ page })

@@ -1,5 +1,7 @@
 # Atlas design system (atlas-3, step 1)
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The design contract (tokens, components, tone) of the MarineSensitivity Atlas: its gold/steel BOEM palette, Jost/Carlito fonts, Scores lens and Report. OceanMetrics Atlas keeps the token architecture (`src/lib/brand/tokens.css`, contrast gate) but with the ocean palette (`--om-*`), a system font stack and no Scores or Report; treat the palette, font and lens sections as upstream history.
+
 The MMA visual language applied to a full-screen map app. Sources: `MarineSensitivity.github.io/branding/MMA Branding Guide 2026.pdf`
 (July 2026, read 2026-09-20), plan decisions **D10** (brand: seal and agency name approved, spelled
 "Minerals") and **D13** (size budget), `atlas-3 design system + shell (MMA brand).md`, and the two

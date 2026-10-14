@@ -1,5 +1,7 @@
 # engine/ — DuckDB-WASM extension mirror: eh vs mvp, and cross-origin
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The DuckDB-WASM engine (`src/lib/engine/`) is still in the code, but the Collections lens reads Parquet with hyparquet and does not use it; only the shared place uploads (`lib/geo/upload/engineRuntime.ts`, `places/engine.ts`) still do. Everything about per-release stores, `versions.json` / restricted-release purges, `built_at` digests of MarineSensitivity release tables and the `msens` parity CLI describes the upstream release registry, which OceanMetrics Atlas does not have.
+
 atlas-2 Step 3 (Sonnet half). This is the engine note atlas-0's hand-over asked this step to write:
 measure the `mvp` bundle flavour (never selected in `docs/spikes/S1.md`/`S3.md` — every engine in
 those spikes picked `eh`), and measure whether a cross-origin `custom_extension_repository` works at

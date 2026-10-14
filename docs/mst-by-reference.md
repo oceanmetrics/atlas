@@ -43,8 +43,13 @@ Why not the API: it is the cleaner source (per-model Items, CORS) **once it serv
 Until then reading the v7 bundle keeps the Species lens and the Collections lens on one release.
 
 What is drawn: COG surfaces (`model` representation). A taxon whose dataset model is vector only
-(PMTiles `native`) or has no registered file shows a sentence saying so instead of a layer
-(`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection does not exist yet (WP7); there is no
+(PMTiles `native` with a `source_layer`) is drawn as a presence fill (WP11): the Item carries a PMTiles
+`data` asset (`pmtiles:layers`, `atlas:key_property` = `mdl_key`, `atlas:key` = the shard's `source_key`,
+else the input's `mdl_key`) and the lens draws a vector fill filtered to that key, with a "range
+(presence)" legend (the shard carries no value column, so there is nothing to colour by). In the pinned
+v7 release every input that has a PMTiles also has a COG, so today the COG wins; the fill is for a
+release that publishes ranges only. A model with no registered file, or a vector range that names no
+tile layer, shows a sentence saying so instead of a layer (`noSurfaceMessage`). The raw 0.5 degree AquaMaps collection does not exist yet (WP7); there is no
 placeholder row for it.
 
 ## nc and gm: dimensions from a manifest (stopgap)

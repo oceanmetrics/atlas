@@ -8,11 +8,12 @@
 // Behind `StatisticsSource` like `ValueSource` (point.ts): the HTTP call is injected, so tests never
 // touch the network and a future client-side COG reader can replace it.
 //
-// KNOWN LIMIT (checked 2026-10-14): titiler-v8 answers the CORS preflight of a JSON POST with 400
-// (`access-control-allow-methods: GET`), so a browser cannot call this from oceanmetrics.io until
-// the tile server allows POST. `statistics()` then resolves `{ok: false, error.kind: "network"}`
-// and the UI shows an explanation, never a number. The request itself is correct: curl returns the
-// statistics (verified against a marine-atlas COG).
+// Verified live 2026-10-14 (WP11): the tile server now allows POST in its CORS preflight, so a browser
+// gets statistics for a place (Stellwagen Bank over the Arctic Tern density COG). A multi-band COG is
+// asked for ITS band (`&bidx=N`, the same band the map draws): titiler then names the band `bN`, and
+// `parseStatistics` takes whichever band comes back. titiler's `count` is coverage-weighted (a pixel
+// the polygon clips counts as a fraction), so the pixel count shown is rounded. A transport failure
+// still resolves `{ok: false, error.kind: "network"}` and the UI says so, never a number.
 import type { Feature } from "geojson";
 import type { Loaded } from "../catalog/load";
 import { polygonsOf, type AreaGeometry, type Position, type Ring } from "../geo/types";
@@ -29,8 +30,11 @@ export interface RasterStats {
   noValueShare: number | null;
 }
 
-export function titilerStatisticsUrl(config: TitilerConfig, cogUrl: string): string {
-  return `${config.host}/cog/statistics?url=${encodeUrlReserved(cogUrl)}`;
+export function titilerStatisticsUrl(config: TitilerConfig, cogUrl: string, bidx?: number): string {
+  return (
+    `${config.host}/cog/statistics?url=${encodeUrlReserved(cogUrl)}` +
+    (bidx === undefined ? "" : `&bidx=${bidx}`)
+  );
 }
 
 // --- the geometry titiler is sent: longitudes in [-180, 180] --------------------------------------
@@ -111,7 +115,7 @@ export function parseStatistics(json: unknown): RasterStats | null {
   const masked = finite(band.masked_pixels) ?? 0;
   const total = valid + masked;
   return {
-    count: finite(band.count) ?? valid,
+    count: Math.round(finite(band.count) ?? valid),
     min: finite(band.min),
     max: finite(band.max),
     mean: finite(band.mean),
@@ -124,6 +128,8 @@ export function parseStatistics(json: unknown): RasterStats | null {
 export interface StatisticsRequest {
   /** absolute https URL of the COG. */
   cogUrl: string;
+  /** the 1-based band of a multi-band COG (absent = band 1, no `bidx` in the URL). */
+  bidx?: number;
   geometry: AreaGeometry;
 }
 
@@ -140,7 +146,7 @@ export function createTitilerStatisticsSource(
 ): StatisticsSource {
   return {
     async statistics(req) {
-      const url = titilerStatisticsUrl(config, req.cogUrl);
+      const url = titilerStatisticsUrl(config, req.cogUrl, req.bidx);
       const body: Feature = {
         type: "Feature",
         properties: {},

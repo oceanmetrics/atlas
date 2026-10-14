@@ -6,6 +6,7 @@
 // on the MAP (not per layer) and asks `queryRenderedFeatures` for whichever overlay layers exist at
 // that moment. The pure rules (what a feature says, which layers to ask, the button label) are
 // exported and unit-tested; the MapLibre popup is the only thing that is not.
+import { cellLineAt, registerOverlayProbe } from "../lib/map/clickInfo";
 import { createPopup } from "../lib/map/popup";
 
 /** what one tile feature of an overlay tells us. */
@@ -46,6 +47,37 @@ export const addToPlacesLabel = (name: string): string => `Add ${name} to Places
 /** whether the popup offers the add button: an area with a place_id. */
 export const canAddToPlaces = (info: OverlayFeatureInfo): boolean =>
   info.isArea && info.placeId !== null;
+
+/** one line of the overlay popup. */
+export type OverlayCardLine =
+  | { kind: "name"; text: string }
+  | { kind: "add"; text: string; placeId: string; name: string }
+  | { kind: "note"; text: string }
+  | { kind: "cell"; text: string };
+
+/**
+ * The popup's lines, top to bottom: the PLACE first (name and status, then "Add <name> to Places" or
+ * the note that only areas can be added), the data CELL's value line under it when a hex cell lies
+ * under the same point. One card for both; never a second popup for the cell.
+ */
+export function overlayCardLines(
+  info: OverlayFeatureInfo,
+  cellLine: string | null,
+): OverlayCardLine[] {
+  const lines: OverlayCardLine[] = [{ kind: "name", text: overlayHoverText(info) }];
+  if (canAddToPlaces(info)) {
+    lines.push({
+      kind: "add",
+      text: addToPlacesLabel(info.name),
+      placeId: info.placeId as string,
+      name: info.name,
+    });
+  } else if (!info.isArea) {
+    lines.push({ kind: "note", text: "Only areas can be added to Places." });
+  }
+  if (cellLine) lines.push({ kind: "cell", text: cellLine });
+  return lines;
+}
 
 // --- the map side --------------------------------------------------------------------------------
 
@@ -132,7 +164,21 @@ export function installOverlayInteraction(
     const info = overlayFeatureAt(map, e.point, opts.hitLayerIds());
     if (!info) return hideHover();
     map.getCanvas().style.cursor = "pointer";
-    hover.setLngLat([e.lngLat.lng, e.lngLat.lat]).setText(overlayHoverText(info));
+    const cell = cellLineAt(e.point);
+    if (cell) {
+      const root = document.createElement("div");
+      root.className = "overlay-popup";
+      for (const line of overlayCardLines(info, cell)) {
+        if (line.kind !== "name" && line.kind !== "cell") continue; // the hover has no button
+        const p = document.createElement("p");
+        p.className = line.kind === "name" ? "overlay-popup-name" : "overlay-popup-cell";
+        p.textContent = line.text;
+        root.append(p);
+      }
+      hover.setLngLat([e.lngLat.lng, e.lngLat.lat]).setDOMContent(root);
+    } else {
+      hover.setLngLat([e.lngLat.lng, e.lngLat.lat]).setText(overlayHoverText(info));
+    }
     if (!hoverShown) {
       hover.addTo(map as never);
       hoverShown = true;
@@ -149,33 +195,37 @@ export function installOverlayInteraction(
     hideHover();
     const root = document.createElement("div");
     root.className = "overlay-popup";
-    const title = document.createElement("p");
-    title.className = "overlay-popup-name";
-    title.textContent = overlayHoverText(info);
-    root.append(title);
-    if (canAddToPlaces(info)) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = addToPlacesLabel(info.name);
-      btn.addEventListener("click", () => {
-        card.remove();
-        opts.onAdd({ id: info.placeId as string, name: info.name });
-      });
-      root.append(btn);
-    } else if (!info.isArea) {
-      const note = document.createElement("p");
-      note.textContent = "Only areas can be added to Places.";
-      root.append(note);
+    for (const line of overlayCardLines(info, cellLineAt(e.point))) {
+      if (line.kind === "add") {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = line.text;
+        btn.addEventListener("click", () => {
+          card.remove();
+          opts.onAdd({ id: line.placeId, name: line.name });
+        });
+        root.append(btn);
+        continue;
+      }
+      const p = document.createElement("p");
+      p.className = line.kind === "name" ? "overlay-popup-name" : `overlay-popup-${line.kind}`;
+      p.textContent = line.text;
+      root.append(p);
     }
     card.setLngLat([e.lngLat.lng, e.lngLat.lat]).setDOMContent(root);
     card.addTo(map as never);
   };
 
+  // the probe the hex layer and the species lens ask before they open a popup of their own
+  const unregister = registerOverlayProbe(
+    (point) => !opts.isOwned?.() && overlayFeatureAt(map, point, opts.hitLayerIds()) !== null,
+  );
   map.on("mousemove", onMove as never);
   map.on("mouseout", hideHover as never);
   map.on("click", onClick as never);
   return {
     destroy() {
+      unregister();
       map.off("mousemove", onMove as never);
       map.off("mouseout", hideHover as never);
       map.off("click", onClick as never);

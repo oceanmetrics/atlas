@@ -91,8 +91,92 @@ describe("a multi-band item with rescale: auto", () => {
       marker: null,
     });
     expect(out.raster?.tiles[0]).toMatch(/&colormap_name=spectral_r&rescale=0\.11,1\.97&bidx=2$/);
+    // the band reaches the place summaries too (titiler /cog/statistics must read the band drawn)
+    expect(out.cogBidx).toBe(2);
     expect(out.legend?.stops[0].value).toBe(0.11);
     expect(out.legend?.stops.at(-1)?.value).toBe(1.97);
+  });
+});
+
+describe("the raster source's bounds (WP11): the COG footprint, when it is known", () => {
+  const e = entry("msens-v8-nc", "NOAA NCCOS seabird density", "n_per_km2");
+  const item: StacItem = {
+    type: "Feature",
+    id: "atlantic.ARTE.summer.n_per_km2",
+    properties: { title: "Arctic Tern", "atlas:value_range": [0, 0.008] },
+    assets: {
+      data: {
+        href: "https://file.marinesensitivity.org/cog/sdm/raw/nc_atl_birds_dens/ARTE_summer.tif",
+        type: "image/tiff; application=geotiff; profile=cloud-optimized",
+        roles: ["data"],
+      },
+    },
+    links: [],
+  };
+  it("a known footprint is the raster's `bounds` (MapLibre never asks for tiles outside it)", () => {
+    const out = collectionMapInputs({
+      entry: e,
+      item,
+      style: null,
+      values: null,
+      marker: null,
+      cogBounds: [-82.5, 24.1, -64.9, 46.3],
+    });
+    expect(out.raster?.bounds).toEqual([-82.5, 24.1, -64.9, 46.3]);
+  });
+  it("an unknown footprint draws unbounded (no `bounds` key, not a wrong one)", () => {
+    for (const cogBounds of [undefined, null]) {
+      const out = collectionMapInputs({
+        entry: e,
+        item,
+        style: null,
+        values: null,
+        marker: null,
+        cogBounds,
+      });
+      expect(out.raster).not.toBeNull();
+      expect(out.raster).not.toHaveProperty("bounds");
+    }
+  });
+});
+
+describe("a vector-only model draws as a presence fill, not a 'cannot draw' notice (WP11)", () => {
+  const e = entry("msens-v7-rng_iucn", "IUCN range");
+  const vec = {
+    ...card,
+    inputs: card.inputs.map((i) => ({
+      ...i,
+      assets: i.assets.filter((a) => a.type === "pmtiles"),
+    })),
+  };
+  const item = taxonItem(vec, "rng_iucn", e.id, e.title)!;
+  const out = collectionMapInputs({ entry: e, item, style: null, values: null, marker: null });
+  it("a range layer keyed by the model, no raster and no hex", () => {
+    expect(out.raster).toBeNull();
+    expect(out.hex).toBeNull();
+    expect(out.range).toMatchObject({
+      id: "collection_range",
+      sourceLayer: "rng_iucn",
+      keyProperty: "mdl_key",
+      key: "rng_iucn|6494",
+      pmtiles: expect.stringMatching(/3a26f18f3e7cdca6\.pmtiles$/),
+    });
+  });
+  it("the legend is a presence swatch with the taxon's title", () => {
+    expect(out.legend).toMatchObject({ kind: "presence", stops: [], histogram: null });
+    expect(out.legend?.swatch).toBe(out.range?.fillColor);
+    expect(out.legend?.title).toContain("Dermochelys coriacea");
+  });
+  it("a COG item has no range layer", () => {
+    const cog = taxonItem(card, "am_0.05", "msens-v7-am_0.05", "AquaMaps")!;
+    const o = collectionMapInputs({
+      entry: entry("msens-v7-am_0.05", "AquaMaps"),
+      item: cog,
+      style: null,
+      values: null,
+      marker: null,
+    });
+    expect(o.range).toBeNull();
   });
 });
 

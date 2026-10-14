@@ -34,6 +34,9 @@ export interface PlaceOverlays {
   readonly error: string | null;
   /** every collection the manifest lists. */
   readonly layers: readonly OverlayLayer[];
+  /** the manifest row (`index/layers.json`) of a collection, for its info dialog; `undefined` when the
+   * manifest has none. */
+  manifestRow(slug: string): Layer | undefined;
   /** the same, grouped for the list. */
   readonly groups: readonly OverlayGroup[];
   /** the collections that are ON (the URL's `?ov=`, or the default set). */
@@ -74,6 +77,7 @@ export function createPlaceOverlays(deps: PlaceOverlaysDeps): PlaceOverlays {
   let phase = $state<"loading" | "ready" | "error">("loading");
   let error = $state<string | null>(null);
   let layers = $state.raw<readonly OverlayLayer[]>([]);
+  let rows = $state.raw<readonly Layer[]>([]);
   let tick = $state(0);
 
   // the manifest: once, and again on `reload()` (a failed read keeps the URL's set; nothing is lost)
@@ -86,9 +90,10 @@ export function createPlaceOverlays(deps: PlaceOverlaysDeps): PlaceOverlays {
       error = null;
     });
     fetchManifest().then(
-      (rows) => {
+      (fetched) => {
         if (mine !== token) return;
-        layers = overlayLayersFrom(rows);
+        rows = fetched;
+        layers = overlayLayersFrom(fetched);
         phase = "ready";
       },
       (e: unknown) => {
@@ -169,6 +174,7 @@ export function createPlaceOverlays(deps: PlaceOverlaysDeps): PlaceOverlays {
     get creditLine() {
       return creditLine;
     },
+    manifestRow: (slug) => rows.find((r) => r.slug === slug),
     isOn: (slug) => on.includes(slug),
     toggle,
     clear() {

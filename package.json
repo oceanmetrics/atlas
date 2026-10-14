@@ -18,6 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "e2e": "playwright test",
+    "e2e:chromium": "playwright test --project=chromium e2e/",
     "e2e:shell": "playwright test --project=chromium --workers=1 e2e/shell.*.spec.ts e2e/feedback.spec.ts",
     "faults:check": "node scripts/check-faults-apply.mjs",
     "e2e:analytics-privacy": "playwright test --config e2e/fixtures/analytics-privacy/playwright.config.ts",

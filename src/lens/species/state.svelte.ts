@@ -9,6 +9,7 @@
 // fully settled — including the `selStore.set` that writes the FINAL `sp`/`in` — and every other
 // effect here refuses to run while it is true. So the very first taxon fetch this module ever makes
 // already carries the resolved `in`, not the URL's naive default.
+import { overlayAt } from "../../lib/map/clickInfo";
 import { untrack } from "svelte";
 import type { Popup } from "maplibre-gl";
 import { gridFromBoot } from "../../lib/grid/grid";
@@ -701,6 +702,10 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
 
     async handleMapClick(lngLat: LngLat, point: { x: number; y: number }): Promise<void> {
       if (selStore.sel.lens !== "species" || !card) return;
+      // a click on a gazetteer overlay feature (a sanctuary, a lease) opens THAT card (the place and
+      // its "Add to Places" button); a second, species popup on top of it would be two cards for one
+      // click, so this click is the place's (click beside it to read the species value)
+      if (overlayAt(point)) return;
       // §6.5 step 6: opens on the FIRST click, immediately (not the second, as mapgl's own marker
       // popup would need) — set right away, one popup instance at a time.
       function show(content: PopupContent, markerValue: number | null = null): void {

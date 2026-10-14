@@ -75,6 +75,9 @@ export interface Sel {
   i?: string;
   /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
   catalog?: string;
+  /** WP11: `?collection=<https url of a collection.json>`: one extra, unlisted collection loaded into the
+   * picker (a private link to a restricted collection), `catalog/base.ts#validateCollectionUrl`. */
+  collection?: string;
   /** WP4: the gazetteer collections toggled on in the "Place layers" group (`?ov=a,b`); `undefined` =
    * the default set (none since 2026-10-15), never written; `[]` = none (`ov=`).
    * `../gazetteer/overlayUrl.ts`. */
@@ -114,6 +117,7 @@ export const QUERY_KEYS = [
   "c",
   "i",
   "catalog",
+  "collection",
   "ov",
   "filter",
 ] as const;
@@ -200,6 +204,7 @@ export const DEFAULT_SEL: Sel = {
   c: undefined,
   i: undefined,
   catalog: undefined,
+  collection: undefined,
   ov: undefined,
   filter: undefined,
   zl: true,

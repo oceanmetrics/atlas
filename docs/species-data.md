@@ -1,5 +1,7 @@
 # The species lens' data layer (`src/lens/species/data/`)
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The Species lens' data layer is current and now reads ONE pinned MarineSensitivity release (`v7`, `src/lib/release/mst.ts`); there is no release registry. References to `atlas-refs/parity species app.md` and to a viewer-chosen release describe the upstream app. WP6 reads the same `app/` bundle for the Collections lens' v7 collections (`docs/mst-by-reference.md`).
+
 Everything the species lens needs that is **not** a map and not a component: pure TypeScript, no
 DOM, no MapLibre, no DuckDB. The UI half (atlas-5 step 1's other half, once the shared map module
 lands) calls these functions and renders what they return; the tests in `tests/lens/species/**`

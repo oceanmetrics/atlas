@@ -1,6 +1,6 @@
 // P5 fix round 2 (coordinator finding, 390px eyes-on evidence on p5-phone-search-sheet-species-
 // results.png): adding the P1 search button beside ⋯ pushed the phone topbar's fixed content
-// (version chip, Scores/Species, search, ⋯, theme) past the viewport's right edge -- the theme
+// (Collections/Species, search, ⋯, theme) past the viewport's right edge -- the theme
 // toggle's own right edge landed ~20px past 390px and ~2px past 360px. Fixed by moving the theme
 // toggle into the ⋯ menu on the phone (`topbar-desktop-only` on its standalone button,
 // TopBarActions.svelte's own "Switch to light/dark theme" item) -- the same route Feedback/About
@@ -13,12 +13,10 @@
 // list of "the ones I touched") so a future control added to the phone topbar is covered by the
 // same rule without this file changing.
 import { expect, test, type Page } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { routeBucket, waitForHydration } from "./hermetic";
 
 async function gotoShell(page: Page, viewport: { width: number; height: number }) {
-  await routeBucket(page, "v7");
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await page.setViewportSize(viewport);
   await page.goto("/?theme=navy");
   await waitForHydration(page);
@@ -49,9 +47,11 @@ for (const width of [390, 360]) {
   }) => {
     await gotoShell(page, { width, height: 844 });
     const rows = await topbarControlBoxes(page);
-    expect(rows.length, "no topbar controls found -- selector or timing is wrong").toBeGreaterThan(
-      3,
-    );
+    // lens switch, the phone search button and the ⋯ menu, at least
+    expect(
+      rows.length,
+      "no topbar controls found -- selector or timing is wrong",
+    ).toBeGreaterThanOrEqual(3);
     for (const { name, box } of rows) {
       expect(
         box.x + box.width,

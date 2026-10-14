@@ -54,7 +54,7 @@ describe("buildPageLocation / buildPagePath — never the hash, never an unliste
     expect(buildPageLocation(loc, ["proj"])).toBe("https://x.test/atlas/?proj=mercator");
   });
 
-  it("the default allow-list is state/types.ts's QUERY_KEYS minus `catalog` (a data-origin override never reaches analytics)", () => {
+  it("the default allow-list is state/types.ts's QUERY_KEYS minus `catalog` and `collection` (a data-origin override or a private preview link never reaches analytics)", () => {
     const search = QUERY_KEYS.map((k) => `${k}=x`).join("&");
     const loc: LocationLike = {
       origin: "https://x.test",
@@ -62,8 +62,10 @@ describe("buildPageLocation / buildPagePath — never the hash, never an unliste
       search: `?${search}`,
     };
     const out = buildPageLocation(loc);
-    for (const key of QUERY_KEYS.filter((k) => k !== "catalog")) expect(out).toContain(`${key}=x`);
+    for (const key of QUERY_KEYS.filter((k) => k !== "catalog" && k !== "collection"))
+      expect(out).toContain(`${key}=x`);
     expect(out).not.toContain("catalog=");
+    expect(out).not.toContain("collection=");
   });
 
   // seeded fault: the hash included in page_location. LocationLike has no `hash` field, so this

@@ -8,18 +8,12 @@
 //   3. the active tool's marker (`aria-current`, plus the accent fill/ring CSS) follows clicks.
 //   4. arrow keys (+ Home/End) move the roving-tabindex focus stop, per roving.ts.
 //
-// R4-B (2026-09-30): the rail is the spine -- FOUR entries (Layers, Details, Table, Report), the
+// R4-B (2026-09-30): the rail is the spine -- FOUR entries (Layers, Details, Table, Places), the
 // same in both lenses and on every viewport, attached to the panel's outer edge.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { gotoPublicShell, waitForHydration } from "./hermetic";
 
-const RAIL_LABELS = ["Layers", "Details", "Table", "Report"];
-
-async function dismissWelcome(page: Page) {
-  await expect(
-    page.getByRole("dialog", { name: "Welcome to the Marine Sensitivity Atlas" }),
-  ).toHaveCount(0);
-}
+const RAIL_LABELS = ["Layers", "Details", "Table", "Places"];
 
 test.describe("R4: desktop -- a vertical labelled stack", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
@@ -27,7 +21,6 @@ test.describe("R4: desktop -- a vertical labelled stack", () => {
   test("every rail item shows its label as visible text, not tooltip-only", async ({ page }) => {
     await gotoPublicShell(page);
     await waitForHydration(page);
-    await dismissWelcome(page);
 
     const items = page.locator("#rail-region .rail button.railitem");
     await expect(items).toHaveCount(4);
@@ -43,7 +36,6 @@ test.describe("R4: desktop -- a vertical labelled stack", () => {
   test("the active tool's marker follows the clicked tool (aria-current)", async ({ page }) => {
     await gotoPublicShell(page);
     await waitForHydration(page);
-    await dismissWelcome(page);
 
     const layers = page.locator('#rail-region button.railitem[aria-label="Layers"]');
     const table = page.locator('#rail-region button.railitem[aria-label="Table"]');
@@ -70,7 +62,6 @@ test.describe("R4: desktop -- a vertical labelled stack", () => {
   test("arrow keys and Home/End move the roving-tabindex stop (roving.ts)", async ({ page }) => {
     await gotoPublicShell(page);
     await waitForHydration(page);
-    await dismissWelcome(page);
 
     const rail = page.locator("#rail-region .rail");
     await rail.locator("button.railitem").first().focus();
@@ -86,14 +77,14 @@ test.describe("R4: desktop -- a vertical labelled stack", () => {
     await expect(page.locator('button.railitem[aria-label="Layers"]')).toBeFocused();
 
     await page.keyboard.press("End");
-    await expect(page.locator('button.railitem[aria-label="Report"]')).toBeFocused();
+    await expect(page.locator('button.railitem[aria-label="Places"]')).toBeFocused();
 
     await page.keyboard.press("Home");
     await expect(page.locator('button.railitem[aria-label="Layers"]')).toBeFocused();
 
     // wraps at both ends (roving.ts's own rule)
     await page.keyboard.press("ArrowUp");
-    await expect(page.locator('button.railitem[aria-label="Report"]')).toBeFocused();
+    await expect(page.locator('button.railitem[aria-label="Places"]')).toBeFocused();
   });
 });
 
@@ -105,7 +96,6 @@ test.describe("R4: phone (390x844) -- a labelled bottom tab bar, same four tools
   test("the tab bar shows all four labels, in a row, at every sheet detent", async ({ page }) => {
     await gotoPublicShell(page);
     await waitForHydration(page);
-    await dismissWelcome(page);
 
     const rail = page.locator("#rail-region .rail");
     await expect(rail).toHaveCSS("flex-direction", "row");
@@ -132,7 +122,6 @@ for (const width of [320, 390]) {
     }) => {
       await gotoPublicShell(page);
       await waitForHydration(page);
-      await dismissWelcome(page);
       const buttons = page.locator("#rail-region button.railitem");
       await expect(buttons).toHaveCount(4);
       for (let i = 0; i < 4; i++) {

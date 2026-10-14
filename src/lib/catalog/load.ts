@@ -38,13 +38,14 @@ function fail<T>(kind: LoadErrorKind, url: string, message: string, status?: num
 // --- model --------------------------------------------------------------------------------------
 
 /** which picker group a collection belongs to. */
-export type CatalogGroup = "oceanmetrics" | "mst-v7" | "mst-v8" | "external";
+export type CatalogGroup = "oceanmetrics" | "mst-v7" | "mst-v8" | "external" | "unlisted";
 
 export const GROUP_LABEL: Record<CatalogGroup, string> = {
   oceanmetrics: "OceanMetrics",
   "mst-v7": "MarineSensitivity v7",
   "mst-v8": "MarineSensitivity v8",
   external: "Other",
+  unlisted: "Unlisted (shared by link)",
 };
 
 /** the order groups appear in the picker. */
@@ -53,6 +54,7 @@ export const GROUP_ORDER: readonly CatalogGroup[] = [
   "mst-v7",
   "mst-v8",
   "external",
+  "unlisted",
 ];
 
 export interface CollectionEntry {
@@ -88,6 +90,10 @@ export interface LoadOptions {
   base?: string;
   /** injectable for tests; default the global `fetch`. */
   fetchImpl?: typeof fetch;
+  /** WP11: absolute URLs of extra `collection.json` files (`?collection=`, already validated) loaded as
+   * "unlisted" entries after the catalog's own. One that cannot be read is an "unavailable" row; one
+   * whose id the catalog already lists is dropped (the listed one wins). */
+  extraCollections?: readonly string[];
   /** per-request timeout; default 20 s. */
   timeoutMs?: number;
   /** how many item files are fetched at once; default 8. */
@@ -331,7 +337,23 @@ export async function loadCatalog(opts: LoadOptions = {}): Promise<Loaded<AtlasC
       return loadEntries(link, childUrl, groupOf(childUrl, base), base, 0, opts, cache);
     }),
   );
-  return { ok: true, value: { base, catalog, entries: groups.flat() } };
+  const entries = groups.flat();
+  const seen = new Set(entries.map((e) => e.id));
+  for (const extraUrl of opts.extraCollections ?? []) {
+    const link: StacLink = { rel: "child", href: extraUrl };
+    for (const e of await loadEntries(link, extraUrl, "unlisted", base, 0, opts, cache)) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      entries.push(e);
+    }
+  }
+  return { ok: true, value: { base, catalog, entries } };
+}
+
+/** the id of the first readable unlisted entry (the one a `?collection=` link is about), else `null`:
+ * the collection a link with no `?c=` opens on. */
+export function unlistedEntryId(entries: readonly CollectionEntry[]): string | null {
+  return entries.find((e) => e.group === "unlisted" && e.status === "ok")?.id ?? null;
 }
 
 // --- items --------------------------------------------------------------------------------------

@@ -108,6 +108,35 @@ export function rasterAssetOf(item: StacItem | null): RasterAsset | null {
   };
 }
 
+export interface RangeAsset {
+  url: string;
+  /** the vector layer inside the archive. */
+  layer: string;
+  /** the feature property that carries the model id (`mdl_key`). */
+  keyProperty: string;
+  /** the model id to show: only features with this value are drawn. */
+  key: string;
+}
+
+/** a vector RANGE the item draws as a fill: its `data` PMTiles asset with a layer name and the
+ * `atlas:key` of the model (the v7 range-only taxon shards). The collection's own hex grid is not
+ * this (that asset is `hex`, and the Parquet `values` column paints it). `null` for none. */
+export function rangeAssetOf(item: StacItem | null): RangeAsset | null {
+  const asset = item?.assets?.data;
+  if (!item || !asset || asset.type !== PMTILES_TYPE) return null;
+  const url = assetUrl(item, asset);
+  const layer = asset["pmtiles:layers"]?.[0];
+  const key = asset["atlas:key"];
+  if (!url || !layer || typeof key !== "string" || !key) return null;
+  const keyProperty = asset["atlas:key_property"];
+  return {
+    url,
+    layer,
+    keyProperty: typeof keyProperty === "string" && keyProperty ? keyProperty : "mdl_key",
+    key,
+  };
+}
+
 /** the collection's MapLibre style document (`styles/default.json`): the `style` asset, else a link
  * `rel: "style"`. `null` when it publishes none. */
 export function styleUrlOf(collection: StacCollection | null): string | null {

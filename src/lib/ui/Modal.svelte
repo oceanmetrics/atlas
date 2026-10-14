@@ -16,9 +16,11 @@
      * `open = false`) -- the caller is expected to set its own `open` state to false here, so a
      * `<dialog>` closed by the platform (Esc) and one closed by the caller stay in sync. */
     onclose?: () => void;
+    /** `lg` is for documents (a README with tables); the default suits a short dialog. */
+    size?: "md" | "lg";
   }
 
-  let { open, title, children, onclose }: Props = $props();
+  let { open, title, children, onclose, size = "md" }: Props = $props();
   let dialogEl: HTMLDialogElement | undefined;
   // per-INSTANCE, not per-title (SC 4.1.2) -- see HexButton.svelte's identical fix.
   const titleId = uid("modal-title");
@@ -99,7 +101,13 @@
   });
 </script>
 
-<dialog bind:this={dialogEl} tabindex="-1" aria-labelledby={titleId} onclose={() => onclose?.()}>
+<dialog
+  bind:this={dialogEl}
+  tabindex="-1"
+  data-size={size}
+  aria-labelledby={titleId}
+  onclose={() => onclose?.()}
+>
   <div class="modal-head">
     <h2 id={titleId}>{title}</h2>
     <button type="button" class="modal-close" aria-label="Close" onclick={() => dialogEl?.close()}>
@@ -121,6 +129,11 @@
     background: var(--surface-raised);
     color: var(--text-primary);
     box-shadow: var(--elev-3);
+  }
+
+  dialog[data-size="lg"] {
+    width: min(920px, calc(100vw - var(--space-6)));
+    max-width: min(920px, calc(100vw - var(--space-6)));
   }
 
   dialog::backdrop {

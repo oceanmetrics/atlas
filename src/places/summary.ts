@@ -229,5 +229,7 @@ export function summaryLine(row: SummaryRow): string {
   if (row.noValueShare !== null && row.noValueShare > 0 && row.mean !== null) {
     parts.push(`${formatShare(row.noValueShare)} no value`);
   }
+  // a raster row is not a zonal statistic of the model: say what it is
+  if (row.unit === "pixels") parts.push("display-grid statistics");
   return parts.join(" · ");
 }

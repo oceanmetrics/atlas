@@ -4,6 +4,7 @@
 // them yields an empty block, never an error. Contact e-mail addresses are NEVER carried (the
 // strip shows names and organisations only).
 import { assetUrl } from "./load";
+import { licenseModelOf, type LicenseModel } from "./licenses";
 import type { StacCollection, StacContact } from "./types";
 
 export interface PersonCredit {
@@ -12,12 +13,17 @@ export interface PersonCredit {
 }
 
 export interface Credits {
+  /** the collection's title, for the dialogs the strip opens. */
+  title: string | null;
   citation: string | null;
   /** `https://doi.org/...` when `sci:doi` is present. */
   doiUrl: string | null;
   license: string | null;
   /** the `license` link's own URL, else the SPDX page for a known id. */
   licenseUrl: string | null;
+  /** what the License modal shows (id, name, summary, license links, attribution); `null` when the
+   * collection states no license. */
+  licenseModel: LicenseModel | null;
   /** contacts whose role is a principal investigator. */
   pis: PersonCredit[];
   /** the remaining contacts (authors, data managers, ...), when no PI is named they are shown instead. */
@@ -48,10 +54,12 @@ function spdxUrl(id: string): string | null {
 export function creditsOf(collection: StacCollection | null): Credits {
   if (!collection) {
     return {
+      title: null,
       citation: null,
       doiUrl: null,
       license: null,
       licenseUrl: null,
+      licenseModel: null,
       pis: [],
       contacts: [],
       funders: [],
@@ -72,12 +80,14 @@ export function creditsOf(collection: StacCollection | null): Credits {
   const licenseLink = collection.links.find((l) => l.rel === "license");
   const methods = collection.links.find((l) => l.rel === "describedby");
   return {
+    title: (collection.title ?? "").trim() || null,
     citation: (collection["sci:citation"] ?? "").trim() || null,
     doiUrl: doi ? (/^https?:\/\//.test(doi) ? doi : `https://doi.org/${doi}`) : null,
     license: license || null,
     licenseUrl:
       (licenseLink ? assetUrl(collection, licenseLink) : null) ??
       (license ? spdxUrl(license) : null),
+    licenseModel: licenseModelOf(collection),
     pis,
     contacts: others,
     funders: Array.isArray(collection["atlas:funders"])

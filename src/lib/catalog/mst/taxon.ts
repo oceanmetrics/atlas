@@ -10,17 +10,31 @@ import type { StacAsset, StacItem } from "../types";
 import { MERGED_DS_KEY, type TaxonAsset, type TaxonCard } from "../../../lens/species/data/shards";
 
 export const COG_MEDIA_TYPE = "image/tiff; application=geotiff; profile=cloud-optimized";
+export const PMTILES_MEDIA_TYPE = "application/vnd.pmtiles";
+/** the property every range tile carries the model id under (the Species lens' `RANGE_KEY_PROPERTY`). */
+export const RANGE_KEY_PROPERTY = "mdl_key";
 
 export type Rescale = [number, number];
 
 export type SurfaceResult =
   | {
       ok: true;
+      kind: "cog";
       url: string;
       /** VERBATIM from the shard; `null` when it names none (then the lens reads titiler's own). */
       rescale: Rescale | null;
       colormap: string | null;
       /** `merged` for the merged model, else the shard's `rep` (`model`, `native`). */
+      rep: string;
+    }
+  | {
+      /** a vector range (PMTiles): drawn as a fill of the model's features, presence only. */
+      ok: true;
+      kind: "pmtiles";
+      url: string;
+      sourceLayer: string;
+      /** the `mdl_key` value of this model's features (the shard's `source_key`, else the input's key). */
+      key: string;
       rep: string;
     }
   | { ok: false; reason: "no-input" | "no-surface" | "no-asset" | "no-cog" };
@@ -34,23 +48,42 @@ function isCog(a: TaxonAsset): boolean {
  * that input's `model` representation (the surface on the analysis grid, which is what the
  * collection's value range describes), else any other COG it has. `no-input`: the taxon has no model
  * from this dataset at all; `no-surface` (merged only): the taxon has no merged surface in this
- * release; `no-asset`: the model feeds the merge but the release registers no file for it; `no-cog`: the dataset's models for it are all vector (PMTiles) and nothing here draws them.
+ * release; `no-asset`: the model feeds the merge but the release registers no file for it; `no-cog`: the dataset's models for it are vector (PMTiles) without a tile layer name, so there is nothing to draw. A model that is vector ONLY (and names its layer) is drawn as a range fill (`kind: "pmtiles"`).
  * A rescale is passed through verbatim and never defaulted.
  */
 export function surfaceFor(card: TaxonCard, dsKey: string): SurfaceResult {
   if (dsKey === MERGED_DS_KEY) {
     const m = card.merged;
     if (!m) return { ok: false, reason: "no-surface" };
-    return { ok: true, url: m.url, rescale: m.rescale, colormap: m.colormap, rep: "merged" };
+    return {
+      ok: true,
+      kind: "cog",
+      url: m.url,
+      rescale: m.rescale,
+      colormap: m.colormap,
+      rep: "merged",
+    };
   }
   const input = card.inputs.find((i) => i.dsKey === dsKey);
   if (!input) return { ok: false, reason: "no-input" };
   if (input.assets.length === 0) return { ok: false, reason: "no-asset" };
   const cogs = input.assets.filter(isCog);
   const asset = cogs.find((a) => a.rep === "model") ?? cogs[0];
-  if (!asset) return { ok: false, reason: "no-cog" };
+  if (!asset) {
+    const vector = input.assets.find((a) => a.type === "pmtiles" && a.sourceLayer);
+    if (!vector?.sourceLayer) return { ok: false, reason: "no-cog" };
+    return {
+      ok: true,
+      kind: "pmtiles",
+      url: vector.url,
+      sourceLayer: vector.sourceLayer,
+      key: vector.sourceKey || input.mdlKey,
+      rep: vector.rep,
+    };
+  }
   return {
     ok: true,
+    kind: "cog",
     url: asset.url,
     rescale: asset.rescale,
     colormap: asset.colormap,
@@ -110,6 +143,32 @@ export function taxonItem(
 ): StacItem | null {
   const s = surfaceFor(card, dsKey);
   if (!s.ok) return null;
+  const title = taxonTitle(card.sci, card.common);
+  if (s.kind === "pmtiles") {
+    return {
+      type: "Feature",
+      id: card.key,
+      collection: collectionId,
+      properties: {
+        title,
+        description: collectionTitle ? `${title} in ${collectionTitle}.` : title,
+        datetime: null,
+        "sdm:taxon": sdmTaxonOf(card),
+        "atlas:representation": s.rep,
+      },
+      assets: {
+        data: {
+          href: s.url,
+          type: PMTILES_MEDIA_TYPE,
+          roles: ["data"],
+          "pmtiles:layers": [s.sourceLayer],
+          "atlas:key_property": RANGE_KEY_PROPERTY,
+          "atlas:key": s.key,
+        },
+      },
+      links: [],
+    };
+  }
   const asset: StacAsset = {
     href: s.url,
     type: COG_MEDIA_TYPE,
@@ -117,7 +176,6 @@ export function taxonItem(
     "atlas:rescale": s.rescale ?? "auto",
     ...(s.colormap ? { "atlas:colormap": s.colormap } : {}),
   };
-  const title = taxonTitle(card.sci, card.common);
   return {
     type: "Feature",
     id: card.key,
@@ -190,6 +248,6 @@ export function noSurfaceMessage(
     case "no-asset":
       return `${ver} has no raster registered for ${taxon}'s ${collectionTitle} model.`;
     case "no-cog":
-      return `${taxon}'s ${collectionTitle} model is a vector range; only raster surfaces are drawn here yet.`;
+      return `${taxon}'s ${collectionTitle} model is a vector range that names no tile layer, so there is nothing to draw.`;
   }
 }

@@ -3,61 +3,20 @@
 // button (dock-bottom and Full screen retired), drag-resize + arrow-key resize on the map-facing
 // edge, Table taking the whole stage by itself, collapse to a pill (a click on the ACTIVE rail entry
 // collapses too), remembered per viewport in localStorage, NEVER the URL. HERMETIC, same convention
-// as e2e/keyboard-walk.spec.ts (whose BOOT fixture -- `units: []`, zones read verbatim from
-// boot.json -- this file borrows the shape of, so no PMTiles/titiler route is needed either).
+// as the other shell specs (the catalog, the tile origins and the gazetteer manifest are routed to
+// fixtures, `e2e/hermetic.ts`).
 //
-// The owner's zones-table acceptance case (2026-09-24, with a screenshot): the Table tool's
-// wide-content tabs are what a full-stage surface is FOR (usability M6). Proven on the ZONES tab
-// (boot-data only, no DuckDB engine): Table gets the whole stage with every column visible and no
-// horizontal scroll.
+// The Table tool is what a full-stage surface is FOR (usability M6): in the Collections lens it is the
+// places summary table (`PlaceSummaryTable.svelte`), which takes the whole stage with no horizontal scroll.
 import { expect, test, type Page } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { routeBucket, waitForHydration } from "./hermetic";
 import { blockWasm, routeBasemapStyle, routeGlyphs } from "./map-hermetic";
 
 test.describe.configure({ mode: "serial" });
 
-const VER = "v7";
-const COMPOSITE_KEY = "score_overall";
-const COMPONENT_KEYS = ["c1", "c2", "c3", "c4", "c5", "c6"];
-const N_ZONES = 20;
-
-function zoneMetrics(i: number): Record<string, number> {
-  const metrics: Record<string, number> = { [COMPOSITE_KEY]: 100 - i };
-  for (const k of COMPONENT_KEYS) metrics[k] = (i * 7) % 100;
-  return metrics;
-}
-
-const BOOT = {
-  ver: VER,
-  built_at: "2026-09-05T00:00:00Z",
-  id_field: "mdl_key",
-  grid: { grid_id: "test05r" },
-  release: { status: "release", access: "public" },
-  units: [], // no drawable unit published -- the zones table ranks boot.zones verbatim, no engine
-  zones: {
-    programarea: Array.from({ length: N_ZONES }, (_, i) => ({
-      key: `Z${i}`,
-      name: `Zone ${i}`,
-      metrics: zoneMetrics(i),
-    })),
-  },
-  datasets: [],
-  layers: [
-    { metric_key: COMPOSITE_KEY, label: "Overall score", category: "composite", order: 1 },
-    ...COMPONENT_KEYS.map((k, i) => ({
-      metric_key: k,
-      label: `Component ${i + 1}`,
-      category: "component",
-      order: i + 2,
-    })),
-  ],
-};
-
 async function gotoApp(page: Page, path = "/") {
   await blockWasm(page);
-  await routeBucket(page, VER, BOOT);
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await routeBasemapStyle(page);
   await routeGlyphs(page);
   await page.goto(path);
@@ -72,8 +31,7 @@ function railButton(page: Page, name: string) {
 async function gotoTable(page: Page, path = "/") {
   await gotoApp(page, path);
   await railButton(page, "Table").click();
-  await page.getByRole("tab", { name: "Zones", exact: true }).click();
-  await expect(page.getByRole("table", { name: /^Zones ranked by/ })).toBeVisible();
+  await expect(page.getByTestId("place-summary-table")).toBeVisible();
 }
 
 function panelSurface(page: Page) {
@@ -242,9 +200,9 @@ test.describe("R4-B: Table takes the full stage; leaving it restores the side do
     expect(Math.round(box.width)).toBe(430);
   });
 
-  test("Details and Report open as a side panel, not full stage", async ({ page }) => {
+  test("Details and Places open as a side panel, not full stage", async ({ page }) => {
     await gotoApp(page);
-    for (const name of ["Details", "Report"]) {
+    for (const name of ["Details", "Places"]) {
       await railButton(page, name).click();
       await expect(page.locator("#panel-region")).toHaveAttribute("data-maximized", "false");
     }
@@ -317,39 +275,21 @@ test.describe("R1: geometry is chrome -- remembered per viewport, never the URL"
 });
 
 // ===================================================================================================
-// the owner's acceptance case (2026-09-24): the Table tool's wide-content tab, now on the full stage.
+// the full-stage Table has no horizontal scroll
 // ===================================================================================================
 
-/** every `<th>` in the zones table's header row is within the SCROLLABLE region's own visible box
- * (its right edge does not exceed the container's), and the container has no horizontal overflow. */
-async function assertAllColumnsVisible(page: Page, minColumns: number) {
-  const container = page.locator(".zones-table");
-  const table = page.getByRole("table", { name: /^Zones ranked by/ });
-  const headers = table.locator("thead th");
-  const count = await headers.count();
-  expect(count).toBeGreaterThanOrEqual(minColumns);
-
-  const overflow = await container.evaluate((el) => el.scrollWidth - el.clientWidth);
-  expect(overflow, "the zones table scrolls horizontally").toBeLessThanOrEqual(1);
-
-  const containerBox = await container.boundingBox();
-  for (let i = 0; i < count; i++) {
-    const box = await headers.nth(i).boundingBox();
-    expect(box, `column ${i} has no box`).not.toBeNull();
-    expect(
-      box!.x + box!.width,
-      `column ${i}'s header is not within the table's visible box`,
-    ).toBeLessThanOrEqual(containerBox!.x + containerBox!.width + 1);
-  }
-}
-
-test.describe("owner's acceptance case: the full-stage Table shows every column, no horizontal scroll", () => {
+test.describe("the full-stage Table fits the stage with no horizontal scroll", () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test("all 10 columns (Select/Rank/Zone/Score + 6 components) fit with no scroll", async ({
+  test("the places summary table's frame is within the stage and does not scroll sideways", async ({
     page,
   }) => {
     await gotoTable(page);
-    await assertAllColumnsVisible(page, 10);
+    const table = page.getByTestId("place-summary-table");
+    const overflow = await table.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow, "the summary table scrolls horizontally").toBeLessThanOrEqual(1);
+    const box = (await table.boundingBox())!;
+    const stage = (await page.locator("#stage").boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width + 1);
   });
 });

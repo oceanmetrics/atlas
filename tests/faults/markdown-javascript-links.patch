@@ -1,0 +1,15 @@
+diff --git a/src/lib/markdown/render.ts b/src/lib/markdown/render.ts
+index b15fc39..453c6ce 100644
+--- a/src/lib/markdown/render.ts
++++ b/src/lib/markdown/render.ts
+@@ -37,7 +37,9 @@ export function resolveMarkdownUrl(
+   } catch {
+     return null;
+   }
+-  if (url.protocol === "https:" || url.protocol === "http:") return url.href;
++  // SEEDED FAULT (tests/faults/markdown-javascript-links.patch): a javascript: link keeps its href.
++  if (url.protocol === "https:" || url.protocol === "http:" || url.protocol === "javascript:")
++    return url.href;
+   if (allowMailto && url.protocol === "mailto:") return url.href;
+   return null;
+ }

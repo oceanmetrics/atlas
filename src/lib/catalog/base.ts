@@ -56,6 +56,30 @@ export function validateCatalogBase(
   return url.pathname.endsWith("/") ? url.href : `${url.href}/`;
 }
 
+/**
+ * Validate `?collection=<url of a collection.json>` (WP11 item 6): ONE extra collection read into the
+ * picker as "unlisted", e.g. a restricted per-species collection previewed through a private link
+ * before it is public. Strict like {@link validateCatalogBase}: `https:` only (no loopback http, a link
+ * can never be one), no embedded credentials, no fragment, and the path must end in `.json`. A QUERY is
+ * allowed (a signed link carries its signature there). Returns the normalised absolute URL or `null`.
+ */
+export function validateCollectionUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (v.length === 0) return null;
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  if (url.hash) return null;
+  if (!url.pathname.toLowerCase().endsWith(".json")) return null;
+  return url.href;
+}
+
 /** the effective catalog base: `?catalog=` (`override`) > `VITE_CATALOG_BASE` (`env`) > the default. */
 export function resolveCatalogBase(
   override?: string | null,

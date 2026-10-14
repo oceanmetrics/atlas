@@ -237,7 +237,9 @@
   // it and a `ui=` link can restore it, matching `activeTool`'s own "chrome, restorable from a
   // link, never ordinary URL state" treatment. "data-raster" (the Data row) is the same default
   // `LayersPanel.svelte`'s own internal state used before this existed.
-  let expandedRow = $state<LayerGroupId | null>(initialUi?.expandedRow ?? "data-raster");
+  // a shared link's `null` ("nothing expanded", `ui=...n`) must stay null: `??` would turn it back into the
+  // default (the Data row open), so a collapsed arrangement never survived a share
+  let expandedRow = $state<LayerGroupId | null>(initialUi ? initialUi.expandedRow : "data-raster");
 
   // fix list #5 (SC 2.4.3), WEBKIT ONLY: activating a rail tool that CHANGES the open tool drops
   // `document.activeElement` to `<body>` roughly 100ms later, once the newly-chosen tool's lazy
@@ -525,8 +527,7 @@
   const placesMap = createPlacesMapStore({
     selStore,
     mapHandle: () => mapHandle,
-    // the "Place layers" list lives in the Collections lens' Layers panel
-    overlaysEnabled: () => selStore.sel.lens === "collection",
+    // the "Place layers" list is mounted in the Layers panel of BOTH lenses, so `?ov=` works in either
   });
 
   // atlas-5: the species lens' reactive core. A plain call, not a component -- state.svelte.ts's
@@ -1056,7 +1057,12 @@
         : sel.lens === "collection"
           ? collectionLens.mapInputs.raster
           : null,
-    range: sel.lens === "species" ? speciesLens.mapInputs.range : null,
+    range:
+      sel.lens === "species"
+        ? speciesLens.mapInputs.range
+        : sel.lens === "collection"
+          ? collectionLens.mapInputs.range
+          : null,
     overlays: [],
     // WP4: the gazetteer collections toggled in the "Place layers" group
     placeOverlays: placesMap.overlays.specs,
@@ -1775,6 +1781,7 @@
             {expandedRow}
             onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
             part={activeTool === "details" ? "details" : "layers"}
+            overlays={placesMap.overlays}
           />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>

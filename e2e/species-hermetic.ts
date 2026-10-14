@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import { BUCKET, routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { BUCKET, routeBucket, waitForHydration } from "./hermetic";
 import { blockWasm, routeBasemapStyle, routeGlyphs, routeTitilerTiles } from "./map-hermetic";
 import { safeRoute } from "./routeSafety";
 
@@ -100,36 +100,49 @@ export function bootFor(ver: "v9" | "v7") {
   };
 }
 
-/** every `{ver}/app/**` shard this spec's fixtures cover, keyed by the path `dataUrl()` builds. */
-const SHARD_FILES: Record<string, string> = {
-  "v9/app/taxa.json": "v9/taxa.json",
-  "v9/app/taxon/f9.json": "v9/taxon/f9.json",
-  "v9/app/taxon/75.json": "v9/taxon/75.json",
-  "v9/app/taxon/28.json": "v9/taxon/28.json",
-  // R3-A1: WIDE_RANGE_SP's shard (shardIdFor("ms_merge|DERIVED:900") === "84") — reached only via
-  // `?sp=` (never legacy `mdl_key`/`mdl_seq`), so no matching alias entry is needed.
-  "v9/app/taxon/84.json": "derived/taxon-widerange.json",
-  "v9/app/alias/f9.json": "v9/alias/f9.json",
-  "v9/app/alias/9f.json": "v9/alias/9f.json",
-  "v7/app/taxon/6f.json": "v7/taxon/6f.json",
-  "v7/app/alias/6f.json": "v7/alias/6f.json",
-  // V4 fix (owner phone report, 2026-09-24): the leatherback fixture (54241, mdl_seq) was already
-  // on disk (`tests/fixtures/species/v7/{taxon,alias}/e1.json`) but never wired into this map --
-  // `e2e/species.camera.spec.ts`'s V4 free-area-coverage test is the first to need it.
-  "v7/app/taxon/e1.json": "v7/taxon/e1.json",
-  "v7/app/alias/e1.json": "v7/alias/e1.json",
+/** every `app/**` shard this spec's fixtures cover, keyed by the path under the release prefix. The
+ * Species lens reads ONE pinned release (`v7`, `src/lib/release/mst.ts`), so a fixture set (v9's
+ * global05 taxa, or v7's own) is always SERVED under `v7/`; the set only picks the files. */
+const SHARD_FILES: Record<"v9" | "v7", Record<string, string>> = {
+  v9: {
+    "app/taxa.json": "v9/taxa.json",
+    "app/taxon/f9.json": "v9/taxon/f9.json",
+    "app/taxon/75.json": "v9/taxon/75.json",
+    "app/taxon/28.json": "v9/taxon/28.json",
+    // R3-A1: WIDE_RANGE_SP's shard (shardIdFor("ms_merge|DERIVED:900") === "84") — reached only via
+    // `?sp=` (never legacy `mdl_key`/`mdl_seq`), so no matching alias entry is needed.
+    "app/taxon/84.json": "derived/taxon-widerange.json",
+    "app/alias/f9.json": "v9/alias/f9.json",
+    "app/alias/9f.json": "v9/alias/9f.json",
+  },
+  v7: {
+    "app/taxon/6f.json": "v7/taxon/6f.json",
+    "app/alias/6f.json": "v7/alias/6f.json",
+    // V4 fix (owner phone report, 2026-09-24): the leatherback fixture (54241, mdl_seq).
+    "app/taxon/e1.json": "v7/taxon/e1.json",
+    "app/alias/e1.json": "v7/alias/e1.json",
+  },
 };
+
+/** `v9/app/taxon/28.json` and `v7/app/taxon/28.json` both mean "the shard `app/taxon/28.json`". */
+const underRelease = (path: string) => path.replace(/^v[0-9]+[a-z]?\//, "");
 
 /** exported so a spec that needs to compose its OWN route order (e.g. registering a hung titiler
  * handler that must win over `gotoSpecies`'s own `routeTitilerTiles`) can call every other piece
  * of this setup without duplicating it — see species.smoke.spec.ts's hung-tile-fallback test. */
-export async function routeSpeciesShards(page: Page, overrides: Record<string, unknown> = {}) {
+export async function routeSpeciesShards(
+  page: Page,
+  overrides: Record<string, unknown> = {},
+  set: "v9" | "v7" = "v9",
+) {
+  const byPath = new Map(Object.entries(overrides).map(([k, v]) => [underRelease(k), v]));
   await page.route(
     (url) => url.href.startsWith(BUCKET) && url.href.includes("/app/"),
     safeRoute((route) => {
-      const path = route.request().url().slice(BUCKET.length);
-      if (path in overrides) return route.fulfill({ status: 200, json: overrides[path] });
-      const file = SHARD_FILES[path];
+      const path = underRelease(route.request().url().slice(BUCKET.length));
+      if (byPath.has(path)) return route.fulfill({ status: 200, json: byPath.get(path) });
+      const other = set === "v9" ? "v7" : "v9";
+      const file = SHARD_FILES[set][path] ?? SHARD_FILES[other][path];
       // NOT a known species shard path (e.g. app/boot.json) — fall through to routeBucket's
       // handler (registered BEFORE this one; Playwright tries routes newest-first, and
       // `fallback()` hands the request to the next-most-recently-registered matching route,
@@ -151,15 +164,10 @@ export async function gotoSpecies(
   beforeGoto?: (page: Page) => Promise<void>,
 ) {
   await blockWasm(page);
-  await routeBucket(page, ver, bootFor(ver));
-  await routeSpeciesShards(page, shardOverrides);
-  // e2e/hermetic.ts's VERSIONS_FIXTURE (routeBucket's versions.json) marks v9 restricted (matching
-  // the live registry) — a PUBLIC (no-session) load of v9 is correctly DENIED by plan D6's access
-  // gate and renders nothing at all (measured: this is what a first attempt at this spec, with
-  // `routeSession(page, null)`, actually hit). A preview session is the honest way to view v9 here,
-  // same as a real reviewer would; v7 is already public, so this session is simply unneeded for it.
-  await routeSession(page, { preview: true, ver });
-  await routeSealFixture(page);
+  // `ver` names the FIXTURE SET (v9 = the global05 taxa, v7 = the usa05 ones); either is served under
+  // the one pinned release the lens reads
+  await routeBucket(page, bootFor(ver));
+  await routeSpeciesShards(page, shardOverrides, ver);
   await routeBasemapStyle(page);
   await routeTitilerTiles(page);
   await routeGlyphs(page);

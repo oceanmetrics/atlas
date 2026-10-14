@@ -1,5 +1,7 @@
 # performance.md — what each budget measured, on what, and the three slowest matrix states
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The measurements are from MarineSensitivity Atlas 0.10.x (the `scripts/verify.mjs` matrix, the scores states, `npm run parity`), none of which exists here, and were not re-measured. The current budgets are `npm run size-budget` (450 KB gzip static path + 150 KB workers, 600 KB combined) and the gates listed in `tests/GATES.md`.
+
 atlas-8 step 3. Every number below is real, from a real command run in this dispatch (2026-09-23,
 macOS, this worktree, laptop) unless marked otherwise. Nothing here is invented or interpolated.
 The size-budget, `verify.mjs`-matrix and CI numbers were re-measured in a later pass the same day

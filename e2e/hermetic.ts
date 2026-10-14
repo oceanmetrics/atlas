@@ -2,29 +2,160 @@
 // bucket URL routed to a fixture, matching e2e/shell.smoke.spec.ts's original convention) instead
 // of each spec re-inventing its own fixture registry. Not a `*.spec.ts` file, so playwright.config.ts
 // never tries to run it as a test on its own.
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import type { IncompleteResult } from "axe-core";
-import { routeBasemapStyle, routeGlyphs, solidPng } from "./map-hermetic";
+import {
+  ZONES_PMTILES_PATH,
+  fulfillRanged,
+  routeBasemapStyle,
+  routeGlyphs,
+  solidPng,
+} from "./map-hermetic";
 import { isTeardownRaceError, safeRoute } from "./routeSafety";
 
 export { isTeardownRaceError, safeRoute };
 
 export const BUCKET = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
 
-/** the registry shape, matching the real versions.json (orchestrator-verified 2026-09-21). */
-export const VERSIONS_FIXTURE = [
-  { ver: "v7", status: "release", access: "public", prev: "v6", released: "2026-09-12" },
-  { ver: "v7b", status: "prerelease", access: "restricted", prev: "v7", released: "2026-09-20" },
-  { ver: "v8", status: "prerelease", access: "restricted", prev: "v7", released: "2026-08-02" },
-  { ver: "v9", status: "prerelease", access: "restricted", prev: "v8", released: "2026-09-05" },
-];
+// The shell no longer reads a release registry (no `latest.txt`, `versions.json`, `session.json`): the
+// catalog is `atlas/catalog.json` under CATALOG_BASE, and the Species lens reads one pinned MST release
+// (`v7`) from BUCKET. A missing `boot.json` legitimately 404s in a spec that does not need the species
+// lens; Chromium and WebKit (not Firefox) still surface a fetch()'s non-2xx as a console "error"
+// regardless of the .catch() -- so this is the ONE class of message a spec allows through; anything
+// else still fails it.
+export const EXPECTED_MISSING_FILES = new Set(["boot.json"]);
 
-// session.json (same-origin, the one door into preview mode) legitimately 404s on the public host,
-// and {ver}/app/boot.json does not exist until atlas-1 -- both are swallowed into safe defaults by
-// the early-fetch script. Chromium and WebKit (not Firefox) still surface a fetch()'s non-2xx as a
-// console "error" regardless of the .catch() -- so this is the ONE class of message a spec allows
-// through; anything else still fails it.
-export const EXPECTED_MISSING_FILES = new Set(["session.json", "boot.json"]);
+/** the catalog origin the app reads by default (`src/lib/catalog/base.ts`). */
+export const ATLAS_BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/";
+/** the MarineSensitivity STAC the catalog links by reference. */
+export const MST_STAC_BASE = "https://file.marinesensitivity.org/stac/";
+/** the gazetteer tree (`index/layers.json` = the place-layer manifest). */
+export const GAZETTEER_BASE =
+  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/";
+
+// any PMTiles archive the shell asks for (a collection's hex grid, a gazetteer layer) is answered by one
+// small real archive, so a 404 never reaches the console; its layer name matches nothing, so nothing paints
+const ANY_PMTILES = readFileSync(ZONES_PMTILES_PATH);
+
+/** the extent the e2e biotrack collection carries (west, south, east, north): the US Atlantic coast. */
+export const BIOTRACK_BBOX = [-82, 24, -64, 46] as const;
+
+const CATALOG_FIXTURES = new URL("../tests/fixtures/catalog/", import.meta.url);
+const gazRow = (
+  slug: string,
+  title: string,
+  place_type: string,
+  attribution: string,
+  n: number,
+) => ({
+  slug,
+  title,
+  collection: slug,
+  pmtiles: `https://storage.oceanmetrics.io/gazetteer/${slug}/places.pmtiles`,
+  // every PMTiles request is answered by the one zones archive (ANY_PMTILES), whose vector layer is
+  // `programarea`: naming it here makes the overlays draw real polygons (e2e/map.spec.ts counts them)
+  source_layer: "programarea",
+  geom_type: "MultiPolygon",
+  n,
+  paint: {
+    fill: { "fill-color": "#e08a1e", "fill-opacity": 0.45 },
+    line: { "line-color": "#a85f00", "line-width": 1 },
+  },
+  place_type,
+  attribution,
+  license: "CC-PDDC",
+});
+/** a three-row `index/layers.json`: two default-on overlays and one off. */
+export const GAZETTEER_MANIFEST = {
+  layers: [
+    gazRow(
+      "noaa_sanctuaries",
+      "NOAA national marine sanctuaries",
+      "protected_area",
+      "ONMS credit. Processed by Ocean Metrics.",
+      47,
+    ),
+    gazRow(
+      "boem_wind_leases",
+      "BOEM offshore wind leases",
+      "lease",
+      "BOEM credit. Processed by Ocean Metrics.",
+      52,
+    ),
+    gazRow(
+      "mpa_inventory",
+      "Marine protected areas inventory",
+      "mpa",
+      "MPA credit. Processed by Ocean Metrics.",
+      981,
+    ),
+  ],
+};
+
+/**
+ * Answer the gazetteer's place-layer manifest with an EMPTY list, registered after `routeBucket`
+ * (the newest route wins): no overlay is on the map. A spec that clicks or probes the map for what a
+ * LENS draws (the species popup, a raster pixel) wants no place layer drawn over it: an overlay
+ * feature under the pointer owns the click (one card at a time, `lib/map/clickInfo.ts`).
+ */
+export async function routeNoPlaceLayers(page: Page) {
+  await page.route(
+    `${GAZETTEER_BASE}index/layers.json`,
+    safeRoute((route) => route.fulfill({ status: 200, json: { layers: [] } })),
+  );
+}
+
+/**
+ * The catalog, the MarineSensitivity STAC and the gazetteer manifest, routed to fixtures
+ * (`tests/fixtures/catalog/`, served under the real origins): no spec reaches the live network for
+ * them. Anything else under those origins answers 404 (an unlisted data file, a hex tile).
+ */
+export async function routeAtlasData(page: Page) {
+  await page.route(
+    (url) =>
+      url.href.startsWith(ATLAS_BASE) ||
+      url.href.startsWith(MST_STAC_BASE) ||
+      url.href.startsWith(GAZETTEER_BASE),
+    safeRoute((route) => {
+      const href = route.request().url();
+      if (href.split("?")[0].endsWith(".pmtiles")) return fulfillRanged(route, ANY_PMTILES);
+      if (href.startsWith(GAZETTEER_BASE)) {
+        return href.endsWith("index/layers.json")
+          ? route.fulfill({ status: 200, json: GAZETTEER_MANIFEST })
+          : route.fulfill({ status: 404, body: "" });
+      }
+      const rel = href.startsWith(ATLAS_BASE)
+        ? href.slice(ATLAS_BASE.length)
+        : `mst/${href.slice(MST_STAC_BASE.length)}`;
+      const path = fileURLToPath(new URL(rel.split("?")[0], CATALOG_FIXTURES));
+      if (!existsSync(path)) {
+        // a collection the fixture tree does not carry (the loader's own tests cover "unavailable"):
+        // an empty one, so the picker is full and the console stays clean
+        const m = /\/([^/]+)\/collection\.json$/.exec(href);
+        return m
+          ? route.fulfill({
+              status: 200,
+              json: { type: "Collection", id: m[1], title: m[1], links: [] },
+            })
+          : route.fulfill({ status: 404, body: "" });
+      }
+      if (rel === "biotrack_indicators/collection.json") {
+        // the fixture publishes no extent (the loader's own tests want that); the shell fits the
+        // collection's extent on first load, which the camera specs measure
+        const collection = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+        collection.extent ??= { spatial: { bbox: [BIOTRACK_BBOX] } };
+        return route.fulfill({ status: 200, json: collection });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: path.endsWith(".json") ? "application/json" : "application/octet-stream",
+        body: readFileSync(path),
+      });
+    }),
+  );
+}
 
 /**
  * The map's cross-origin tile/style/glyph origins → fixtures, so no spec ever reaches the live
@@ -82,95 +213,34 @@ export function collectRequests(page: Page): string[] {
  * hermeticity rule that each spec has to remember separately is one that a future spec will
  * silently break. `routeBucket` is the one call every shell spec already makes.
  */
-export async function routeBucket(page: Page, latest = "v7", boot?: object) {
+export async function routeBucket(
+  page: Page,
+  boot?: object,
+  // a spec that hands a species `boot` fixture is about what the Species lens draws and clicks: no
+  // place layer is drawn over it unless it asks (`routeNoPlaceLayers`' own header says why)
+  placeLayers: boolean = boot === undefined,
+) {
   await routeMapTileOrigins(page);
+  await routeAtlasData(page);
+  if (!placeLayers) await routeNoPlaceLayers(page);
   await page.route(
     (url) => url.href.startsWith(BUCKET),
     safeRoute(async (route) => {
       const path = route.request().url().slice(BUCKET.length);
-      if (path.startsWith("latest.txt")) {
-        return route.fulfill({ status: 200, contentType: "text/plain", body: `${latest}\n` });
-      }
-      if (path.startsWith("versions.json")) {
-        return route.fulfill({ status: 200, json: VERSIONS_FIXTURE });
-      }
-      const manifest = /^(v[0-9]+[a-z]?)\/manifest\.json/.exec(path);
-      if (manifest) {
-        return route.fulfill({ status: 200, json: { ver: manifest[1], capabilities: {} } });
-      }
+      // the Species lens reads one pinned release (v7): its boot fixture answers at that path whatever
+      // release the fixture itself describes
       if (boot && /^v[0-9]+[a-z]?\/app\/boot\.json/.test(path)) {
         return route.fulfill({ status: 200, json: boot });
       }
-      return route.fulfill({ status: 404, body: "" }); // app/boot.json: not published until atlas-1
+      return route.fulfill({ status: 404, body: "" }); // app/boot.json: not published for a spec without `boot`
     }),
   );
 }
 
-/**
- * Serve the same dist/ under a version-prefixed path, the preview host's shape
- * (`preview.marinesensitivity.org/{ver}/atlas/`, plan D1/D2). Rewrites the prefix away and fetches
- * from the preview server's root -- which also proves the build's asset URLs are relative.
- */
-export async function mountUnder(page: Page, prefix: string) {
-  await page.route(
-    (url) => url.pathname.startsWith(prefix),
-    // the most likely site of the teardown race this file's header describes: a REAL cross-fetch
-    // (`route.fetch`) that can still be in flight when the test/page ends.
-    safeRoute(async (route) => {
-      const url = new URL(route.request().url());
-      url.pathname = url.pathname.slice(prefix.length - 1);
-      route.fulfill({ response: await route.fetch({ url: url.toString() }) });
-    }),
-  );
-}
-
-/** the same-origin session.json: absent (public host) or a signed-in preview body. */
-export async function routeSession(page: Page, body: object | null) {
-  await page.route(
-    (url) => url.pathname.endsWith("/session.json"),
-    safeRoute((route) =>
-      body
-        ? route.fulfill({ status: 200, json: body })
-        : route.fulfill({ status: 404, body: "not found" }),
-    ),
-  );
-}
-
-/** the seal image About.svelte's default VITE_SEAL_URL points at -- routed so no spec here ever
- * touches the live network (matching e2e/gallery.spec.ts's convention).
- *
- * ALSO seeds the welcome modal's "don't show again" localStorage key (atlas-4 step 3,
- * `WelcomeModal.svelte`) via `addInitScript`, so it runs before the page's own scripts on every
- * navigation from here on. Every spec in this file already calls this ONE function as part of its
- * hermetic setup, and the welcome modal's native `<dialog>` (`showModal()`) blocks pointer events
- * across the WHOLE page while open -- an unrelated spec clicking `.topbar`/`#rail-region`/panel
- * controls would otherwise time out (measured: this broke shell.url-state/a11y/cls/theme-flash
- * wholesale the moment the modal landed). A spec that wants to see the real welcome modal clears
- * this key itself (`e2e/scores.welcome.spec.ts`) rather than expecting the shared default to show it. */
-export async function routeSealFixture(page: Page) {
-  const svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">' +
-    '<circle cx="100" cy="100" r="90" fill="#123456"/></svg>';
-  await page.route(
-    "**/branding/mma-seal.svg",
-    safeRoute((route) => route.fulfill({ contentType: "image/svg+xml", body: svg })),
-  );
-  await page.addInitScript(() => {
-    try {
-      window.localStorage.setItem("atlas.welcome.dontShowAgain", "1");
-    } catch {
-      /* private mode / storage disabled -- the modal just shows, no spec breaks because of it */
-    }
-  });
-}
-
-/** the shell's one same-origin, one-time setup for a hermetic public-host load: routes the
- * bucket + session.json + seal, in the order that matters (session registered so it wins over a
- * later mountUnder rewrite, matching shell.smoke.spec.ts's original comment). */
+/** the shell's one hermetic setup for a public load: the catalog, the tile origins, the gazetteer
+ * manifest, then the navigation. */
 export async function gotoPublicShell(page: Page, path = "/") {
   await routeBucket(page);
-  await routeSession(page, null);
-  await routeSealFixture(page);
   await page.goto(path);
 }
 

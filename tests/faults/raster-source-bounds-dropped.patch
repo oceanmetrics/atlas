@@ -1,0 +1,14 @@
+diff --git a/src/lens/collection/mapInputs.ts b/src/lens/collection/mapInputs.ts
+index a7ce12b..7516b45 100644
+--- a/src/lens/collection/mapInputs.ts
++++ b/src/lens/collection/mapInputs.ts
+@@ -166,7 +166,8 @@ export function collectionMapInputs(args: {
+           }),
+         ],
+         opacity: COLLECTION_RASTER_OPACITY,
+-        ...(cogBounds ? { bounds: cogBounds } : {}),
++        // SEEDED FAULT (tests/faults/raster-source-bounds-dropped.patch): the COG footprint never
++        // reaches the source, so MapLibre asks for (and 404s) every world tile again.
+       },
+       legend: {
+         kind: "continuous",

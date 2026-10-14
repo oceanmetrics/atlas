@@ -1,5 +1,7 @@
 # Gazetteer places in the atlas (the `p.` place_id token)
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** Current for places by reference (`p.` token), the vendored client, overlays and summaries. The lines that mention `report.html` and `src/report/gazPlaces.ts` describe the retired Report: OceanMetrics Atlas has no report page, and the Places tool's list, summaries and GeoJSON download replace it.
+
 The atlas can hold a place from the Ocean Metrics places gazetteer **by reference**: the link carries
 the gazetteer `place_id`, not the geometry. This note is the contract the `msens` R package mirrors
 (the g1 codec is implemented in both; this repo does not touch msens).
@@ -94,9 +96,9 @@ A failed fetch never removes the token: the place stays in the link and the list
   click, "Add <name> to Places"). The manifest is read with a plain `fetch`
   (`src/lib/gazetteer/manifest.ts`), never through the parquet client, so the overlay list adds nothing
   to the static graph beyond a few KB. `?ov=` grammar: `src/lib/gazetteer/overlayUrl.ts`. The overlays are
-  drawn in the Collections lens only (its Layers panel hosts the list); to show them in another lens,
-  mount `PlaceLayerList` in its Layers panel through `LayersPanel`'s `placeLayers` snippet and drop the
-  `overlaysEnabled` condition in `Shell.svelte`.
+  drawn in both lenses (WP11): `SpeciesLens.svelte` mounts `PlaceLayerList` through `LayersPanel`'s
+  `placeLayers` snippet like the Collections lens, and `Shell.svelte` no longer conditions the overlays on
+  the lens, so `?ov=` works in either.
 - **Search.** `searchGazetteer()` (`resolve.ts`, lazy) wraps the vendored client's `search()`: areas only,
   one hit per place_id. A `p.` token carries the id alone, so an id that lives in two collections
   resolves to the first by authority order (the same lease in both BOEM layers: the same polygon).
@@ -104,6 +106,11 @@ A failed fetch never removes the token: the place stays in the link and the list
   `lib/catalog/centroids.ts`, point-in-polygon in `lib/geo/pip.ts`, raster statistics in
   `lib/raster/statistics.ts`. DuckDB-WASM is not involved: the centroid table and the item's value
   column are both read with hyparquet and joined in memory.
-- **Known limit.** titiler-v8 answers the CORS preflight of a JSON POST to `/cog/statistics` with 400
-  (`access-control-allow-methods: GET`, checked 2026-10-14), so a browser cannot get raster area
-  statistics until the tile server allows POST; the summary rows say so.
+- **Raster statistics (live 2026-10-14).** titiler-v8 now allows POST in its CORS preflight, so
+  `/cog/statistics` answers a browser: a place over a raster item shows pixels, mean, min, max as
+  "display-grid statistics", on the band the map draws (`bidx`).
+- **Layer info dialog (WP11).** The "i" button of a place-layer row (`PlaceLayerList.svelte`) opens
+  `LayerInfoModal.svelte`: `lib/gazetteer/layerInfo.ts` reads `<root>/<slug>/collection.json` (the canonical
+  host, then the path-style bucket URL, cached per slug) and `layerInfoModel` merges it with the manifest
+  row (tested against the published `gebco_undersea` and `boem_wind_planning_rescinded` collections,
+  `tests/fixtures/gazetteer/`). The places site's layer page is `https://oceanmetrics.io/places/l/<slug>`.

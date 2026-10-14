@@ -437,6 +437,78 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/places/summary.test.ts"],
   },
   {
+    id: "statistics-bidx-dropped",
+    patch: "tests/faults/statistics-bidx-dropped.patch",
+    describe:
+      "the raster statistics source never sends the band (bidx) -- a multi-band COG is summarised " +
+      "on band 1 whatever the map draws (the coefficient of variation shows the density's numbers)",
+    gate: ["npx", "vitest", "run", "tests/raster/statistics.test.ts"],
+  },
+  {
+    id: "overlay-card-cell-line-dropped",
+    patch: "tests/faults/overlay-card-cell-line-dropped.patch",
+    describe:
+      "the overlay popup forgets the hex cell's value line -- a click on a place over a cell shows " +
+      "the place only",
+    gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
+  },
+  {
+    id: "hex-hover-ignores-overlay",
+    patch: "tests/faults/hex-hover-ignores-overlay.patch",
+    describe:
+      "the hex hover popup does not yield to an overlay feature over the same point -- two popups " +
+      "stack (the gate: a hover over an overlay builds no hex popup)",
+    gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
+  },
+  {
+    id: "raster-source-bounds-dropped",
+    patch: "tests/faults/raster-source-bounds-dropped.patch",
+    describe:
+      "a raster item's COG footprint never reaches the MapLibre source `bounds` -- every world tile " +
+      "is requested again and the regional COG 404s the ones outside it",
+    gate: ["npx", "vitest", "run", "tests/lens/collection/mstMapInputs.test.ts"],
+  },
+  {
+    id: "vector-only-model-undrawable",
+    patch: "tests/faults/vector-only-model-undrawable.patch",
+    describe:
+      "surfaceFor() never finds a PMTiles range for a model with no COG -- a vector-only v7 model shows " +
+      "the 'cannot draw' notice again instead of a presence fill",
+    gate: ["npx", "vitest", "run", "tests/catalog/mst/taxon.test.ts"],
+  },
+  {
+    id: "collection-url-accepts-http",
+    patch: "tests/faults/collection-url-accepts-http.patch",
+    describe:
+      "validateCollectionUrl() accepts plain http -- a ?collection= link can point the app's reads at an " +
+      "unencrypted origin",
+    gate: ["npx", "vitest", "run", "tests/catalog/unlisted.test.ts"],
+  },
+  {
+    id: "markdown-html-passthrough",
+    patch: "tests/faults/markdown-html-passthrough.patch",
+    describe:
+      "the README renderer stops escaping text -- raw HTML (a <script>) in a methods file is passed " +
+      "through into the Methods dialog",
+    gate: ["npx", "vitest", "run", "tests/lib/markdown.test.ts"],
+  },
+  {
+    id: "markdown-javascript-links",
+    patch: "tests/faults/markdown-javascript-links.patch",
+    describe:
+      "the README renderer lets a javascript: URL keep its href -- a [click](javascript:...) link " +
+      "in a methods file runs script in the app's origin",
+    gate: ["npx", "vitest", "run", "tests/lib/markdown.test.ts"],
+  },
+  {
+    id: "layer-info-no-bucket-fallback",
+    patch: "tests/faults/layer-info-no-bucket-fallback.patch",
+    describe:
+      "a place layer's collection.json is asked of the canonical host only -- the host's 302 has no CORS, so " +
+      "the info dialog never gets the collection in a browser (no fallback to the bucket URL)",
+    gate: ["npx", "vitest", "run", "tests/gazetteer/layerInfo.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:

@@ -14,7 +14,7 @@
 // timed out with the sheet's content intercepting the tap").
 //
 // The phone species search (m1-adjacent, a different owner) is out of scope here -- this spec only
-// taps the Report tool (R4-D: Places section at the top of the one-flow Report pane) and
+// taps the Places tool and
 // reads the sheet's own title, never species state.
 import { expect, test, type Page } from "@playwright/test";
 import { gotoPublicShell, waitForHydration } from "./hermetic";
@@ -31,13 +31,6 @@ const DETENTS = [
 async function gotoPhoneShell(page: Page) {
   await gotoPublicShell(page);
   await waitForHydration(page);
-  // the welcome modal's native <dialog> blocks pointer events across the whole page while open
-  // (hermetic.ts's own routeSealFixture seeds the "don't show again" key for every OTHER spec --
-  // gotoPublicShell already calls it, so this is already true here; stated for the reader, not a
-  // second suppression).
-  await expect(
-    page.getByRole("dialog", { name: "Welcome to the Marine Sensitivity Atlas" }),
-  ).toHaveCount(0);
 }
 
 async function setDetent(page: Page, buttonLabel: string) {
@@ -46,7 +39,7 @@ async function setDetent(page: Page, buttonLabel: string) {
 
 test.describe("B4: the phone tool rail is reachable at every sheet detent", () => {
   for (const { name, buttonLabel } of DETENTS) {
-    test(`detent "${name}": tapping the Report rail item actually opens Report (defaulting to its Places tab)`, async ({
+    test(`detent "${name}": tapping the Places rail item actually opens Places`, async ({
       page,
     }) => {
       await gotoPhoneShell(page);
@@ -63,15 +56,15 @@ test.describe("B4: the phone tool rail is reachable at every sheet detent", () =
 
       // the real tap: Playwright refuses to click a target another element visually covers, so
       // this alone reproduces the bug (a timeout) on unfixed CSS -- no custom hit-testing needed.
-      await page.locator("#rail-region button[aria-label='Report']").click({ timeout: 5_000 });
+      await page.locator("#rail-region button[aria-label='Places']").click({ timeout: 5_000 });
 
-      // R4-B: Report is now the active entry, and its header context with no place added and
-      // nothing clicked is the tool's own label ("Report").
-      await expect(page.locator("#rail-region button[aria-label='Report']")).toHaveAttribute(
+      // Places is now the active entry, and its header context with no place added is the tool's own
+      // label ("Places").
+      await expect(page.locator("#rail-region button[aria-label='Places']")).toHaveAttribute(
         "aria-current",
         "true",
       );
-      await expect(page.locator(".sheet-title")).toHaveText("Report");
+      await expect(page.locator(".sheet-title")).toHaveText("Places");
     });
   }
 

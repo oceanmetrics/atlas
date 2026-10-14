@@ -1,5 +1,7 @@
 # Accessibility fix list — atlas-8 step 3
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The audit behind this list ran on the MarineSensitivity Atlas shell (Scores lens, Report, gallery, version chip). Findings about shared controls (rail, panel, sheet, menus, dialogs, popups) still describe code that remains; anything about the Scores lens, the Report, the component gallery or the version chip no longer applies, and the specs it cites (`e2e/matrix.a11y.spec.ts`, `e2e/keyboard-walk.spec.ts`, the gallery sweep) were removed in the 0.1.0 strip.
+
 Found by the axe sweep over every `scripts/verify.mjs` matrix state (`e2e/matrix.a11y.spec.ts`,
 179 audits), the scripted no-pointer keyboard walk on all three engines
 (`e2e/keyboard-walk.spec.ts`), and a read of the real accessibility tree
