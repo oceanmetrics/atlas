@@ -1,0 +1,14 @@
+diff --git a/src/places/summary.ts b/src/places/summary.ts
+index 1f517ee..4a6fa55 100644
+--- a/src/places/summary.ts
++++ b/src/places/summary.ts
+@@ -43,7 +43,8 @@ export function cellStats(values: Iterable<number | null | undefined>): CellStat
+   let sum = 0;
+   let min = Infinity;
+   let max = -Infinity;
+-  for (const v of values) {
++  for (const raw of values) {
++    const v = raw ?? 0;
+     n++;
+     if (typeof v !== "number" || !Number.isFinite(v)) continue;
+     nValue++;

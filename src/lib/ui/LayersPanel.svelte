@@ -83,6 +83,10 @@
      * single Shell-level value is enough regardless of which lens is active. */
     expandedRow?: LayerGroupId | null;
     onExpandedRowChange?: (id: LayerGroupId | null) => void;
+    /** WP4: the list of gazetteer collections shown under the "Place layers" row (toggles, swatches,
+     * credits). A snippet, so this lib component never imports `src/places/`; omitted = the row is
+     * just its visible/opacity/reorder controls. */
+    placeLayers?: Snippet;
   }
 
   let {
@@ -94,6 +98,7 @@
     rowState,
     expandedRow,
     onExpandedRowChange,
+    placeLayers,
   }: Props = $props();
 
   /** the one row this panel EXPANDS -- "Data" (the lens's own layer). Every other group is
@@ -314,6 +319,12 @@
             </button>
           </span>
         </div>
+
+        {#if entry.id === "data-overlays" && placeLayers}
+          <div class="row-body" data-testid="place-layers-body">
+            {@render placeLayers()}
+          </div>
+        {/if}
 
         {#if entry.id === DATA_ROW_ID && expandedId === DATA_ROW_ID && dataControls}
           <div class="row-body" id={DATA_ROW_BODY_ID}>

@@ -14,8 +14,10 @@
 // property of the codec's own schema (atlas-2, not ours to change), not an oversight here.
 import type { FeatureCollection } from "geojson";
 import {
+  MAX_ID_CHARS,
   clampName,
   decodePlaces,
+  encodeName,
   encodePlaces,
   type GeomPlace,
   type Place,
@@ -238,6 +240,10 @@ export function gazIdsOf(places: readonly Place[]): string[] {
  * already in the list is refused rather than silently doubled. */
 export function addGazPlace(places: readonly Place[], id: string, name: string): MutationResult {
   if (!id) return refused(places, "that feature has no place_id");
+  // a `p.` token carries the id percent-encoded in at most MAX_ID_CHARS: a longer one cannot be linked
+  if (encodeName(id).length > MAX_ID_CHARS) {
+    return refused(places, `${name || id} has an id too long to carry in a link.`);
+  }
   if (places.some((p) => p.kind === "gaz" && p.id === id)) {
     return refused(places, `${name || id} is already in your places.`);
   }

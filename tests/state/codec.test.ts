@@ -346,7 +346,7 @@ describe("layers: the R3 layer stack (deltas against the default, via ../map/lay
   it("a reordered + dimmed stack round-trips", () => {
     const loc = {
       search:
-        "?layers=basemap-land,basemap-bathymetry,basemap-boundaries,data-raster:o50,basemap-roads,basemap-labels,data-places",
+        "?layers=basemap-land,basemap-bathymetry,basemap-boundaries,data-raster:o50,basemap-roads,basemap-labels,data-overlays,data-places",
       hash: "",
     };
     const sel = parseSel(loc);
@@ -357,6 +357,7 @@ describe("layers: the R3 layer stack (deltas against the default, via ../map/lay
       "data-raster",
       "basemap-roads",
       "basemap-labels",
+      "data-overlays",
       "data-places",
     ]);
     expect(sel.layers?.find((e) => e.id === "data-raster")?.opacity).toBe(0.5);

@@ -22,6 +22,8 @@
   import { formatCellValue } from "./mapInputs";
   import MstDetails from "./MstDetails.svelte";
   import TaxonField from "./TaxonField.svelte";
+  import PlaceLayerList from "../../places/PlaceLayerList.svelte";
+  import type { PlaceOverlays } from "../../places/overlays.svelte";
   import type { CollectionLens } from "./state.svelte";
 
   interface Props {
@@ -34,6 +36,8 @@
     expandedRow?: LayerGroupId | null;
     onExpandedRowChange?: (id: LayerGroupId | null) => void;
     part?: "layers" | "details";
+    /** WP4: the gazetteer collections toggled under the "Place layers" row. */
+    overlays?: PlaceOverlays;
   }
 
   let {
@@ -46,6 +50,7 @@
     expandedRow,
     onExpandedRowChange,
     part = "layers",
+    overlays,
   }: Props = $props();
 
   // the collection picker: unavailable collections are listed but disabled, so the viewer sees the
@@ -153,6 +158,10 @@
   </div>
 {/snippet}
 
+{#snippet placeLayers()}
+  {#if overlays}<PlaceLayerList {overlays} />{/if}
+{/snippet}
+
 {#if part === "details"}
   {@render detailsContent()}
 {:else}
@@ -163,6 +172,7 @@
     {rowState}
     {expandedRow}
     {onExpandedRowChange}
+    placeLayers={overlays ? placeLayers : undefined}
   >
     {#snippet speciesField()}
       <div class="collection-field" data-testid="collection-field">

@@ -7,9 +7,10 @@
 // drives the REAL vendored client against committed parquet fixtures served from a local HTTP
 // server, and the store-level tests inject a stub.
 import { analysisGeometry } from "../geo/analysisGeometry";
+import { MAX_ID_CHARS, encodeName } from "../geo/placeCodec";
 import { isAreaGeometry, type AreaGeometry } from "../geo/types";
 import { createClient } from "./vendor/client";
-import type { Layer, PlaceFeature } from "./vendor/types";
+import type { IndexPlace, Layer, PlaceFeature, SearchOptions } from "./vendor/types";
 import {
   PLACES_SLUG,
   authorityOf,
@@ -32,11 +33,19 @@ export class GazetteerError extends Error {
   }
 }
 
+/** a place feature; `collection` (client 0.1.2+) is optional here so a test stub need not carry it. */
+export type AnyPlaceFeature = Omit<PlaceFeature, "collection"> & { collection?: string };
+
 /** the slice of the vendored client this module uses (injectable). */
 export interface GazetteerClient {
-  getPlace(id: string, opts?: { unwrap?: boolean; slug?: string }): Promise<PlaceFeature | null>;
+  getPlace(id: string, opts?: { unwrap?: boolean; slug?: string }): Promise<AnyPlaceFeature | null>;
   listLayers(opts?: { refresh?: boolean }): Promise<Layer[]>;
   creditsFor(refs: string | string[], opts?: { html?: boolean }): Promise<string>;
+}
+
+/** the search slice of the vendored client (separate so a test stub of the rest need not carry it). */
+export interface GazetteerSearcher {
+  search(q: string, opts?: SearchOptions): Promise<IndexPlace[]>;
 }
 
 let shared: GazetteerClient | null = null;
@@ -71,7 +80,7 @@ export async function resolveGazPlace(
   id: string,
   client: GazetteerClient = gazetteerClient(),
 ): Promise<GazResolved> {
-  let feature: PlaceFeature | null;
+  let feature: AnyPlaceFeature | null;
   try {
     // the built-in `places` authorities (NMS/MRGID/PSGID) are read from that collection directly:
     // the client otherwise finds a place's collection through layers.json, which answers 403 until
@@ -158,4 +167,57 @@ export async function creditsForPlaces(
     parts.push(credit || fallbackAttribution(id));
   }
   return joinCredits(parts);
+}
+
+/** one search hit the picker can add: an AREA place (a polygon collection), by reference. */
+export interface GazHit {
+  id: string;
+  name: string;
+  /** the collection slug holding it (`index/layers.json`). */
+  collection: string;
+  placeType: string;
+  authority: string;
+  areaKm2: number | null;
+  /** `[lon, lat]` of the index centroid (may exceed 180 for an antimeridian place), or `null`. */
+  centroid: [number, number] | null;
+  /** the index's per-place credit, `""` when none. */
+  attribution: string;
+}
+
+const isAreaType = (g: string | null) => g === null || /polygon/i.test(g);
+
+/**
+ * Search the places index (`places_index.parquet`, read once, then local) for areas matching `q`:
+ * every word of `q` in the name or place id, best matches first. Points and lines are left out (a
+ * place is an area), and so is a place_id too long for a `p.` token (`maxIdChars`, encoded). One hit
+ * per place_id: an id that lives in two collections (a BOEM lease in both the wind and the Pacific
+ * oil and gas layers) is the same place, listed under the first collection.
+ */
+export async function searchGazetteer(
+  q: string,
+  opts: { limit?: number; type?: string | string[]; authority?: string | string[] } = {},
+  client: GazetteerSearcher = gazetteerClient() as unknown as GazetteerSearcher,
+): Promise<GazHit[]> {
+  const limit = opts.limit ?? 20;
+  // over-fetch: points/lines and duplicate ids are dropped below
+  const raw = await client.search(q, { ...opts, limit: limit * 4 + 20 });
+  const seen = new Set<string>();
+  const out: GazHit[] = [];
+  for (const h of raw) {
+    if (!isAreaType(h.geom_type) || seen.has(h.place_id)) continue;
+    if (encodeName(h.place_id).length > MAX_ID_CHARS) continue;
+    seen.add(h.place_id);
+    out.push({
+      id: h.place_id,
+      name: h.name,
+      collection: h.collection,
+      placeType: h.place_type,
+      authority: h.authority,
+      areaKm2: h.area_km2,
+      centroid: h.centroid,
+      attribution: h.attribution ?? "",
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
 }

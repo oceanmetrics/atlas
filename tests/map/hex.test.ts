@@ -3,6 +3,8 @@
 import { describe, expect, it } from "vitest";
 import {
   HEX_FILL_ID,
+  HEX_FILL_OPACITY,
+  HEX_OUTSIDE_OPACITY,
   HEX_SELECTED_ID,
   HEX_SOURCE_ID,
   createHexPainter,
@@ -247,6 +249,81 @@ describe("createHexPainter: feature state on a live map", () => {
     expect(f.listeners.size).toBe(1);
     p.destroy();
     expect(f.listeners.size).toBe(0);
+  });
+});
+
+describe("the 'Only inside places' filter (feature state `inside`)", () => {
+  const insideCalls = (f: ReturnType<typeof fakeMap>) =>
+    f.calls.filter((c) => "inside" in c.state).map((c) => [c.id, c.state.inside]);
+
+  it("the fill dims a cell whose inside state is exactly false (0.15) and leaves the rest at full opacity", () => {
+    const op = (hexFillLayer(SPEC).paint as Record<string, unknown>)["fill-opacity"] as unknown[];
+    expect(op[0]).toBe("case");
+    expect(JSON.stringify(op[1])).toBe('["==",["feature-state","inside"],false]');
+    expect(op[2]).toBe(HEX_OUTSIDE_OPACITY);
+    expect(op[3]).toBe(HEX_FILL_OPACITY);
+    expect(HEX_OUTSIDE_OPACITY).toBe(0.15);
+  });
+
+  it("flags every painted cell: true inside, false outside", () => {
+    const f = fakeMap();
+    f.addSource();
+    const p = createHexPainter(f.map, "hex");
+    p.apply(COL_A);
+    p.setInside(new Set([2]));
+    expect(insideCalls(f)).toEqual([
+      [1, false],
+      [2, true],
+      [3, false],
+    ]);
+  });
+
+  it("clearing the filter writes inside: null for every cell it flagged (the dim goes away)", () => {
+    const f = fakeMap();
+    f.addSource();
+    const p = createHexPainter(f.map, "hex");
+    p.apply(COL_A);
+    p.setInside(new Set([2]));
+    f.calls.length = 0;
+    p.setInside(null);
+    expect(insideCalls(f)).toEqual([
+      [1, null],
+      [2, null],
+      [3, null],
+    ]);
+    f.calls.length = 0;
+    p.setInside(null); // already clear: nothing to write
+    expect(insideCalls(f)).toEqual([]);
+  });
+
+  it("switching items keeps the filter: the new column's cells are flagged too", () => {
+    const f = fakeMap();
+    f.addSource();
+    const p = createHexPainter(f.map, "hex");
+    p.apply(COL_A);
+    p.setInside(new Set([1]));
+    f.calls.length = 0;
+    p.apply({ fids: [1, 4], values: [0.5, 0.6] });
+    expect(insideCalls(f)).toEqual([
+      [1, true],
+      [4, false],
+      [2, null],
+      [3, null],
+    ]);
+  });
+
+  it("a filter set before the source lands is applied when it does", () => {
+    const f = fakeMap();
+    const p = createHexPainter(f.map, "hex");
+    p.apply(COL_A);
+    p.setInside(new Set([3]));
+    expect(insideCalls(f)).toEqual([]);
+    f.addSource();
+    expect(insideCalls(f)).toEqual([
+      [1, false],
+      [2, false],
+      [3, true],
+    ]);
   });
 });
 

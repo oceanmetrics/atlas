@@ -52,6 +52,13 @@ describe("hyparquet and the vendored gazetteer client are dynamic imports only",
     expect(staticImportsOf(src)).toEqual([]);
   });
 
+  it("WP4: the manifest reader and the ?ov= grammar (static-safe, used by the Layers panel) import nothing lazy", () => {
+    for (const f of ["manifest.ts", "overlayUrl.ts"]) {
+      const src = readFileSync(join(gazDir, f), "utf8");
+      expect(staticImportsOf(src).filter(LAZY), f).toEqual([]);
+    }
+  });
+
   it("the consumers reach resolve.ts dynamically", () => {
     for (const rel of ["places/placesMap.svelte.ts", "places/Places.svelte"]) {
       const src = readFileSync(join(srcDir, rel), "utf8");

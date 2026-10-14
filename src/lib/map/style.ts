@@ -33,6 +33,7 @@ import {
   gazetteerLineLayer,
   gazetteerSource,
 } from "./layers/gazetteer";
+import { overlayLayers, overlaySource, overlaySourceId } from "./layers/overlays";
 // R3 layer stack model (round-2 plan §5 U4, docs/usability.md §7 R3): the user-reorderable/
 // dimmable GROUPS a merged CARTO layer or a data layer belongs to. `layerStack.ts` is the pure
 // model (classify/apply/codec); this file only CONSUMES it — composeStyle still returns ONE style
@@ -49,6 +50,7 @@ import {
 import type {
   BasemapSpec,
   GazetteerLayerSpec,
+  PlaceOverlaySpec,
   LayerSpecification,
   Projection,
   RangeLayerSpec,
@@ -165,6 +167,11 @@ export const LAYER_ORDER = [
   "raster",
   "range",
   "overlay",
+  // WP4: the gazetteer collections toggled in the Layers panel's "Place layers" group (fill under line
+  // under circle), above the data and under the picker + the selection highlight.
+  "place-overlay-fill",
+  "place-overlay-line",
+  "place-overlay-circle",
   // gazetteer-places: the "Pick from gazetteer" tile polygons sit just under the selection
   // highlight, in the same `data-places` group (the Layers panel's "Selection" row), so the picked
   // place's pink outline always draws over them.
@@ -195,6 +202,9 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   overlay: "data-raster",
   hex: "data-raster",
   "hex-selected": "data-raster",
+  "place-overlay-fill": "data-overlays",
+  "place-overlay-line": "data-overlays",
+  "place-overlay-circle": "data-overlays",
   "gazetteer-fill": "data-places",
   "gazetteer-line": "data-places",
   "selection-fill": "data-places",
@@ -211,6 +221,7 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-roads": ["basemap-roads"],
   "basemap-labels": ["basemap-labels"],
   "data-raster": ["hex", "hex-selected", "raster", "range", "overlay"],
+  "data-overlays": ["place-overlay-fill", "place-overlay-line", "place-overlay-circle"],
   "data-places": ["gazetteer-fill", "gazetteer-line", "selection-fill", "selection-line"],
 };
 
@@ -280,6 +291,8 @@ export interface ComposeStyleInput {
   /** extra rasters above the main one, e.g. "cells outside Program Areas". */
   overlays?: readonly RasterLayerSpec[];
   selection?: SelectionSpec | null;
+  /** the gazetteer collections toggled on in the "Place layers" group (WP4) -- absent for none. */
+  placeOverlays?: readonly PlaceOverlaySpec[];
   /** the gazetteer collection shown for "Pick from gazetteer" -- `null`/absent for none. */
   gazetteer?: GazetteerLayerSpec | null;
   /** override only in a test: the glyph endpoint used when a label layer exists. */
@@ -434,6 +447,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   for (const overlay of overlays) {
     sources[overlay.id] = rasterSource(overlay);
     roled.push({ role: "overlay", layer: rasterLayer(overlay) });
+  }
+
+  for (const spec of input.placeOverlays ?? []) {
+    sources[overlaySourceId(spec.slug)] = overlaySource(spec);
+    roled.push(...overlayLayers(spec));
   }
 
   if (input.gazetteer) {

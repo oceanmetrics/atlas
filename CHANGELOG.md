@@ -73,6 +73,28 @@ and hex painting follow.
 - **URL.** `?c=<collection>&sp=<taxon>` for a v7 taxon collection (it now stays in the Collections
   lens; `?sp=` alone is still the Species lens), `?c=msens-v8-nc&i=<region.species.season.variable>`
   and `?c=msens-v8-gm&i=<taxon.time>` for the density collections.
+- **Place layers (WP4).** The Layers panel's "Layers on the map" stack gains a "Place layers" group with
+  a "Places" list: every collection of the Ocean Metrics gazetteer (`index/layers.json`: title, feature
+  count, a colour swatch from its published paint, grouped by theme from `place_type`, else
+  alphabetical), each toggleable and drawn from its `places.pmtiles` as a line plus a faint fill (lines
+  and points as lines and circles). National marine sanctuaries and BOEM offshore wind leases are on by
+  default. Hover shows the name and status; click opens a popup with "Add <name> to Places". The set
+  lives in the URL as `?ov=a,b` (absent = the default set, `ov=` = none). The credit of every overlay
+  that is on joins the map attribution and is listed under the group, and is published as the
+  `overlayCredits` store (`src/places/overlayCredits.ts`) for the About / catalog pages.
+- **Search the gazetteer.** The Places tool gains a search field over `places_index.parquet` (the
+  vendored `@oceanmetrics/places` client, refreshed to 0.1.3): type a name or place id, press Add, and
+  the place is added by reference (`p.` token, geometry fetched like any shared link). "Pick from
+  gazetteer", draw, upload and coordinates are unchanged. An id too long for a link is refused.
+- **Summaries over places.** For the current item of the Collections lens, each place in the list shows
+  n cells, mean, min and max, with the share of cells that have no value: hex cells are counted by
+  centroid (new `hex_centroids` asset of `biotrack_indicators`: `FID`, `lon`, `lat`, 27,841 rows, 0.6 MB,
+  and `lib/geo/pip.ts`, ray casting that also handles holes and antimeridian-unwrapped places);
+  raster items ask titiler `/cog/statistics` (display-grid statistics, labelled as such; the tile
+  server does not yet answer a browser's POST preflight, so these rows say so instead of a number).
+  The same rows are in the Table tool, with a CSV download.
+- **Only inside places.** A switch in the Places pane dims hex cells whose centroid is outside every
+  place (feature state `inside`, opacity 0.15); `?filter=places`.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

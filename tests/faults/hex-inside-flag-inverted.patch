@@ -1,0 +1,13 @@
+diff --git a/src/lib/map/layers/hex.ts b/src/lib/map/layers/hex.ts
+index 0f4b0a6..cfc68e1 100644
+--- a/src/lib/map/layers/hex.ts
++++ b/src/lib/map/layers/hex.ts
+@@ -205,7 +205,7 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
+       // flag every painted cell (in the place or not) while the filter is on; clear what was flagged
+       // when it goes off. `inside: null` is "no state": the paint expression reads it as normal.
+       if (inside) {
+-        for (const id of appliedIds) map.setFeatureState(feature(id), { inside: inside.has(id) });
++        for (const id of appliedIds) map.setFeatureState(feature(id), { inside: !inside.has(id) });
+         for (const id of insideTouched) {
+           if (!appliedIds.has(id)) map.setFeatureState(feature(id), { inside: null });
+         }

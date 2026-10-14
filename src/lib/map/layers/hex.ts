@@ -24,6 +24,8 @@ export const HEX_SOURCE_ID = "hex";
 export const HEX_FILL_ID = "hex-fill";
 export const HEX_SELECTED_ID = "hex-selected";
 export const HEX_FILL_OPACITY = 0.85;
+/** WP4 "Only inside places": a cell whose `inside` state is exactly `false` draws at this opacity. */
+export const HEX_OUTSIDE_OPACITY = 0.15;
 /** the outline of the clicked cell. */
 export const HEX_SELECTED_WIDTH = 3;
 
@@ -84,7 +86,14 @@ export function hexFillLayer(spec: HexLayerSpec): LayerSpecification {
     "source-layer": spec.sourceLayer,
     paint: {
       "fill-color": hexColorExpression(spec.colors, spec.domain),
-      "fill-opacity": spec.opacity ?? HEX_FILL_OPACITY,
+      // a cell whose `inside` feature state is `false` (the "Only inside places" filter, `setInside`
+      // below) is dimmed; no state, or `true`, is the normal opacity -- so the filter off is a no-op
+      "fill-opacity": [
+        "case",
+        ["==", ["feature-state", "inside"], false],
+        HEX_OUTSIDE_OPACITY,
+        spec.opacity ?? HEX_FILL_OPACITY,
+      ] as ExpressionSpecification,
       "fill-antialias": false,
     },
   };
@@ -148,6 +157,9 @@ export interface HexPainter {
   apply(column: ValueColumn | null): void;
   /** outline one cell (`null` clears it). */
   setSelected(fid: number | null): void;
+  /** the "Only inside places" filter: the FIDs inside a place stay at full opacity, every other
+   * painted cell is dimmed (`inside: false` feature state); `null` clears the filter. */
+  setInside(fids: ReadonlySet<number> | null): void;
   destroy(): void;
 }
 
@@ -158,6 +170,9 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
   let appliedIds = new Set<number>();
   let selected: number | null = null;
   let selectedApplied: number | null = null;
+  let inside: ReadonlySet<number> | null = null;
+  let insideApplied: ReadonlySet<number> | null = null;
+  let insideTouched = new Set<number>();
 
   const feature = (id: number) => ({ source: HEX_SOURCE_ID, sourceLayer, id });
 
@@ -170,8 +185,12 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
       appliedColumn = null;
       appliedIds = new Set();
       selectedApplied = null;
+      insideApplied = null;
+      insideTouched = new Set();
     }
+    let columnChanged = false;
     if (appliedColumn !== current) {
+      columnChanged = true;
       const next = current ? hexFeatureStates(current) : [];
       const nextIds = new Set(next.map((p) => p.id));
       for (const { id, state } of next) map.setFeatureState(feature(id), state);
@@ -181,6 +200,21 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
       }
       appliedIds = nextIds;
       appliedColumn = current;
+    }
+    if (insideApplied !== inside || (columnChanged && inside)) {
+      // flag every painted cell (in the place or not) while the filter is on; clear what was flagged
+      // when it goes off. `inside: null` is "no state": the paint expression reads it as normal.
+      if (inside) {
+        for (const id of appliedIds) map.setFeatureState(feature(id), { inside: inside.has(id) });
+        for (const id of insideTouched) {
+          if (!appliedIds.has(id)) map.setFeatureState(feature(id), { inside: null });
+        }
+        insideTouched = new Set(appliedIds);
+      } else {
+        for (const id of insideTouched) map.setFeatureState(feature(id), { inside: null });
+        insideTouched = new Set();
+      }
+      insideApplied = inside;
     }
     if (selectedApplied !== selected) {
       if (selectedApplied !== null)
@@ -198,6 +232,10 @@ export function createHexPainter(map: HexPaintMap, sourceLayer: string): HexPain
     },
     setSelected(fid) {
       selected = fid;
+      flush();
+    },
+    setInside(fids) {
+      inside = fids;
       flush();
     },
     destroy() {

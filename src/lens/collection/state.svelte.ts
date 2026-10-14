@@ -103,6 +103,9 @@ export interface CollectionLensDeps {
   mst?: { items?: MstItemOptions; taxon?: import("../../lib/catalog/mst/items").TaxonLoadOptions };
   /** the display-rescale reader (titiler `/cog/statistics`, cached); default the module cache. */
   rescale?: RescaleCache;
+  /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
+   * dimmed), read reactively; `null`/absent = no filter. */
+  insideFids?: () => ReadonlySet<number> | null;
 }
 
 /** the species list of the clicked cell, for the item's season and group (see `lib/catalog/species.ts`). */
@@ -151,6 +154,8 @@ export interface CollectionLens {
   /** true while the item's value column is being read. */
   readonly valuesLoading: boolean;
   readonly valuesError: LoadError | null;
+  /** the active item's value column (`FID` + values), `null` until it is read or for a raster item. */
+  readonly values: ValueColumn | null;
   /** the clicked cell (mirrors the store, reactively). */
   readonly cell: CellSelection | null;
   /** the public species list's load state (`idle` when the collection publishes none). */
@@ -592,6 +597,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     painter?.apply(mapInputs.hex ? values : null);
   });
   $effect(() => {
+    painter?.setInside(mapInputs.hex ? (deps.insideFids?.() ?? null) : null);
+  });
+  $effect(() => {
     painter?.setSelected(
       mapInputs.hex && cell && entry && cell.collection === entry.id ? cell.fid : null,
     );
@@ -690,6 +698,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get valuesError() {
       return valuesError;
+    },
+    get values() {
+      return values;
     },
     get cell() {
       return cell;

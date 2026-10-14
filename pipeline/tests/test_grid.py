@@ -16,6 +16,15 @@ def test_fid_only_drops_every_other_attribute(hexes):
   assert grid.fid_only(g)["FID"].dtype == "int64"
 
 
+def test_hex_centroids_are_fid_lon_lat_inside_each_hexagon(hexes):
+  c = grid.hex_centroids(hexes)
+  assert list(c.columns) == ["FID", "lon", "lat"] and c["FID"].dtype == "int64"
+  assert c["FID"].tolist() == [0, 1, 2]
+  for row, geom in zip(c.itertuples(), hexes.geometry):
+    assert geom.contains(shapely.Point(row.lon, row.lat))
+  assert abs(c.loc[0, "lon"] - (-80.6)) < 1e-6 and abs(c.loc[0, "lat"] - 28.4) < 1e-6
+
+
 def test_crosswalk_weights_sum_to_one_per_fid(hexes):
   xw = grid.build_crosswalk(hexes)
   assert list(xw.columns) == ["FID", "h3", "weight", "overlap_km2"]

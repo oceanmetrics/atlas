@@ -229,6 +229,16 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
           {"name": "overlap_km2", "type": "double", "description": "intersection area in km2 (equal-area projection)"},
         ],
       },
+      "hex_centroids": {
+        "href": "./hex_centroids.parquet", "type": PARQUET, "roles": ["data"],
+        "title": "Hexagon centroids (FID, lon, lat) for point-in-polygon summaries",
+        "atlas:key_column": "FID", "table:row_count": n_hex,
+        "table:columns": [
+          {"name": "FID", "type": "int64", "description": "hexagonal cell id (join key to hex.pmtiles feature id)"},
+          {"name": "lon", "type": "double", "description": "centroid longitude, EPSG:4326"},
+          {"name": "lat", "type": "double", "description": "centroid latitude, EPSG:4326"},
+        ],
+      },
       "values_h3": {
         "href": "./values_h3.parquet", "type": PARQUET, "roles": ["data"],
         "title": "Indicator values aggregated to H3 res 7 (area-weighted mean)",

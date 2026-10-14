@@ -159,3 +159,33 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 0;
 }
+
+/* WP4: the gazetteer overlay popup (places/overlayInteraction.ts): the feature's name and an
+   "Add <name> to Places" button, styled like the app's other small controls. */
+.atlas-popup .overlay-popup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.atlas-popup .overlay-popup p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.atlas-popup .overlay-popup .overlay-popup-name {
+  font-weight: 600;
+}
+
+.atlas-popup .overlay-popup button {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--fill-control);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}

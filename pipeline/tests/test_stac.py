@@ -45,6 +45,12 @@ def test_indicator_collection_assets_and_links():
   assert [x["roles"][0] for x in c["contacts"]] == ["principal investigator", "author"]
 
 
+def test_indicator_collection_lists_hex_centroids_asset():
+  a = make_collection()["assets"]["hex_centroids"]
+  assert a["href"] == "./hex_centroids.parquet" and a["atlas:key_column"] == "FID" and a["table:row_count"] == 3
+  assert [c["name"] for c in a["table:columns"]] == ["FID", "lon", "lat"]
+
+
 def test_24_items_with_dims_and_value_columns():
   items = stac.indicator_items(BBOX, ranges())
   assert len(items) == 24

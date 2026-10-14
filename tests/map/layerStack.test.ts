@@ -221,7 +221,7 @@ describe("normalizeLayerStack", () => {
   // would then rank `data-places` BELOW the raster, painting Selection under everything else.
   it("a complete stack with data-places NOT last is repaired -- moved to the very end", () => {
     const def = defaultLayerStackEntries();
-    const violating = [def[6], ...def.slice(0, 6)]; // data-places moved to the FRONT
+    const violating = [def[7], ...def.slice(0, 7)]; // data-places moved to the FRONT
     const out = normalizeLayerStack(violating);
     expect(out.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
   });
@@ -409,6 +409,7 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
       "basemap-roads",
       "data-raster",
       "basemap-labels",
+      "data-overlays",
       "data-places",
     ]);
     const token = formatLayerStack(entries)!;
@@ -508,6 +509,7 @@ describe("moveLayerStackEntry", () => {
       "basemap-labels",
       "basemap-land",
       "data-raster",
+      "data-overlays",
       "data-places",
     ]);
   });
@@ -553,6 +555,7 @@ describe("moveLayerStackEntry", () => {
       "basemap-roads",
       "data-raster",
       "basemap-labels",
+      "data-overlays",
       "data-places",
     ]);
   });
@@ -579,9 +582,9 @@ describe("canMoveLayerStackEntry", () => {
 
   it("the entry directly below data-places cannot move any further up -- clamps to a no-op at the boundary", () => {
     const entries = defaultLayerStackEntries();
-    const rasterIdx = entries.findIndex((e) => e.id === "data-raster"); // directly below data-places
+    const overlaysIdx = entries.findIndex((e) => e.id === "data-overlays"); // directly below data-places
     const placesIdx = entries.findIndex((e) => e.id === "data-places");
-    expect(canMoveLayerStackEntry(entries, rasterIdx, placesIdx)).toBe(false);
+    expect(canMoveLayerStackEntry(entries, overlaysIdx, placesIdx)).toBe(false);
   });
 
   it("moving to the SAME position (from === to, after clamping) returns false", () => {
@@ -644,11 +647,15 @@ describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", 
     expect(canMoveLayerStackEntryVisible(entries, "basemap-roads", "down", inPanel)).toBe(true);
   });
 
-  it("the pin rule still applies through the hop -- Data (data-raster) cannot move up past the pinned Selection", () => {
+  it("the pin rule still applies through the hop -- Place layers cannot move up past the pinned Selection", () => {
     const entries = defaultLayerStackEntries();
     // up: its only visible neighbour above is data-places, which is pinned (never a valid target).
+    expect(
+      canMoveLayerStackEntryVisible(entries, "data-overlays", "up", LAYER_GROUP_IN_PANEL),
+    ).toBe(false);
+    // Data CAN move up past Place layers (the overlays then draw under the data)
     expect(canMoveLayerStackEntryVisible(entries, "data-raster", "up", LAYER_GROUP_IN_PANEL)).toBe(
-      false,
+      true,
     );
   });
 

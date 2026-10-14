@@ -198,3 +198,58 @@ describe("creditsForPlaces", () => {
     expect(await creditsForPlaces([], client)).toBe("");
   });
 });
+
+// WP4: searching the places index (`search()` of the vendored client) for areas to add by reference
+describe("searchGazetteer: areas from the index, one per place_id", () => {
+  const hit = (over: Record<string, unknown>) => ({
+    place_id: "A:1",
+    name: "Alpha",
+    authority: "A",
+    place_type: "lease",
+    geom_type: "MultiPolygon",
+    collection: "wind",
+    bbox: [0, 0, 1, 1],
+    centroid: [0.5, 0.5],
+    area_km2: 12,
+    license: null,
+    attribution: "Credit.",
+    version: null,
+    updated: null,
+    ...over,
+  });
+  const searcher = (rows: ReturnType<typeof hit>[]) => ({
+    search: async () => rows as never,
+  });
+
+  it("points and lines are left out (a place is an area); an id in two collections is listed once", async () => {
+    const { searchGazetteer } = await import("../../src/lib/gazetteer/resolve");
+    const out = await searchGazetteer(
+      "alpha",
+      {},
+      searcher([
+        hit({}),
+        hit({ place_id: "P:1", geom_type: "Point", name: "Pt" }),
+        hit({ place_id: "L:1", geom_type: "MultiLineString", name: "Ln" }),
+        hit({ collection: "pacific" }), // the same A:1, another collection
+        hit({ place_id: "B:2", name: "Beta", geom_type: "Polygon" }),
+        hit({ place_id: "N:1", name: "No type", geom_type: null }),
+      ]),
+    );
+    expect(out.map((h) => [h.id, h.collection])).toEqual([
+      ["A:1", "wind"],
+      ["B:2", "wind"],
+      ["N:1", "wind"],
+    ]);
+    expect(out[0]).toMatchObject({ name: "Alpha", areaKm2: 12, attribution: "Credit." });
+  });
+
+  it("an id too long for a p. token is dropped, and the limit applies after the filtering", async () => {
+    const { searchGazetteer } = await import("../../src/lib/gazetteer/resolve");
+    const rows = [
+      hit({ place_id: `X:${"y".repeat(130)}` }),
+      ...Array.from({ length: 5 }, (_, i) => hit({ place_id: `Z:${i}`, name: `Z${i}` })),
+    ];
+    const out = await searchGazetteer("z", { limit: 3 }, searcher(rows));
+    expect(out.map((h) => h.id)).toEqual(["Z:0", "Z:1", "Z:2"]);
+  });
+});

@@ -1,0 +1,13 @@
+diff --git a/src/lib/gazetteer/overlayUrl.ts b/src/lib/gazetteer/overlayUrl.ts
+index 93943b1..d9a679b 100644
+--- a/src/lib/gazetteer/overlayUrl.ts
++++ b/src/lib/gazetteer/overlayUrl.ts
+@@ -30,7 +30,7 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
+ 
+ /** the value to write, or `null` for "write nothing" (undefined, or the default set). */
+ export function formatOv(ov: readonly string[] | undefined): string | null {
+-  if (ov === undefined || sameSet(ov, DEFAULT_OVERLAYS)) return null;
++  if (ov === undefined) return null;
+   return ov.join(",");
+ }
+ 

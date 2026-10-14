@@ -17,12 +17,15 @@
   import Chip from "../lib/ui/Chip.svelte";
   import Accordion from "../lib/ui/Accordion.svelte";
   import Select from "../lib/ui/Select.svelte";
+  import Switch from "../lib/ui/Switch.svelte";
   import { notify } from "../lib/ui/announcer";
   import { encodePlace, type Place } from "../lib/geo/placeCodec";
   import type { Sel } from "../lib/state/types";
   import type { SelStore } from "../lib/state/sel.svelte";
   import type { MapHandle } from "../lib/map/map";
   import type { PlacesMapStore } from "./placesMap.svelte";
+  import type { PlaceSummaries } from "./summary.svelte";
+  import { summaryLine } from "./summary";
   import {
     addGazPlace,
     addPlace,
@@ -47,7 +50,7 @@
     gazetteerDataBase,
     placesTilesUrl,
   } from "../lib/gazetteer/config";
-  import type { GazPickLayer } from "../lib/gazetteer/resolve";
+  import type { GazHit, GazPickLayer } from "../lib/gazetteer/resolve";
   import { clearRecents, loadRecents, pushRecent, recentPlace } from "./recents";
   import { downloadGeoJson, placesToGeoJson } from "./download";
   import {
@@ -80,13 +83,15 @@
     selStore: SelStore;
     mapHandle: MapHandle | undefined;
     mapStore: PlacesMapStore;
+    /** WP4: the current item summarised over each place, and the "Only inside places" filter. */
+    summaries?: PlaceSummaries;
     /** Deliverable 7: place_draw/place_upload/place_share, counts and buckets only. Defaults to a
      * no-op -- see analytics.ts's own header for why nothing here sends anything until the GA4
      * loader is wired app-wide. */
     track?: Track;
   }
 
-  let { sel, selStore, mapHandle, mapStore, track = noopTrack }: Props = $props();
+  let { sel, selStore, mapHandle, mapStore, summaries, track = noopTrack }: Props = $props();
 
   const places = $derived(placesFromHash(sel.pl));
   const selectedIndex = $derived(selectedPlaceIndex(sel.sel));
@@ -131,6 +136,70 @@
     mapStore.setGazetteer(null);
     mapStore.setOutline(null);
   });
+
+  // --- "Search the gazetteer" (WP4) -----------------------------------------------------------------
+  // The places index (`places_index.parquet`, ~1 MB, every collection) is read ONCE by the vendored
+  // client's `search()` and searched locally; the lazy chunk and the file are only fetched when the
+  // field is first focused or typed in. A hit is added BY REFERENCE (a `p.` token), exactly like a
+  // click on the map.
+  let query = $state("");
+  let hits = $state<GazHit[]>([]);
+  let searching = $state(false);
+  let searched = $state(false);
+  let searchError = $state<string | null>(null);
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let searchToken = 0;
+  let indexWarm = false;
+
+  function warmIndex() {
+    if (indexWarm) return;
+    indexWarm = true;
+    void import("../lib/gazetteer/resolve")
+      .then((m) => m.searchGazetteer("", { limit: 1 }))
+      .catch(() => {
+        indexWarm = false; // unreachable: the next focus tries again
+      });
+  }
+
+  function onQuery(value: string) {
+    query = value;
+    clearTimeout(searchTimer);
+    searchToken++;
+    if (!value.trim()) {
+      hits = [];
+      searched = false;
+      searching = false;
+      searchError = null;
+      return;
+    }
+    searchTimer = setTimeout(() => void runSearch(value), 200);
+  }
+
+  async function runSearch(value: string) {
+    const mine = ++searchToken;
+    searching = true;
+    try {
+      const { searchGazetteer } = await import("../lib/gazetteer/resolve");
+      const found = await searchGazetteer(value, { limit: 8 });
+      if (mine !== searchToken) return;
+      hits = found;
+      searched = true;
+      searchError = null;
+    } catch (e) {
+      if (mine !== searchToken) return;
+      hits = [];
+      searchError = (e as Error)?.message ?? "the gazetteer could not be reached";
+    } finally {
+      if (mine === searchToken) searching = false;
+    }
+  }
+
+  function addHit(hit: GazHit) {
+    addGazPicked({ id: hit.id, name: hit.name });
+    onQuery("");
+  }
+
+  onDestroy(() => clearTimeout(searchTimer));
 
   // --- "Pick from gazetteer" (gazetteer-places, plan P2 item 10) ----------------------------------
   // Shows a gazetteer PMTiles collection on the map (the composeStyle `gazetteer` input, through
@@ -540,6 +609,10 @@
             <Chip label="loading…" />
           {/if}
 
+          {#if summaries && summaries.rows[i]}
+            <p class="row-summary" data-testid="place-summary">{summaryLine(summaries.rows[i])}</p>
+          {/if}
+
           <span class="row-actions" role="group" aria-label="Place actions">
             <button type="button" aria-label="Zoom to place" onclick={() => zoomTo(place)}>
               <Icon name="search" size={16} />
@@ -558,7 +631,88 @@
     </ul>
   {/if}
 
+  {#if summaries && (places.length || summaries.filterOn)}
+    <section class="summary-bar" aria-label="Summary of the layer over your places">
+      {#if summaries.subject && !summaries.unavailable}
+        <p class="summary-subject">
+          Showing <b>{summaries.subject}</b> over each place.
+        </p>
+      {/if}
+      {#if summaries.unavailable}
+        <p class="summary-note" role="status">{summaries.unavailable}</p>
+      {:else if summaries.caveat}
+        <details class="summary-caveat">
+          <summary>What do these numbers mean?</summary>
+          <p>{summaries.caveat}</p>
+        </details>
+      {/if}
+      {#if summaries.mode === "hex" || summaries.filterOn}
+        <div class="filter-row">
+          <Switch
+            label="Only inside places"
+            checked={summaries.filterOn}
+            variant="quiet"
+            onchange={(on) => summaries.setFilter(on)}
+          />
+          <span>Only inside places</span>
+        </div>
+        {#if summaries.filterNote}
+          <p class="summary-note" role="status">{summaries.filterNote}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
+
   <h3 class="flow-heading flow-heading--add">Add a place</h3>
+
+  <section class="search-bar" aria-label="Find a place in the gazetteer">
+    <input
+      type="search"
+      class="search-input"
+      aria-label="Search the gazetteer"
+      placeholder="Search places, e.g. Channel Islands"
+      autocomplete="off"
+      value={query}
+      onfocus={warmIndex}
+      oninput={(e) => onQuery(e.currentTarget.value)}
+    />
+    {#if searching}
+      <p class="search-note" role="status">Searching the gazetteer…</p>
+    {:else if searchError}
+      <p class="search-note" role="alert">Couldn't search the gazetteer ({searchError}).</p>
+    {:else if searched && !hits.length}
+      <p class="search-note">No areas match "{query.trim()}".</p>
+    {/if}
+    {#if hits.length}
+      <ul class="hit-list" aria-label="Gazetteer results">
+        {#each hits as hit (hit.id)}
+          <li class="hit-row">
+            <span class="hit-text">
+              <span class="hit-name">{hit.name}</span>
+              <span class="hit-meta">
+                {[
+                  hit.placeType.replace(/_/g, " "),
+                  hit.collection,
+                  hit.areaKm2 !== null ? `${fmt(hit.areaKm2)} km²` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </span>
+            <button
+              type="button"
+              class="hit-add"
+              aria-label={`Add ${hit.name} to Places`}
+              disabled={places.length >= MAX_PLACES}
+              onclick={() => addHit(hit)}
+            >
+              Add
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 
   <section class="pick-bar" aria-label="Pick from gazetteer">
     <Pill
@@ -685,6 +839,130 @@
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
+  }
+
+  .summary-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+  }
+
+  .summary-bar p {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .summary-bar .summary-subject {
+    color: var(--text-primary);
+  }
+
+  .summary-caveat {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .summary-caveat summary {
+    cursor: pointer;
+  }
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .row-summary {
+    flex: 1 0 100%;
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .search-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .search-input {
+    height: 32px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .search-note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .hit-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+  }
+
+  .hit-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .hit-name {
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hit-meta {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hit-add {
+    flex: none;
+    height: 28px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .hit-add:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .draw-bar {

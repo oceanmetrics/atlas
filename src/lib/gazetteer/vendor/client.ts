@@ -1,21 +1,32 @@
 // VENDORED from @oceanmetrics/places (https://github.com/oceanmetrics/places, client/src/client.ts,
-// v0.1.0 at commit 3ff9fbf), the sibling JS client for the Ocean Metrics gazetteer. That package is
-// unpublished and private, so the three files this app needs are copied here rather than linked
-// with a `file:` dependency (which would break `npm ci` on CI and on every other machine):
-//   client.ts <- client/src/client.ts   TRIMMED: addLayer/removeLayer/search/bboxIntersects and the
-//                                       module-level default client are dropped (the atlas draws the
-//                                       PMTiles layers itself, through composeStyle -- never addLayer)
-//   unwrap.ts, wkb.ts, types.ts <- verbatim, prettier-formatted (types.ts also keeps the unused map option types)
+// v0.1.3 at commit 366c2cc), the sibling JS client for the Ocean Metrics gazetteer. That package is
+// unpublished and private, so the files this app needs are copied here rather than linked with a
+// `file:` dependency (which would break `npm ci` on CI and on every other machine):
+//   client.ts <- client/src/client.ts   TRIMMED: addLayer/removeLayer and the module-level default
+//                                       client are dropped (the atlas draws the PMTiles layers itself,
+//                                       through composeStyle -- never addLayer). `search`,
+//                                       `bboxIntersects`, `layerLabel` and `creditLine` are kept.
+//   unwrap.ts, wkb.ts <- verbatim (v0.1.3 is byte-identical to v0.1.0 here), prettier-formatted
+//   types.ts <- verbatim (also keeps the unused map option types)
 // Keep the logic identical; when the package is published, replace this folder with the dependency
-// (see docs/gazetteer-places.md). `getPlace(id, { unwrap: true })` is the one function the `p.`
-// place_id token needs: it returns contiguous (> 180) longitudes, matching the atlas's unwrapped
-// convention, from a filtered range read of `<base><slug>/places.parquet`.
+// (see docs/gazetteer-places.md). WP4 (2026-10-14) refreshed the folder from v0.1.0 to v0.1.3 to get
+// `search()`, the live index schema (centroid_lon/lat, collection, geom_type), `layerLabel` and a
+// `getPlace` that pins a collection by `slug` without caching a pinned lookup.
 import { asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects } from "hyparquet";
 import type { AsyncBuffer, FileMetaData } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
 import { geometryBBox, unwrapAntimeridian } from "./unwrap";
 import { wkbToGeometry } from "./wkb";
-import type { BBox, ClientConfig, GetPlaceOptions, IndexPlace, Layer, PlaceFeature } from "./types";
+import type {
+  BBox,
+  ClientConfig,
+  CreditRef,
+  GetPlaceOptions,
+  IndexPlace,
+  Layer,
+  PlaceFeature,
+  SearchOptions,
+} from "./types";
 
 export const DEFAULT_BASE = "https://storage.oceanmetrics.io/gazetteer/";
 const FOOTER_GUESS = 16 * 1024;
@@ -23,6 +34,7 @@ const SUFFIX = /\s*Processed by Ocean Metrics\.?\s*$/i;
 
 // helpers ----
 const slash = (b: string) => (b.endsWith("/") ? b : b + "/");
+const norm = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const arr = <T>(x: T | T[] | undefined): T[] => (x === undefined ? [] : Array.isArray(x) ? x : [x]);
 
@@ -46,6 +58,23 @@ function toLonLat(c: any): [number, number] | null {
   const x = c.x ?? c.lon ?? c.lng,
     y = c.y ?? c.lat;
   return x === undefined ? null : [Number(x), Number(y)];
+}
+
+/**
+ * do two [w, s, e, n] boxes intersect? `a` may cross the antimeridian (w > e); `b` (an index bbox) may be unwrapped,
+ * i.e. its east edge beyond 180 (a place cut at the antimeridian is indexed as 177..199): it is also tried shifted by -360.
+ */
+export function bboxIntersects(a: BBox, b: BBox): boolean {
+  if (!(a[1] <= b[3] && a[3] >= b[1])) return false;
+  const lon = (w: number, e: number, x0: number, x1: number) => w <= x1 && e >= x0;
+  const hit = (x0: number, x1: number) =>
+    a[0] <= a[2] ? lon(a[0], a[2], x0, x1) : lon(a[0], 180, x0, x1) || lon(-180, a[2], x0, x1);
+  return hit(b[0], b[2]) || (b[2] > 180 && hit(b[0] - 360, b[2] - 360));
+}
+
+/** a layer's display name: its title, plus ` (status_label)` when the layer has a status (e.g. "... (rescinded 2025-07-30)"). */
+export function layerLabel(layer: Pick<Layer, "title"> & { status_label?: string | null }): string {
+  return layer.status_label ? `${layer.title} (${layer.status_label})` : layer.title;
 }
 
 /** the credit line for attribution strings: deduped; the shared "Processed by Ocean Metrics." said once at the end. */
@@ -78,7 +107,9 @@ export function createClient(initial: ClientConfig = {}) {
 
   const base = () => slash(cfg.base ?? DEFAULT_BASE);
   const doFetch = () => cfg.fetch ?? globalThis.fetch.bind(globalThis);
+  // layers.json is published at index/layers.json; the root copy is the fallback (and the only copy of older publishes)
   const layersUrl = () => cfg.layersUrl ?? `${base()}index/layers.json`;
+  const layersFallbackUrl = () => (cfg.layersUrl ? null : `${base()}layers.json`);
   const indexUrl = () => cfg.indexUrl ?? `${base()}index/places_index.parquet`;
   const parquetUrl = (slug: string) =>
     cfg.parquetUrl ? cfg.parquetUrl(slug) : `${base()}${slug}/places.parquet`;
@@ -108,8 +139,13 @@ export function createClient(initial: ClientConfig = {}) {
   /** the layers manifest (layers.json), cached; `refresh` re-fetches. */
   function listLayers(opts: { refresh?: boolean } = {}): Promise<Layer[]> {
     if (!layersP || opts.refresh) {
-      const url = layersUrl();
+      const url = layersUrl(),
+        alt = layersFallbackUrl();
       layersP = doFetch()(url).then(async (r) => {
+        if (!r.ok && alt && (r.status === 404 || r.status === 403)) {
+          const r2 = await doFetch()(alt); // index/ missing: try the root copy
+          if (r2.ok) r = r2;
+        }
         if (!r.ok) throw new Error(`layers.json: ${r.status} ${r.statusText} (${url})`);
         const j = await r.json();
         return (Array.isArray(j) ? j : j.layers) as Layer[];
@@ -138,8 +174,14 @@ export function createClient(initial: ClientConfig = {}) {
             name: String(r.name ?? ""),
             authority: String(r.authority ?? ""),
             place_type: String(r.place_type ?? ""),
+            geom_type: r.geom_type == null ? null : String(r.geom_type),
+            collection: String(r.collection ?? ""),
             bbox: toBBox(r.bbox)!,
-            centroid: toLonLat(r.centroid),
+            // live schema: centroid_lon / centroid_lat (doubles); the pre-0.1.1 `centroid` list is still read
+            centroid:
+              r.centroid_lon != null && r.centroid_lat != null
+                ? [Number(r.centroid_lon), Number(r.centroid_lat)]
+                : toLonLat(r.centroid),
             area_km2: r.area_km2 == null ? null : Number(r.area_km2),
             license: r.license ?? null,
             attribution: r.attribution ?? null,
@@ -152,6 +194,52 @@ export function createClient(initial: ClientConfig = {}) {
       });
     }
     return indexP;
+  }
+
+  /**
+   * search places_index.parquet by name or place_id. Every whitespace-separated word of `q` must occur
+   * (case and accent insensitive); results rank exact name, name prefix, word prefix, then substring, larger areas first.
+   * a place_id is unique within a collection, not across them (`BOEM:OCS-P 0562` is in two collections): every
+   * (collection, place_id) is its own hit; pass the hit's `collection` to `getPlace` as `slug`.
+   */
+  async function search(q: string, opts: SearchOptions = {}): Promise<IndexPlace[]> {
+    const { bbox, limit = 20 } = opts;
+    const types = arr(opts.type).map(norm),
+      auths = arr(opts.authority).map(norm);
+    const query = norm(q ?? ""),
+      words = query.split(/\s+/).filter(Boolean);
+    const scored: Array<[number, IndexPlace]> = [];
+    for (const p of await loadIndex()) {
+      if (types.length && !types.includes(norm(p.place_type))) continue;
+      if (auths.length && !auths.includes(norm(p.authority))) continue;
+      if (bbox && p.bbox && !bboxIntersects(bbox, p.bbox)) continue;
+      let score = 0;
+      if (words.length) {
+        const name = norm(p.name),
+          id = norm(p.place_id),
+          hay = `${name} ${id}`;
+        if (!words.every((w) => hay.includes(w))) continue;
+        score =
+          id === query
+            ? 0
+            : name === query
+              ? 0
+              : name.startsWith(query)
+                ? 1
+                : name.split(/[\s\-_/,()]+/).some((w) => w.startsWith(words[0]))
+                  ? 2
+                  : 3;
+      }
+      scored.push([score, p]);
+    }
+    scored.sort(
+      (a, b) =>
+        a[0] - b[0] ||
+        (b[1].area_km2 ?? 0) - (a[1].area_km2 ?? 0) ||
+        a[1].name.localeCompare(b[1].name) ||
+        a[1].collection.localeCompare(b[1].collection),
+    );
+    return scored.slice(0, limit).map((s) => s[1]);
   }
 
   // places ----
@@ -168,6 +256,8 @@ export function createClient(initial: ClientConfig = {}) {
    * one place as a GeoJSON Feature (`id` = place_id), read from the collection parquet by id with a filtered
    * range read (only the row group holding the id is fetched). `null` if no collection has it.
    * `unwrap: true` unwraps antimeridian-split parts into contiguous longitudes beyond 180 (see `unwrapAntimeridian`).
+   * `slug` pins the collection (no guessing): use it from a search hit's `collection`, since a place_id can occur in
+   * more than one collection and an unpinned lookup returns the first (the id's authority first, then manifest order).
    */
   async function getPlace(id: string, opts: GetPlaceOptions = {}): Promise<PlaceFeature | null> {
     for (const slug of opts.slug ? [opts.slug] : await candidateSlugs(id)) {
@@ -186,7 +276,7 @@ export function createClient(initial: ClientConfig = {}) {
       }
       const r: any = rows.find((x: any) => x.place_id === id);
       if (!r) continue;
-      found.set(id, slug);
+      if (!opts.slug) found.set(id, slug); // a pinned lookup says nothing about where an unpinned one should look
       const { geometry: raw, bbox: rawBox, ...rest } = r;
       let geometry = raw instanceof Uint8Array ? wkbToGeometry(raw) : raw;
       if (opts.unwrap) geometry = unwrapAntimeridian(geometry);
@@ -194,23 +284,24 @@ export function createClient(initial: ClientConfig = {}) {
       const bbox = opts.unwrap
         ? geometryBBox(geometry)
         : (toBBox(rawBox) ?? geometryBBox(geometry));
-      return { type: "Feature", id, bbox, properties, geometry } as PlaceFeature;
+      return { type: "Feature", id, bbox, properties, geometry, collection: slug } as PlaceFeature;
     }
     return null;
   }
 
   /**
-   * the deduped credit line for what is on screen. Pass place ids ("BOEM:OCS-P 0561", read from the index) and/or
-   * layer slugs ("boem_wind_leases", read from layers.json). Unknown ids and slugs are skipped.
+   * the deduped credit line for what is on screen. Pass place ids ("BOEM:OCS-P 0561", read from the index), search hits
+   * or `{ collection, place_id }` pairs, and/or layer slugs ("boem_wind_leases", read from layers.json). A bare id that
+   * occurs in several collections credits all of them (pass a hit or a pair to pin one). Unknown ids and slugs are skipped.
    * `html: true` returns the layer's `attribution_html` (links) and escapes the index's plain text.
    */
   async function creditsFor(
-    refs: string | string[],
+    refs: CreditRef | CreditRef[],
     opts: { html?: boolean } = {},
   ): Promise<string> {
     const list = arr(refs);
-    const ids = list.filter((r) => r.includes(":")),
-      slugs = list.filter((r) => !r.includes(":"));
+    const slugs = list.filter((r): r is string => typeof r === "string" && !r.includes(":"));
+    const ids = list.filter((r) => typeof r !== "string" || r.includes(":"));
     const parts: string[] = [];
     if (slugs.length) {
       const layers = await listLayers();
@@ -220,14 +311,26 @@ export function createClient(initial: ClientConfig = {}) {
       }
     }
     if (ids.length) {
-      const byId = new Map((await loadIndex()).map((p) => [p.place_id, p]));
-      for (const id of ids) {
-        const a = byId.get(id)?.attribution;
-        if (a) parts.push(opts.html ? esc(a) : a);
+      // keyed on (collection, place_id): the id alone is not unique across collections
+      const byKey = new Map<string, IndexPlace>(),
+        byId = new Map<string, IndexPlace[]>();
+      for (const p of await loadIndex()) {
+        byKey.set(`${p.collection}\u0000${p.place_id}`, p);
+        byId.set(p.place_id, [...(byId.get(p.place_id) ?? []), p]);
+      }
+      for (const r of ids) {
+        const hits =
+          typeof r === "string"
+            ? (byId.get(r) ?? [])
+            : r.collection
+              ? [byKey.get(`${r.collection}\u0000${r.place_id}`)]
+              : (byId.get(r.place_id) ?? []);
+        for (const h of hits)
+          if (h?.attribution) parts.push(opts.html ? esc(h.attribution) : h.attribution);
       }
     }
     return creditLine(parts);
   }
 
-  return { configure, listLayers, getLayer, getPlace, creditsFor };
+  return { configure, listLayers, getLayer, search, getPlace, creditsFor };
 }

@@ -81,6 +81,8 @@ grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported
   feature-state and `promoteId: "FID"`.
 - `values.parquet`: one row per FID, columns `{{group}}_{{season}}_{{suffix}}` ({counts['n_values_cols']} value
   columns). Public metrics are `richness` and `uncertainty`.
+- `hex_centroids.parquet`: `FID`, `lon`, `lat` of each hexagon's centroid (EPSG:4326). The atlas app tests these
+  points against a place's polygon to summarise a layer over places.
 - `hex_h3.parquet`: FID to H3 resolution 7 crosswalk (`FID`, `h3`, `weight`, `overlap_km2`); `weight` is the share
   of the hexagon's area inside the H3 cell and sums to 1 per FID.
 - `values_h3.parquet`: the numeric value columns aggregated to H3 res 7 (area-weighted mean over the overlapping

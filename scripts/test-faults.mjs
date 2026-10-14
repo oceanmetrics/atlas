@@ -419,6 +419,47 @@ export const FAULTS = [
       "(Ben: it must represent the whole layer; only the marker follows a click)",
     gate: ["npx", "vitest", "run", "tests/lib/map/distribution.test.ts"],
   },
+  // --- WP4 (places: overlays, summaries, the inside-places filter) -------------------------------
+  {
+    id: "pip-antimeridian-unshifted",
+    patch: "tests/faults/pip-antimeridian-unshifted.patch",
+    describe:
+      "pointInArea() stops trying a point at +/-360 -- a hex centroid at -175 is no longer inside an " +
+      "unwrapped place spanning 170..190, so every antimeridian place summarises to zero cells",
+    gate: ["npx", "vitest", "run", "tests/geo/pip.test.ts"],
+  },
+  {
+    id: "summary-null-counted-as-zero",
+    patch: "tests/faults/summary-null-counted-as-zero.patch",
+    describe:
+      "cellStats() reads a cell with no value as 0 -- the mean drops, the min becomes 0 and the " +
+      "no-value share disappears (no data is not zero)",
+    gate: ["npx", "vitest", "run", "tests/places/summary.test.ts"],
+  },
+  {
+    id: "ov-default-set-written",
+    patch: "tests/faults/ov-default-set-written.patch",
+    describe:
+      "formatOv() writes the default overlay set into the URL -- the default view stops being an " +
+      "empty link and a later change to the default silently changes old links",
+    gate: ["npx", "vitest", "run", "tests/gazetteer/overlayUrl.test.ts"],
+  },
+  {
+    id: "hex-inside-flag-inverted",
+    patch: "tests/faults/hex-inside-flag-inverted.patch",
+    describe:
+      "the hex painter flags cells inside a place as outside -- 'Only inside places' dims exactly " +
+      "the cells it should keep",
+    gate: ["npx", "vitest", "run", "tests/map/hex.test.ts", "-t", "inside"],
+  },
+  {
+    id: "centroid-null-key-is-cell-zero",
+    patch: "tests/faults/centroid-null-key-is-cell-zero.patch",
+    describe:
+      "centroidsFromRows() reads a null FID as 0 (Number(null)) -- a bad row becomes a phantom cell 0 " +
+      "that can be counted inside a place",
+    gate: ["npx", "vitest", "run", "tests/places/summary.test.ts", "-t", "non-finite"],
+  },
   // --- round 4, R4-B (the rail attaches to the panel; four tabs; left by default) ---------------
   // --- round 4, R4-D (the Report tool is one flow, no sub-tabs) ---------------------------------
   // --- round 4 CI-red follow-up (R4-ci): the globe's empty viewport query ----------------------
