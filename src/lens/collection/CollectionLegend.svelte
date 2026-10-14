@@ -2,6 +2,7 @@
   // The Collections lens' legend, bottom-right over the map: the shared continuous `Legend.svelte`
   // (ramp, end labels, the layer's histogram and the clicked cell's marker) fed by
   // `mapInputs.ts#collectionMapInputs`. The same component sits inside the phone legend chip.
+  import Icon from "../../lib/ui/Icon.svelte";
   import Legend from "../../lib/ui/Legend.svelte";
   import { uid } from "../../lib/ui/uid";
   import { formatCollectionValue, type CollectionLegend } from "./mapInputs";
@@ -13,8 +14,17 @@
     tilesDown?: boolean;
     /** the legend belongs to a raster (titiler) item. */
     isRaster?: boolean;
+    /** WP14: fly the camera to the layer (the button sits in the card's header); omitted = no button. */
+    onZoom?: () => void;
+    zoomDisabled?: boolean;
   }
-  let { legend, tilesDown = false, isRaster = false }: Props = $props();
+  let {
+    legend,
+    tilesDown = false,
+    isRaster = false,
+    onZoom,
+    zoomDisabled = false,
+  }: Props = $props();
   const titleId = uid("collection-legend-down");
 </script>
 
@@ -44,6 +54,19 @@
   </div>
 {:else}
   <div class="collection-legend" data-testid="collection-legend">
+    {#if onZoom}
+      <button
+        type="button"
+        class="legend-zoom"
+        aria-label="Zoom to layer"
+        data-tooltip="Zoom to layer"
+        data-testid="legend-zoom-to-layer"
+        disabled={zoomDisabled}
+        onclick={onZoom}
+      >
+        <Icon name="zoomToLayer" size={16} />
+      </button>
+    {/if}
     <Legend
       title={legend.title}
       subtitle={legend.subtitle}
@@ -75,6 +98,36 @@
   }
   :global(.stage[data-panel-maximized="true"]) .collection-legend {
     display: none;
+  }
+  /* WP14: the card's header corner; the title (Legend's own h2) leaves it room */
+  .legend-zoom {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .legend-zoom:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+  .legend-zoom:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .legend-zoom:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+  .collection-legend :global(h2) {
+    padding-right: 24px;
   }
   .presence-title,
   .collection-legend--down h2 {

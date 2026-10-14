@@ -127,6 +127,10 @@ describe("formatMarkerValue (matches the popup's value line)", () => {
     expect(formatMarkerValue(0.4321, { min: 0, max: 0.5 })).toBe("0.43");
     expect(formatMarkerValue(0.4, { min: 0, max: 10 })).toBe("0");
   });
+  it("a density-sized domain (span < 0.1) keeps three significant figures, not 0.00", () => {
+    expect(formatMarkerValue(0.00511, { min: 0.00036, max: 0.0079 })).toBe("0.00511");
+    expect(formatMarkerValue(0.000511, { min: 0.00036, max: 0.0079 })).toBe("5.11e-4");
+  });
   it("null / non-finite -> no label", () => {
     expect(formatMarkerValue(null)).toBeNull();
     expect(formatMarkerValue(undefined)).toBeNull();

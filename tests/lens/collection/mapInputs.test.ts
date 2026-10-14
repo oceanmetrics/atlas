@@ -7,7 +7,9 @@ import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
   formatCollectionValue,
+  formatRasterValue,
   itemLabel,
+  rasterDomainOf,
 } from "../../../src/lens/collection/mapInputs";
 import style from "../../fixtures/catalog/biotrack_indicators/styles/default.json";
 import { FIXTURE_BASE, fakeFetch } from "../../catalog/support";
@@ -212,5 +214,62 @@ describe("itemLabel / formatCollectionValue", () => {
     expect(formatCollectionValue(2_500_000)).toBe("2.50e+6");
     expect(formatCollectionValue(0.0001234)).toBe("1.23e-4");
     expect(formatCollectionValue(Number.NaN)).toBe("");
+  });
+});
+
+describe("WP14: a raster item's legend histogram, value text and domain", () => {
+  const cogAsset = (extra: Record<string, unknown>) => ({
+    href: "https://x/y.tif",
+    type: "image/tiff; application=geotiff; profile=cloud-optimized",
+    roles: ["data"],
+    ...extra,
+  });
+  const cogItem = (props: Record<string, unknown>, asset: Record<string, unknown>) =>
+    ({
+      type: "Feature",
+      id: "t",
+      properties: props,
+      links: [],
+      assets: { data: cogAsset(asset) },
+    }) as unknown as StacItem;
+  const coll = { type: "Collection", id: "c", links: [], "sdm:value_unit": "percent" };
+  const cogEntry = {
+    ...entry,
+    id: "c",
+    title: "C",
+    collection: coll,
+  } as unknown as CollectionEntry;
+  const hist = { binCount: 2, counts: [3, 4], min: 1, max: 100 };
+
+  it("the legend carries the histogram it is given, none while loading", () => {
+    const item = cogItem({ "atlas:value_range": [1, 100] }, {});
+    const base = { entry: cogEntry, item, style: null, values: null, marker: null };
+    expect(collectionMapInputs({ ...base, histogram: hist }).legend?.histogram).toEqual(hist);
+    expect(collectionMapInputs(base).legend?.histogram).toBeNull();
+    expect(collectionMapInputs({ ...base, histogram: null }).legend?.histogram).toBeNull();
+  });
+  it("rasterDomainOf: the asset rescale, else the item's range; auto waits for its range", () => {
+    expect(rasterDomainOf(cogItem({}, { "atlas:rescale": [1, 100] }), null)).toEqual([1, 100]);
+    expect(
+      rasterDomainOf(cogItem({ "atlas:value_range": [0, 5] }, { "atlas:rescale": [1, 100] }), null),
+    ).toEqual([0, 5]);
+    expect(rasterDomainOf(cogItem({}, { "atlas:rescale": "auto" }), null)).toBeNull();
+    expect(
+      rasterDomainOf(
+        cogItem({ "atlas:value_range": [0, 0.008] }, { "atlas:rescale": "auto" }),
+        null,
+      ),
+    ).toEqual([0, 0.008]);
+    expect(rasterDomainOf(null, null)).toBeNull();
+  });
+  it("formatRasterValue: percent, a density unit, unitless, and no data", () => {
+    expect(formatRasterValue(87, "percent")).toBe("87%");
+    expect(formatRasterValue(42.46, "percent")).toBe("42.5%");
+    expect(formatRasterValue(0.0123, "n_per_km2")).toBe("0.0123 n/km²");
+    expect(formatRasterValue(0.000511, "n_per_km2")).toBe("5.11e-4 n/km²");
+    expect(formatRasterValue(0.213, "")).toBe("0.213");
+    expect(formatRasterValue(null, "percent")).toBe("no data");
+    expect(formatRasterValue(NaN, "percent")).toBe("no data");
+    expect(formatRasterValue(undefined, "")).toBe("no data");
   });
 });

@@ -84,6 +84,9 @@ export interface CubeDimension {
   extent?: unknown[];
   /** `{value: label}`, an atlas convention for human labels of `values`. */
   "atlas:labels"?: Record<string, string>;
+  /** true for the dimension that picks a taxon (an MST cube's `taxon_dim`): its selector lists only the
+   * taxa that exist for the other selections, and an unavailable value is labelled by the model it lacks. */
+  "atlas:taxon_dim"?: boolean;
   [key: string]: unknown;
 }
 

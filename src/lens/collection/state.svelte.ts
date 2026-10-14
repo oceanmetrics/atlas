@@ -21,6 +21,8 @@ import { resolveCatalogBase } from "../../lib/catalog/base";
 import {
   itemDims,
   pickEntry,
+  selectorOptions as selectorOptionsOf,
+  switchedNotice,
   resolveItem,
   selPatchFor,
   selectDim as selectDimItem,
@@ -34,6 +36,8 @@ import {
   type ValuesAsset,
 } from "../../lib/catalog/assets";
 import { extentBounds } from "../../lib/catalog/extent";
+import { layerExtent, worldView } from "../../lib/catalog/layerExtent";
+import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
 import {
   likelyCountIndex,
   likelySpeciesText,
@@ -59,6 +63,21 @@ import {
 import { loadMstItems, type MstItemOptions } from "../../lib/catalog/mst/items";
 import { taxonFacts, type TaxonFact } from "../../lib/catalog/mst/taxon";
 import { createRescaleCache, type Rescale, type RescaleCache } from "../../lib/raster/rescale";
+import {
+  createHistogramCache,
+  createTitilerHistogramSource,
+  rasterHistogramKey,
+  type HistogramCache,
+} from "../../lib/raster/histogram";
+import { createTitilerValueSource, type ValueSource } from "../../lib/raster/point";
+import { createLatestRead, pointInBounds, wrapLon } from "../../lib/raster/pointRead";
+import { colorForValue } from "../../lib/raster/ramps";
+import { DEFAULT_HISTOGRAM_BINS, type Histogram } from "../../lib/map/density";
+import {
+  installRasterInteraction,
+  type RasterInteractionMap,
+} from "../../lib/map/layers/rasterValue";
+import { announce } from "../../lib/ui/announcer";
 import {
   createCogExtentCache,
   itemSourceBounds,
@@ -95,7 +114,9 @@ import {
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
   formatCellValue,
+  formatRasterValue,
   itemLabel,
+  rasterDomainOf,
   type CollectionMapInputs,
 } from "./mapInputs";
 
@@ -126,6 +147,12 @@ export interface CollectionLensDeps {
   rescale?: RescaleCache;
   /** the COG footprint reader (titiler `/cog/info`, cached); default the module cache. */
   cogExtent?: CogExtentCache;
+  /** the legend histogram of a raster item (titiler `/cog/statistics`, cached); default the module cache. */
+  histogram?: HistogramCache;
+  /** the value under the pointer of a raster item (titiler `/cog/point`); default stock titiler. */
+  valueSource?: ValueSource;
+  /** where the "Auto-zoom to layer" choice is kept; default the browser's localStorage. */
+  storage?: Pick<Storage, "getItem" | "setItem"> | null;
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
    * dimmed), read reactively; `null`/absent = no filter. */
   insideFids?: () => ReadonlySet<number> | null;
@@ -142,6 +169,19 @@ export interface CellSpeciesView {
   /** how many species the models cover in the group. */
   modeled: number;
   share: GroupShare;
+}
+
+/** the value of a raster item at a clicked position (`/cog/point`), for the legend marker and the Details tool. */
+export interface RasterPoint {
+  collection: string;
+  item: string;
+  /** [lon, lat] as clicked. */
+  lngLat: [number, number];
+  /** `null` = no data (or not read yet, while `loading`). */
+  value: number | null;
+  loading: boolean;
+  /** the value as text with the item's unit ("87%", "no data"); "" while loading. */
+  text: string;
 }
 
 /** one value of the item's `metric` dimension at the clicked cell (richness / uncertainty ...). */
@@ -181,6 +221,8 @@ export interface CollectionLens {
   readonly values: ValueColumn | null;
   /** the clicked cell (mirrors the store, reactively). */
   readonly cell: CellSelection | null;
+  /** the clicked position of a raster (COG) item with its value; `null` for none (or a hex item). */
+  readonly point: RasterPoint | null;
   /** the public species list's load state (`idle` when the collection publishes none). */
   readonly speciesPhase: "idle" | "loading" | "ready" | "error";
   readonly speciesError: LoadError | null;
@@ -204,8 +246,22 @@ export interface CollectionLens {
   readonly rangeLoading: boolean;
   /** true when that read failed (the layer is then not drawn). */
   readonly rangeFailed: boolean;
+  /** true when the active layer has an extent the camera can fit (the "Zoom to layer" button's enabled state). */
+  readonly canZoomToLayer: boolean;
+  /** "Auto-zoom to layer": a change of layer flies the camera to the new layer's extent (a browser setting). */
+  readonly autoZoom: boolean;
+  setAutoZoom(on: boolean): void;
+  /** fly the camera to the active layer's extent (the shell's fit path, centred in the open area). */
+  zoomToLayer(): void;
   /** the dimension values still reachable, per dimension key (`availableValues`). */
   isAvailable(dimKey: string, value: string): boolean;
+  /** the options of one selector with the reason an unavailable value is unavailable; a taxon-like
+   * dimension lists only what exists for the current selection unless `showAll` (`hidden` = how many it
+   * leaves out). */
+  selectorOptions(
+    dimKey: string,
+    showAll: boolean,
+  ): { options: { value: string; label: string }[]; hidden: number };
   /** hand the taxon on screen to the Species lens. */
   openInSpecies(): void;
   selectCollection(id: string): void;
@@ -223,8 +279,8 @@ async function defaultFetchStyle(url: string): Promise<unknown | null> {
   }
 }
 
-async function defaultFetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url);
+async function defaultFetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(url, signal ? { signal } : undefined);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -436,6 +492,103 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
   const extentPending = $derived(extentUrl !== null && extent?.url !== extentUrl);
 
+  // --- a raster's legend histogram: titiler's `/cog/statistics` over the item's own range, once per (COG, band)
+  // (`raster/histogram.ts`, a display-only read like the rescale above). A fixed-range item (AquaMaps,
+  // a manifest rescale) costs this one request; an `auto` item reads its range first (above), then this
+  // over that range: the range is the histogram's own parameter, so the two cannot share one call.
+  // While it loads, or when it fails, the legend simply has no histogram. -----------------------------
+  const histogramCache =
+    deps.histogram ?? createHistogramCache(createTitilerHistogramSource(defaultFetchJson));
+  const rasterHistKey = $derived.by(() => {
+    const cog = rasterAssetOf(drawItem);
+    const dom = rasterDomainOf(drawItem, entry?.collection ?? null);
+    return cog && dom ? rasterHistogramKey(cog.url, cog.bidx, dom, DEFAULT_HISTOGRAM_BINS) : null;
+  });
+  let rasterHist = $state.raw<{ key: string; h: Histogram } | null>(null);
+  $effect(() => {
+    const key = rasterHistKey;
+    const cog = untrack(() => rasterAssetOf(drawItem));
+    const range = untrack(() => rasterDomainOf(drawItem, entry?.collection ?? null));
+    if (!key || !cog || !range) return;
+    let cancelled = false;
+    void histogramCache
+      .get({ cogUrl: cog.url, bidx: cog.bidx, range, bins: DEFAULT_HISTOGRAM_BINS })
+      .then((h) => {
+        if (!cancelled && h) rasterHist = { key, h };
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
+  // never the previous layer's shape while this one loads
+  const rasterHistogram = $derived(
+    rasterHistKey !== null && rasterHist?.key === rasterHistKey ? rasterHist.h : null,
+  );
+
+  // --- the value of a raster item at the clicked position (`/cog/point`, behind `ValueSource`) -------
+  const valueSource = deps.valueSource ?? createTitilerValueSource(defaultFetchJson);
+  let rasterPoint = $state.raw<{
+    collection: string;
+    item: string;
+    lngLat: [number, number];
+    value: number | null;
+    loading: boolean;
+  } | null>(null);
+  // the COG and band the active item draws, as one key: a read for another key is dropped
+  const cogKey = $derived.by(() => {
+    const cog = rasterAssetOf(item);
+    return cog ? `${cog.url}#${cog.bidx ?? 1}` : null;
+  });
+  async function readPoint(lngLat: [number, number], signal: AbortSignal): Promise<number | null> {
+    const cog = untrack(() => rasterAssetOf(item));
+    const key = untrack(() => cogKey);
+    if (!cog) return null;
+    const v = await valueSource.pointValue({
+      domain: "collection",
+      // 5 decimals (about a metre): the same pixel asks the same URL, and the URL stays short
+      lon: Math.round(wrapLon(lngLat[0]) * 1e5) / 1e5,
+      lat: Math.round(lngLat[1] * 1e5) / 1e5,
+      cogUrl: cog.url,
+      ...(cog.bidx === undefined ? {} : { bidx: cog.bidx }),
+      signal,
+    });
+    if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");
+    return v;
+  }
+  function setPointValue(ll: [number, number], value: number | null): void {
+    const p = rasterPoint;
+    if (!p || p.lngLat[0] !== ll[0] || p.lngLat[1] !== ll[1]) return;
+    rasterPoint = { ...p, value, loading: false };
+  }
+  // the clicked position follows the item (another band or taxon: the same place, this layer's value);
+  // another collection, or a hex item, drops it
+  const reread = createLatestRead<[number, number], number | null>(readPoint, setPointValue);
+  $effect(() => {
+    const key = cogKey;
+    const it = item;
+    const e = entry;
+    untrack(() => {
+      const p = rasterPoint;
+      if (!p) return;
+      if (!key || !it || !e || p.collection !== e.id) {
+        reread.cancel();
+        rasterPoint = null;
+        return;
+      }
+      if (p.item === it.id) return;
+      rasterPoint = { ...p, item: it.id, value: null, loading: true };
+      reread.run(p.lngLat);
+    });
+  });
+  const rasterPointView = $derived.by((): RasterPoint | null => {
+    const p = rasterPoint;
+    if (!p || !entry || !item || p.collection !== entry.id || p.item !== item.id) return null;
+    return {
+      ...p,
+      text: p.loading ? "" : formatRasterValue(p.value, mapInputs.legend?.unit ?? ""),
+    };
+  });
+
   // --- the collection's style (a MapLibre fill layer; the ramp is read out of it) ------------------
   let styleToken = 0;
   $effect(() => {
@@ -627,7 +780,37 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     });
   });
 
-  // --- the default camera: the collection's own extent, once, unless the URL carries a `map=` ---------
+  // --- the camera: the layer's own extent (WP14) -------------------------------------------------------
+  // `layerExtent` picks the frame per kind of item (hex: the collection's extent; registry: the surface's
+  // box; nc / gm COGs: the cached `/cog/info.geojson` footprint; else the collection's). The button flies
+  // there at any time; "Auto-zoom to layer" (a browser setting, default on) does it when the layer changes.
+  // The first layer of a page that opened with `?map=` never moves the camera (the URL is the view), and a
+  // fit is a programmatic move: it never writes `map=` (the writer only records the user's own moves).
+  const autoStorage = (() => {
+    if (deps.storage !== undefined) return deps.storage;
+    try {
+      return typeof window === "undefined" ? null : window.localStorage;
+    } catch {
+      return null; // storage blocked
+    }
+  })();
+  let autoZoom = $state(loadAutoZoom(autoStorage));
+  const layerFrame = $derived(
+    layerExtent({
+      item,
+      collection: entry?.collection ?? null,
+      cogBounds: extent && extent.url === extentUrl ? extent.bounds : null,
+    }),
+  );
+  function fitTo(bounds: NonNullable<typeof layerFrame>["bounds"]): void {
+    const handle = deps.mapHandle();
+    if (!handle) return;
+    // a whole-world layer (AquaMaps) has no frame to centre: look at its middle latitude, same longitude
+    const world = worldView(bounds, handle.camera().lon);
+    if (world) handle.flyTo({ key: "layer", ...world });
+    else handle.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
+  }
+  // the first fit of a page: with auto-zoom on it is the first layer's (below), else the collection's extent
   let fitted = false;
   $effect(() => {
     if (fitted || selStore.sel.lens !== "collection") return;
@@ -635,16 +818,44 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const coll = entry?.collection;
     if (!handle || !coll) return;
     fitted = true; // first load only: a later collection switch never moves the camera
+    if (untrack(() => autoZoom)) return; // the layer's own frame, once the item resolves
     if (untrack(() => selStore.sel.map)) return; // `map=` wins
     const bounds = extentBounds(coll);
     if (!bounds) return;
     handle.flyToBounds(bounds, { padding: deps.chromePadding?.() ?? 40 });
   });
+  // auto-zoom: fly to a layer's frame once (a COG waits for its footprint); a layer in the same frame as
+  // the last fit (another season of one hex grid) leaves the camera where the user put it
+  let seenLayer = false;
+  let lastFrame: string | null = null;
+  $effect(() => {
+    if (selStore.sel.lens !== "collection") return;
+    const frame = layerFrame;
+    const handle = deps.mapHandle();
+    const on = autoZoom;
+    const waiting = extentPending;
+    if (!item || !frame || !handle || waiting) return;
+    untrack(() => {
+      const first = !seenLayer;
+      seenLayer = true;
+      const key = `${entry?.id ?? ""}|${boundsKey(frame.bounds)}`;
+      if (key === lastFrame) return;
+      const hasMapParam = !!selStore.sel.map;
+      lastFrame = key;
+      if (shouldAutoZoom({ on, first, hasMapParam })) fitTo(frame.bounds);
+    });
+  });
 
   // --- what the map draws ------------------------------------------------------------------------
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
-    const marker = cell && entry && item && cell.collection === entry.id ? cell.value : null;
+    const rp = rasterPoint;
+    const marker =
+      rp && entry && item && rp.collection === entry.id && rp.item === item.id && !rp.loading
+        ? rp.value
+        : cell && entry && item && cell.collection === entry.id
+          ? cell.value
+          : null;
     // the legend names the surface on screen: the downscaled one is not the collection's own native one
     const legendEntry =
       entry && isRegistry
@@ -656,6 +867,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       style: styleJson,
       values,
       marker,
+      histogram: rasterHistogram,
       cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
     });
     // a raster is held back until its footprint is known (the legend and the summaries stay)
@@ -709,11 +921,53 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     return () => interaction.destroy();
   });
 
+  // a raster item: the value under the pointer (hover, debounced) and at a click, see
+  // `lib/map/layers/rasterValue.ts` (its request budget: `lib/raster/pointRead.ts`)
+  const hasRaster = $derived(mapInputs.raster !== null);
+  $effect(() => {
+    const handle = deps.mapHandle();
+    if (!handle || !hasRaster) return;
+    const unit = () => untrack(() => mapInputs.legend?.unit ?? "");
+    const interaction = installRasterInteraction(handle.map as unknown as RasterInteractionMap, {
+      read: readPoint,
+      outside: (ll) =>
+        !pointInBounds(
+          ll[0],
+          ll[1],
+          untrack(() => bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null)),
+        ),
+      format: (v) => formatRasterValue(v, unit()),
+      subject: () => untrack(() => (item ? itemLabel(item) : "")),
+      color: (v) => {
+        const stops = untrack(() => mapInputs.legend?.stops ?? []);
+        if (stops.length < 2) return null;
+        return colorForValue(
+          stops.map((s) => s.color),
+          v,
+          stops[0].value,
+          stops[stops.length - 1].value,
+        );
+      },
+      isOwned: () => deps.isOwned?.() === true || untrack(() => selStore.sel.lens) !== "collection",
+      onClickStart: (ll) => {
+        const e = untrack(() => entry);
+        const it = untrack(() => item);
+        if (!e || !it) return;
+        reread.cancel();
+        rasterPoint = { collection: e.id, item: it.id, lngLat: ll, value: null, loading: true };
+      },
+      onClickValue: setPointValue,
+      announce,
+    });
+    return () => interaction.destroy();
+  });
+
   // --- actions ------------------------------------------------------------------------------------
   function selectCollection(id: string): void {
     const e = entries.find((x) => x.id === id && x.status === "ok");
     if (!e) return;
     store.set(null);
+    switchNotice = null;
     // the taxon travels between the v7 taxon collections (compare the IUCN range with AquaMaps for the
     // same species) and is dropped from the URL elsewhere, where `sp` would mean nothing
     const taxon = mstRefOf(e)?.kind === "taxon";
@@ -734,9 +988,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     );
   }
 
+  // "Switched to <species>: <old species> has no Atlantic model." after a selector change moved the taxon
+  let switchNotice = $state<string | null>(null);
   function selectDim(key: string, value: string): void {
     const next = selectDimItem(items, view.selected, key, value);
+    switchNotice = null;
     if (!next) return;
+    switchNotice = switchedNotice({
+      dims: view.dims,
+      before: view.selected,
+      after: { ...view.selected, ...itemDims(next) },
+      changed: key,
+    });
     selStore.set(selPatchFor(entries, entry, items, next));
   }
 
@@ -812,6 +1075,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     get cell() {
       return cell;
     },
+    get point() {
+      return rasterPointView;
+    },
     get speciesPhase() {
       return speciesPhase;
     },
@@ -831,7 +1097,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return isRegistry ? registryFacts(item) : taxonFacts(item);
     },
     get notice() {
-      return isTaxon ? mst.notice : isRegistry ? registry.notice : null;
+      return isTaxon ? mst.notice : isRegistry ? registry.notice : switchNotice;
     },
     get rangeLoading() {
       return rangeLoading;
@@ -851,6 +1117,25 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         i: undefined,
       });
     },
+    get canZoomToLayer() {
+      return layerFrame !== null;
+    },
+    get autoZoom() {
+      return autoZoom;
+    },
+    setAutoZoom(on) {
+      autoZoom = on;
+      saveAutoZoom(autoStorage, on);
+    },
+    zoomToLayer() {
+      const frame = layerFrame;
+      if (frame) fitTo(frame.bounds);
+    },
+    selectorOptions(dimKey, showAll) {
+      const dim = view.dims.find((d) => d.key === dimKey);
+      if (!dim) return { options: [], hidden: 0 };
+      return selectorOptionsOf({ dim, dims: view.dims, items, selected: view.selected, showAll });
+    },
     isAvailable(dimKey, value) {
       const dim = view.dims.find((d) => d.key === dimKey);
       if (!dim) return true;
@@ -869,6 +1154,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     selectDim,
     clearCell() {
       store.set(null);
+      reread.cancel();
+      rasterPoint = null;
     },
     reload() {
       clearCatalogCache(deps.loadOptions?.cache);

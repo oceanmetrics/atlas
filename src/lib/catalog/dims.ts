@@ -35,6 +35,8 @@ export interface DimSpec {
   label: string;
   /** the cube's `description`, usable as a tooltip. */
   description?: string;
+  /** the dimension that picks a taxon (`cube:dimensions[key]["atlas:taxon_dim"]`). */
+  taxon?: boolean;
   values: DimValue[];
 }
 
@@ -88,6 +90,7 @@ export function dimsOf(
         key,
         label: dim.title?.trim() || prettify(key),
         ...(dim.description ? { description: dim.description } : {}),
+        ...(dim["atlas:taxon_dim"] === true ? { taxon: true } : {}),
         values,
       });
     }
@@ -170,6 +173,98 @@ export function availableValues(
     if (v !== undefined) out.add(v);
   }
   return out;
+}
+
+// --- the selectors' text: why a value is unavailable, which values to list, what a snap changed ------------
+
+const labelOf = (dim: DimSpec | undefined, value: string | undefined): string =>
+  (dim?.values.find((v) => v.value === value)?.label ?? value ?? "").trim();
+
+/**
+ * The note after an unavailable value of `dim` ("Atlantic" with a Pacific-only species selected). It
+ * names what blocks it: the sibling dimension whose CURRENT value is the only thing keeping `value`
+ * from an item (dropping that one selection would make an item exist). A taxon-like sibling reads
+ * "(no Common Murre model)"; any other "(not with the current season)"; when no single sibling is to
+ * blame (several together) "(not with the current selection)". A value that is available has no note
+ * (`""`).
+ */
+export function unavailableNote(args: {
+  dim: DimSpec;
+  value: string;
+  dims: readonly DimSpec[];
+  items: readonly StacItem[];
+  selected: Record<string, string>;
+}): string {
+  const { dim, value, dims, items, selected } = args;
+  if (availableValues(dim, items, selected).has(value)) return "";
+  // taxon-like siblings are asked first: "no <species> model" is the more telling reason
+  const siblings = dims
+    .filter((d) => d.key !== dim.key)
+    .sort((a, b) => Number(b.taxon === true) - Number(a.taxon === true));
+  for (const sib of siblings) {
+    const rest = Object.fromEntries(
+      Object.entries(selected).filter(([k]) => k !== dim.key && k !== sib.key),
+    );
+    const leadsToItem = items.some((it) => matches(it, rest) && itemDims(it)[dim.key] === value);
+    if (!leadsToItem) continue;
+    return sib.taxon
+      ? `(no ${labelOf(sib, selected[sib.key])} model)`
+      : `(not with the current ${sib.label.toLowerCase()})`;
+  }
+  return "(not with the current selection)";
+}
+
+export interface SelectorOptions {
+  options: { value: string; label: string }[];
+  /** how many values the filtered list leaves out (0 = nothing to reveal). */
+  hidden: number;
+}
+
+/**
+ * The options of one selector. A taxon-like dimension lists only the values that lead to an item given
+ * the other dimensions' current selection (the region, and the season / variable where they narrow it)
+ * unless `showAll`; every other dimension, and the "show all" list, lists every value, an unavailable one
+ * with its {@link unavailableNote}. The current value is always listed.
+ */
+export function selectorOptions(args: {
+  dim: DimSpec;
+  dims: readonly DimSpec[];
+  items: readonly StacItem[];
+  selected: Record<string, string>;
+  showAll?: boolean;
+}): SelectorOptions {
+  const { dim, dims, items, selected, showAll = false } = args;
+  const available = availableValues(dim, items, selected);
+  const filter = dim.taxon === true && !showAll;
+  const shown = dim.values.filter(
+    (v) => !filter || available.has(v.value) || v.value === selected[dim.key],
+  );
+  return {
+    options: shown.map((v) => {
+      const note = unavailableNote({ dim, value: v.value, dims, items, selected });
+      return { value: v.value, label: note ? `${v.label} ${note}` : v.label };
+    }),
+    hidden: dim.values.length - shown.length,
+  };
+}
+
+/**
+ * The sentence after a selector change moved the taxon too ("Switched to Arctic Tern: Common Murre has no
+ * Atlantic model."), `null` when it did not: the changed dimension is the taxon itself, there is no taxon
+ * dimension, or the taxon is the same.
+ */
+export function switchedNotice(args: {
+  dims: readonly DimSpec[];
+  before: Record<string, string>;
+  after: Record<string, string>;
+  changed: string;
+}): string | null {
+  const { dims, before, after, changed } = args;
+  const taxon = dims.find((d) => d.taxon === true);
+  if (!taxon || taxon.key === changed) return null;
+  if (before[taxon.key] === undefined || before[taxon.key] === after[taxon.key]) return null;
+  const to = dims.find((d) => d.key === changed);
+  return `Switched to ${labelOf(taxon, after[taxon.key])}: ${labelOf(taxon, before[taxon.key])} has no ${labelOf(to, after[changed])} model.`;
 }
 
 // --- collection + item selection (the lens' view, and its URL state) -------------------------------

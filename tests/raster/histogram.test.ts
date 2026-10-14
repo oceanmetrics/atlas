@@ -153,3 +153,146 @@ describe("createTitilerHistogramSource", () => {
     expect(fetched).toBe(false);
   });
 });
+
+// --- WP14: Collections raster items --------------------------------------------------------------
+import {
+  createHistogramCache,
+  rasterHistogramKey,
+  type HistogramRequest,
+  type HistogramSource,
+} from "../../src/lib/raster/histogram";
+import type { Histogram } from "../../src/lib/map/density";
+
+describe("titiler histogram -> Histogram for a Collections COG item (WP14)", () => {
+  it("bins and edges: the bars span the REQUESTED range, one count per bin, nodata excluded by titiler", () => {
+    const raw = {
+      b1: {
+        min: 1,
+        max: 100,
+        histogram: [
+          [3, 0, 7, 2],
+          [1, 25.75, 50.5, 75.25, 100],
+        ],
+      },
+    };
+    expect(parseTitilerStatistics(raw)).toEqual({
+      binCount: 4,
+      counts: [3, 0, 7, 2],
+      min: 1,
+      max: 100,
+    });
+  });
+  it("names the band bN when asked for one: the first band object is read, whatever its key", () => {
+    const raw = {
+      b2: {
+        min: 0,
+        max: 1,
+        histogram: [
+          [4, 6],
+          [0, 0.5, 1],
+        ],
+      },
+    };
+    expect(parseTitilerStatistics(raw)).toEqual({ binCount: 2, counts: [4, 6], min: 0, max: 1 });
+  });
+  it("empty: no counted pixel in the range (all zero counts, or no counts) is no histogram", () => {
+    expect(
+      parseTitilerStatistics({
+        b1: {
+          min: 0,
+          max: 1,
+          histogram: [
+            [0, 0, 0],
+            [0, 1, 2, 3],
+          ],
+        },
+      }),
+    ).toBeNull();
+    expect(parseTitilerStatistics({ b1: { min: 0, max: 1, histogram: [[], []] } })).toBeNull();
+  });
+  it("failure: the source resolves null for a throw and for an error body, never an error state", async () => {
+    const down = createTitilerHistogramSource(async () => {
+      throw new Error("HTTP 500");
+    });
+    const req: HistogramRequest = { domain: "collection", cogUrl: "https://x/y.tif", bins: 40 };
+    await expect(down.histogram(req)).resolves.toBeNull();
+    const bad = createTitilerHistogramSource(async () => ({ detail: "nope" }));
+    await expect(bad.histogram(req)).resolves.toBeNull();
+  });
+  it("the URL carries bidx after the range, and the collection domain is allowed", async () => {
+    const url = titilerStatisticsUrl(DEFAULT_TITILER_CONFIG, "https://x/y.tif", 40, [1, 100], 2);
+    expect(url).toMatch(/histogram_bins=40&histogram_range=1,100&bidx=2$/);
+    expect(titilerStatisticsUrl(DEFAULT_TITILER_CONFIG, "https://x/y.tif", 40)).not.toContain(
+      "bidx",
+    );
+    expect(() => assertHistogramRequest({ domain: "collection" })).not.toThrow();
+    let seen = "";
+    const source = createTitilerHistogramSource(async (u) => {
+      seen = u;
+      return { b2: { min: 0, max: 1, histogram: [[1], [0, 1]] } };
+    });
+    await source.histogram({ domain: "collection", cogUrl: "https://x/y.tif", bins: 40, bidx: 2 });
+    expect(seen).toContain("&bidx=2");
+  });
+});
+
+describe("the whole-layer histogram cache: key = COG + band (+ range, bins) (WP14)", () => {
+  const h: Histogram = { binCount: 1, counts: [5], min: 0, max: 1 };
+  const counting = (answer: () => Histogram | null) => {
+    const seen: HistogramRequest[] = [];
+    const source: HistogramSource = {
+      async histogram(r) {
+        seen.push(r);
+        return answer();
+      },
+    };
+    return { seen, cache: createHistogramCache(source) };
+  };
+  const q = (bidx: number | null) => ({
+    cogUrl: "https://x/y.tif",
+    bidx,
+    range: [0, 1] as const,
+    bins: 40,
+  });
+
+  it("the key separates bands of one COG and ranges of one band, and reads no bidx as band 1", () => {
+    const k = (b: number | null, r: [number, number] = [0, 1]) =>
+      rasterHistogramKey("https://x/y.tif", b, r, 40);
+    expect(k(1)).not.toBe(k(2));
+    expect(k(1)).toBe(k(null));
+    expect(k(1)).not.toBe(k(1, [0, 2]));
+  });
+  it("one request per (COG, band): a second ask is a hit, a second band is its own request", async () => {
+    const { seen, cache } = counting(() => h);
+    await cache.get(q(1));
+    await cache.get(q(1));
+    expect(seen).toHaveLength(1);
+    await cache.get(q(2));
+    expect(seen.map((r) => r.bidx)).toEqual([1, 2]);
+    expect(cache.size).toBe(2);
+  });
+  it("a request in flight is shared; the request is for the collection domain", async () => {
+    const { seen, cache } = counting(() => h);
+    await Promise.all([cache.get(q(1)), cache.get(q(1))]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].domain).toBe("collection");
+    expect(seen[0].bins).toBe(40);
+  });
+  it("a failure is null, is not cached, and is retried on the next ask", async () => {
+    let ok = false;
+    const { seen, cache } = counting(() => (ok ? h : null));
+    await expect(cache.get(q(1))).resolves.toBeNull();
+    expect(cache.size).toBe(0);
+    ok = true;
+    await expect(cache.get(q(1))).resolves.toEqual(h);
+    expect(seen).toHaveLength(2);
+  });
+  it("a source that throws is a null, never a throw", async () => {
+    const cache = createHistogramCache({
+      async histogram() {
+        throw new Error("boom");
+      },
+    });
+    await expect(cache.get(q(1))).resolves.toBeNull();
+  });
+});

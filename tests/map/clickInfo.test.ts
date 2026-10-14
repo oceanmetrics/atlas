@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   cellLineAt,
   overlayAt,
+  pushCardLine,
+  registerCardLineSink,
   registerCellLine,
   registerOverlayProbe,
 } from "../../src/lib/map/clickInfo";
@@ -148,5 +150,27 @@ describe("the hex layer beside an overlay", () => {
     } as never);
     expect(clicks).toEqual([{ fid: 12, value: 0.42, lngLat: [-70, 42] }]);
     hex.destroy();
+  });
+});
+
+describe("WP14: a raster value that arrives after the click joins the overlay card", () => {
+  it("is pushed to the registered sink; with none registered nothing takes it", () => {
+    expect(pushCardLine([1, 2], "87%")).toBe(false);
+    const got: [[number, number], string][] = [];
+    cleanups.push(registerCardLineSink((ll, t) => got.push([ll, t])));
+    expect(pushCardLine([1, 2], "87%")).toBe(true);
+    expect(got).toEqual([[[1, 2], "87%"]]);
+  });
+  it("a stale unregister never removes a newer sink; a sink that throws is a miss", () => {
+    const off1 = registerCardLineSink(() => {});
+    cleanups.push(registerCardLineSink(() => {}));
+    off1();
+    expect(pushCardLine([0, 0], "x")).toBe(true);
+    cleanups.push(
+      registerCardLineSink(() => {
+        throw new Error("card closed");
+      }),
+    );
+    expect(pushCardLine([0, 0], "x")).toBe(false);
   });
 });

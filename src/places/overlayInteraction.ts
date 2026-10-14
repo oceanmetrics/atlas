@@ -6,7 +6,7 @@
 // on the MAP (not per layer) and asks `queryRenderedFeatures` for whichever overlay layers exist at
 // that moment. The pure rules (what a feature says, which layers to ask, the button label) are
 // exported and unit-tested; the MapLibre popup is the only thing that is not.
-import { cellLineAt, registerOverlayProbe } from "../lib/map/clickInfo";
+import { cellLineAt, registerCardLineSink, registerOverlayProbe } from "../lib/map/clickInfo";
 import { createPopup } from "../lib/map/popup";
 
 /** what one tile feature of an overlay tells us. */
@@ -152,6 +152,9 @@ export function installOverlayInteraction(
     maxWidth: "260px",
   });
   const card = createPopup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+  // the open click card's body and where it was opened: a raster value read after the click lands here
+  let cardRoot: HTMLElement | null = null;
+  let cardAt: [number, number] | null = null;
   let hoverShown = false;
   const hideHover = () => {
     if (hoverShown) hover.remove();
@@ -214,8 +217,22 @@ export function installOverlayInteraction(
     }
     card.setLngLat([e.lngLat.lng, e.lngLat.lat]).setDOMContent(root);
     card.addTo(map as never);
+    cardRoot = root;
+    cardAt = [e.lngLat.lng, e.lngLat.lat];
   };
 
+  // a data line that arrives after the click (a raster value) joins the open card under the place
+  const unregisterSink = registerCardLineSink((lngLat, text) => {
+    if (!cardRoot || !cardAt || !card.isOpen()) return;
+    if (cardAt[0] !== lngLat[0] || cardAt[1] !== lngLat[1]) return;
+    let p = cardRoot.querySelector<HTMLElement>("p.overlay-popup-cell");
+    if (!p) {
+      p = document.createElement("p");
+      p.className = "overlay-popup-cell";
+      cardRoot.append(p);
+    }
+    p.textContent = text;
+  });
   // the probe the hex layer and the species lens ask before they open a popup of their own
   const unregister = registerOverlayProbe(
     (point) => !opts.isOwned?.() && overlayFeatureAt(map, point, opts.hitLayerIds()) !== null,
@@ -226,6 +243,7 @@ export function installOverlayInteraction(
   return {
     destroy() {
       unregister();
+      unregisterSink();
       map.off("mousemove", onMove as never);
       map.off("mouseout", hideHover as never);
       map.off("click", onClick as never);

@@ -1,0 +1,16 @@
+diff --git a/src/lib/raster/histogram.ts b/src/lib/raster/histogram.ts
+index df9ac23..c5eff4e 100644
+--- a/src/lib/raster/histogram.ts
++++ b/src/lib/raster/histogram.ts
+@@ -141,7 +141,10 @@ export function rasterHistogramKey(
+   range: readonly [number, number],
+   bins: number,
+ ): string {
+-  return `${cogUrl}#${bidx ?? 1}#${range[0]},${range[1]}#${bins}`;
++  // SEEDED FAULT (tests/faults/raster-histogram-key-drops-band.patch): the band is left out of the key,
++  // so band 2 (the CV) of a COG is served band 1's cached histogram.
++  void bidx;
++  return `${cogUrl}#${range[0]},${range[1]}#${bins}`;
+ }
+ 
+ export interface HistogramCache {

@@ -1811,6 +1811,8 @@
             legend={phoneLegend}
             tilesDown={health.isDown("tiler")}
             isRaster={!!collectionLens.mapInputs.raster}
+            onZoom={() => collectionLens.zoomToLayer()}
+            zoomDisabled={!collectionLens.canZoomToLayer}
           />
         {/if}
       </LegendChip>
@@ -1972,6 +1974,8 @@
         legend={collectionLens.mapInputs.legend}
         tilesDown={health.isDown("tiler")}
         isRaster={!!collectionLens.mapInputs.raster}
+        onZoom={() => collectionLens.zoomToLayer()}
+        zoomDisabled={!collectionLens.canZoomToLayer}
       />
     </div>
   {/if}

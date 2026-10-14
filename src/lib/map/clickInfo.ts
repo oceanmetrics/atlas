@@ -10,6 +10,10 @@
 //     card: the place on top, the cell value under it. The cell selection itself is the hex layer's
 //     own click and is unaffected.
 //
+//   - a raster item's value arrives AFTER the click (a `/cog/point` read), when the overlay card is
+//     already open: the raster interaction pushes it as a CARD LINE (`pushCardLine`) and the overlay card,
+//     which registered a sink, adds it under the place. No second popup for the raster value either.
+//
 // Plain module state (no Svelte): both sides are installed from effects and clean up after
 // themselves; a stale registration never overwrites a newer one.
 export interface ScreenPoint {
@@ -19,6 +23,9 @@ export interface ScreenPoint {
 export type OverlayProbe = (point: ScreenPoint) => boolean;
 export type CellLineProvider = (point: ScreenPoint) => string | null;
 
+export type CardLineSink = (lngLat: [number, number], text: string) => void;
+
+let cardLineSink: CardLineSink | null = null;
 let overlayProbe: OverlayProbe | null = null;
 let cellLineProvider: CellLineProvider | null = null;
 
@@ -53,5 +60,26 @@ export function cellLineAt(point: ScreenPoint): string | null {
     return cellLineProvider?.(point) ?? null;
   } catch {
     return null;
+  }
+}
+
+/** the overlay card registers where a late data line goes; the returned function unregisters it (only
+ * if still the current one). */
+export function registerCardLineSink(sink: CardLineSink): () => void {
+  cardLineSink = sink;
+  return () => {
+    if (cardLineSink === sink) cardLineSink = null;
+  };
+}
+
+/** offer a data line to the open overlay card at `lngLat` (the click that opened it); `true` when a
+ * card took it. The card ignores a line for a card that is no longer open or sits elsewhere. */
+export function pushCardLine(lngLat: [number, number], text: string): boolean {
+  try {
+    if (!cardLineSink) return false;
+    cardLineSink(lngLat, text);
+    return true;
+  } catch {
+    return false;
   }
 }
