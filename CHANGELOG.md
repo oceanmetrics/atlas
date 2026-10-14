@@ -127,7 +127,7 @@ and hex painting follow.
   and a collection id the catalog already lists is not added twice. Like `catalog`, the key never reaches
   analytics page locations.
 - **The inherited e2e suite is brought up to the current shell (WP11).** `e2e/` is green in chromium
-  (`npm run e2e:chromium`, 141 tests; a manual script, 11 to 17 minutes, not in CI): lenses Collections |
+  (`npm run e2e:chromium`, 145 tests; a manual script, about 4 minutes on an idle laptop and 11 to 17 while it is busy, so not in CI): lenses Collections |
   Species, rail tools Layers / Details / Table / Places, no Scores / Report / version chip / release
   registry. Every spec is hermetic (`e2e/hermetic.ts` routes the catalog, the MarineSensitivity STAC,
   the gazetteer manifest and the map origins to fixtures; the Species lens' fixtures are served under its
