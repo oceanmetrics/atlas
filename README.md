@@ -40,6 +40,7 @@ Analytics are off unless `VITE_GA_ID` / `VITE_LOG_URL` are set.
 
 ## Docs
 
-`docs/` is inherited from upstream: `map.md`, `engine.md`, `species-data.md`, `gazetteer-places.md`,
-`upload.md`, `feedback.md`, `analytics.md` still describe the code that remains; pages that mention
-scores, Program Areas, releases or reports describe the retired MarineSensitivity app.
+`docs/` is partly inherited from upstream (MarineSensitivity/atlas). Each inherited page opens with a
+"Status in OceanMetrics Atlas" note saying what no longer applies (scores, Program Areas, the Report, the
+release registry); `gazetteer-places.md` and `mst-by-reference.md` are the current notes for places and for
+the MarineSensitivity collections. No page is entirely about a removed feature, so none was deleted.

@@ -1,5 +1,7 @@
 # Send feedback
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The dialog, the payload and the privacy rules still apply. What no longer does: the release registry (`versions.json` `access`, preview sessions, `session.json`), so the payload's `restricted` flag is always false and the "restricted release" branch (no public issue) is never reached; the GitHub issue goes to `oceanmetrics/atlas`, and the endpoint comes from `VITE_FEEDBACK_URL` (no address is hard-coded).
+
 U3 (round 2). The "Report a problem" control (About card, bottom-left over the map — see
 `src/shell/Shell.svelte`'s `.about-region`; U1's top-bar "Feedback" control will call the same
 function once it lands) opens `src/lib/feedback/FeedbackDialog.svelte`: a screenshot of the current

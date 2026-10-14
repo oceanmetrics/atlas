@@ -1,5 +1,7 @@
 # Send feedback on the docs site (Quarto) — an include for `MarineSensitivity/docs`
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** This is a ready-to-drop-in include for the MarineSensitivity docs book (a separate Quarto repository). It is not used by OceanMetrics Atlas, whose feedback goes to `oceanmetrics/atlas` issues and the endpoint in `VITE_FEEDBACK_URL`. Kept for reference only.
+
 U3 (round 2) asks for the same "Send feedback" entry point on the rendered docs book
 (`marinesensitivity.org/docs/{ver}/`), not just the atlas app. `MarineSensitivity/docs` is a
 **separate Quarto repo** — nothing here is committed there; this file is the ready-to-drop-in

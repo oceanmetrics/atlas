@@ -1,5 +1,7 @@
 # Uploads: from an untrusted file to a place
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The upload parsers (`src/lib/geo/upload/`) and their refusal rules are current. Mentions of the scores boot, the release's cell table and `in_usa` cells (the "must touch the study area" rule) describe the upstream scores analysis; an uploaded place here is only held and summarised against the current layer (`docs/gazetteer-places.md`).
+
 atlas-6 Deliverable 4, parsing half. Everything here lives under `src/lib/geo/upload/`, has no DOM
 and no map, and is callable from a test. The panel (atlas-6 step 3's UI half) _calls_ it; this
 document is that call's contract.

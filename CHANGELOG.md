@@ -136,6 +136,10 @@ and hex painting follow.
   defects the suite found are fixed: the index.html skeleton had no ensō mark (a 17 px wordmark shift on
   hydration), `?ui=` link with the Data row collapsed reopened it, and the Playwright allowances were too
   tight for a loaded machine (60 s per test, 15 s per expectation, 3 workers, one local retry).
+- **Docs sweep (WP11).** Every inherited page in `docs/` that is partly stale opens with a "Status in
+  OceanMetrics Atlas" note saying what no longer applies (scores, Program Areas, the Report, the release
+  registry, the gallery, fonts); no page is entirely about a removed feature, so none was deleted. The README's
+  Docs paragraph says so.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

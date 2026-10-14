@@ -1,5 +1,7 @@
 # `src/lib/map` — the shared map, and what a lens may call
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** The shared map module (one MapLibre instance, one composed style, `setStyle(diff:true)`) is current. The scores lens, its `mapExtra`/`createScoresLens()` store, Program Areas and the score-raster constants (`SCORE_RASTER_OPACITY`, `OVERLAY_RASTER_OPACITY`) are retired: the Collections lens feeds `composeStyle` a hex grid, a titiler raster or a presence range, and WP4 adds `placeOverlays` (`layers/overlays.ts`).
+
 One MapLibre instance, one composed style, one `setStyle(diff:true)`. The scores lens (atlas-4), the
 species lens (atlas-5) and places (atlas-6) all render through this module and none of them touches
 MapLibre directly.

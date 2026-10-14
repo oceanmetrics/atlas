@@ -1,5 +1,7 @@
 # Gazetteer places in the atlas (the `p.` place_id token)
 
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** Current for places by reference (`p.` token), the vendored client, overlays and summaries. The lines that mention `report.html` and `src/report/gazPlaces.ts` describe the retired Report: OceanMetrics Atlas has no report page, and the Places tool's list, summaries and GeoJSON download replace it.
+
 The atlas can hold a place from the Ocean Metrics places gazetteer **by reference**: the link carries
 the gazetteer `place_id`, not the geometry. This note is the contract the `msens` R package mirrors
 (the g1 codec is implemented in both; this repo does not touch msens).
