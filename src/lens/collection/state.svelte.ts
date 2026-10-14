@@ -21,6 +21,8 @@ import { resolveCatalogBase } from "../../lib/catalog/base";
 import {
   itemDims,
   pickEntry,
+  selectorOptions as selectorOptionsOf,
+  switchedNotice,
   resolveItem,
   selPatchFor,
   selectDim as selectDimItem,
@@ -253,6 +255,13 @@ export interface CollectionLens {
   zoomToLayer(): void;
   /** the dimension values still reachable, per dimension key (`availableValues`). */
   isAvailable(dimKey: string, value: string): boolean;
+  /** the options of one selector with the reason an unavailable value is unavailable; a taxon-like
+   * dimension lists only what exists for the current selection unless `showAll` (`hidden` = how many it
+   * leaves out). */
+  selectorOptions(
+    dimKey: string,
+    showAll: boolean,
+  ): { options: { value: string; label: string }[]; hidden: number };
   /** hand the taxon on screen to the Species lens. */
   openInSpecies(): void;
   selectCollection(id: string): void;
@@ -953,6 +962,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const e = entries.find((x) => x.id === id && x.status === "ok");
     if (!e) return;
     store.set(null);
+    switchNotice = null;
     // the taxon travels between the v7 taxon collections (compare the IUCN range with AquaMaps for the
     // same species) and is dropped from the URL elsewhere, where `sp` would mean nothing
     const taxon = mstRefOf(e)?.kind === "taxon";
@@ -973,9 +983,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     );
   }
 
+  // "Switched to <species>: <old species> has no Atlantic model." after a selector change moved the taxon
+  let switchNotice = $state<string | null>(null);
   function selectDim(key: string, value: string): void {
     const next = selectDimItem(items, view.selected, key, value);
+    switchNotice = null;
     if (!next) return;
+    switchNotice = switchedNotice({
+      dims: view.dims,
+      before: view.selected,
+      after: { ...view.selected, ...itemDims(next) },
+      changed: key,
+    });
     selStore.set(selPatchFor(entries, entry, items, next));
   }
 
@@ -1073,7 +1092,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return isRegistry ? registryFacts(item) : taxonFacts(item);
     },
     get notice() {
-      return isTaxon ? mst.notice : isRegistry ? registry.notice : null;
+      return isTaxon ? mst.notice : isRegistry ? registry.notice : switchNotice;
     },
     get rangeLoading() {
       return rangeLoading;
@@ -1106,6 +1125,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     zoomToLayer() {
       const frame = layerFrame;
       if (frame) fitTo(frame.bounds);
+    },
+    selectorOptions(dimKey, showAll) {
+      const dim = view.dims.find((d) => d.key === dimKey);
+      if (!dim) return { options: [], hidden: 0 };
+      return selectorOptionsOf({ dim, dims: view.dims, items, selected: view.selected, showAll });
     },
     isAvailable(dimKey, value) {
       const dim = view.dims.find((d) => d.key === dimKey);

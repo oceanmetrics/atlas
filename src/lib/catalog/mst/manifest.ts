@@ -106,6 +106,7 @@ export function manifestCube(m: MstManifest): Record<string, CubeDimension> {
       ...(d.description ? { description: d.description } : {}),
       values: d.values.map((v) => v.value),
       "atlas:labels": Object.fromEntries(d.values.map((v) => [v.value, v.label])),
+      ...(d.key === m.taxon_dim ? { "atlas:taxon_dim": true } : {}),
     };
   }
   return out;

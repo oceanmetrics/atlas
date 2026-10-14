@@ -92,6 +92,9 @@
   });
 
   const cell = $derived(lens.cell);
+  // a taxon-like selector lists what exists for the current selection; this reverts to every value
+  // (each with the reason it is unavailable). Not persisted.
+  let showAllTaxa = $state(false);
   // MarineSensitivity: the taxon collections pick a taxon by search; the rest show the collection's
   // own `sdm:source_authority` under the identifiers
   const isTaxonCollection = $derived(lens.mst.ref?.kind === "taxon");
@@ -269,20 +272,22 @@
             </p>
           {:else}
             {#each lens.dims as dim (dim.key)}
+              {@const sel = lens.selectorOptions(dim.key, showAllTaxa)}
               <label class="field">
                 <span class="field-label" title={dim.description}>{dim.label}</span>
                 <Select
                   label={dim.label}
                   value={lens.selected[dim.key] ?? ""}
-                  options={dim.values.map((v) => ({
-                    value: v.value,
-                    label: lens.isAvailable(dim.key, v.value)
-                      ? v.label
-                      : `${v.label} (not available here)`,
-                  }))}
+                  options={sel.options}
                   onchange={(v) => lens.selectDim(dim.key, v)}
                 />
               </label>
+              {#if dim.taxon && (sel.hidden > 0 || showAllTaxa)}
+                <label class="show-all" data-testid="show-all-taxa">
+                  <input type="checkbox" bind:checked={showAllTaxa} />
+                  <span>Show all species</span>
+                </label>
+              {/if}
             {/each}
             {#if lens.notice}
               <p class="note" role="status" data-testid="collection-notice">{lens.notice}</p>
@@ -337,6 +342,18 @@
   .field-label {
     font-size: var(--text-xs);
     color: var(--text-secondary);
+  }
+  .show-all {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .show-all input {
+    accent-color: var(--border-control);
   }
   .note,
   .description {
