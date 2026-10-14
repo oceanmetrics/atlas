@@ -99,3 +99,41 @@ def check_taxa(taxa: pd.DataFrame) -> None:
 
 def species_column(aphia_id: int) -> str:
   return f"aphia_{int(aphia_id)}"
+
+
+# ---- common names (WoRMS vernaculars, cached) ----
+
+VERNACULAR_URL = "https://www.marinespecies.org/rest/AphiaVernacularsByAphiaID/{id}"
+
+
+def fetch_vernaculars(aphia_ids: list[int], cache: Path, session=None) -> dict:
+  """{str(aphia_id): [vernacular records]} from WoRMS AphiaVernacularsByAphiaID, cached as json at `cache`.
+  a 204 (no vernaculars) caches as an empty list; ids missing from the cache are fetched one by one, so a re-run costs nothing."""
+  cache = Path(cache)
+  have = json.loads(cache.read_text()) if cache.exists() else {}
+  todo = [int(i) for i in aphia_ids if str(int(i)) not in have]
+  sess = session or requests
+  for i in todo:
+    r = sess.get(VERNACULAR_URL.format(id=i), timeout=60)
+    if r.status_code != 204:
+      r.raise_for_status()
+    have[str(i)] = r.json() if r.status_code != 204 and r.text.strip() else []
+  if todo:
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(have, indent=1))
+  return have
+
+
+def pick_common_name(records: list[dict] | None) -> str:
+  """the first English vernacular (WoRMS lists them alphabetically), trimmed; "" when there is none."""
+  for rec in records or []:
+    if rec.get("language_code") == "eng" and str(rec.get("vernacular", "")).strip():
+      return str(rec["vernacular"]).strip()
+  return ""
+
+
+def add_common_names(taxa_df: pd.DataFrame, vernaculars: dict) -> pd.DataFrame:
+  """taxa with a `common_name` column (blank when WoRMS has no English vernacular for the accepted AphiaID)."""
+  out = taxa_df.copy()
+  out["common_name"] = [pick_common_name(vernaculars.get(str(int(a)))) for a in out["aphia_id"]]
+  return out

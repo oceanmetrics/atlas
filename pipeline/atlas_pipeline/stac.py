@@ -98,6 +98,29 @@ def indicator_column_description(col: str) -> str:
   return f"{bt.SUFFIX_DESCRIPTION[suffix]}; group {group}, season {season}"
 
 
+def cell_species_table_columns() -> list[dict]:
+  return [
+    {"name": "FID", "type": "int32", "description": "hexagonal cell id (join key to hex.pmtiles feature id and values.parquet)"},
+    {"name": "season", "type": "string", "description": "summer (May-Aug) or winter (Nov-Feb)"},
+    {"name": "aphia_id", "type": "int32", "description": "accepted WoRMS AphiaID (join key to species.parquet)"},
+    {"name": "prob", "type": "float", "description": "probability of occurrence, 0.6 or more"},
+    {"name": "class", "type": "string", "description": "probability class: Likely (0.6-0.8) or Very likely (0.8-1.0)"},
+  ]
+
+
+def species_table_columns() -> list[dict]:
+  return [
+    {"name": "aphia_id", "type": "int32", "description": "accepted WoRMS AphiaID"},
+    {"name": "scientific_name", "type": "string", "description": "accepted WoRMS scientific name"},
+    {"name": "abbreviation", "type": "string", "description": "six-letter code used in the producer's tables"},
+    {"name": "iucn_code", "type": "string", "description": "IUCN Red List category code (LC, NT, VU, EN, CR, DD, ...)"},
+    {"name": "redlisted", "type": "bool", "description": "true when the species is in the red-listed group"},
+    {"name": "group1", "type": "string", "description": "detailed group (Reef fish, Game fish, Shark, Ray, Turtle, ...)"},
+    {"name": "group2", "type": "string", "description": "coarse group: Fish, Ray, Shark, Turtle, Seal or Invertebrate; lowercased it equals the cube dimension group (all and redlisted are not groups of their own)"},
+    {"name": "common_name", "type": "string", "description": "English vernacular name from WoRMS (AphiaVernacularsByAphiaID); blank when none"},
+  ]
+
+
 def indicator_table_columns(values_columns: list[str], dtypes: dict[str, str]) -> list[dict]:
   cols = [{"name": "FID", "type": "int64", "description": "hexagonal cell id (join key to hex.pmtiles feature id)"}]
   for c in values_columns:
@@ -118,8 +141,10 @@ def _credits() -> dict:
 # ---- biotrack_indicators ----
 
 def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: dict[str, str],
-                          values_h3_columns: list[str], n_hex: int, n_h3: int, hex_info: dict) -> dict:
-  """Collection for the public indicator products: hex + values + h3 twins."""
+                          values_h3_columns: list[str], n_hex: int, n_h3: int, hex_info: dict,
+                          species_rows: dict[str, int] | None = None) -> dict:
+  """Collection for the public indicator products: hex + values + h3 twins + the public species list
+  (`species_rows` = {"cell_species": n, "species": n}; omitted when the list was not built)."""
   hex_asset = {
     "href": "./hex.pmtiles", "type": PMTILES, "roles": ["data"],
     "title": "10 km hexagon grid (geometry + FID only)",
@@ -127,6 +152,22 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
     "pmtiles:min_zoom": 0, "pmtiles:max_zoom": 10, "file:size": hex_info.get("bytes"),
   }
   hex_asset = {k: v for k, v in hex_asset.items() if v is not None}
+  species_assets = {}
+  if species_rows:
+    species_assets = {
+      "cell_species": {
+        "href": "./cell_species.parquet", "type": PARQUET, "roles": ["metadata"],
+        "title": "Likely and Very likely species per cell and season (public species list for a clicked cell)",
+        "atlas:key_column": "FID", "table:row_count": species_rows["cell_species"],
+        "table:columns": cell_species_table_columns(),
+      },
+      "species": {
+        "href": "./species.parquet", "type": PARQUET, "roles": ["metadata"],
+        "title": "species lookup: AphiaID, scientific and English common name, IUCN code, groups",
+        "atlas:key_column": "aphia_id", "table:row_count": species_rows["species"],
+        "table:columns": species_table_columns(),
+      },
+    }
   return {
     "type": "Collection",
     "stac_version": STAC_VERSION,
@@ -195,6 +236,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
         "table:columns": [{"name": "h3", "type": "string", "description": "H3 cell index"}] + [
           {"name": c, "type": "double", "description": indicator_column_description(c)} for c in values_h3_columns],
       },
+      **species_assets,
       "style": {
         "href": "./styles/default.json", "type": STYLE_T, "roles": ["style"],
         "title": "MapLibre fill layer, Spectral reversed on feature-state value (0..1)",

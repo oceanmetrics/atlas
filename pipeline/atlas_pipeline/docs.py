@@ -85,6 +85,13 @@ grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), supported
   of the hexagon's area inside the H3 cell and sums to 1 per FID.
 - `values_h3.parquet`: the numeric value columns aggregated to H3 res 7 (area-weighted mean over the overlapping
   hexagons; cells with no data are skipped; rounded to 4 decimals).
+- `cell_species.parquet`: the public species list, long table (`FID`, `season`, `aphia_id`, `prob`, `class`) of the
+  species that are Likely (0.6-0.8) or Very likely (0.8-1.0) in each cell and season ({counts.get('n_cell_species', 0):,}
+  rows; Unlikely rows are not kept). Click a cell, filter by `FID` and `season`.
+- `species.parquet`: the lookup for `aphia_id` ({counts.get('n_species', 0)} species): `scientific_name`,
+  `abbreviation`, `iucn_code`, `redlisted`, `group1`, `group2` and `common_name` (English vernacular from WoRMS
+  `AphiaVernacularsByAphiaID`, blank when none). A group's list is `lower(group2) == group` (group2 is Fish, Ray, Shark, Turtle, Seal or Invertebrate);
+  `all` is every species and `redlisted` is `redlisted == true`. The per-species probability MAPS stay restricted; only this list is public.
 - `items/`: 24 STAC Items `{{group}}_{{season}}_{{metric}}`, each pointing at a column of `values.parquet` and
   `values_h3.parquet` through `atlas:value_column`.
 - `styles/default.json`: MapLibre fill layer, Spectral reversed, 0..1.
@@ -122,7 +129,17 @@ How to read this collection programmatically.
    `values_h3.parquet` (key `h3`) holds the same numeric columns aggregated by area-weighted mean.
    `sdm:h3_resolution` is 7.
 5. Credits (citation, license, contacts, funders) are on the collection; the license is a placeholder.
-6. The per-species surfaces are not in this collection; they are restricted.
+6. Species list (public): `cell_species.parquet` (`FID`, `season`, `aphia_id`, `prob`, `class`; Likely and Very likely
+   rows only, {counts.get('n_cell_species', 0):,} rows) joins `species.parquet` (`aphia_id`, `scientific_name`,
+   `abbreviation`, `iucn_code`, `redlisted`, `group1`, `group2`, `common_name`) on `aphia_id`. For an item's list filter
+   `season == atlas:dims.season`, then `lower(group2) == atlas:dims.group` (`all` = everyone, `redlisted` = `redlisted`).
+   ```sql
+   -- duckdb
+   select s.scientific_name, s.common_name, c.prob, c."class"
+   from read_parquet('cell_species.parquet') c join read_parquet('species.parquet') s using (aphia_id)
+   where c.FID = 100 and c.season = 'summer' order by c.prob desc;
+   ```
+7. The per-species probability surfaces (maps) are not in this collection; they are restricted.
 """
 
 

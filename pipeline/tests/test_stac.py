@@ -133,3 +133,34 @@ def test_restricted_prefix_is_created_once(tmp_path):
   p = tmp_path / "restricted_prefix.txt"
   first = cli.restricted_prefix(p)
   assert first == cli.restricted_prefix(p) and len(first) == 26
+
+
+# ---- public species list assets ----
+
+def test_species_list_assets_are_public_with_table_columns():
+  cols = list(ranges())
+  c = stac.indicators_collection(BBOX, cols, {}, cols, 3, 10, {"bytes": 1}, species_rows={"cell_species": 7, "species": 2})
+  cs, sp = c["assets"]["cell_species"], c["assets"]["species"]
+  assert cs["href"] == "./cell_species.parquet" and sp["href"] == "./species.parquet"
+  assert [x["name"] for x in cs["table:columns"]] == ["FID", "season", "aphia_id", "prob", "class"]
+  assert [x["name"] for x in sp["table:columns"]] == [
+    "aphia_id", "scientific_name", "abbreviation", "iucn_code", "redlisted", "group1", "group2", "common_name"]
+  assert cs["table:row_count"] == 7 and sp["table:row_count"] == 2
+  assert all(x["type"] and x["description"] for x in cs["table:columns"] + sp["table:columns"])
+
+
+def test_collection_without_species_rows_has_no_species_assets():
+  c = make_collection()
+  assert "cell_species" not in c["assets"] and "species" not in c["assets"]
+
+
+def test_per_species_map_surfaces_are_not_in_the_public_collection():
+  c = stac.indicators_collection(BBOX, list(ranges()), {}, list(ranges()), 3, 10, {"bytes": 1}, species_rows={"cell_species": 1, "species": 1})
+  assert not any(k.startswith(("prob_", "class_")) for k in c["assets"])
+
+
+def test_readme_and_agents_mention_the_species_list():
+  counts = {"n_hex": 3, "n_values_cols": 5, "n_null_richness": 0, "n_cell_species": 1234, "n_species": 66}
+  readme, agents = docs.indicators_readme([], counts), docs.indicators_agents(counts)
+  for text in (readme, agents):
+    assert "cell_species.parquet" in text and "species.parquet" in text and "common_name" in text and "1,234" in text
