@@ -237,7 +237,9 @@
   // it and a `ui=` link can restore it, matching `activeTool`'s own "chrome, restorable from a
   // link, never ordinary URL state" treatment. "data-raster" (the Data row) is the same default
   // `LayersPanel.svelte`'s own internal state used before this existed.
-  let expandedRow = $state<LayerGroupId | null>(initialUi?.expandedRow ?? "data-raster");
+  // a shared link's `null` ("nothing expanded", `ui=...n`) must stay null: `??` would turn it back into the
+  // default (the Data row open), so a collapsed arrangement never survived a share
+  let expandedRow = $state<LayerGroupId | null>(initialUi ? initialUi.expandedRow : "data-raster");
 
   // fix list #5 (SC 2.4.3), WEBKIT ONLY: activating a rail tool that CHANGES the open tool drops
   // `document.activeElement` to `<body>` roughly 100ms later, once the newly-chosen tool's lazy

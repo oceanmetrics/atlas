@@ -11,12 +11,10 @@
 // not which branch fired (both go through the identical `notify()` call, just with a different
 // tone -- see announcer.ts's own header).
 import { expect, test, type Page } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { routeBucket, waitForHydration } from "./hermetic";
 
 async function gotoShell(page: Page, viewport: { width: number; height: number }) {
-  await routeBucket(page, "v7");
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await page.setViewportSize(viewport);
   await page.goto("/?theme=navy");
   await waitForHydration(page);

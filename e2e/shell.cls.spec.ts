@@ -1,11 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import {
-  blockAppBundle,
-  routeBucket,
-  routeSealFixture,
-  routeSession,
-  waitForHydration,
-} from "./hermetic";
+import { blockAppBundle, routeBucket, waitForHydration } from "./hermetic";
 
 // atlas-3 step 3 fix round 1: the PRIMARY gate here is GEOMETRY EQUALITY between the static
 // skeleton and the hydrated frame -- not the Layout Instability API, which CANNOT detect a
@@ -44,11 +38,6 @@ const KEYS: KeySpec[] = [
   { key: "topbar", skeleton: ".topbar", hydrated: ".topbar" },
   { key: "title", skeleton: "#app-title", hydrated: "#app-title" },
   {
-    key: "version-chip",
-    skeleton: '[data-control="version-chip"]',
-    hydrated: '[data-control="version-chip"]',
-  },
-  {
     key: "lens-switch",
     skeleton: '[data-control="lens-switch"]',
     hydrated: '[data-control="lens-switch"]',
@@ -78,9 +67,9 @@ const KEYS: KeySpec[] = [
     hydrated: '#rail-region button[aria-label="Table"]',
   },
   {
-    key: "rail-report",
+    key: "rail-places",
     skeleton: "#rail-region .sk-railitem:nth-child(4)",
-    hydrated: '#rail-region button[aria-label="Report"]',
+    hydrated: '#rail-region button[aria-label="Places"]',
   },
   { key: "panel-frame", skeleton: "#panel-region > *", hydrated: "#panel-region > *" },
   // R4-B: the panel's two controls, in their real DOM order -- move to the other side, THEN
@@ -146,67 +135,22 @@ async function captureBoxes(page: Page, keys: KeySpec[], side: "skeleton" | "hyd
   return boxes;
 }
 
-// The two SELF-HOSTED brand families (src/lib/brand/fonts.css). These are the only faces whose
-// metrics can move a box between the skeleton and the hydrated frame; the licensed
-// Century Gothic / Calibri faces above them in fonts.css are `local()`-only and are simply not
-// present on a CI runner, so waiting on them would be waiting on nothing.
-const BRAND_FAMILIES = ["Jost", "Carlito"] as const;
-
-/** how long the brand faces get to finish loading before this helper gives up and NAMES them. */
-const FACE_LOAD_TIMEOUT_MS = 10_000;
+/** how long the document's fonts get to settle before this helper gives up and says so. */
+const FONTS_TIMEOUT_MS = 10_000;
 
 /**
- * Wait for the brand faces, then assert each one actually reached `status === "loaded"`.
- *
- * 0.10.14: this used to be `await page.evaluate(() => document.fonts.ready)`, which on
- * WebKit/linux did not settle inside the test's budget — all six WebKit cases died as
- * `page.evaluate: Test ended.` on that one line (runs 35819393922 and 35821690181).
- * `document.fonts.ready` is a whole-document promise: it is only as prompt as the slowest face in
- * the set and re-arms on every new font request, so as a wait it is both unbounded and
- * uninformative — when it does not settle there is nothing to report but a timeout.
- *
- * Two deliberate choices in what replaced it:
- *
- *   - it awaits the SPECIFIC `FontFace` objects the geometry depends on, each racing a bounded
- *     timer, so a hung face costs `FACE_LOAD_TIMEOUT_MS` and not the whole test budget;
- *   - it asserts each face's own `status`, NOT `document.fonts.check()`. `check()` is useless as a
- *     gate here: measured on WebKit, it answers `true` for a family whose `@font-face` request
- *     never responds at all (with `font-display: swap` the fallback is "available", so the check
- *     can essentially never fail — a check that cannot fail is not a check). `FontFace.status`
- *     reports `"loading"` / `"error"` for exactly those cases.
- *
- * A face that never loads is therefore a loud red naming the face, weight and status, never a
- * silent 30 s timeout. Finding NO brand face at all is also a red: this page's layout does depend
- * on them, so an empty set means the stylesheet moved, not that there is nothing to wait for.
+ * Wait for the document's fonts to settle. OceanMetrics Atlas ships NO web fonts (a system font stack,
+ * `src/lib/brand/tokens.css`), so there is normally nothing to load; this stays as a bounded wait so a
+ * future face cannot move a box between the skeleton and the hydrated frame unnoticed. It is bounded
+ * (`document.fonts.ready` is a whole-document promise that can hang on WebKit) and it asserts nothing
+ * is still loading afterwards.
  */
 async function settleFonts(page: Page) {
-  const faces = await page.evaluate(
-    async ({ families, timeoutMs }) => {
-      const wanted = [...document.fonts].filter((f) =>
-        families.includes(f.family.replace(/^["']|["']$/g, "")),
-      );
-      await Promise.all(
-        wanted.map((f) =>
-          Promise.race([
-            f.load().catch(() => undefined),
-            new Promise((resolve) => setTimeout(resolve, timeoutMs)),
-          ]),
-        ),
-      );
-      return wanted.map((f) => `${f.family} ${f.weight}: ${f.status}`);
-    },
-    { families: [...BRAND_FAMILIES] as string[], timeoutMs: FACE_LOAD_TIMEOUT_MS },
-  );
-  expect(
-    faces.length,
-    `no ${BRAND_FAMILIES.join("/")} @font-face is registered on this page at all — ` +
-      "src/lib/brand/fonts.css is what this wait exists for",
-  ).toBeGreaterThan(0);
-  const notLoaded = faces.filter((f) => !f.endsWith(": loaded"));
-  expect(
-    notLoaded,
-    `brand face(s) not loaded within ${FACE_LOAD_TIMEOUT_MS} ms: ${notLoaded.join("; ")}`,
-  ).toEqual([]);
+  const loading = await page.evaluate(async (timeoutMs) => {
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, timeoutMs))]);
+    return [...document.fonts].filter((f) => f.status === "loading").map((f) => f.family);
+  }, FONTS_TIMEOUT_MS);
+  expect(loading, `font face(s) still loading after ${FONTS_TIMEOUT_MS} ms`).toEqual([]);
 }
 
 for (const theme of THEMES) {
@@ -215,8 +159,6 @@ for (const theme of THEMES) {
       const skeletonCtx = await browser.newContext();
       const skeletonPage = await skeletonCtx.newPage();
       await routeBucket(skeletonPage);
-      await routeSession(skeletonPage, null);
-      await routeSealFixture(skeletonPage);
       await blockAppBundle(skeletonPage);
       await skeletonPage.setViewportSize(viewport);
       await skeletonPage.goto(`/?theme=${theme}`, { waitUntil: "networkidle" });
@@ -227,8 +169,6 @@ for (const theme of THEMES) {
       const hydratedCtx = await browser.newContext();
       const hydratedPage = await hydratedCtx.newPage();
       await routeBucket(hydratedPage);
-      await routeSession(hydratedPage, null);
-      await routeSealFixture(hydratedPage);
       await hydratedPage.setViewportSize(viewport);
       await hydratedPage.goto(`/?theme=${theme}`, { waitUntil: "networkidle" });
       await waitForHydration(hydratedPage);
@@ -277,13 +217,37 @@ test.describe("secondary: post-hydration layout-shift score", () => {
     "Layout Instability API is Chromium-only",
   );
 
+  // What this counts: shifts of the CHROME (top bar, rail, the panel frame, the map controls). Three
+  // pieces of content are data-driven and legitimately re-flow when their data arrives, so a shift
+  // whose every source lies inside one of them is not counted: the panel's body (the catalog's
+  // collection fields replace "Loading the catalog" -- a content swap inside a panel whose frame does
+  // not move), the map-attribution line (it grows when the place-layer credits arrive from the
+  // gazetteer manifest, anchored to the stage's edge) and the map legend card (its histogram arrives
+  // with the values, growing the card upward from its corner). A shift of anything else still fails.
   async function installClsObserver(page: Page) {
     await page.addInitScript(() => {
       (window as unknown as { __cls: number }).__cls = 0;
+      (window as unknown as { __clsIgnored: number }).__clsIgnored = 0;
+      const DATA_DRIVEN =
+        "#panel-region .panel-body, #panel-region .sheet-body, .map-attribution, .lens-legend-region";
       const po = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          const e = entry as PerformanceEntry & { value: number; hadRecentInput: boolean };
-          if (!e.hadRecentInput) (window as unknown as { __cls: number }).__cls += e.value;
+          const e = entry as PerformanceEntry & {
+            value: number;
+            hadRecentInput: boolean;
+            sources?: { node: Node | null }[];
+          };
+          if (e.hadRecentInput) continue;
+          const sources = e.sources ?? [];
+          const dataDriven =
+            sources.length > 0 &&
+            sources.every((src) => {
+              const n = src.node;
+              const el = n instanceof Element ? n : (n?.parentElement ?? null);
+              return !!el?.closest(DATA_DRIVEN);
+            });
+          const key = dataDriven ? "__clsIgnored" : "__cls";
+          (window as unknown as Record<string, number>)[key] += e.value;
         }
       });
       po.observe({ type: "layout-shift", buffered: true });
@@ -294,8 +258,6 @@ test.describe("secondary: post-hydration layout-shift score", () => {
     for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       test(`post-hydration layout-shift score is 0 -- ${theme} @ ${name}`, async ({ page }) => {
         await routeBucket(page);
-        await routeSession(page, null);
-        await routeSealFixture(page);
         await installClsObserver(page);
         await page.setViewportSize(viewport);
 

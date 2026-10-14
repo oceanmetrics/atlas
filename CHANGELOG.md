@@ -126,6 +126,16 @@ and hex painting follow.
   path; a signed link's query is kept); an invalid one is ignored, an unreadable one is an "unavailable" row,
   and a collection id the catalog already lists is not added twice. Like `catalog`, the key never reaches
   analytics page locations.
+- **The inherited e2e suite is brought up to the current shell (WP11).** `e2e/` is green in chromium
+  (`npm run e2e:chromium`, 141 tests; a manual script, 11 to 17 minutes, not in CI): lenses Collections |
+  Species, rail tools Layers / Details / Table / Places, no Scores / Report / version chip / release
+  registry. Every spec is hermetic (`e2e/hermetic.ts` routes the catalog, the MarineSensitivity STAC,
+  the gazetteer manifest and the map origins to fixtures; the Species lens' fixtures are served under its
+  pinned `v7`). Specs of removed features (release-access gate, restricted-release feedback, the zones
+  table, the Program-Area first-view camera) are replaced by their current equivalents or removed. Three
+  defects the suite found are fixed: the index.html skeleton had no ensō mark (a 17 px wordmark shift on
+  hydration), `?ui=` link with the Data row collapsed reopened it, and the Playwright allowances were too
+  tight for a loaded machine (60 s per test, 15 s per expectation, 3 workers, one local retry).
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

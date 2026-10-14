@@ -67,7 +67,11 @@ test.describe("species lens with store-shaped asset URLs (R5-3)", () => {
     // the archive was read from the store URL (header + directory + tile reads)
     expect(requests.filter((u) => u === STORE_PMTILES_URL).length).toBeGreaterThan(0);
     // ...and no request names a versioned/legacy copy of the same file
-    expect(requests.filter((u) => /\.pmtiles/.test(u) && u !== STORE_PMTILES_URL)).toEqual([]);
+    expect(
+      requests.filter(
+        (u) => /\.pmtiles/.test(u) && u !== STORE_PMTILES_URL && !u.includes("/gazetteer/"), // (place layers are not the range)
+      ),
+    ).toEqual([]);
   });
 
   test("Interpolated: titiler is asked about the store's cog/{grid}/{hash}.tif, never a {ver}/native path", async ({
@@ -94,6 +98,8 @@ test.describe("species lens with store-shaped asset URLs (R5-3)", () => {
     // every species raster request (tiles + the legend's histogram) asks about exactly the store COG (URLSearchParams decodes it)
     for (const p of cogParams) expect(p).toBe(STORE_COG_URL);
     // the Interpolated surface is a raster: the range layer is not on screen
-    expect(requests.filter((u) => /\.pmtiles/.test(u))).toEqual([]);
+    expect(
+      requests.filter((u) => /\.pmtiles/.test(u) && !u.includes("/gazetteer/")), // (place layers are not the range)
+    ).toEqual([]);
   });
 });

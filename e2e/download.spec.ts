@@ -1,81 +1,74 @@
-// R3-W2: the Download menu, on the REAL shell (scores lens), hermetic.
+// R3-W2: the Download menu, on the REAL shell (Collections lens), hermetic.
 //
-// `e2e/map-hermetic.ts`'s own `BOOT_FIXTURE` carries no `layers`/`palettes` (it exists for
-// atlas-map's vector/raster paint proof, which injects a raster directly via `composeStyle()` --
-// see map.spec.ts's own header). This file builds a LOCAL fixture that adds a real `layers` row
-// (one composite metric, `by_subregion.FULL.cog` = `SCORE_COG_URL`) so the Download menu's
-// "Data layer · GeoTIFF" item resolves off the SAME `layerByKey`/`fullSubregion` readers the real
-// app uses (Shell.svelte's own `downloadCogUrl`), never a test-only shortcut.
+// The default view is the fixture catalog's hex collection (no COG, so "Data layer · GeoTIFF" is
+// disabled with its reason). The GeoTIFF case opens a raster item of the NOAA NCCOS seabird density
+// (`?c=msens-v8-nc&i=...`): its collection, titiler's `/cog/statistics` (the display range) and
+// `/cog/info.geojson` (the COG's footprint) and the COG itself are routed to fixtures, so the item
+// resolves through the SAME `collectionLens.mapInputs.cogUrl` the real app uses (Shell.svelte's
+// `downloadCogUrl`), never a test-only shortcut.
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
-import {
-  BOOT_FIXTURE,
-  SCORE_COG_URL,
-  blockWasm,
-  routeBasemapStyle,
-  routeGlyphs,
-  routeTitilerTiles,
-  routeZonesPmtiles,
-} from "./map-hermetic";
+import { routeBucket, waitForHydration } from "./hermetic";
+import { blockWasm, routeBasemapStyle, routeGlyphs, routeTitilerTiles } from "./map-hermetic";
 import { safeRoute } from "./routeSafety";
 
-const SCORES_BOOT = {
-  ...BOOT_FIXTURE,
-  layers: [
-    {
-      metric_key: "sensitivity_ecoregion_rescaled",
-      label: "Sensitivity",
-      category: "composite",
-      order: 1,
-      colormap: "spectral_r",
-      by_subregion: { FULL: { cog: SCORE_COG_URL, rescale: [1, 100] } },
-    },
-  ],
-  // the same 11 stops species-hermetic.ts's BOOT fixture uses for spectral_r -- one committed
-  // ramp table, never retyped per fixture (tests/raster/ramps.wiring.test.ts's own rule, applied
-  // here to fixture data rather than source).
-  palettes: {
-    spectral_r: [
-      "#9E0142",
-      "#D53E4F",
-      "#F46D43",
-      "#FDAE61",
-      "#FEE08B",
-      "#FFFFBF",
-      "#E6F598",
-      "#ABDDA4",
-      "#66C2A5",
-      "#3288BD",
-      "#5E4FA2",
-    ],
-  },
-};
+const TILER = "https://titiler-v8.marinesensitivity.org";
+const NC_COLLECTION = "https://file.marinesensitivity.org/stac/v8/nc/collection.json";
+const NC_COG = "https://file.marinesensitivity.org/cog/sdm/raw/nc_atl_birds_dens/ARTE_summer.tif";
+const NC_ITEM = "atlantic.ARTE.summer.n_per_km2";
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-async function gotoScores(page: Page) {
+async function gotoShell(page: Page, path = "/") {
   await blockWasm(page);
-  await routeBucket(page, "v7", SCORES_BOOT);
-  await routeSession(page, null);
-  await routeSealFixture(page);
-  await routeZonesPmtiles(page);
+  await routeBucket(page);
   await routeBasemapStyle(page);
   await routeTitilerTiles(page);
   await routeGlyphs(page);
-  await page.goto("/");
+  await page.goto(path);
   await waitForHydration(page);
-  // the version chip is present at every viewport (unlike the Download trigger, which is
-  // `topbar-desktop-only` -- the phone test below runs this same helper at 390px) -- proves the
-  // shell settled without assuming a desktop layout.
-  await expect(page.locator('[data-control="version-chip"]')).toBeVisible();
+  // the shell has settled once its top bar is up
+  await expect(page.locator(".topbar")).toBeVisible();
+}
+
+/** the NOAA NCCOS seabird density collection and everything its raster item reads, as fixtures. */
+async function routeNcRaster(page: Page) {
+  await page.route(
+    NC_COLLECTION,
+    safeRoute((route) =>
+      route.fulfill({
+        status: 200,
+        json: {
+          type: "Collection",
+          id: "msens-v8-nc",
+          title: "NOAA NCCOS (density)",
+          description: "fixture",
+          license: "proprietary",
+          links: [],
+        },
+      }),
+    ),
+  );
+  await page.route(
+    `${TILER}/cog/statistics?*`,
+    safeRoute((route) =>
+      route.fulfill({
+        status: 200,
+        json: { b1: { min: 0.0004, max: 0.8, percentile_98: 0.008 } },
+      }),
+    ),
+  );
+  await page.route(
+    `${TILER}/cog/info.geojson?*`,
+    safeRoute((route) => route.fulfill({ status: 200, json: { bbox: [-87, 23, -52, 53] } })),
+  );
 }
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 test.describe("R3-W2: Download menu", () => {
   test("opens by click, closes by Escape, and returns focus to the trigger", async ({ page }) => {
-    await gotoScores(page);
+    await gotoShell(page);
     const trigger = page.locator('[data-control="download"]');
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
 
@@ -93,7 +86,7 @@ test.describe("R3-W2: Download menu", () => {
   });
 
   test("ArrowDown/ArrowUp move focus within the menu, wrapping at both ends", async ({ page }) => {
-    await gotoScores(page);
+    await gotoShell(page);
     await page.locator('[data-control="download"]').click();
     const items = page.getByRole("menu", { name: "Download" }).getByRole("menuitem");
     // the menu's own chunk loads asynchronously (lazy) -- wait for the first item to actually be
@@ -113,7 +106,7 @@ test.describe("R3-W2: Download menu", () => {
   });
 
   test("outside click closes the menu", async ({ page }) => {
-    await gotoScores(page);
+    await gotoShell(page);
     await page.locator('[data-control="download"]').click();
     const menu = page.getByRole("menu", { name: "Download" });
     await expect(menu).toBeVisible();
@@ -122,13 +115,13 @@ test.describe("R3-W2: Download menu", () => {
   });
 
   test("'Map view · PNG' downloads a real, non-trivial PNG", async ({ page }) => {
-    await gotoScores(page);
+    await gotoShell(page);
     await page.locator('[data-control="download"]').click();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.getByRole("menuitem", { name: "Map view · PNG" }).click(),
     ]);
-    expect(download.suggestedFilename()).toMatch(/^marine-atlas_scores_.*_v7_\d{8}\.png$/);
+    expect(download.suggestedFilename()).toMatch(/^oceanmetrics-atlas_collection_.*_\d{8}\.png$/);
     const path = await download.path();
     expect(path).toBeTruthy();
     const bytes = readFileSync(path!);
@@ -141,26 +134,44 @@ test.describe("R3-W2: Download menu", () => {
   test("'Map view · SVG' downloads a well-formed SVG with the footer and legend", async ({
     page,
   }) => {
-    await gotoScores(page);
+    await gotoShell(page);
     await page.locator('[data-control="download"]').click();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.getByRole("menuitem", { name: "Map view · SVG" }).click(),
     ]);
-    expect(download.suggestedFilename()).toMatch(/^marine-atlas_scores_.*_v7_\d{8}\.svg$/);
+    expect(download.suggestedFilename()).toMatch(/^oceanmetrics-atlas_collection_.*_\d{8}\.svg$/);
     const path = await download.path();
     const svg = readFileSync(path!, "utf8");
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("<image");
-    expect(svg).toContain("MarineSensitivity Atlas · v7");
-    expect(svg).toContain("linearGradient"); // the legend gradient — this fixture publishes stops
+    expect(svg).toContain("OceanMetrics Atlas");
+    expect(svg).toContain("linearGradient"); // the legend gradient (the collection publishes a ramp)
   });
 
-  test("'Data layer · GeoTIFF' fetches the routed COG fixture and saves it", async ({ page }) => {
-    await gotoScores(page);
+  test("'Data layer · GeoTIFF' is disabled, with its reason, for a hex collection", async ({
+    page,
+  }) => {
+    await gotoShell(page);
+    await page.locator('[data-control="download"]').click();
+    const item = page.getByRole("menuitem", { name: /Data layer · GeoTIFF/ });
+    await expect(item).toBeDisabled();
+    await expect(item).toContainText("no COG published for this layer");
+  });
+
+  test("'Data layer · GeoTIFF' fetches the routed COG fixture of a raster item and saves it", async ({
+    page,
+  }) => {
+    await blockWasm(page);
+    await routeBucket(page);
+    await routeBasemapStyle(page);
+    await routeTitilerTiles(page);
+    await routeGlyphs(page);
+    // registered AFTER the tile route: Playwright tries the newest matching route first
+    await routeNcRaster(page);
     let cogRequested = false;
     await page.route(
-      SCORE_COG_URL,
+      NC_COG,
       safeRoute((route) => {
         cogRequested = true;
         return route.fulfill({
@@ -170,17 +181,18 @@ test.describe("R3-W2: Download menu", () => {
         });
       }),
     );
+    await page.goto(`/?c=msens-v8-nc&i=${NC_ITEM}`);
+    await waitForHydration(page);
 
+    // the raster draws (and `cogUrl` exists) once its display range has been read
+    await expect(page.getByTestId("collection-legend")).toBeVisible();
     await page.locator('[data-control="download"]').click();
-    const item = page.getByRole("menuitem", { name: "Data layer · GeoTIFF" });
+    const item = page.getByRole("menuitem", { name: /Data layer · GeoTIFF/ });
     await expect(item).toBeEnabled();
     const [download] = await Promise.all([page.waitForEvent("download"), item.click()]);
     expect(cogRequested).toBe(true);
-    expect(download.suggestedFilename()).toBe(
-      "marine-atlas_scores_sensitivity_ecoregion_rescaled.tif",
-    );
-    const path = await download.path();
-    const bytes = readFileSync(path!, "utf8");
+    expect(download.suggestedFilename()).toMatch(/^oceanmetrics-atlas_collection_.*\.tif$/);
+    const bytes = readFileSync((await download.path())!, "utf8");
     expect(bytes).toBe("FAKE-GEOTIFF-BYTES");
   });
 
@@ -188,7 +200,7 @@ test.describe("R3-W2: Download menu", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await gotoScores(page);
+    await gotoShell(page);
     await page.locator('[data-control="more-menu"]').click();
     await page.getByRole("menuitem", { name: "Download…" }).click();
     const dialog = page.getByRole("dialog", { name: "Download" });

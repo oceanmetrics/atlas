@@ -1,41 +1,27 @@
 // usability M4 (docs/usability.md §7): "Default camera frames Canada; panel/sheet cover the study
 // area; basemap 8.6-14s, raster 10-21s after load, no loader." Two independent fixes, proven here:
-// (1) the FIRST view (no explicit `?map=`) is shifted so the study area's own reference point
-// lands inside the VISIBLE (non-panel) part of the map, never partly behind the docked panel --
-// `src/lib/map/camera.ts#paddedStudyAreaCenter` + `src/lib/map/chromePadding.ts`, wired once at map
-// construction in Shell.svelte. (2) a honeycomb loader covers the map until the first tile settles
-// ("idle"), announced politely, then replaced by "Map ready" -- never blocking a click (`pointer-
-// events: none`, shell.css).
+// (1) the FIRST view (no explicit `?map=`) fits the Collections lens' collection extent into the
+// VISIBLE (non-panel) part of the map, never partly behind the docked panel -- the collection's
+// `extent.spatial.bbox` and `src/lib/map/chromePadding.ts`, wired in `lens/collection/state.svelte.ts`.
+// (2) a honeycomb loader covers the map until the first tile settles ("idle"), announced politely,
+// then replaced by "Map ready" -- never blocking a click (`pointer-events: none`, shell.css).
 //
-// An explicit `?map=` is a real, user-chosen camera and is NEVER second-guessed (`initialStudyArea`
-// in Shell.svelte checks `sel.map` first) -- proven by the SAME reference point landing at the
-// UNPADDED canvas center when the URL supplies that exact camera. HERMETIC, same convention as
-// e2e/keyboard-walk.spec.ts (whose minimal `units: []` boot this file borrows, so no PMTiles/
-// titiler route is needed).
+// An explicit `?map=` is a real, user-chosen camera and is NEVER second-guessed -- proven by the SAME
+// reference point landing at the UNPADDED canvas center when the URL supplies that exact camera.
+// HERMETIC: the catalog is a fixture (`e2e/hermetic.ts`), its biotrack collection given a US Atlantic
+// extent.
 import { expect, test, type Page } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession, waitForHydration } from "./hermetic";
+import { BIOTRACK_BBOX, routeBucket, waitForHydration } from "./hermetic";
 import { routeBasemapStyle, routeGlyphs } from "./map-hermetic";
 
-const BOOT = {
-  ver: "v7",
-  built_at: "2026-09-05T00:00:00Z",
-  id_field: "mdl_key",
-  grid: { grid_id: "test05r" },
-  release: { status: "release", access: "public" },
-  units: [],
-  zones: { programarea: [] },
-  datasets: [],
-  layers: [],
+// the centre of the extent the first view fits
+const CENTRE = {
+  lon: (BIOTRACK_BBOX[0] + BIOTRACK_BBOX[2]) / 2,
+  lat: (BIOTRACK_BBOX[1] + BIOTRACK_BBOX[3]) / 2,
 };
 
-// the FALLBACK study area (src/lib/map/interaction.ts#FALLBACK_FULL_STUDY_AREA) -- what this
-// fixture's boot (no `study_areas`) resolves to either way.
-const FALLBACK = { lon: -101.304, lat: 46.9, zoom: 2.16 };
-
 async function gotoMap(page: Page, path: string) {
-  await routeBucket(page, "v7", BOOT);
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await routeBasemapStyle(page);
   await routeGlyphs(page);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -46,45 +32,50 @@ async function gotoMap(page: Page, path: string) {
   });
 }
 
-async function projectFallback(page: Page): Promise<{ x: number; y: number }> {
+async function projectCentre(page: Page): Promise<{ x: number; y: number }> {
   return page.evaluate((fb) => {
     const w = window as unknown as {
       __atlasMap: { handle: { map: { project(ll: [number, number]): { x: number; y: number } } } };
     };
     const p = w.__atlasMap.handle.map.project([fb.lon, fb.lat]);
     return { x: p.x, y: p.y };
-  }, FALLBACK);
+  }, CENTRE);
 }
 
 test.describe("usability M4: default camera padded for the docked panel", () => {
-  test("no explicit ?map=: the fallback study area's point renders RIGHT of canvas center (the LEFT-docked panel + rail reserve the left edge)", async ({
+  test("no explicit ?map=: the extent's centre renders RIGHT of canvas center (the LEFT-docked panel + rail reserve the left edge)", async ({
     page,
   }) => {
     await gotoMap(page, "/");
-    const pt = await projectFallback(page);
     const viewportWidth = 1280;
-    expect(pt.x, "still on screen").toBeGreaterThan(0);
-    expect(pt.x, "shifted meaningfully right of canvas center").toBeGreaterThan(
-      viewportWidth / 2 + 50,
-    );
+    // the fit runs once the collection has loaded (a fly-to), so poll until it has landed
+    await expect
+      .poll(async () => (await projectCentre(page)).x, {
+        message: "the first view never shifted the extent's centre right of canvas center",
+      })
+      .toBeGreaterThan(viewportWidth / 2 + 50);
+    const pt = await projectCentre(page);
     expect(pt.x, "still on screen").toBeLessThan(viewportWidth);
+    expect(pt.y, "still on screen").toBeGreaterThan(0);
   });
 
-  test("an explicit ?map= matching the SAME point is never padded (a real camera is not second-guessed)", async ({
+  test("an explicit ?map= is never padded or refitted (a real camera is not second-guessed)", async ({
     page,
   }) => {
-    await gotoMap(page, `/?map=${FALLBACK.lon},${FALLBACK.lat},${FALLBACK.zoom}`);
-    const pt = await projectFallback(page);
+    await gotoMap(page, `/?map=${CENTRE.lon},${CENTRE.lat},4`);
+    // give a (wrongly) running fit time to land before measuring
+    await page.waitForTimeout(3000);
+    const pt = await projectCentre(page);
     const viewportWidth = 1280;
     // unpadded: the point lands at (approximately) the canvas's own center.
     expect(Math.abs(pt.x - viewportWidth / 2)).toBeLessThan(20);
   });
 
-  test("collapsing the panel reserves only the rail: the point sits much closer to canvas center than uncollapsed", async ({
+  test("collapsing the panel reserves only the rail: the centre sits much closer to canvas center than uncollapsed", async ({
     page,
   }) => {
-    // seed the "shell" panel collapsed BEFORE the app's own script runs, the same technique
-    // e2e/scores.collapsed-panel.spec.ts uses -- Panel.svelte only reads this once, in onMount.
+    // seed the "shell" panel collapsed BEFORE the app's own script runs -- Panel.svelte only reads
+    // this once, in onMount.
     await page.addInitScript(
       ([k, v]) => {
         try {
@@ -99,10 +90,10 @@ test.describe("usability M4: default camera padded for the docked panel", () => 
       ] as const,
     );
     await gotoMap(page, "/");
-    const pt = await projectFallback(page);
-    // R4-B: the rail stays on the dock side even collapsed (RAIL_FOOTPRINT_PX), so the shift is the
-    // rail's half-width (~54px measured), not zero -- and far below the uncollapsed panel's (~229px,
-    // the first test above).
+    await page.waitForTimeout(3000); // the fit has landed
+    const pt = await projectCentre(page);
+    // the rail stays on the dock side even collapsed (RAIL_FOOTPRINT_PX), so the shift is about the
+    // rail's half-width, not zero -- and far below the uncollapsed panel's (the first test above).
     expect(Math.abs(pt.x - 1280 / 2)).toBeLessThan(80);
   });
 });
@@ -114,9 +105,7 @@ test.describe("usability M4: default camera padded for the docked panel", () => 
  * order (this file's other helpers' own convention) -- a route registered before `gotoMap` runs
  * would be shadowed by `gotoMap`'s, not the other way round. */
 async function gotoMapSlowBasemap(page: Page, styleJsonDelayMs: number) {
-  await routeBucket(page, "v7", BOOT);
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await routeBasemapStyle(page, { styleJsonDelayMs });
   await routeGlyphs(page);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -128,7 +117,7 @@ test.describe("usability M4: the loading honeycomb", () => {
   test("visible at first paint, announced, then replaced by 'Map ready' once the map settles", async ({
     page,
   }) => {
-    await gotoMapSlowBasemap(page, 2000);
+    await gotoMapSlowBasemap(page, 6000);
     const loader = page.locator('[data-testid="map-loading"]');
 
     await expect(loader).toBeVisible();
@@ -149,7 +138,7 @@ test.describe("usability M4: the loading honeycomb", () => {
   test("the loader never obstructs a click meant for the topbar or the map (pointer-events: none, and confined to .stage)", async ({
     page,
   }) => {
-    await gotoMapSlowBasemap(page, 2000);
+    await gotoMapSlowBasemap(page, 6000);
     const loader = page.locator('[data-testid="map-loading"]');
     await expect(loader).toBeVisible();
 

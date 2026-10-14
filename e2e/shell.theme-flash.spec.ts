@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { blockAppBundle, hexToRgb, routeBucket, routeSealFixture, routeSession } from "./hermetic";
+import { blockAppBundle, hexToRgb, routeBucket } from "./hermetic";
 
 // atlas-3 step 3 fix round 1: "no theme flash" CANNOT FAIL as written elsewhere in this repo --
 // every OTHER shell spec goes through a full hydration, and Shell.svelte's own `$effect` sets
@@ -47,8 +47,6 @@ for (const c of CASES) {
   }) => {
     await page.emulateMedia({ colorScheme: c.colorScheme });
     await routeBucket(page);
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await blockAppBundle(page); // the ONLY way to see the skeleton before any $effect can fix it
 
     await page.goto(`/${c.search}`);

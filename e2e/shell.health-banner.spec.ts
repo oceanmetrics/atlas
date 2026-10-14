@@ -5,15 +5,8 @@
 // network), asserts the banner names the host and reason, that Retry re-probes, and that
 // unrouting (a recovered service) clears it.
 import { expect, test, type Page } from "@playwright/test";
+import { collectRequests, routeBucket, waitForHydration } from "./hermetic";
 import {
-  collectRequests,
-  routeBucket,
-  routeSealFixture,
-  routeSession,
-  waitForHydration,
-} from "./hermetic";
-import {
-  BOOT_FIXTURE,
   SCORE_COG_URL,
   blockWasm,
   routeBasemapStyle,
@@ -45,9 +38,7 @@ function routeTilerDown(page: Page) {
 
 async function gotoWithFailingTiler(page: Page, down: ReturnType<typeof routeTilerDown>) {
   await blockWasm(page);
-  await routeBucket(page, "v7", BOOT_FIXTURE);
-  await routeSession(page, null);
-  await routeSealFixture(page);
+  await routeBucket(page);
   await routeZonesPmtiles(page);
   await routeBasemapStyle(page);
   await routeGlyphs(page);
@@ -72,7 +63,7 @@ test.describe("V3: titiler-v8 down — a visible banner replaces the silent empt
     await expect(banner(page)).toContainText("Map tiles unavailable");
     await expect(banner(page)).toContainText("titiler-v8.marinesensitivity.org");
     await expect(banner(page)).toContainText("HTTP 503");
-    await expect(banner(page)).toContainText("Scores and species rasters cannot be drawn");
+    await expect(banner(page)).toContainText("Raster layers cannot be drawn");
     // role="status", not an alert dialog that steals focus -- the map controls stay usable.
     await expect(banner(page)).toHaveAttribute("role", "status");
   });
@@ -84,9 +75,7 @@ test.describe("V3: titiler-v8 down — a visible banner replaces the silent empt
     // routeMapTileOrigins): the boot-time probe (trigger a) succeeds, so nothing this test later
     // observes can be explained by that first probe -- only a REAL tile failure can raise it.
     await blockWasm(page);
-    await routeBucket(page, "v7", BOOT_FIXTURE);
-    await routeSession(page, null);
-    await routeSealFixture(page);
+    await routeBucket(page);
     await routeZonesPmtiles(page);
     await routeBasemapStyle(page);
     await routeGlyphs(page);
@@ -104,26 +93,37 @@ test.describe("V3: titiler-v8 down — a visible banner replaces the silent empt
     await down.install();
 
     // a real raster source under the now-failing tiler host -- the same __atlasMap seam
-    // e2e/map.spec.ts's own raster-paint test uses, so this never depends on the scores lens'
-    // full DuckDB/parquet pipeline actually resolving.
-    await page.evaluate((cogUrl) => {
-      const api = window.__atlasMap!;
-      api.handle.applyStyle(
-        api.composeStyle({
-          ...api.inputs(),
-          raster: {
-            id: "r_lyr",
-            tiles: [
-              "https://titiler-v8.marinesensitivity.org/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png" +
-                `?url=${encodeURIComponent(cogUrl)}&colormap_name=spectral_r&rescale=0,90`,
-            ],
-            opacity: 1,
-          },
-        }),
-      );
-    }, SCORE_COG_URL);
+    // e2e/map.spec.ts's own raster-paint test uses, so this never depends on a lens' own data
+    // pipeline resolving. Re-asserted on every poll: the shell re-applies its OWN composed style
+    // whenever a lazy lens store resolves, which can wipe an injected raster that landed first (the
+    // race map.spec.ts's raster test documents), so the injection that survives must be the last.
+    const injectRaster = () =>
+      page.evaluate((cogUrl) => {
+        const api = window.__atlasMap!;
+        api.handle.applyStyle(
+          api.composeStyle({
+            ...api.inputs(),
+            raster: {
+              id: "r_lyr",
+              tiles: [
+                "https://titiler-v8.marinesensitivity.org/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png" +
+                  `?url=${encodeURIComponent(cogUrl)}&colormap_name=spectral_r&rescale=0,90`,
+              ],
+              opacity: 1,
+            },
+          }),
+        );
+      }, SCORE_COG_URL);
 
-    await expect(banner(page)).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(
+        async () => {
+          await injectRaster();
+          return banner(page).isVisible();
+        },
+        { message: "a failing raster tile never raised the banner", timeout: 20_000 },
+      )
+      .toBe(true);
     await expect(banner(page)).toContainText("titiler-v8.marinesensitivity.org");
   });
 
@@ -196,8 +196,6 @@ test.describe("P round 2: an ordinary hermetic fixture never raises a banner", (
   test("no boot.json fixture, tiler healthy: no banner within 5s of boot", async ({ page }) => {
     await blockWasm(page);
     await routeBucket(page); // NO `boot` arg -- app/boot.json 404s, like most shell specs
-    await routeSession(page, null);
-    await routeSealFixture(page);
     await routeZonesPmtiles(page);
     await routeBasemapStyle(page);
     await routeGlyphs(page);

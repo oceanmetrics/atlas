@@ -21,10 +21,14 @@ not a check). Three patterns cover everything:
 
 This repo was forked from MarineSensitivity/atlas 0.10.88, whose GATES.md inventoried ~120 gates. The
 strip removed the Scores lens, Program Areas, the Report, the release gate and the gallery, and with
-them every gate that only guarded those features. The Playwright-gated seeded faults were dropped too:
-the inherited `e2e/` suite has not been revalidated against the catalog-driven shell, so a fault whose
-gate cannot be proven red here is not kept. Re-add them (with their e2e specs) as the e2e suite is
-brought back. The upstream inventory is in the upstream repository's history.
+them every gate that only guarded those features. The Playwright-gated seeded faults were dropped too.
+WP11 revalidated the inherited `e2e/` suite against the catalog-driven shell (Collections | Species,
+tools Layers / Details / Table / Places): it is green in chromium (`npm run e2e:chromium`), hermetic (the
+catalog, the MarineSensitivity STAC, the gazetteer manifest and every map origin are routed to fixtures,
+`e2e/hermetic.ts`) and a MANUAL script, not a CI job: the whole directory takes about 11 to 17 minutes on
+a laptop (every spec builds a software-GL map), well over the 3 minutes that would justify adding it to
+`pages.yml`. Playwright-gated seeded faults are still not kept; re-add them with their specs as needed.
+The upstream inventory is in the upstream repository's history.
 
 ## Seeded faults wired into `npm run test:faults` (`29`)
 

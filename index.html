@@ -145,7 +145,18 @@
       <header class="topbar" data-tour="topbar">
         <span data-tour="brand" style="display: flex; align-items: center; gap: var(--space-2)">
           <h1 class="brand-title" id="app-title">
-            <span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
+            <!-- the ensō mark's box (src/lib/brand/OmMark.svelte, size 1.05em): same size and baseline
+                 offset as the hydrated SVG, empty here, so the wordmark does not shift when it arrives -->
+            <svg
+              class="om-mark"
+              viewBox="0 0 2048 2048"
+              width="1.05em"
+              height="1.05em"
+              aria-hidden="true"
+              focusable="false"
+              style="display: inline-block; vertical-align: -0.15em; flex: none"
+            ></svg
+            ><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
             <span class="wm-atlas">Atlas</span>
           </h1>
         </span>

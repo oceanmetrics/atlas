@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 import { safeRoute } from "./routeSafety";
 
 /** the committed archive. Rebuild with:
@@ -151,32 +151,35 @@ export async function routeZonesPmtiles(
   const file = readFileSync(path);
   await page.route(
     url,
-    safeRoute((route) => {
-      const range = route.request().headers()["range"];
-      const m = range ? /bytes=(\d+)-(\d*)/.exec(range) : null;
-      if (!m) {
-        return route.fulfill({
-          status: 200,
-          contentType: "application/octet-stream",
-          headers: { "accept-ranges": "bytes", "access-control-allow-origin": "*" },
-          body: file,
-        });
-      }
-      const start = Number(m[1]);
-      const end = m[2] ? Number(m[2]) : file.length - 1;
-      const slice = file.subarray(start, end + 1);
-      return route.fulfill({
-        status: 206,
-        contentType: "application/octet-stream",
-        headers: {
-          "accept-ranges": "bytes",
-          "content-range": `bytes ${start}-${end}/${file.length}`,
-          "access-control-allow-origin": "*",
-        },
-        body: slice,
-      });
-    }),
+    safeRoute((route) => fulfillRanged(route, file)),
   );
+}
+
+/** answer a (possibly `Range`) request for `file`, as an S3 object would. */
+export function fulfillRanged(route: Route, file: Buffer) {
+  const range = route.request().headers()["range"];
+  const m = range ? /bytes=(\d+)-(\d*)/.exec(range) : null;
+  if (!m) {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/octet-stream",
+      headers: { "accept-ranges": "bytes", "access-control-allow-origin": "*" },
+      body: file,
+    });
+  }
+  const start = Number(m[1]);
+  const end = m[2] ? Number(m[2]) : file.length - 1;
+  const slice = file.subarray(start, end + 1);
+  return route.fulfill({
+    status: 206,
+    contentType: "application/octet-stream",
+    headers: {
+      "accept-ranges": "bytes",
+      "content-range": `bytes ${start}-${end}/${file.length}`,
+      "access-control-allow-origin": "*",
+    },
+    body: slice,
+  });
 }
 
 /** the fixture's own tiles.json + tile-template URLs — CARTO's real shape (verified live

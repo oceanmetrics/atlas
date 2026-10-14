@@ -17,22 +17,22 @@ const DESKTOP = { width: 1280, height: 800 };
 test.describe("the topbar search field is the SAME width in both lenses, with no doubled inset border", () => {
   test.use({ viewport: DESKTOP });
 
-  test("scores and species search inputs fill their shared .search-field pill equally, borderless", async ({
+  test("the Collections and Species search inputs fill their shared .search-field pill equally, borderless", async ({
     page,
   }) => {
-    // v7, public -- no preview session needed (species-hermetic.ts's own default is v9/restricted).
+    // v7, public -- no preview session needed (species-hermetic.ts's own default fixture set is v9).
     await gotoSpecies(page, "/", "v7");
 
     const field = page.locator(".search-field");
     const fieldBox = (await field.boundingBox())!;
 
-    // default lens on load with no `?sp=`/`?lens=` is "scores" (defaultLens()).
-    const scoresInput = page.locator(".search-field .scores-search-input");
-    await expect(scoresInput).toBeVisible();
-    const scoresBox = (await scoresInput.boundingBox())!;
+    // default lens on load with no `?sp=`/`?lens=` is "collection" (defaultLens()).
+    const collectionsInput = page.locator(".search-field input[type=search]");
+    await expect(collectionsInput).toBeVisible();
+    const collectionsBox = (await collectionsInput.boundingBox())!;
     expect(
-      await scoresInput.evaluate((el) => getComputedStyle(el).borderWidth),
-      "the scores search input must carry no border of its own on the desktop field",
+      await collectionsInput.evaluate((el) => getComputedStyle(el).borderWidth),
+      "the Collections search input must carry no border of its own on the desktop field",
     ).toBe("0px");
 
     await page.locator(".topbar").getByRole("button", { name: "Species" }).click();
@@ -45,8 +45,8 @@ test.describe("the topbar search field is the SAME width in both lenses, with no
     ).toBe("0px");
 
     expect(
-      Math.abs(speciesBox.width - scoresBox.width),
-      `species (${speciesBox.width}px) and scores (${scoresBox.width}px) search inputs must be the same width`,
+      Math.abs(speciesBox.width - collectionsBox.width),
+      `species (${speciesBox.width}px) and Collections (${collectionsBox.width}px) search inputs must be the same width`,
     ).toBeLessThanOrEqual(0.5);
     // the field's own chrome (the search icon + its gap + the field's own horizontal padding,
     // shell.css's `.search-field`) accounts for the remaining ~50px -- this bounds it well under

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { routeBucket, routeSealFixture, routeSession } from "./hermetic";
+import { routeBucket } from "./hermetic";
 
 // atlas-3 step 3 / CLAUDE.md "URL-is-the-view": every write goes through history.replaceState,
 // never pushState (a link must reproduce its exact view, not grow a back-button stack of every
@@ -21,8 +21,6 @@ async function recordHistoryCalls(page: import("@playwright/test").Page) {
 
 async function gotoShell(page: import("@playwright/test").Page) {
   await routeBucket(page);
-  await routeSession(page, null);
-  await routeSealFixture(page);
   await recordHistoryCalls(page);
   await page.goto("/", { waitUntil: "networkidle" });
 }
@@ -41,7 +39,7 @@ test("clicking the ALREADY-active lens does not add a default value to the URL",
   page,
 }) => {
   await gotoShell(page);
-  await page.locator(".topbar").getByRole("button", { name: "Scores" }).click();
+  await page.locator(".topbar").getByRole("button", { name: "Collections" }).click();
   expect(urlTail(page)).toBe("");
 });
 
@@ -51,8 +49,8 @@ test("switching lenses writes a non-default value, and switching back removes it
   await gotoShell(page);
   await page.locator(".topbar").getByRole("button", { name: "Species" }).click();
   expect(urlTail(page)).toBe("?lens=species");
-  await page.locator(".topbar").getByRole("button", { name: "Scores" }).click();
-  expect(urlTail(page)).toBe(""); // "scores" is the default when no species is selected
+  await page.locator(".topbar").getByRole("button", { name: "Collections" }).click();
+  expect(urlTail(page)).toBe(""); // "collection" is the default lens when no species is selected
 });
 
 test("opening every rail tool and every panel-size control never touches the URL (chrome, not view state)", async ({
@@ -60,7 +58,7 @@ test("opening every rail tool and every panel-size control never touches the URL
 }) => {
   await gotoShell(page);
   const rail = page.locator("#rail-region [role='toolbar']");
-  for (const label of ["Layers", "Details", "Table", "Report"]) {
+  for (const label of ["Layers", "Details", "Table", "Places"]) {
     await rail.locator(`button[aria-label="${label}"]`).click();
     expect(urlTail(page)).toBe("");
   }
@@ -85,23 +83,18 @@ test("a full interaction walk never calls history.pushState, and never grows his
   const startLength = await page.evaluate(() => history.length);
 
   await page.locator(".topbar").getByRole("button", { name: "Species" }).click();
-  await page.locator(".topbar").getByRole("button", { name: "Scores" }).click();
+  await page.locator(".topbar").getByRole("button", { name: "Collections" }).click();
   await page.locator('[data-control="theme"]').click();
   const rail = page.locator("#rail-region [role='toolbar']");
-  for (const label of ["Layers", "Details", "Table", "Report"]) {
+  for (const label of ["Layers", "Details", "Table", "Places"]) {
     await rail.locator(`button[aria-label="${label}"]`).click();
   }
   const panel = page.locator("#panel-region");
   await panel.locator('[data-panel-control="collapse"]').click();
   await panel.locator("button.panel-pill").click();
-  // U1c fix round (CI run 35956406448/107495562810): `getByLabel` used to match TWO elements
-  // sharing one accessible name -- the desktop search field and P5's phone-search trigger
-  // `<button>` (`topbar-phone-only`, CSS-hidden here but still present in the DOM). `role`
-  // disambiguated it back then; it still does, though Q1 (2026-09-24) also gave the scores-lens
-  // field its own distinct accessible name ("Search Program Areas or coordinates",
-  // `ScoresSearch.svelte`) now that this click lands back in the Scores lens (the "Scores" click
-  // just above), so the two no longer collide on name either.
-  await page.getByRole("combobox", { name: "Search Program Areas or coordinates" }).click();
+  // the desktop search field and the phone-search trigger button (CSS-hidden here, still in the DOM)
+  // share the label; the role picks the field
+  await page.getByRole("searchbox", { name: /Search species and places/ }).click();
   await page.keyboard.type("leatherback");
 
   const pushStateCalls = await page.evaluate(

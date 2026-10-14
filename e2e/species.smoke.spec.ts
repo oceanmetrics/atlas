@@ -12,14 +12,7 @@
 // makes a single sample meaningless: measured 1,578-1,621ms alone vs 3,065ms inside the full run).
 // Shared fixtures/helpers now live in e2e/species-hermetic.ts so the two files never duplicate them.
 import { expect, test } from "@playwright/test";
-import {
-  BUCKET,
-  collectRequests,
-  routeBucket,
-  routeSealFixture,
-  routeSession,
-  waitForHydration,
-} from "./hermetic";
+import { BUCKET, collectRequests, routeBucket, waitForHydration } from "./hermetic";
 import { fileURLToPath } from "node:url";
 import {
   blockWasm,
@@ -338,10 +331,8 @@ test.describe("species lens, first paint with **/*.wasm blocked", () => {
     // still requests it internally AFTER the style is applied, so `isStyleLoaded()` stays false
     // exactly as before.
     await blockWasm(page);
-    await routeBucket(page, "v9", bootFor("v9"));
+    await routeBucket(page, bootFor("v9"));
     await routeSpeciesShards(page);
-    await routeSession(page, { preview: true, ver: "v9" });
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await page.route(
       (url) => /\/vectortiles\/carto\.streets\/v1\//.test(url.pathname),
@@ -607,10 +598,8 @@ test.describe("0.10.22: the species raster's style is issued when its shard land
   }) => {
     test.setTimeout(60_000);
     await blockWasm(page);
-    await routeBucket(page, "v9", bootFor("v9"));
+    await routeBucket(page, bootFor("v9"));
     await routeSpeciesShards(page);
-    await routeSession(page, { preview: true, ver: "v9" });
-    await routeSealFixture(page);
     await routeGlyphs(page);
     await routeTitilerTiles(page);
     // registered AFTER routeBucket's basemap chain, so these win (Playwright tries newest first):

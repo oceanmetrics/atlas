@@ -62,8 +62,16 @@ export default defineConfig({
   // never starts its fixture build.
   testIgnore: ["fixtures/**"],
   fullyParallel: true,
+  // every spec builds a software-GL WebGL map, so a loaded machine (several workers at once) needs more
+  // room than Playwright's 30 s / 5 s defaults: the same specs pass alone in seconds and failed on the
+  // clock alone in a full parallel run (WP11 measured). Correctness is unchanged, only the allowance.
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
+  workers: process.env.CI ? 2 : 3,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // one local retry absorbs the clock-bound flakes a loaded machine produces (a flaky pass is reported as
+  // such, never hidden)
+  retries: process.env.CI ? 2 : 1,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: BASE_URL,

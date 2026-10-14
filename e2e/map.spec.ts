@@ -2,7 +2,9 @@
 //
 // The assertion that carries the maplibre-gl 6.10 pin is the VECTOR one (docs/spikes/S2.md,
 // consequence 4): `isSourceLoaded()` AND `queryRenderedFeatures().length > 0`, with the failure
-// message naming the layer. Rasters paint with a dead worker, so a `readPixels` gate alone is not a
+// message naming the layer. The vector source here is a gazetteer place layer (the default-on
+// "NOAA national marine sanctuaries" overlay): the hermetic gazetteer answers its `places.pmtiles` with
+// the repo's one real 7 KB archive (`e2e/fixtures/map/zones.pmtiles`, four rectangles in US waters). Rasters paint with a dead worker, so a `readPixels` gate alone is not a
 // check — the `?url` wiring produces a build that paints tiles and silently never parses a single
 // vector tile.
 //
@@ -13,17 +15,9 @@
 // whole file per engine, vs ~2s for chromium alone in the original S2 note -- no fault of the
 // engines here; see scripts/verify.mjs's own note on running MANY pages back to back).
 import { expect, test, type Page } from "@playwright/test";
-import {
-  collectConsoleErrors,
-  collectRequests,
-  routeBucket,
-  routeSealFixture,
-  routeSession,
-  waitForHydration,
-} from "./hermetic";
+import { collectConsoleErrors, collectRequests, routeBucket, waitForHydration } from "./hermetic";
 import {
   BASEMAP_RGB_BY_THEME,
-  BOOT_FIXTURE,
   RASTER_RGB,
   SCORE_COG_URL,
   blockWasm,
@@ -31,7 +25,6 @@ import {
   routeBasemapStyle,
   routeGlyphs,
   routeTitilerTiles,
-  routeZonesPmtiles,
 } from "./map-hermetic";
 
 // SERIAL, on purpose (S2 consequence 12, "the timing gate runs alone"): four WebGL maps built at
@@ -71,16 +64,13 @@ declare global {
   }
 }
 
-async function gotoMap(page: Page) {
+async function gotoMap(page: Page, path = "/") {
   await blockWasm(page);
-  await routeBucket(page, "v7", BOOT_FIXTURE);
-  await routeSession(page, null);
-  await routeSealFixture(page);
-  await routeZonesPmtiles(page);
+  await routeBucket(page);
   await routeBasemapStyle(page);
   await routeTitilerTiles(page);
   await routeGlyphs(page);
-  await page.goto("/");
+  await page.goto(path);
   await waitForHydration(page);
   await page.waitForFunction(() => !!window.__atlasMap, undefined, { timeout: 15_000 });
 }
@@ -101,7 +91,7 @@ async function gotoMap(page: Page) {
  * is unweakened: the layer must exist, its source must be loaded, AND it must render a feature.
  */
 function zoneFeatureCount(page: Page) {
-  return renderedLayerCount(page, "programarea_ln", "programarea_src");
+  return renderedLayerCount(page, "ov-noaa_sanctuaries-line", "ov-noaa_sanctuaries");
 }
 
 /** the REAL applied style (`map.getStyle()`), not a recomposed `composeStyle(inputs())` object —
@@ -147,7 +137,7 @@ function readPixel(page: Page, lon: number, lat: number) {
 }
 
 test.describe("map module, first paint with **/*.wasm blocked", () => {
-  test("renders a VECTOR feature from the release's zones PMTiles", async ({ page }) => {
+  test("renders a VECTOR feature from a place layer's PMTiles", async ({ page }) => {
     const errors = collectConsoleErrors(page);
     const requests = collectRequests(page);
     await gotoMap(page);
@@ -155,7 +145,7 @@ test.describe("map module, first paint with **/*.wasm blocked", () => {
     await expect
       .poll(() => zoneFeatureCount(page), {
         message:
-          'source "programarea_src" / layer "programarea_ln" never rendered a vector feature — ' +
+          'source "ov-noaa_sanctuaries" / layer "ov-noaa_sanctuaries-line" never rendered a vector feature — ' +
           "the maplibre worker is the first thing to check (docs/spikes/S2.md: the `?url` wiring " +
           "paints rasters and silently parses no vector tiles)",
         timeout: 20_000,
@@ -169,16 +159,16 @@ test.describe("map module, first paint with **/*.wasm blocked", () => {
   });
 
   // regression: zone-layer-renders-with-left-dock (R4-ci, 2026-10-01). Round 4 docked the panel
-  // LEFT by default, which moved the fit's centre from lng -69 to -140; on the globe MapLibre's
-  // no-geometry viewport query then answered [] for the painted zone lines, so four specs, the
-  // verify matrix and the pick-mode highlight all read "no zone layer". This pins the real
+  // LEFT by default, which moved the fit's centre; on the globe MapLibre's no-geometry viewport
+  // query then answered [] for the painted lines, so specs read "no layer". This pins the real
   // property: under the default left dock the Program Area lines ARE drawn where the fixture says
   // (a box query around Central California's rectangle hits), and the probe + the app's
   // `renderedZoneOutline` both see them.
   test("zone-layer-renders-with-left-dock: the zone lines are drawn and countable under the default left dock", async ({
     page,
   }) => {
-    await gotoMap(page);
+    // a camera over the fixture rectangle (explicit, so the collection fit does not move it)
+    await gotoMap(page, "/?map=-125,38,4");
     await expect.poll(() => zoneFeatureCount(page), { timeout: 20_000 }).toBeGreaterThan(0);
     const dock = await page.evaluate(() =>
       document.querySelector("[data-panel-dock]")?.getAttribute("data-panel-dock"),
@@ -199,14 +189,16 @@ test.describe("map module, first paint with **/*.wasm blocked", () => {
           [p.x - 12, p.y - 12],
           [p.x + 12, p.y + 12],
         ],
-        { layers: ["programarea_ln"] },
+        { layers: ["ov-noaa_sanctuaries-line"] },
       ).length;
     });
     expect(hits, "the CAA line must be hit-testable at its drawn position").toBeGreaterThan(0);
   });
 
   test("paints a raster at two ocean probe points", async ({ page }) => {
-    await gotoMap(page);
+    // `ov=` (no place layers): their faint fills would tint the probed pixel; the explicit camera keeps
+    // both probe points on screen (the default view fits the collection's extent)
+    await gotoMap(page, "/?ov=&map=-105,34,2.2");
     await page.waitForFunction(() => window.__atlasMap!.handle.map.loaded(), undefined, {
       timeout: 20_000,
     });
@@ -276,7 +268,9 @@ test.describe("map module, first paint with **/*.wasm blocked", () => {
   // (`BASEMAP_RGB_BY_THEME`, map-hermetic.ts) — proving the swap is actually rendered, not just
   // declared.
   test("a theme switch swaps the basemap and keeps the zones drawn", async ({ page }) => {
-    await gotoMap(page);
+    // an explicit camera that keeps the open-ocean probe (0, 0) on screen (the default view fits the
+    // collection's extent, the US Atlantic coast)
+    await gotoMap(page, "/?map=-30,10,2");
     await expect.poll(() => zoneFeatureCount(page), { timeout: 20_000 }).toBeGreaterThan(0);
 
     const before = await page.evaluate(() => document.documentElement.dataset.theme);
