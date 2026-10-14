@@ -33,6 +33,7 @@ import {
   type ChromePadding,
 } from "./camera";
 import { FALLBACK_FULL_STUDY_AREA, PROGRAMMATIC_EVENT_DATA, type StudyArea } from "./interaction";
+import { paddingEqual, residualFitPadding } from "./livePadding";
 import { applyStyle } from "./style";
 import { createStyleApplier } from "./styleQueue";
 import type { MapView, Projection, ResolvedTheme, StyleSpecification } from "./types";
@@ -65,6 +66,9 @@ export interface CreateMapOptions {
   /** the study area to open on when there is no `?map=` — `boot.study_areas[sel.area]`. */
   area?: StudyArea;
   projection?: Projection;
+  /** WP13: the standing camera padding at construction (the shell's estimate of what the panel
+   * covers), set before the first frame so the first view is already centred in the open area. */
+  padding?: ChromePadding;
   /** called with a settled, rounded, user-driven camera. The shell passes `selStore.set({map})`. */
   onCamera?: (camera: MapView) => void;
   /** override only in a test. */
@@ -95,8 +99,25 @@ export interface MapHandle {
    * module exists for is preserved, `boundsToCameraView`'s hand math is kept as the fallback, and
    * this is deliberately NOT `fitBounds` — see docs/map.md and no-fitbounds.test.ts's own header
    * for why that native method is still never called).
+   *
+   * WP13: `padding` as a {@link ChromePadding} is the chrome reserve measured from the viewport edge;
+   * the live padding the map already carries (`setPadding`) covers part of it, and MapLibre's
+   * `cameraForBounds` adds an option padding ON TOP of `transform.padding`, so only the remainder is
+   * passed on (`residualFitPadding`): with the panel open, just the breathing gutter. A bare number
+   * is extra breathing room and passes through unchanged.
    */
   flyToBounds(bounds: CameraBoundsInput, opts?: { padding?: number | ChromePadding }): void;
+  /**
+   * WP13: set the map's standing camera padding, the part of the stage the panel and phone sheet
+   * cover, so the centre (and a globe) is drawn in the middle of what stays open. The geographic
+   * centre does not move; only where it is drawn does. `animate` eases it over 250 ms (the shell's
+   * settle after a panel change); without it the padding is set at once (the first view, so nothing
+   * shifts twice). A no-op when it is already the padding. While a programmatic fly is in flight the
+   * change waits for its `moveend` rather than cutting the flight short. Never written to the URL.
+   */
+  setPadding(padding: ChromePadding, opts?: { animate?: boolean }): void;
+  /** the padding the map is on, or is easing to, for the shell to compare against. */
+  padding(): ChromePadding;
   /** the current camera, rounded for the URL. */
   camera(): MapView;
   resize(): void;
@@ -133,6 +154,9 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
   });
   // S2 consequence 6: without this, raster tile requests are non-deterministic headless.
   map.resize();
+  // WP13: the centre stays the camera's centre; only where it is drawn moves. Set before the first
+  // frame, with no easing, and marked programmatic (the URL never records it).
+  if (opts.padding) map.setPadding({ ...opts.padding }, { ...PROGRAMMATIC_EVENT_DATA });
 
   // ...and this one keeps it right afterwards. The `resize()` above runs before the shell's grid
   // has laid out, so the canvas can latch a wrong height and never correct it (measured: a 1280×800
@@ -155,6 +179,32 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
       bearing: map.getBearing(),
       pitch: map.getPitch(),
     };
+  }
+
+  // WP13: the standing padding and how it is applied. `wanted` is the latest request; `flying` is
+  // true from a programmatic fly until its `moveend` (an `easeTo({padding})` issued mid-flight
+  // would cut the flight short and strand the fit), so a request made in that window waits.
+  let wanted: ChromePadding = readPadding();
+  let flying = false;
+  function readPadding(): ChromePadding {
+    const p = map.getPadding();
+    return { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 };
+  }
+  function applyWanted(animate: boolean) {
+    if (paddingEqual(readPadding(), wanted)) return;
+    if (animate) map.easeTo({ padding: wanted, duration: 250 }, { ...PROGRAMMATIC_EVENT_DATA });
+    else map.setPadding(wanted, { ...PROGRAMMATIC_EVENT_DATA });
+  }
+  const onFlightEnd = () => {
+    flying = false;
+    applyWanted(true);
+  };
+  map.on("moveend", onFlightEnd);
+  /** a fit computes its camera from `transform.padding`, so it must be the padding the shell asked
+   * for, not an ease caught half way. */
+  function settlePadding() {
+    if (!paddingEqual(readPadding(), wanted))
+      map.setPadding(wanted, { ...PROGRAMMATIC_EVENT_DATA });
   }
 
   const applyQueuedStyle = createStyleApplier(map, (s) => applyStyle(map, s));
@@ -183,13 +233,24 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
       if (map.isStyleLoaded()) map.setProjection({ type: projection });
       else map.once("idle", () => map.setProjection({ type: projection }));
     },
+    setPadding(padding: ChromePadding, opts?: { animate?: boolean }) {
+      wanted = { ...padding };
+      if (flying) return; // applied by onFlightEnd
+      applyWanted(opts?.animate ?? false);
+    },
+    padding: () => ({ ...wanted }),
     flyTo(area: StudyArea) {
       // a programmatic move supersedes whatever the user's last gesture was still holding.
       writer?.cancel();
       map.flyTo({ center: [area.lon, area.lat], zoom: area.zoom }, { ...PROGRAMMATIC_EVENT_DATA });
+      flying = true; // after the call: flyTo stops a flight in progress, and that moveend must not clear this
     },
     flyToBounds(bounds: CameraBoundsInput, opts?: { padding?: number | ChromePadding }) {
       writer?.cancel();
+      settlePadding();
+      // WP13: only what the live padding does not already cover (header on `MapHandle.flyToBounds`)
+      const fitPadding =
+        opts?.padding === undefined ? undefined : residualFitPadding(opts.padding, wanted);
       // V4 fix (owner phone report, 2026-09-24, phone-17/18): `boundsToCameraView`'s shift
       // (camera.ts#shiftForPadding) is EXACT only for FLAT Mercator rendering. On the phone a wide
       // species range fits at a low zoom (the sheet's own padding shrinks the "available" area
@@ -212,10 +273,11 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
       ];
       const native = map.cameraForBounds(
         mutableBounds,
-        opts?.padding !== undefined ? { padding: opts.padding } : undefined,
+        fitPadding !== undefined ? { padding: fitPadding } : undefined,
       );
       if (native?.center !== undefined && native.zoom !== undefined) {
         map.flyTo({ center: native.center, zoom: native.zoom }, { ...PROGRAMMATIC_EVENT_DATA });
+        flying = true;
         return;
       }
       // fallback: a zero-size container (a test, a not-yet-laid-out map) is the one case
@@ -224,9 +286,10 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
       const view = boundsToCameraView(
         bounds,
         { width: rect.width, height: rect.height },
-        { padding: opts?.padding },
+        { padding: fitPadding },
       );
       map.flyTo({ center: view.center, zoom: view.zoom }, { ...PROGRAMMATIC_EVENT_DATA });
+      flying = true;
     },
     camera: currentCamera,
     resize() {
@@ -240,6 +303,7 @@ export function createMap(container: HTMLElement, opts: CreateMapOptions): MapHa
       observer?.disconnect();
       map.off("move", onMove);
       map.off("moveend", onMove);
+      map.off("moveend", onFlightEnd);
       map.remove();
     },
   };
