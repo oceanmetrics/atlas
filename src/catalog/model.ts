@@ -19,6 +19,7 @@ import type {
   StacProvider,
 } from "../lib/catalog/types";
 import { openInMapHref } from "../lib/brand/brand";
+import { licenseModelOf, type LicenseModel } from "../lib/catalog/licenses";
 
 // --- small formatters ---------------------------------------------------------------------------
 
@@ -323,11 +324,23 @@ export interface CreditsView {
   citation: string | null;
   doiUrl: string | null;
   license: LicenseView | null;
+  /** what the License modal shows; `null` when the collection states no license. */
+  licenseModel: LicenseModel | null;
   sourceAuthority: string | null;
   contacts: ContactView[];
   providers: ProviderView[];
   funders: string[];
   version: string | null;
+}
+
+/** whether a card link is a markdown document, shown rendered in a dialog (Methods, README) rather
+ * than as a raw file in a new tab. */
+export function isMarkdownLink(href: string): boolean {
+  try {
+    return /\.(md|markdown)$/i.test(new URL(href).pathname);
+  } catch {
+    return false;
+  }
 }
 
 export interface LinkView {
@@ -418,6 +431,7 @@ export function buildCard(entry: CollectionEntry): CatalogCard {
       citation: str(c["sci:citation"]),
       doiUrl: doiUrl(c["sci:doi"]),
       license: licenseView(c),
+      licenseModel: licenseModelOf(c),
       sourceAuthority: str(c["sdm:source_authority"]),
       contacts: contactViews(c),
       providers: providerViews(c),

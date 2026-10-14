@@ -30,10 +30,12 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
       }),
     );
     expect(c).toEqual({
+      title: null,
       citation: "Author, A. (2025). A dataset.",
       doiUrl: "https://doi.org/10.1234/abcd",
       license: "CC-BY-4.0",
       licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+      licenseModel: expect.objectContaining({ info: expect.objectContaining({ id: "CC-BY-4.0" }) }),
       pis: [{ name: "Pat Investigator", organization: "Org A" }],
       contacts: [{ name: "Alex Author" }],
       funders: ["BOEM", "NOAA IOOS MBON"],
@@ -79,10 +81,12 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
 
   it("a collection that publishes none of it, and a null collection, give an empty block", () => {
     const empty = {
+      title: null,
       citation: null,
       doiUrl: null,
       license: null,
       licenseUrl: null,
+      licenseModel: null,
       pis: [],
       contacts: [],
       funders: [],

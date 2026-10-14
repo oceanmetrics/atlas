@@ -1,13 +1,20 @@
 <script lang="ts">
   // One collection on the catalog page: what it is, the numbers that size it, and the credits block
   // (WHO made it, how to cite it, under what license) -- every field from `model.ts#buildCard`.
-  import type { CatalogCard } from "./model";
+  import { isMarkdownLink, type CatalogCard } from "./model";
   import ExtentSketch from "./ExtentSketch.svelte";
+  import DocModal from "../lib/ui/DocModal.svelte";
+  import LicenseModal from "../lib/ui/LicenseModal.svelte";
 
   interface Props {
     card: CatalogCard;
   }
   let { card }: Props = $props();
+
+  // Methods / README open as rendered dialogs (the file stays one click away: "Open raw"), and the
+  // license opens an explanation with its links and the attribution to copy
+  let openDoc = $state<{ label: string; href: string } | null>(null);
+  let licenseOpen = $state(false);
 
   const headingId = $derived(`c-${card.id}`);
   const bboxText = $derived(
@@ -85,7 +92,14 @@
           {#if cr.license}
             <dt>License</dt>
             <dd>
-              {#if cr.license.url}
+              {#if cr.licenseModel}
+                <button
+                  type="button"
+                  class="linkish"
+                  aria-haspopup="dialog"
+                  onclick={() => (licenseOpen = true)}>{cr.license.label}</button
+                >
+              {:else if cr.license.url}
                 <a href={cr.license.url} target="_blank" rel="noopener">{cr.license.label}</a>
               {:else}
                 {cr.license.label}
@@ -144,7 +158,17 @@
 
   <footer class="links">
     {#each card.links as l (l.href)}
-      <a href={l.href} target="_blank" rel="noopener">{l.label}</a>
+      {#if isMarkdownLink(l.href)}
+        <button
+          type="button"
+          class="linkish"
+          aria-haspopup="dialog"
+          data-testid="doc-open"
+          onclick={() => (openDoc = { label: l.label, href: l.href })}>{l.label}</button
+        >
+      {:else}
+        <a href={l.href} target="_blank" rel="noopener">{l.label}</a>
+      {/if}
     {/each}
   </footer>
 
@@ -166,7 +190,37 @@
   {/if}
 </article>
 
+{#if openDoc}
+  <DocModal
+    open={true}
+    title={`${openDoc.label}: ${card.title}`}
+    url={openDoc.href}
+    onclose={() => (openDoc = null)}
+  />
+{/if}
+{#if card.credits?.licenseModel}
+  <LicenseModal
+    open={licenseOpen}
+    title={card.title}
+    model={card.credits.licenseModel}
+    onclose={() => (licenseOpen = false)}
+  />
+{/if}
+
 <style>
+  .linkish {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-link);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .linkish:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
   .card {
     display: flex;
     flex-direction: column;
@@ -301,7 +355,8 @@
     gap: var(--space-1) var(--space-4);
     font-size: var(--text-sm);
   }
-  .links a {
+  .links a,
+  .links .linkish {
     display: inline-flex;
     align-items: center;
     min-height: 32px;

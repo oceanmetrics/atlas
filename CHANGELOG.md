@@ -140,6 +140,14 @@ and hex painting follow.
   OceanMetrics Atlas" note saying what no longer applies (scores, Program Areas, the Report, the release
   registry, the gallery, fonts); no page is entirely about a removed feature, so none was deleted. The README's
   Docs paragraph says so.
+- **Methods and License open as dialogs (WP11).** In the credits strip and on the catalog page, "Methods" (the
+  collection's `describedby` README, and any other markdown link) opens a dialog that fetches the file and
+  renders it (headings, lists, tables, code, links and images; a small renderer in `lib/markdown/`, loaded
+  only when a dialog opens, no new dependency). Raw HTML in a README is shown as text, never run; links open
+  in a new tab with `rel="noopener noreferrer"`, only `http(s)`/`mailto` survive, relative links and images
+  resolve against the README's own URL; "Open raw" links to the file. "License" opens a dialog with the SPDX id,
+  its full name, a one-line plain-language summary (CC-BY-4.0, CC-BY-NC-3.0, CC0-1.0, public domain / US
+  Government work, else "see the license link"), the collection's `license` links and the attribution to copy.
 
 - **Forked from MarineSensitivity/atlas 0.10.88** (history kept, `upstream` remote). Name, title and
   brand strings are now "OceanMetrics Atlas"; the version restarts at 0.1.0.

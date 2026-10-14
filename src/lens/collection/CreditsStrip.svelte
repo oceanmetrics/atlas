@@ -4,11 +4,18 @@
   // the methods README. Pure presentation of `lib/catalog/credits.ts#creditsOf`; a collection that
   // publishes none of it renders nothing. Never shows an e-mail address.
   import type { Credits } from "../../lib/catalog/credits";
+  import DocModal from "../../lib/ui/DocModal.svelte";
+  import LicenseModal from "../../lib/ui/LicenseModal.svelte";
 
   interface Props {
     credits: Credits;
   }
   let { credits }: Props = $props();
+
+  // "Methods" and "License" open as dialogs (the README rendered, the license explained), not as raw
+  // files in a new tab; each dialog carries its own link to the raw file / the license text
+  let methodsOpen = $state(false);
+  let licenseOpen = $state(false);
 
   const people = $derived(credits.pis.length > 0 ? credits.pis : credits.contacts);
   const peopleLabel = $derived(credits.pis.length > 0 ? "PI" : "Contact");
@@ -38,7 +45,15 @@
       <div class="row">
         <dt>License</dt>
         <dd>
-          {#if credits.licenseUrl}
+          {#if credits.licenseModel}
+            <button
+              type="button"
+              class="linkish"
+              aria-haspopup="dialog"
+              data-testid="license-open"
+              onclick={() => (licenseOpen = true)}>{credits.license}</button
+            >
+          {:else if credits.licenseUrl}
             <a href={credits.licenseUrl} target="_blank" rel="noopener">{credits.license}</a>
           {:else}
             {credits.license}
@@ -66,13 +81,33 @@
       <div class="row">
         <dt>Methods</dt>
         <dd>
-          <a href={credits.methodsUrl} target="_blank" rel="noopener"
-            >Methods and field dictionary</a
+          <button
+            type="button"
+            class="linkish"
+            aria-haspopup="dialog"
+            data-testid="methods-open"
+            onclick={() => (methodsOpen = true)}>Methods and field dictionary</button
           >
         </dd>
       </div>
     {/if}
   </dl>
+  {#if credits.methodsUrl}
+    <DocModal
+      open={methodsOpen}
+      title={`Methods: ${credits.title ?? "collection"}`}
+      url={credits.methodsUrl}
+      onclose={() => (methodsOpen = false)}
+    />
+  {/if}
+  {#if credits.licenseModel}
+    <LicenseModal
+      open={licenseOpen}
+      title={credits.title ?? "collection"}
+      model={credits.licenseModel}
+      onclose={() => (licenseOpen = false)}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -90,6 +125,20 @@
   .row {
     display: flex;
     gap: var(--space-2);
+  }
+  .linkish {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-link);
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .linkish:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
   dt {
     flex: none;

@@ -1,0 +1,14 @@
+diff --git a/src/lib/markdown/render.ts b/src/lib/markdown/render.ts
+index b15fc39..fe9943f 100644
+--- a/src/lib/markdown/render.ts
++++ b/src/lib/markdown/render.ts
+@@ -14,6 +14,9 @@
+ // of the map does not carry it (`src/lib/ui/DocModal.svelte`).
+ 
+ export function escapeHtml(s: string): string {
++  // SEEDED FAULT (tests/faults/markdown-html-passthrough.patch): raw HTML in a README is passed through
++  // unescaped, so a `<script>` in the file would run in the modal.
++  if (s.length >= 0) return s;
+   return s
+     .replace(/&/g, "&amp;")
+     .replace(/</g, "&lt;")

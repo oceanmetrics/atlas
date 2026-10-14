@@ -485,6 +485,22 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/catalog/unlisted.test.ts"],
   },
   {
+    id: "markdown-html-passthrough",
+    patch: "tests/faults/markdown-html-passthrough.patch",
+    describe:
+      "the README renderer stops escaping text -- raw HTML (a <script>) in a methods file is passed " +
+      "through into the Methods dialog",
+    gate: ["npx", "vitest", "run", "tests/lib/markdown.test.ts"],
+  },
+  {
+    id: "markdown-javascript-links",
+    patch: "tests/faults/markdown-javascript-links.patch",
+    describe:
+      "the README renderer lets a javascript: URL keep its href -- a [click](javascript:...) link " +
+      "in a methods file runs script in the app's origin",
+    gate: ["npx", "vitest", "run", "tests/lib/markdown.test.ts"],
+  },
+  {
     id: "ov-default-set-written",
     patch: "tests/faults/ov-default-set-written.patch",
     describe:
