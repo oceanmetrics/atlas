@@ -355,6 +355,25 @@ export const FAULTS = [
       "bbox would not), so the exact returned left/right values are the reliable catch.",
     gate: ["npx", "vitest", "run", "tests/map/chromePadding.test.ts", "-t", "a side gutter"],
   },
+  // --- WP13: the live camera padding ----------------------------------------------------------------
+  {
+    id: "live-padding-open-share-dropped",
+    patch: "tests/faults/live-padding-open-share-dropped.patch",
+    describe:
+      "livePadding() stops enforcing MIN_OPEN_SHARE on the sides -- a panel wide enough to leave under " +
+      "40% of the stage open still pads sideways, so the map's centre (and the globe) is pushed into a " +
+      "sliver and off screen (the obis-hex rule this was copied from). A plain vitest gate on exact " +
+      "values.",
+    gate: ["npx", "vitest", "run", "tests/map/livePadding.test.ts", "-t", "less than 40%"],
+  },
+  {
+    id: "live-padding-bottom-share-dropped",
+    patch: "tests/faults/live-padding-bottom-share-dropped.patch",
+    describe:
+      "livePadding() pads the bottom for a full-height phone sheet -- it leaves under 40% of the " +
+      "height, so the centre is drawn in a sliver at the top of the stage.",
+    gate: ["npx", "vitest", "run", "tests/map/livePadding.test.ts", "-t", "full height"],
+  },
   {
     id: "svgwrapper-footer-text-dropped",
     patch: "tests/faults/svgwrapper-footer-text-dropped.patch",

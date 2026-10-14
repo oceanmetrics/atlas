@@ -268,6 +268,13 @@ export function cameraViewToBounds(
 export const PHONE_STUDY_AREA_ZOOM_BOOST = 0.85;
 
 /**
+ * WP13: no longer called by the shell. The map now carries the live padding (`livePadding.ts`,
+ * `handle.setPadding`), which centres the camera in the open area for the globe as well, and this
+ * hand shift would move the first view twice. Kept exported and tested as the flat-Mercator
+ * reference for what that padding does at a given zoom. The header below is the ORIGINAL rule it
+ * was written under ("never MapLibre's persisted padding"), which WP13 reversed (docs/map.md,
+ * "Camera padding").
+ *
  * usability M4 ("the panel/sheet cover the study area... frame the study area with padding for
  * the panel/sheet"): shifts a center+zoom camera so the SAME geographic point instead appears at
  * the middle of the VISIBLE (unobscured) rectangle of the viewport, not the middle of the whole

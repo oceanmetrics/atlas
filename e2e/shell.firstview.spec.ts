@@ -59,7 +59,7 @@ test.describe("usability M4: default camera padded for the docked panel", () => 
     expect(pt.y, "still on screen").toBeGreaterThan(0);
   });
 
-  test("an explicit ?map= is never padded or refitted (a real camera is not second-guessed)", async ({
+  test("an explicit ?map= is never refitted: its centre is drawn in the middle of the OPEN area (WP13 live padding)", async ({
     page,
   }) => {
     await gotoMap(page, `/?map=${CENTRE.lon},${CENTRE.lat},4`);
@@ -67,8 +67,10 @@ test.describe("usability M4: default camera padded for the docked panel", () => 
     await page.waitForTimeout(3000);
     const pt = await projectCentre(page);
     const viewportWidth = 1280;
-    // unpadded: the point lands at (approximately) the canvas's own center.
-    expect(Math.abs(pt.x - viewportWidth / 2)).toBeLessThan(20);
+    // WP13: the map carries the live padding, so the URL's centre sits in the middle of what the
+    // left-docked panel (380 + 12 inset + 80 rail = 472) leaves open, NOT of the whole stage; it is
+    // still the centre the URL names (never shifted by a fit, never moved off it)
+    expect(Math.abs(pt.x - (472 + viewportWidth) / 2)).toBeLessThan(20);
   });
 
   test("collapsing the panel reserves only the rail: the centre sits much closer to canvas center than uncollapsed", async ({

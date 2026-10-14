@@ -36,8 +36,13 @@ const project = (page: Page, ll: [number, number]) =>
     const w = window as unknown as {
       __atlasMap: { handle: { map: { project(ll: [number, number]): Px } } };
     };
-    const p = w.__atlasMap.handle.map.project(point);
-    return { x: p.x, y: p.y };
+    const map = w.__atlasMap.handle.map;
+    const p = map.project(point);
+    // viewport coordinates, like `boundingBox()` -- the canvas starts BELOW the top bar (WP13: the old
+    // canvas-relative number only passed against the bar's bottom edge because the fit over-reserved)
+    const canvas = (map as unknown as { getCanvas(): HTMLCanvasElement }).getCanvas();
+    const r = canvas.getBoundingClientRect();
+    return { x: p.x + r.left, y: p.y + r.top };
   }, ll);
 
 const [WEST, SOUTH, EAST, NORTH] = BIOTRACK_BBOX;

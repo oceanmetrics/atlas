@@ -55,6 +55,32 @@ async function readCamera(page: Page): Promise<CameraState> {
   });
 }
 
+/** WP13: the screen x-range (viewport px) a bbox's outline occupies -- with the live padding the
+ * camera's centre IS the bbox centre and the PADDING keeps the bbox out from under the docked panel,
+ * so "the whole bbox is east of the panel" is asserted on where it is drawn, not on the centre. */
+async function bboxScreenXRange(
+  page: Page,
+  bbox: [number, number, number, number],
+): Promise<{ min: number; max: number }> {
+  return page.evaluate((bb) => {
+    const w = window as unknown as {
+      __atlasMap: {
+        handle: {
+          map: { project(ll: [number, number]): { x: number }; getContainer(): HTMLElement };
+        };
+      };
+    };
+    const map = w.__atlasMap.handle.map;
+    const left = map.getContainer().getBoundingClientRect().left;
+    const xs: number[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const lon = bb[0] + (i / 8) * (bb[2] - bb[0]);
+      for (const lat of [bb[1], bb[3]]) xs.push(map.project([lon, lat]).x + left);
+    }
+    return { min: Math.min(...xs), max: Math.max(...xs) };
+  }, bbox);
+}
+
 async function cameraIsMoving(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const w = window as unknown as { __atlasMap?: { handle: { map: { isMoving(): boolean } } } };
@@ -174,8 +200,14 @@ test.describe("D8: selecting a model frames its extent, not the default study ar
     // gutter) on the west, so the camera centre sits WEST of the bbox centre (-158.4), keeping the
     // whole bbox east of the panel (measured -183.4 at 1280 px, i.e. 176.6 unwrapped). Was -133.4
     // (east of it) when the panel docked right.
-    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-200);
-    expect(unwrapWest(camera.center.lng)).toBeLessThan(-165);
+    // WP13: the map carries the live padding (livePadding.ts), so the camera's centre is the bbox's own
+    // centre (-158.4, give or take the globe's own curvature) and the PADDING keeps the whole bbox in
+    // the open area east of the panel (rail + panel + inset = 472 px at 1280 wide)
+    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-170);
+    expect(unwrapWest(camera.center.lng)).toBeLessThan(-148);
+    const range = await bboxScreenXRange(page, [-177.7, 60.65, -139.15, 79]);
+    expect(range.min, "the bbox starts east of the docked panel").toBeGreaterThanOrEqual(472);
+    expect(range.max, "the bbox ends on screen").toBeLessThanOrEqual(1280);
     expect(camera.center.lat).toBeGreaterThan(55);
     expect(camera.center.lat).toBeLessThan(85);
   });
@@ -219,8 +251,12 @@ test.describe("D8: selecting a model frames its extent, not the default study ar
     // barely pass.
     // R4-B: docked LEFT by default, so the centre shifts west of the bbox centre (-170); measured
     // -191.2 (168.8 unwrapped). Was -152.3 with the panel on the right.
-    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-205);
-    expect(unwrapWest(camera.center.lng)).toBeLessThan(-180);
+    // WP13: the centre is the bbox centre (-170); the live padding, not a shifted centre, keeps the
+    // bbox east of the panel
+    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-182);
+    expect(unwrapWest(camera.center.lng)).toBeLessThan(-160);
+    const range = await bboxScreenXRange(page, [-190, 53.15, -150, 73.75]);
+    expect(range.min, "the bbox starts east of the docked panel").toBeGreaterThanOrEqual(472);
     expect(camera.center.lat).toBeGreaterThan(58);
     expect(camera.center.lat).toBeLessThan(70);
   });
@@ -297,8 +333,12 @@ test.describe("D8: selecting a model frames its extent, not the default study ar
     // reason.
     // R4-B: docked LEFT by default, so the centre shifts west of the bbox centre (-170); measured
     // -191.2 (168.8 unwrapped). Was -152.3 with the panel on the right.
-    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-205);
-    expect(unwrapWest(camera.center.lng)).toBeLessThan(-180);
+    // WP13: the centre is the bbox centre (-170); the live padding, not a shifted centre, keeps the
+    // bbox east of the panel
+    expect(unwrapWest(camera.center.lng)).toBeGreaterThan(-182);
+    expect(unwrapWest(camera.center.lng)).toBeLessThan(-160);
+    const range = await bboxScreenXRange(page, [-190, 53.15, -150, 73.75]);
+    expect(range.min, "the bbox starts east of the docked panel").toBeGreaterThanOrEqual(472);
     expect(camera.center.lat).toBeGreaterThan(58);
     expect(camera.center.lat).toBeLessThan(70);
   });
@@ -484,18 +524,33 @@ test.describe("V4 fix: the species camera fills the free area under globe projec
    * sequence (an initial center-only fallback, then a second flyToBounds once /cog/info answers)
    * cannot be mistaken for "settled" during the brief gap between the two flights, when the map is
    * genuinely not moving but still parked at the (low-zoom) study-area default. */
-  async function waitForCameraSettled(page: Page): Promise<void> {
+  async function waitForCameraSettled(page: Page, nearLng?: number): Promise<void> {
+    // WP13: on the phone the exact fit of a walrus-sized box (zoom ~2.05) is no longer past the phone's
+    // own default (~2.03), so "past the study-area default" is read from where the camera is when a
+    // target longitude is given: settled AND within 15 degrees of it
     await expect
       .poll(
         () =>
-          page.evaluate((ceiling) => {
-            const w = window as unknown as {
-              __atlasMap?: { handle: { map: { getZoom(): number; isMoving(): boolean } } };
-            };
-            const map = w.__atlasMap?.handle.map;
-            if (!map) return false;
-            return map.getZoom() > ceiling && !map.isMoving();
-          }, STUDY_AREA_ZOOM_CEILING),
+          page.evaluate(
+            ([ceiling, lng]) => {
+              const w = window as unknown as {
+                __atlasMap?: {
+                  handle: {
+                    map: { getZoom(): number; isMoving(): boolean; getCenter(): { lng: number } };
+                  };
+                };
+              };
+              const map = w.__atlasMap?.handle.map;
+              if (!map || map.isMoving()) return false;
+              if (lng !== null) {
+                let c = map.getCenter().lng;
+                while (c > 0) c -= 360;
+                return Math.abs(c - lng) < 15;
+              }
+              return map.getZoom() > ceiling;
+            },
+            [STUDY_AREA_ZOOM_CEILING, nearLng ?? null] as const,
+          ),
         { message: "camera flight never settled past the study-area default", timeout: 15_000 },
       )
       .toBe(true);
@@ -592,7 +647,7 @@ test.describe("V4 fix: the species camera fills the free area under globe projec
     // two flights in sequence (the initial study-area fallback, then the COG-bounds fit once
     // /cog/info + the point-probe answer) -- waitForCameraSettled's own header explains why a
     // plain zoom poll alone is not enough here.
-    await waitForCameraSettled(page);
+    await waitForCameraSettled(page, -170);
 
     // narrowed bbox: [-190, 53.15, -150, 73.75] -- same real value as the desktop D8 test above.
     const NARROWED_BBOX: [number, number, number, number] = [-190, 53.15, -150, 73.75];

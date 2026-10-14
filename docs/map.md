@@ -37,6 +37,8 @@ is the regression gate — a desktop panel collapsed at load still paints the ra
 | `handle.setProjection("globe"\|"mercator")`      | `map/map.ts`            | the imperative twin of `composeStyle({projection})`             |
 | `handle.flyTo(studyArea)`                        | `map/map.ts`            | centre + zoom; never a bbox                                     |
 | `handle.camera()` / `handle.resize()`            | `map/map.ts`            | current (rounded) camera; re-measure the container              |
+| `handle.flyToBounds(bounds, {padding})`          | `map/map.ts`            | frame an extent in the open area (see "Camera padding" below)   |
+| `handle.setPadding(padding, {animate})`          | `map/map.ts`            | the standing padding; the shell's, a lens never calls it        |
 | `mapClick(map, lngLat, point, {grid, units})`    | `map/interaction.ts`    | `{lngLat, cellId, zone}`                                        |
 | `zoneAtPoint(map, point, units)`                 | `map/interaction.ts`    | hover: the zone under the cursor                                |
 | `studyAreaFromBoot(boot, key)`                   | `map/interaction.ts`    | `boot.study_areas[key]`, clamped to `FULL`                      |
@@ -170,6 +172,58 @@ lenses — the panel IS the stack, its "Data" row expanding into the lens's own 
    outline row is hidden. The mirror case needs no exception: hiding "Data" (data-raster) in zone
    mode hides a REAL choropleth, which is simply correct (nothing else reads through it the way
    pick-mode depends on the query fill).
+
+## Camera padding: the centre sits in the open area (WP13)
+
+The panel (and, on a phone, the sheet) covers part of the stage, so the map's centre, and a globe
+at low zoom, is drawn in the middle of what stays open, as in obis-hex. Four pieces:
+
+- **`livePadding(stageW, stageH, chrome, {maximized})`** (`map/livePadding.ts`, pure, one test per rule in
+  `tests/map/livePadding.test.ts`) turns the shell's chrome reserve (`chromePadding.ts`) into MapLibre
+  padding. Sides: the reserve minus the fit gutter, kept only while the open width stays at or above
+  `MIN_OPEN_SHARE = 0.4` of the stage (the larger side is dropped first). Bottom (the phone sheet and the
+  rail row under it): kept only while it leaves 0.4 of the height, so a full-height sheet pads nothing. A
+  maximized panel (the Table tool) pads nothing. The legend card and chip are not part of it (a legend
+  appearing must not move the map). **The top bar is not either**: it is a row above the stage (measured
+  at 1280x800 and 390x844, the stage starts at y=48), so `insideStage()` subtracts the part of the 48 px
+  reserve that does not overlap the stage, which today is all of it.
+- **`Shell.svelte`** applies it through `handle.setPadding()` in one `$effect` that reads `panelGeom`,
+  `sheetGeom` and the stage size (a `ResizeObserver` on `#map`). While a pointer is held anywhere the effect
+  waits, so a panel or sheet drag does not make the globe chase the pane; it re-runs on release with the
+  final geometry (obis-hex re-measures on `pointerup` for the same reason). The handle eases over 250 ms,
+  only when the padding differs, marks the move programmatic (the URL never records it), and defers a change
+  made during a fly to that fly's `moveend` so it cannot cut a fit short.
+- **The first camera is unshifted.** `paddedStudyAreaCenter` used to move the first centre by hand; now the
+  study area's own centre is the camera and the estimated live padding (from the same localStorage keys,
+  `initialLivePadding()`) is set before the first frame with no easing (`createMap({padding})`), then
+  re-measured once on the map's first `load`, also with no easing. The first view therefore shifts once,
+  never twice; on the phone the zoom still fits the free area (`symmetricPadding` of the same reserve, so the
+  zoom is unchanged and the centre is the box's midpoint). `paddedStudyAreaCenter` stays exported and tested
+  but the shell no longer calls it. Consequence: a `?map=` centre is now the point drawn at the middle of the
+  open area (it used to be the middle of the whole stage), the same rule as obis-hex.
+- **Fits are solved against the padded transform** (`map.ts#solveFit`, behind `flyToBounds`). MapLibre 6.10's
+  `cameraForBounds` adds an option padding on top of `transform.padding` (its `availableWidth = width -
+(transform.padding + padding)`), so passing the whole reserve would pad twice, and passing only the
+  remainder works for a flat map, but its globe branch tests the extent against clip-space limits built
+  from the option padding alone while projecting with the padded transform. Measured with the live panel
+  open: the phone's BioTrack extent clipped at the left edge and sat under the legend chip (zoom 2.01
+  against 2.33 unpadded). `solveFit` instead projects the extent's outline at a candidate camera and
+  corrects centre and zoom until the outline fills the free region (`ChromePadding` = the chrome reserve
+  from the stage edge, never less than the live padding; a bare number = breathing room inside the open
+  area) and is centred in it, for either projection; the camera is restored before it returns. The old
+  `cameraForBounds` + `residualFitPadding()` path (the reserve minus the live padding, so just the gutter) is
+  kept only for a zero-size container. Never `fitBounds`; the bounds stay continuous (east may exceed 180).
+
+Measured on the BioTrack extent (-97.9, 11.8, -43.9, 56.5) at 1280x800, panel docked left (padding left
+472, stage 1280x752, open area x 492..1280 after the 20 px gutter, y 20..732): mercator, outline x 549..1223,
+y 20..732 (exactly the gutter at top and bottom, centred on the open area's middle, x 886); globe, x
+508..1264, y 20..732. Before this change the same fit on the globe ended at x 539..1149, y 49..758, off the
+bottom of the stage. Phone 390x844 (half sheet, padding bottom 452), extent y 20..288 of the 344 px
+above the sheet, x centred.
+
+Known MapLibre 6.10 behaviour with a padding on a globe: a whole-canvas `queryRenderedFeatures()` returns
+nothing (2 features unpadded, 0 padded, 2 in mercator, verified); point and small-box queries, which are all
+the app makes, are unaffected. `e2e/species.smoke.spec.ts` queries a box around the feature for that reason.
 
 ## Rules with teeth
 
