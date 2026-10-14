@@ -489,7 +489,7 @@ export const FAULTS = [
       "run",
       "tests/catalog/dimNotes.test.ts",
       "-t",
-      "a taxon-like sibling blocks",
+      "the taxon is blamed first",
     ],
   },
   // --- WP4 (places: overlays, summaries, the inside-places filter) -------------------------------
