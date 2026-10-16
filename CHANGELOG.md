@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- **The summary chips of "Species in this cell" are filters.** Click a group chip ("Hard corals 93") to list only that group (one at a time; click it again, or "Show all groups", to see them all), and the Red List chips (CR, EN, VU, NT) to keep species of those categories (any number, combined with the group and the text filter). Chips are buttons with a pressed state (outlined, the others dimmed); group chips always count the whole cell, Red List chips count within the chosen group. While anything narrows the list a line reads "Showing M of N" with "Clear filters" (back to the item's own group, no category, empty text); the CSV download exports what is shown.
+
 ## 0.3.2
 
 - **The clicked raster cell stays marked on the map.** A click on a raster layer used to leave only a transient popup and the legend marker. The map now keeps a white ring (dark halo, so it reads on any colour ramp) at the clicked point, and where the layer's cell grid is known (the AquaMaps EOV share's 0.05 degree grid, the AquaMaps native 0.5 degree and downscaled 0.05 degree surfaces) the square of the cell itself. It is drawn above every data layer, stays through "Atlas" links and "Back", and clears with "Clear selection" or when you pick another collection. It is a new `highlight` input of `composeStyle` (the same group as the places selection in the Layers panel).

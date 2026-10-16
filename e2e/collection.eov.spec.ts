@@ -205,3 +205,42 @@ test("the zoom toggle is the auto-zoom preference, and an Atlas link leaves a wa
   await expect(panel.getByTestId("raster-cell-species-count")).toHaveText("6 species in this cell");
   await expect(toggle).not.toBeChecked();
 });
+
+test("the group and Red List chips are filters, with Showing M of N and Clear filters", async ({
+  page,
+}) => {
+  await boot(page, []);
+  await clickCancun(page);
+  const panel = page.getByTestId("raster-cell-species");
+  const rows = panel.getByTestId("raster-cell-species-row");
+  await expect(rows).toHaveCount(6, { timeout: 15_000 });
+  await expect(panel.getByTestId("cell-species-showing")).toHaveCount(0);
+  // a group chip is a single-select filter
+  const corals = panel.getByTestId("cell-species-chip-group-hardCorals");
+  await expect(corals).toHaveAttribute("aria-pressed", "false");
+  await corals.click();
+  await expect(corals).toHaveAttribute("aria-pressed", "true");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Hard corals");
+  await expect(panel.getByTestId("cell-species-showing")).toContainText("Showing 2 of 6");
+  // another group replaces it; the active one again clears it
+  await panel.getByTestId("cell-species-chip-group-fish").click();
+  await expect(corals).toHaveAttribute("aria-pressed", "false");
+  await expect(rows).toHaveCount(2);
+  await panel.getByTestId("cell-species-chip-group-fish").click();
+  await expect(rows).toHaveCount(6);
+  // Red List chips are a multi-select filter, counted within the active group
+  await corals.click();
+  await panel.getByTestId("cell-species-chip-redlist-CR").click();
+  await expect(panel.getByTestId("cell-species-chip-redlist-CR")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(rows).toHaveCount(1);
+  await expect(panel.getByTestId("cell-species-showing")).toContainText("Showing 1 of 6");
+  // clearing restores the item's list
+  await panel.getByRole("button", { name: "Clear filters" }).click();
+  await expect(rows).toHaveCount(6);
+  await expect(panel.getByTestId("cell-species-showing")).toHaveCount(0);
+  await expect(corals).toHaveAttribute("aria-pressed", "false");
+});

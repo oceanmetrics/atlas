@@ -77,14 +77,22 @@
   let sortKey = $state<SortKey>("suit");
   let query = $state("");
   let expanded = $state(false);
-  // the EOV the list is on: the selected item's, until "Show all" is chosen; follows the item
+  // the filters. Group: ONE group at a time (a chip, or the item's EOV to start with; follows the item), `null` =
+  // all. Red List: any of the chosen codes. Both are chips; the text query is the box.
   const itemGroup = $derived(defaultGroup(desc, selected, composite));
-  let allGroups = $state(false);
-  $effect(() => {
-    void itemGroup;
-    allGroups = false;
-  });
-  const group = $derived(allGroups ? null : itemGroup);
+  // a writable $derived: a chip overrides it, a change of the item's own group resets it
+  let groupFilter = $derived<string | null>(itemGroup);
+  let redlist = $state<string[]>([]);
+  const group = $derived(groupFilter);
+  const filtered = $derived(groupFilter !== itemGroup || redlist.length > 0 || query.trim() !== "");
+  const toggleGroup = (g: string) => (groupFilter = groupFilter === g ? null : g);
+  const toggleRedlist = (code: string) =>
+    (redlist = redlist.includes(code) ? redlist.filter((c) => c !== code) : [...redlist, code]);
+  function clearFilters() {
+    groupFilter = itemGroup;
+    redlist = [];
+    query = "";
+  }
 
   let token = 0;
   $effect(() => {
@@ -119,7 +127,7 @@
     });
   });
 
-  const shown = $derived(sortRows(filterRows(rows, { group, query }), sortKey));
+  const shown = $derived(sortRows(filterRows(rows, { group, redlist, query }), sortKey));
   const visible = $derived(expanded ? shown : shown.slice(0, TOP));
   const inGroup = $derived(group ? rows.filter((r) => r.group === group) : rows);
   const counts = $derived(
@@ -128,7 +136,16 @@
       groups.map((g) => g.value),
     ),
   );
-  const chips = $derived(redlistCounts(inGroup));
+  // Red List chips count within the active group; a chosen code the group has none of stays, as 0, to be unchosen
+  const chips = $derived.by(() => {
+    const c = redlistCounts(inGroup);
+    return [
+      ...c,
+      ...redlist
+        .filter((code) => !c.some((x) => x.code === code))
+        .map((code) => ({ code, count: 0 })),
+    ];
+  });
 
   const linksOf = (r: CellSpeciesRow): CellSpeciesLink[] => linksFor(r, desc, map);
 
@@ -185,17 +202,33 @@
         No species of this product have habitat in this cell.
       </p>
     {:else}
-      <ul class="chips" aria-label="Species per group and Red List category">
+      <ul class="chips" aria-label="Filter by group and Red List category">
         {#each counts as g (g.group)}
           <li>
-            <span class="pill" style:background={`var(${flowerColorFor(g.group)})`}
-              >{labelOf(g.group)} {g.count}</span
+            <button
+              type="button"
+              class="pill chip"
+              class:on={groupFilter === g.group}
+              class:dim={groupFilter !== null && groupFilter !== g.group}
+              aria-pressed={groupFilter === g.group}
+              data-testid={`cell-species-chip-group-${g.group}`}
+              style:background={`var(${flowerColorFor(g.group)})`}
+              onclick={() => toggleGroup(g.group)}>{labelOf(g.group)} {g.count}</button
             >
           </li>
         {/each}
         {#each chips as c (c.code)}
           <li>
-            <span class="pill redlist" title="IUCN Red List category">{c.code} {c.count}</span>
+            <button
+              type="button"
+              class="pill redlist chip"
+              class:on={redlist.includes(c.code)}
+              class:dim={redlist.length > 0 && !redlist.includes(c.code)}
+              aria-pressed={redlist.includes(c.code)}
+              title="IUCN Red List category"
+              data-testid={`cell-species-chip-redlist-${c.code}`}
+              onclick={() => toggleRedlist(c.code)}>{c.code} {c.count}</button
+            >
           </li>
         {/each}
       </ul>
@@ -217,9 +250,19 @@
         </select>
       </div>
       {#if itemGroup}
-        <button type="button" class="linkish" onclick={() => (allGroups = !allGroups)}>
-          {allGroups ? `Only ${labelOf(itemGroup)}` : "Show all groups"}
+        <button
+          type="button"
+          class="linkish"
+          onclick={() => (groupFilter = groupFilter === itemGroup ? null : itemGroup)}
+        >
+          {groupFilter === itemGroup ? "Show all groups" : `Only ${labelOf(itemGroup)}`}
         </button>
+      {/if}
+      {#if filtered}
+        <p class="count" data-testid="cell-species-showing">
+          Showing {shown.length} of {rows.length}
+          <button type="button" class="linkish" onclick={clearFilters}>Clear filters</button>
+        </p>
       {/if}
 
       {#if shown.length === 0}
@@ -337,6 +380,23 @@
   .pill.redlist {
     background: var(--fill-control);
     color: var(--text-primary);
+  }
+  /* the chips are the filters: pressed = outlined at full strength, the rest of a filtered dimension dimmed */
+  .chip {
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .chip.dim {
+    opacity: 0.55;
+  }
+  .chip.on {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 1px;
+  }
+  .chip:focus-visible {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 2px;
   }
   .controls {
     display: flex;

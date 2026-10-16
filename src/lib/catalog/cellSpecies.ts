@@ -455,15 +455,20 @@ export function sortRows(rows: readonly CellSpeciesRow[], key: SortKey = "suit")
   return [...rows].sort((a, b) => cmp[key](a, b) || byName(a, b));
 }
 
-/** rows of one group (`null` = all) whose scientific name, common name, group or Red List code contains `query`. */
+/**
+ * The rows that pass every filter: one `group` (`null`/absent = all), any of the Red List codes in `redlist`
+ * (empty/absent = no filter), and a `query` contained in the scientific name, common name, group or Red List code.
+ */
 export function filterRows(
   rows: readonly CellSpeciesRow[],
-  opts: { group?: string | null; query?: string } = {},
+  opts: { group?: string | null; redlist?: readonly string[]; query?: string } = {},
 ): CellSpeciesRow[] {
   const q = (opts.query ?? "").trim().toLowerCase();
+  const codes = opts.redlist ?? [];
   return rows.filter(
     (r) =>
       (!opts.group || r.group === opts.group) &&
+      (codes.length === 0 || codes.includes(r.redlist)) &&
       (!q ||
         [r.scientificName, r.commonName, r.group, r.redlist].some((s) =>
           s.toLowerCase().includes(q),

@@ -366,6 +366,23 @@ describe("the table's rules: sort, filter, counts, default group", () => {
     expect(filterRows(rows(), {})).toHaveLength(6);
   });
 
+  it("filters by Red List codes: one code, two codes (either), none = no filter, combined with group and query", () => {
+    expect(names(filterRows(rows(), { redlist: ["CR"] }))).toEqual(["Acropora palmata"]);
+    expect(filterRows(rows(), { redlist: ["EN"] })).toHaveLength(3);
+    expect(filterRows(rows(), { redlist: ["CR", "NT"] })).toHaveLength(2);
+    expect(filterRows(rows(), { redlist: [] })).toHaveLength(6);
+    expect(filterRows(rows(), { redlist: ["XX"] })).toEqual([]);
+    // with the group: the Red List codes narrow within it
+    const corals = filterRows(rows(), { group: "hardCorals" });
+    expect(corals).toHaveLength(2);
+    expect(filterRows(rows(), { group: "hardCorals", redlist: ["CR"] })).toHaveLength(1);
+    expect(filterRows(rows(), { group: "fish", redlist: ["CR"] })).toEqual([]);
+    // and with the text query
+    expect(names(filterRows(rows(), { redlist: ["CR", "EN"], query: "orbi" }))).toEqual([
+      "Orbicella faveolata",
+    ]);
+  });
+
   it("counts species per group in the given order, and the CR / EN / VU / NT chips", () => {
     expect(groupCounts(rows(), ["fish", "hardCorals", "mangroves", "marineMammals"])).toEqual([
       { group: "fish", count: 2 },
