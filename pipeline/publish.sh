@@ -41,7 +41,9 @@ if [ -d "$stage/aquamaps_native" ]; then
 fi
 # aquamaps_eov/ is NOT synced from here: it is written (and uploaded) by oceanmetrics/workflows/aquamaps_eov.qmd.
 # Only catalog.json is published from this repo, and it links ./aquamaps_eov/collection.json as its FIRST child.
-aws s3 cp "$stage/catalog.json" "s3://$bucket/atlas/catalog.json" --content-type application/json $flag
+# no-cache: without it S3 sends no Cache-Control and Chrome keeps the old catalog for hours (seen 2026-10-16:
+# the app kept opening on BioTrack after the EOV collection was published), so the app must revalidate.
+aws s3 cp "$stage/catalog.json" "s3://$bucket/atlas/catalog.json" --content-type application/json --cache-control "no-cache" $flag
 
 # restricted: unlisted prefix, never linked from catalog.json
 if [ -d "$stage/biotrack_species" ]; then
