@@ -296,7 +296,7 @@ async function fileOf(url: string): Promise<AsyncBuf> {
  * answers for a missing key) is an EMPTY cell, not an error; any other failure is a `LoadError`.
  */
 export async function readTile(
-  source: string | ArrayBuffer,
+  source: string | ArrayBuffer | AsyncBuf,
   cellId: number,
   cols: TileColumns,
 ): Promise<Loaded<TileRow[]>> {
@@ -310,7 +310,10 @@ export async function readTile(
     const rows = (await parquetReadObjects({
       file,
       columns: [cols.keyColumn, cols.speciesColumn, cols.valueColumn],
-      filter: { [cols.keyColumn]: cellId } as never, // an equality filter; hyparquet types the $-operators only
+      // the OPERATOR form: hyparquet prunes row groups from the footer statistics only for an operator
+      // object ({ $eq }); the shorthand { col: value } matches rows one by one and reads every row group
+      // (a 12.8 MB real tile: 243 ranges / 1.5 s shorthand vs 2 ranges / 13 ms with $eq)
+      filter: { [cols.keyColumn]: { $eq: cellId } } as never, // hyparquet types the $-operators loosely
       rowFormat: "object",
       compressors,
     })) as Record<string, unknown>[];

@@ -189,6 +189,26 @@ describe("readTile: one cell out of a sorted tile", () => {
   const cols = { keyColumn: "cell_id", speciesColumn: "aphia_id", valueColumn: "suit" };
   const tile = () => buf("cell_species/tile=954/data_0.parquet");
 
+  it("prunes row groups from the footer statistics: one cell costs the footer plus one row group", async () => {
+    // regression: the shorthand filter { cell_id: X } read every row group of a real 12.8 MB tile
+    const file = tile();
+    const ranges: [number, number][] = [];
+    const counting = {
+      byteLength: file.byteLength,
+      slice: async (a: number, b?: number) => {
+        ranges.push([a, b ?? file.byteLength]);
+        return file.slice(a, b);
+      },
+    };
+    const r = await readTile(counting, 9844266, cols);
+    expect(r.ok && r.value.length).toBe(6);
+    const bytes = ranges.reduce((n, [a, b]) => n + (b - a), 0);
+    // the fixture has four 3-row row groups and the cell's six rows span two of them: footer + 2
+    // groups = 3 ranges; a full read (the shorthand filter) would touch all four plus the footer = 5
+    expect(ranges.length).toBeLessThanOrEqual(3);
+    expect(bytes).toBeLessThan(file.byteLength);
+  });
+
   it("the cell's rows, suitability high to low (the file is sorted by cell then suit desc)", () => {
     expect(tile66).toEqual([
       { speciesId: 100001, suit: 95 },
