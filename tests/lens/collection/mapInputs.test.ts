@@ -20,7 +20,7 @@ beforeAll(async () => {
   const o = { base: FIXTURE_BASE, fetchImpl: fakeFetch().fetch, cache: new Map() };
   const cat = await loadCatalog(o);
   if (!cat.ok) throw new Error("fixture");
-  entry = cat.value.entries[0];
+  entry = cat.value.entries.find((e) => e.id === "biotrack_indicators")!;
   const res = await loadItems(entry, o);
   if (!res.ok) throw new Error("fixture");
   items = res.value.items;

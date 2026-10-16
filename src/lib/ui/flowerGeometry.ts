@@ -57,6 +57,24 @@ export interface FlowerComponentInput {
   key: string;
   /** 0-100, or null when this place has no value for this component ("no data", not zero). */
   score: number | null;
+  /** the component's own display label, when the data names one ("Hard corals"); absent = the category's. */
+  label?: string;
+  /** the component's own colour as a CSS custom PROPERTY NAME (`--cat-coral`), when it is not one of
+   * categories.ts's eight keys (an EOV); absent = the category's. Never a resolved colour value. */
+  color?: string;
+  /** why a null score is null, shown beside the empty slot ("(not in AquaMaps)"); absent = "No data". */
+  note?: string;
+}
+
+/** the category row a component draws with: the table's row for its key, with the component's own label and
+ * colour token winning when it names them. The ONE place the SVG, the table and the summary read it from. */
+export function componentCategory(c: FlowerComponentInput): Category {
+  const base = categoryFor(c.key);
+  return {
+    ...base,
+    label: c.label?.trim() || categoryLabel(c.key),
+    ...(c.color ? { color: c.color } : {}),
+  };
 }
 
 export interface FlowerPetal {
@@ -83,6 +101,8 @@ export interface FlowerPetal {
 export interface FlowerSlot {
   key: string;
   category: Category;
+  /** the component's `note` (why it is empty), if it gave one. */
+  note?: string;
   startAngle: number;
   endAngle: number;
 }
@@ -113,6 +133,9 @@ export interface FlowerGeometryOptions {
    * here, never at the true centre (see this module's header). Default
    * `outerRadius * FLOWER_HUB_RADIUS_RATIO` (24 when `outerRadius` is the default 100). */
   innerRadius?: number;
+  /** the centre number when the data states it (the composite item's own band value); omitted = the mean of
+   * the non-null scores. `null` states "no data". */
+  centerValue?: number | null;
 }
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -305,9 +328,15 @@ export function computeFlowerGeometry(
     // already share one color by design (this function's own header, just below) -- only the TEXT
     // a caller reads off `.label` changes, from the literal word "No data" to the release's own
     // component name.
-    const category = { ...categoryFor(c.key), label: categoryLabel(c.key) };
+    const category = componentCategory(c);
     if (c.score === null) {
-      noData.push({ key: c.key, category, startAngle, endAngle });
+      noData.push({
+        key: c.key,
+        category,
+        ...(c.note ? { note: c.note } : {}),
+        startAngle,
+        endAngle,
+      });
       return;
     }
     const score = clamp(c.score, 0, 100);
@@ -329,9 +358,8 @@ export function computeFlowerGeometry(
     });
   });
 
-  const centerValue = present.length
-    ? present.reduce((sum, v) => sum + v, 0) / present.length
-    : null;
+  const meanValue = present.length ? present.reduce((sum, v) => sum + v, 0) / present.length : null;
+  const centerValue = options.centerValue !== undefined ? options.centerValue : meanValue;
 
   return { petals, noData, centerValue, sliceCount: n, innerRadius };
 }
@@ -384,6 +412,9 @@ export function computeFlowerGeometrySafe(
   }
 }
 
+const slotText = (s: FlowerSlot): string =>
+  s.note ? `${s.category.label} ${s.note}` : s.category.label;
+
 /**
  * PURE: the flower's text summary (SC 1.1.1 -- "every chart has a table equivalent AND a text
  * summary"), built from the SAME `FlowerGeometry` the SVG draws, so the two cannot disagree. The
@@ -400,7 +431,7 @@ export function describeFlowerSummary(title: string, geometry: FlowerGeometry): 
   const n = petals.length;
 
   if (n === 0) {
-    const absent = noData.map((s) => s.category.label).join(", ");
+    const absent = noData.map(slotText).join(", ");
     return `${title}. Composite mean: no data. No data for any component (${absent}).`;
   }
 
@@ -409,7 +440,7 @@ export function describeFlowerSummary(title: string, geometry: FlowerGeometry): 
     `${title}. Composite mean ${meanText} across ${n} component${n === 1 ? "" : "s"}: ` +
     `${parts.join(", ")}.`;
   if (noData.length > 0) {
-    const absent = noData.map((s) => s.category.label).join(", ");
+    const absent = noData.map(slotText).join(", ");
     text += ` No data for ${absent}.`;
   }
   // atlas-4 fix round 2: never claims a PAGE POSITION ("below") -- this one sentence is reused in

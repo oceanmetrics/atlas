@@ -30,6 +30,7 @@ describe("loadCatalog: catalog.json -> collections", () => {
   it("loads the catalog and every child collection, in the catalog's own child order", async () => {
     const { entries } = await entriesOf();
     expect(entries.map((e) => e.id)).toEqual([
+      "aquamaps_eov",
       "biotrack_indicators",
       "am_0.05",
       "rng_iucn",
@@ -40,7 +41,7 @@ describe("loadCatalog: catalog.json -> collections", () => {
 
   it("an OWN collection (relative href) is group oceanmetrics, not external, and ok", async () => {
     const { entries } = await entriesOf();
-    const own = entries[0];
+    const own = entries.find((e) => e.id === "biotrack_indicators")!;
     expect(own).toMatchObject({
       id: "biotrack_indicators",
       title: "MBON BioTrack biodiversity indicators",
@@ -197,8 +198,9 @@ describe("loadCatalog: failure shapes of catalog.json itself", () => {
         ? jsonResponse({ hello: "world" })
         : undefined,
     );
-    expect(entries[0]).toMatchObject({ status: "unavailable", id: "biotrack_indicators" });
-    expect(entries[0].error?.kind).toBe("schema");
+    const bt = entries.find((e) => e.id === "biotrack_indicators")!;
+    expect(bt).toMatchObject({ status: "unavailable", id: "biotrack_indicators" });
+    expect(bt.error?.kind).toBe("schema");
   });
 
   it("never throws: even a fetch that is missing entirely resolves to a network error", async () => {
@@ -234,7 +236,11 @@ describe("loadCatalog: caching", () => {
 describe("loadItems: lazy, cached, partial failures survive", () => {
   async function biotrack(override?: Parameters<typeof fakeFetch>[0]) {
     const { entries, o } = await entriesOf(override);
-    return { entry: entries[0] as CollectionEntry, o, calls: opts };
+    return {
+      entry: entries.find((e) => e.id === "biotrack_indicators") as CollectionEntry,
+      o,
+      calls: opts,
+    };
   }
 
   it("fetches no item until asked (the catalog load touches collections only)", async () => {
@@ -268,7 +274,7 @@ describe("loadItems: lazy, cached, partial failures survive", () => {
     const { f, o } = opts();
     const cat = await loadCatalog(o);
     if (!cat.ok) throw new Error("catalog");
-    const entry = cat.value.entries[0];
+    const entry = cat.value.entries.find((e) => e.id === "biotrack_indicators")!;
     await loadItems(entry, o);
     const n = f.calls.length;
     const again = await loadItems(entry, o);

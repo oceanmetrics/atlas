@@ -118,6 +118,9 @@ export interface StacCollection extends StacBase {
   /** funders (BOEM, MBON, ...) until a standard field exists. */
   "atlas:funders"?: string[];
   "atlas:status"?: string;
+  /** a flower plot on a raster click: the petals are the sibling items across `dimension`, the centre the
+   * `composite` value of it (`lib/catalog/flower.ts`). */
+  "atlas:flower"?: { dimension: string; composite: string };
   "atlas:access"?: string;
   "cube:dimensions"?: Record<string, CubeDimension>;
   "sdm:response_type"?: string;
@@ -137,6 +140,11 @@ export interface StacItemProperties {
   "atlas:dims"?: Record<string, string>;
   /** `richness` / `uncertainty` ... where `sdm:response_type` is `mixed`. */
   "atlas:metric"?: string;
+  /** true for an item that has no data by construction (an EOV the source models no taxa of): drawn as an empty
+   * slot, never as a zero (`lib/catalog/flower.ts`). */
+  "atlas:absent"?: boolean;
+  /** the text beside such an empty slot; absent = "(not in AquaMaps)". */
+  "atlas:absent_note"?: string;
   /** the observed [min, max] of this item's values: drives the legend and the colour domain. */
   "atlas:value_range"?: [number, number];
   "sdm:value_unit"?: string;

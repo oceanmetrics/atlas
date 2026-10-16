@@ -71,6 +71,8 @@ export interface RasterAsset {
   colormap?: string;
   /** `[min, max]` or `"auto"` (`atlas:rescale`); absent = the item's own value range. */
   rescale?: [number, number] | "auto";
+  /** the band's nodata value (`raster:bands[bidx - 1].nodata`), when the asset declares one. */
+  nodata?: number;
 }
 
 function rescaleOf(v: unknown): [number, number] | "auto" | undefined {
@@ -100,11 +102,14 @@ export function rasterAssetOf(item: StacItem | null): RasterAsset | null {
   const bidx = asset["atlas:bidx"];
   const colormap = asset["atlas:colormap"];
   const rescale = rescaleOf(asset["atlas:rescale"]);
+  const band = typeof bidx === "number" && Number.isInteger(bidx) && bidx >= 1 ? bidx : 1;
+  const nodata = (asset["raster:bands"] as { nodata?: unknown }[] | undefined)?.[band - 1]?.nodata;
   return {
     url,
-    ...(typeof bidx === "number" && Number.isInteger(bidx) && bidx >= 1 ? { bidx } : {}),
+    ...(band > 1 || bidx === 1 ? { bidx: band } : {}),
     ...(typeof colormap === "string" && colormap ? { colormap } : {}),
     ...(rescale ? { rescale } : {}),
+    ...(typeof nodata === "number" && Number.isFinite(nodata) ? { nodata } : {}),
   };
 }
 

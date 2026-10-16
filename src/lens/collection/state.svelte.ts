@@ -19,7 +19,14 @@ import {
 import { creditsOf, type Credits } from "../../lib/catalog/credits";
 import { resolveCatalogBase } from "../../lib/catalog/base";
 import {
+  bandValueOf,
+  flowerPetalsFor,
+  flowerSpecOf,
+  type FlowerView,
+} from "../../lib/catalog/flower";
+import {
   itemDims,
+  itemTitleOf,
   pickEntry,
   selectorOptions as selectorOptionsOf,
   switchedNotice,
@@ -115,7 +122,6 @@ import {
   collectionMapInputs,
   formatCellValue,
   formatRasterValue,
-  itemLabel,
   rasterDomainOf,
   type CollectionMapInputs,
 } from "./mapInputs";
@@ -182,6 +188,9 @@ export interface RasterPoint {
   loading: boolean;
   /** the value as text with the item's unit ("87%", "no data"); "" while loading. */
   text: string;
+  /** the flower plot of this pixel when the collection declares `atlas:flower` and every band has been read
+   * (one `/cog/point` for all petals); `null` otherwise. */
+  flower: FlowerView | null;
 }
 
 /** one value of the item's `metric` dimension at the clicked cell (richness / uncertainty ...). */
@@ -463,8 +472,15 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
   // the item the map draws: the active one, with its rescale filled in once it has been read
   const drawItem = $derived.by((): StacItem | null => {
-    const it = item;
-    if (!it || !rangeKey || resolved?.key !== rangeKey) return it;
+    let it = item;
+    if (!it) return it;
+    // an item with no title of its own is titled by its dimension labels ("All EOVs (mean) · Risk-weighted share")
+    const own = it.properties?.title;
+    if (!(typeof own === "string" && own.trim())) {
+      const title = itemTitleOf(it, view.dims);
+      if (title !== it.id) it = { ...it, properties: { ...it.properties, title } };
+    }
+    if (!rangeKey || resolved?.key !== rangeKey) return it;
     return { ...it, properties: { ...it.properties, "atlas:value_range": resolved.range } };
   });
   const rangeLoading = $derived(
@@ -533,24 +549,49 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     lngLat: [number, number];
     value: number | null;
     loading: boolean;
+    /** every band of the pixel, when the collection has a flower (one read serves all petals) */
+    bands: (number | null)[] | null;
+    /** the COG those bands belong to: a sibling on the same COG needs no new request */
+    bandsUrl: string | null;
   } | null>(null);
   // the COG and band the active item draws, as one key: a read for another key is dropped
   const cogKey = $derived.by(() => {
     const cog = rasterAssetOf(item);
     return cog ? `${cog.url}#${cog.bidx ?? 1}` : null;
   });
+  // the bands of the last few pixel reads of a flower collection, by COG and position: the read hands its
+  // number to `setPointValue`, which looks the whole answer up here (the interaction's `read` is number-only)
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a plain cache read by the point reader, never a template
+  const bandsRead = new Map<string, (number | null)[]>();
+  const bandsKey = (url: string, ll: [number, number]) => `${url}|${ll[0]},${ll[1]}`;
   async function readPoint(lngLat: [number, number], signal: AbortSignal): Promise<number | null> {
     const cog = untrack(() => rasterAssetOf(item));
+    const it = untrack(() => item);
     const key = untrack(() => cogKey);
     if (!cog) return null;
-    const v = await valueSource.pointValue({
-      domain: "collection",
+    const req = {
+      domain: "collection" as const,
       // 5 decimals (about a metre): the same pixel asks the same URL, and the URL stays short
       lon: Math.round(wrapLon(lngLat[0]) * 1e5) / 1e5,
       lat: Math.round(lngLat[1] * 1e5) / 1e5,
       cogUrl: cog.url,
-      ...(cog.bidx === undefined ? {} : { bidx: cog.bidx }),
       signal,
+    };
+    // a flower collection reads ALL bands in one request (the petals are bands of this pixel); the item's
+    // own value is its band of that answer
+    const flower = untrack(() => flowerSpecOf(entry?.collection) !== null);
+    if (flower) {
+      const pv = await valueSource.pointValues(req);
+      if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");
+      if (pv) {
+        bandsRead.set(bandsKey(cog.url, lngLat), pv.values);
+        if (bandsRead.size > 4) bandsRead.delete(bandsRead.keys().next().value as string);
+      }
+      return bandValueOf(it, pv);
+    }
+    const v = await valueSource.pointValue({
+      ...req,
+      ...(cog.bidx === undefined ? {} : { bidx: cog.bidx }),
     });
     if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");
     return v;
@@ -558,7 +599,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   function setPointValue(ll: [number, number], value: number | null): void {
     const p = rasterPoint;
     if (!p || p.lngLat[0] !== ll[0] || p.lngLat[1] !== ll[1]) return;
-    rasterPoint = { ...p, value, loading: false };
+    const url = untrack(() => rasterAssetOf(item)?.url ?? null);
+    const bands = url ? (bandsRead.get(bandsKey(url, ll)) ?? null) : null;
+    rasterPoint = { ...p, value, loading: false, bands, bandsUrl: bands ? url : null };
   }
   // the clicked position follows the item (another band or taxon: the same place, this layer's value);
   // another collection, or a hex item, drops it
@@ -576,7 +619,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         return;
       }
       if (p.item === it.id) return;
-      rasterPoint = { ...p, item: it.id, value: null, loading: true };
+      // a sibling on the COG whose bands were all read already (another petal of the flower) needs no request
+      if (p.bands && p.bandsUrl === rasterAssetOf(it)?.url) {
+        reread.cancel();
+        rasterPoint = {
+          ...p,
+          item: it.id,
+          value: bandValueOf(it, { values: p.bands }),
+          loading: false,
+        };
+        return;
+      }
+      rasterPoint = { ...p, item: it.id, value: null, loading: true, bands: null, bandsUrl: null };
       reread.run(p.lngLat);
     });
   });
@@ -584,8 +638,16 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const p = rasterPoint;
     if (!p || !entry || !item || p.collection !== entry.id || p.item !== item.id) return null;
     return {
-      ...p,
+      collection: p.collection,
+      item: p.item,
+      lngLat: p.lngLat,
+      value: p.value,
+      loading: p.loading,
       text: p.loading ? "" : formatRasterValue(p.value, mapInputs.legend?.unit ?? ""),
+      flower:
+        p.loading || !p.bands
+          ? null
+          : flowerPetalsFor(entry, items, view.selected, { values: p.bands }),
     };
   });
 
@@ -937,7 +999,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           untrack(() => bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null)),
         ),
       format: (v) => formatRasterValue(v, unit()),
-      subject: () => untrack(() => (item ? itemLabel(item) : "")),
+      subject: () => untrack(() => (item ? itemTitleOf(item, view.dims) : "")),
       color: (v) => {
         const stops = untrack(() => mapInputs.legend?.stops ?? []);
         if (stops.length < 2) return null;
@@ -954,7 +1016,15 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         const it = untrack(() => item);
         if (!e || !it) return;
         reread.cancel();
-        rasterPoint = { collection: e.id, item: it.id, lngLat: ll, value: null, loading: true };
+        rasterPoint = {
+          collection: e.id,
+          item: it.id,
+          lngLat: ll,
+          value: null,
+          loading: true,
+          bands: null,
+          bandsUrl: null,
+        };
       },
       onClickValue: setPointValue,
       announce,
@@ -1048,7 +1118,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return mapInputs;
     },
     get itemTitle() {
-      return item ? itemLabel(item) : null;
+      return item ? itemTitleOf(item, view.dims) : null;
     },
     get itemDescription() {
       const d = item?.properties?.description;

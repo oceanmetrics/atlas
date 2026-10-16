@@ -7,6 +7,7 @@ import {
   defaultSelection,
   dimsOf,
   itemDims,
+  itemTitleOf,
   pickEntry,
   prettify,
   resolveItem,
@@ -24,16 +25,23 @@ import { FIXTURE_BASE, fakeFetch } from "./support";
 let entries: CollectionEntry[];
 let biotrack: CollectionEntry;
 let items: StacItem[];
+// the catalog's FIRST child, so the bare URL opens it: AquaMaps EOV share, eov x metric = 8 x 2 items
+let eov: CollectionEntry;
+let eovItems: StacItem[];
 
 beforeAll(async () => {
   const o = { base: FIXTURE_BASE, fetchImpl: fakeFetch().fetch, cache: new Map() };
   const cat = await loadCatalog(o);
   if (!cat.ok) throw new Error("catalog fixture");
   entries = cat.value.entries;
-  biotrack = entries[0];
+  biotrack = entries.find((e) => e.id === "biotrack_indicators")!;
+  eov = entries.find((e) => e.id === "aquamaps_eov")!;
   const res = await loadItems(biotrack, o);
   if (!res.ok) throw new Error("items fixture");
   items = res.value.items;
+  const eres = await loadItems(eov, o);
+  if (!eres.ok) throw new Error("eov items fixture");
+  eovItems = eres.value.items;
 });
 
 const coll = (partial: Partial<StacCollection>): StacCollection =>
@@ -201,8 +209,30 @@ describe("availableValues: the values that still lead to an item", () => {
 });
 
 describe("pickEntry: ?c= selects a collection; unknown or unavailable falls back to the first available", () => {
-  it("default (no c): the first available entry", () => {
-    expect(pickEntry(entries, undefined)?.id).toBe("biotrack_indicators");
+  it("default (no c): the first available entry, the AquaMaps EOV share", () => {
+    expect(pickEntry(entries, undefined)?.id).toBe("aquamaps_eov");
+  });
+
+  it("the bare URL opens aquamaps_eov at all x risk (first value of each dimension)", () => {
+    const entry = pickEntry(entries, undefined)!;
+    const v = viewOf(entry.collection, eovItems, undefined);
+    expect(v.dims.map((d) => d.key)).toEqual(["eov", "metric"]);
+    expect(v.dims[0].values.map((x) => x.value)[0]).toBe("all");
+    expect(v.dims[1].values.map((x) => x.value)[0]).toBe("risk");
+    expect(v.item?.id).toBe("all_risk");
+    expect(v.selected).toEqual({ eov: "all", metric: "risk" });
+  });
+
+  it("the dimension labels come from atlas:labels, and a title composes from them", () => {
+    const dims = dimsOf(eov.collection, eovItems);
+    expect(dims[0].values.find((x) => x.value === "all")?.label).toBe("All EOVs (mean)");
+    expect(dims[1].values.find((x) => x.value === "risk")?.label).toBe("Risk-weighted share");
+    expect(
+      itemTitleOf(
+        eovItems.find((i) => i.id === "all_risk")!,
+        dims,
+      ),
+    ).toBe("All EOVs (mean) · Risk-weighted share");
   });
 
   it("a known id selects it", () => {
@@ -210,11 +240,11 @@ describe("pickEntry: ?c= selects a collection; unknown or unavailable falls back
   });
 
   it("an unknown id falls back to the default, never errors", () => {
-    expect(pickEntry(entries, "nope")?.id).toBe("biotrack_indicators");
+    expect(pickEntry(entries, "nope")?.id).toBe("aquamaps_eov");
   });
 
   it("an UNAVAILABLE entry is never selectable (c=rng_iucn falls back)", () => {
-    expect(pickEntry(entries, "rng_iucn")?.id).toBe("biotrack_indicators");
+    expect(pickEntry(entries, "rng_iucn")?.id).toBe("aquamaps_eov");
   });
 
   it("no available entry at all: null", () => {
@@ -267,19 +297,29 @@ describe("URL state: ?c=<collection>&i=<item> round trips and the default is an 
   it("the default view writes nothing", () => {
     const patch = selPatchFor(
       entries,
-      biotrack,
-      items,
-      viewOf(biotrack.collection, items, undefined).item,
+      eov,
+      eovItems,
+      viewOf(eov.collection, eovItems, undefined).item,
     );
     expect(patch).toEqual({ c: undefined, i: undefined });
     expect(formatSel({ ...DEFAULT_SEL, ...patch })).toEqual({ search: "", hash: "" });
   });
 
   it("a non-default item writes only i", () => {
-    const shark = items.find((i) => i.id === "shark_summer_richness")!;
-    const patch = selPatchFor(entries, biotrack, items, shark);
-    expect(patch).toEqual({ c: undefined, i: "shark_summer_richness" });
-    expect(formatSel({ ...DEFAULT_SEL, ...patch }).search).toBe("?i=shark_summer_richness");
+    const fish = eovItems.find((i) => i.id === "fish_risk")!;
+    const patch = selPatchFor(entries, eov, eovItems, fish);
+    expect(patch).toEqual({ c: undefined, i: "fish_risk" });
+    expect(formatSel({ ...DEFAULT_SEL, ...patch }).search).toBe("?i=fish_risk");
+  });
+
+  it("the biotrack collection is no longer the default: it writes c (and its default item writes no i)", () => {
+    const patch = selPatchFor(
+      entries,
+      biotrack,
+      items,
+      viewOf(biotrack.collection, items, undefined).item,
+    );
+    expect(patch).toEqual({ c: "biotrack_indicators", i: undefined });
   });
 
   it("a non-default collection writes c (and its item, when not that collection's default)", () => {
@@ -292,18 +332,19 @@ describe("URL state: ?c=<collection>&i=<item> round trips and the default is an 
   it("round trip: URL -> Sel -> view -> patch -> URL is the identity", () => {
     for (const search of [
       "",
-      "?i=shark_winter_richness",
-      "?c=biotrack_indicators&i=all_winter_uncertainty",
+      "?i=seaTurtles_share",
+      "?c=aquamaps_eov&i=fish_share",
+      "?c=biotrack_indicators&i=shark_winter_richness",
+      "?c=biotrack_indicators",
     ]) {
       const sel = parseSel({ search, hash: "" });
       const entry = pickEntry(entries, sel.c)!;
-      const view = viewOf(entry.collection, items, sel.i);
-      const patch = selPatchFor(entries, entry, items, view.item);
+      const its = entry.id === "aquamaps_eov" ? eovItems : items;
+      const view = viewOf(entry.collection, its, sel.i);
+      const patch = selPatchFor(entries, entry, its, view.item);
       const out = formatSel({ ...sel, ...patch }).search;
       // c equal to the default collection normalises away; everything else must match exactly
-      const expected = search
-        .replace("c=biotrack_indicators&", "")
-        .replace("?c=biotrack_indicators", "");
+      const expected = search.replace("c=aquamaps_eov&", "").replace("?c=aquamaps_eov", "");
       expect(out, search).toBe(expected);
     }
   });

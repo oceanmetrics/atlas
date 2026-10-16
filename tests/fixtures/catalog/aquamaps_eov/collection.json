@@ -30,32 +30,22 @@
   "providers": [
     {
       "name": "AquaMaps",
-      "roles": [
-        "producer",
-        "licensor"
-      ],
+      "roles": ["producer", "licensor"],
       "url": "https://aquamaps.org"
     },
     {
       "name": "IUCN",
-      "roles": [
-        "licensor"
-      ],
+      "roles": ["licensor"],
       "url": "https://www.iucnredlist.org"
     },
     {
       "name": "MarineSensitivity",
-      "roles": [
-        "processor"
-      ],
+      "roles": ["processor"],
       "url": "https://marinesensitivity.org"
     },
     {
       "name": "OceanMetrics",
-      "roles": [
-        "processor",
-        "host"
-      ],
+      "roles": ["processor", "host"],
       "url": "https://oceanmetrics.io"
     }
   ],
@@ -63,10 +53,7 @@
     {
       "name": "Ben Best",
       "organization": "OceanMetrics",
-      "roles": [
-        "producer",
-        "pointOfContact"
-      ],
+      "roles": ["producer", "pointOfContact"],
       "emails": [
         {
           "value": "ben@oceanmetrics.io"
@@ -90,10 +77,7 @@
     "ioos-mldn-eov-taxonomy"
   ],
   "sdm:value_unit": "score",
-  "sdm:value_range": [
-    0,
-    100
-  ],
+  "sdm:value_range": [0, 100],
   "atlas:flower": {
     "dimension": "eov",
     "composite": "all"
@@ -102,18 +86,12 @@
     "x": {
       "type": "spatial",
       "axis": "x",
-      "extent": [
-        -180,
-        180
-      ]
+      "extent": [-180, 180]
     },
     "y": {
       "type": "spatial",
       "axis": "y",
-      "extent": [
-        -90,
-        90
-      ]
+      "extent": [-90, 90]
     },
     "eov": {
       "type": "other",
@@ -142,10 +120,7 @@
     "metric": {
       "type": "other",
       "description": "score metric",
-      "values": [
-        "risk",
-        "share"
-      ],
+      "values": ["risk", "share"],
       "atlas:labels": {
         "risk": "Risk-weighted share",
         "share": "Share (unweighted)"
@@ -154,22 +129,10 @@
   },
   "extent": {
     "spatial": {
-      "bbox": [
-        [
-          -180,
-          -90,
-          180,
-          90
-        ]
-      ]
+      "bbox": [[-180, -90, 180, 90]]
     },
     "temporal": {
-      "interval": [
-        [
-          "2019-10-01T00:00:00Z",
-          null
-        ]
-      ]
+      "interval": [["2019-10-01T00:00:00Z", null]]
     }
   },
   "assets": {
@@ -177,41 +140,31 @@
       "href": "./eov_taxa.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "Taxon crosswalk (AphiaID x EOV x Red List x weight)",
-      "roles": [
-        "metadata"
-      ]
+      "roles": ["metadata"]
     },
     "eov_summary": {
       "href": "./eov_summary.csv",
       "type": "text/csv",
       "title": "Per EOV and metric summary",
-      "roles": [
-        "metadata"
-      ]
+      "roles": ["metadata"]
     },
     "method": {
       "href": "./method.json",
       "type": "application/json",
       "title": "Machine-readable method",
-      "roles": [
-        "metadata"
-      ]
+      "roles": ["metadata"]
     },
     "score_risk": {
       "href": "./score_risk.tif",
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Risk-weighted score, 9 bands",
-      "roles": [
-        "reference"
-      ]
+      "roles": ["reference"]
     },
     "score_share": {
       "href": "./score_share.tif",
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Share score, 9 bands",
-      "roles": [
-        "reference"
-      ]
+      "roles": ["reference"]
     }
   },
   "links": [

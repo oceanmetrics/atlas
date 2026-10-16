@@ -100,7 +100,10 @@ export function createTitilerValueSource(
     async pointValues(req: ValueRequest): Promise<PointValues | null> {
       assertSpeciesValueRequest(req);
       // no `bidx`: titiler answers with every band, in band order
-      const raw = (await read(titilerPointUrl(config, req.lon, req.lat, req.cogUrl), req.signal)) as {
+      const raw = (await read(
+        titilerPointUrl(config, req.lon, req.lat, req.cogUrl),
+        req.signal,
+      )) as {
         values?: unknown;
         band_names?: unknown;
       } | null;

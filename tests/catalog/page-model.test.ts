@@ -404,7 +404,7 @@ describe("groupCards", () => {
     if (!res.ok) throw new Error("catalog failed");
     const groups = groupCards(res.value.entries);
     expect(groups.map((g) => [g.group, g.label, g.cards.map((c) => c.id)])).toEqual([
-      ["oceanmetrics", "OceanMetrics", ["biotrack_indicators"]],
+      ["oceanmetrics", "OceanMetrics", ["aquamaps_eov", "biotrack_indicators"]],
       ["mst-v7", "MarineSensitivity v7", ["am_0.05", "rng_iucn"]],
       ["mst-v8", "MarineSensitivity v8", ["gm", "nc"]],
     ]);

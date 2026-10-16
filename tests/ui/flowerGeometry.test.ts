@@ -357,3 +357,39 @@ describe("computeFlowerReferenceRing / flowerReferenceRingLabel", () => {
     expect(ring.radius).toBeLessThan(100);
   });
 });
+
+describe("component overrides (the EOV flower): own label, own colour token, a note for an empty slot", () => {
+  const eov: FlowerComponentInput[] = [
+    { key: "hardCorals", score: 60, label: "Hard corals", color: "--cat-coral" },
+    { key: "mangroves", score: 40, label: "Mangroves", color: "--cat-mangrove" },
+    {
+      key: "seabirds",
+      score: null,
+      label: "Seabirds",
+      color: "--cat-bird",
+      note: "(not in AquaMaps)",
+    },
+  ];
+  it("a component's label and colour token win over the category table's (keys outside the eight)", () => {
+    const g = computeFlowerGeometry(eov);
+    expect(g.petals.map((p) => [p.category.label, p.category.color])).toEqual([
+      ["Hard corals", "--cat-coral"],
+      ["Mangroves", "--cat-mangrove"],
+    ]);
+  });
+  it("without an override the category's own label and colour are unchanged", () => {
+    const g = computeFlowerGeometry([{ key: "bird", score: 10 }]);
+    expect(g.petals[0].category).toMatchObject({ label: "Bird", color: "--cat-bird" });
+  });
+  it("an empty slot keeps its note, and the summary says it", () => {
+    const g = computeFlowerGeometry(eov);
+    expect(g.noData).toHaveLength(1);
+    expect(g.noData[0].note).toBe("(not in AquaMaps)");
+    expect(describeFlowerSummary("t", g)).toContain("No data for Seabirds (not in AquaMaps).");
+  });
+  it("centerValue: omitted = the mean, a number or null = the data's own centre", () => {
+    expect(computeFlowerGeometry(eov).centerValue).toBe(50);
+    expect(computeFlowerGeometry(eov, { centerValue: 52 }).centerValue).toBe(52);
+    expect(computeFlowerGeometry(eov, { centerValue: null }).centerValue).toBeNull();
+  });
+});

@@ -42,10 +42,10 @@
   // reference ring at `maxScore`'s radius (`lens/scores/boot.ts#flowerMaxComponentScore`, or the
   // fallback 100 when the release publishes none), with its own small grey "contour" label
   // (`computeFlowerReferenceRing`/`flowerReferenceRingLabel`, flowerGeometry.ts).
-  import { categoryFor } from "./categories";
   import { announce } from "./announcer";
   import { formatScore } from "../format";
   import {
+    componentCategory,
     computeFlowerGeometrySafe,
     computeFlowerReferenceRing,
     describeFlowerSummary,
@@ -64,6 +64,9 @@
      * readers, hover target) but is visually hidden so the subject is shown once. */
     titleInHeader?: boolean;
     components: FlowerComponentInput[];
+    /** the centre number when the data states it (a composite band's own value, `lib/catalog/flower.ts`);
+     * omitted = the mean of the non-null scores, `null` = "no data". */
+    center?: number | null;
     /** labels the CALLER already dropped before handing `components` to this component (the
      * real-world case: `flower.ts`'s `dedupeFlowerComponents`, atlas-4 fix round 2's v8/v9
      * "primprod"/"primary producer" collision) -- announced the same way as a drop this
@@ -99,6 +102,7 @@
     title,
     titleInHeader = false,
     components,
+    center,
     droppedLabels = [],
     size = 480,
     maxScore = null,
@@ -115,7 +119,9 @@
   // "primprod"/"primary producer" case is de-duplicated upstream by `flower.ts` and arrives here
   // via `droppedLabels` instead) degrades to "drop the duplicate, draw the rest" rather than
   // blanking the whole flower -- see flowerGeometry.ts.
-  const safe = $derived(computeFlowerGeometrySafe(components));
+  const safe = $derived(
+    computeFlowerGeometrySafe(components, center === undefined ? {} : { centerValue: center }),
+  );
   const geometry = $derived(safe.geometry);
   const roundedCenter = $derived(
     geometry.centerValue !== null ? Math.round(geometry.centerValue) : null,
@@ -348,13 +354,15 @@
           </thead>
           <tbody>
             {#each safe.keptComponents as c (c.key)}
+              {@const cat = componentCategory(c)}
               <tr>
                 <td class="swatch-cell">
-                  <span class="swatch" style={`background: var(${categoryFor(c.key).color})`}
-                  ></span>
+                  <span class="swatch" style={`background: var(${cat.color})`}></span>
                 </td>
-                <td>{categoryFor(c.key).label}</td>
-                <td class="num">{c.score === null ? "No data" : formatScore(c.score)}</td>
+                <td>{cat.label}</td>
+                <td class="num"
+                  >{c.score === null ? (c.note ?? "No data") : formatScore(c.score)}</td
+                >
               </tr>
             {/each}
             <tr class="mean-row">

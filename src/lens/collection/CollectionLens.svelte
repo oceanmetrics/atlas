@@ -18,6 +18,8 @@
   import type { SelStore } from "../../lib/state/sel.svelte";
   import type { MapHandle } from "../../lib/map/map";
   import type { LayerGroupId } from "../../lib/map/layerStack";
+  import Flower from "../../lib/ui/Flower.svelte";
+  import { formatLatLon } from "../../lib/format";
   import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
   import { formatCellValue } from "./mapInputs";
@@ -107,6 +109,11 @@
         : lens.registry.row.scientificName
       : null,
   );
+  // the flower's reference ring: the top of the item's own value range (a 0-100 score reads "max 100")
+  const flowerMax = $derived.by(() => {
+    const r = lens.item?.properties?.["atlas:value_range"];
+    return Array.isArray(r) && typeof r[1] === "number" ? r[1] : null;
+  });
   const sourceAuthority = $derived.by(() => {
     const a = lens.entry?.collection?.["sdm:source_authority"];
     return typeof a === "string" && a.trim() ? a.trim() : null;
@@ -167,6 +174,19 @@
           Value at {pt.lngLat[1].toFixed(3)}, {pt.lngLat[0].toFixed(3)}: <b>{pt.text}</b>
         {/if}
       </p>
+      {#if pt.flower}
+        <!-- the collection's `atlas:flower` hook: one petal per sibling item, all read from this pixel's
+             single /cog/point answer (lib/catalog/flower.ts); the centre is the composite's own band -->
+        <div class="flower-wrap" data-testid="collection-flower">
+          <Flower
+            title={`${pt.flower.compositeLabel} · ${pt.flower.subject} · ${formatLatLon(pt.lngLat[1], pt.lngLat[0])}`}
+            components={pt.flower.components}
+            center={pt.flower.center}
+            maxScore={flowerMax}
+            size={320}
+          />
+        </div>
+      {/if}
       <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
     {:else}
       <p>
@@ -354,6 +374,9 @@
   }
   .show-all input {
     accent-color: var(--border-control);
+  }
+  .flower-wrap {
+    margin: var(--space-2) 0;
   }
   .note,
   .description {

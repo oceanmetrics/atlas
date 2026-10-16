@@ -72,6 +72,22 @@ export function itemDims(item: StacItem): Record<string, string> {
   return out;
 }
 
+/**
+ * An item's display title: its own `properties.title`, else its dimension labels in the cube's order joined by
+ * " · " ("All EOVs (mean) · Risk-weighted share"; the labels are the selectors' own, so the layer reads the same
+ * as the selection that picked it), else its id. A collection whose items carry no title of their own (the
+ * `eov` x `metric` cube) thus needs none written per item.
+ */
+export function itemTitleOf(item: StacItem, dims: readonly DimSpec[]): string {
+  const own = item.properties?.title;
+  if (typeof own === "string" && own.trim()) return own.trim();
+  const have = itemDims(item);
+  const parts = dims
+    .filter((d) => have[d.key] !== undefined)
+    .map((d) => d.values.find((v) => v.value === have[d.key])?.label ?? prettify(have[d.key]));
+  return parts.length > 0 ? parts.join(" · ") : item.id;
+}
+
 /** the selectors for `collection`; `items` supply them when the cube declares none (and any value an
  * item uses that the cube's `values` list omits is appended, so every item stays reachable). */
 export function dimsOf(
