@@ -1,7 +1,7 @@
 {
   "name": "oceanmetrics-atlas",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OceanMetrics Atlas: catalog-driven maps of species distribution model products, with places from the Ocean Metrics gazetteer.",
   "license": "MIT",
   "type": "module",

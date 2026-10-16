@@ -112,7 +112,7 @@ export async function routeNoPlaceLayers(page: Page) {
  * (`tests/fixtures/catalog/`, served under the real origins): no spec reaches the live network for
  * them. Anything else under those origins answers 404 (an unlisted data file, a hex tile).
  */
-export async function routeAtlasData(page: Page) {
+export async function routeAtlasData(page: Page, opts: { frameEov?: boolean } = {}) {
   await page.route(
     (url) =>
       url.href.startsWith(ATLAS_BASE) ||
@@ -140,6 +140,17 @@ export async function routeAtlasData(page: Page) {
               json: { type: "Collection", id: m[1], title: m[1], links: [] },
             })
           : route.fulfill({ status: 404, body: "" });
+      }
+      if (opts.frameEov !== false && /^aquamaps_eov\/(collection|items\/[^/]+)\.json$/.test(rel)) {
+        // the catalog's FIRST collection is the global EOV product, whose real frame is the whole world (a
+        // world view, never a fit). The camera specs measure the first-view FIT, so by default the fixture is
+        // framed on the same US Atlantic box as biotrack; `routeAtlasData(page, { frameEov: false })` serves
+        // the world frame the files carry (e2e/collection.eov.spec.ts).
+        const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+        if (rel.endsWith("/collection.json")) {
+          (doc.extent as { spatial: { bbox: unknown } }).spatial.bbox = [BIOTRACK_BBOX];
+        } else doc.bbox = [...BIOTRACK_BBOX];
+        return route.fulfill({ status: 200, json: doc });
       }
       if (rel === "biotrack_indicators/collection.json") {
         // the fixture publishes no extent (the loader's own tests want that); the shell fits the

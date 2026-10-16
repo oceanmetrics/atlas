@@ -66,7 +66,7 @@ test("the credits strip: Methods opens the README rendered, License explains the
   await routeBasemapStyle(page);
   await routeGlyphs(page);
   await routeReadme(page);
-  await page.goto("/");
+  await page.goto("/?c=biotrack_indicators"); // no longer the default collection
   await waitForHydration(page);
 
   // Methods: a dialog with the rendered file, not a raw markdown tab

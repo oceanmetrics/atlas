@@ -36,6 +36,9 @@ export interface Credits {
   note: CollectionNote | null;
   /** the collection's `describedby` README (methods + field dictionary), absolute. */
   methodsUrl: string | null;
+  /** a second `describedby` that is a rendered HTML page (the method notebook), opened in a new tab; absent
+   * when the collection has none. */
+  methodsPageUrl?: string;
 }
 
 function isPi(c: StacContact): boolean {
@@ -84,7 +87,14 @@ export function creditsOf(collection: StacCollection | null): Credits {
   const doi = (collection["sci:doi"] ?? "").trim();
   const license = (collection.license ?? "").trim();
   const licenseLink = collection.links.find((l) => l.rel === "license");
-  const methods = collection.links.find((l) => l.rel === "describedby");
+  // the Methods dialog renders MARKDOWN: it takes the first `describedby` that is not an HTML page (a product
+  // may describe itself by a rendered notebook AND a README, in either order); the HTML page is then its own link
+  const described = collection.links.filter((l) => l.rel === "describedby");
+  const isHtml = (l: { href: string; type?: string }) =>
+    /html/i.test(l.type ?? "") || /\.html?(?:[?#]|$)/i.test(l.href);
+  const methods = described.find((l) => !isHtml(l)) ?? described[0];
+  const page = described.find((l) => l !== methods && isHtml(l));
+  const pageUrl = page ? assetUrl(collection, page) : null;
   return {
     title: (collection.title ?? "").trim() || null,
     citation: (collection["sci:citation"] ?? "").trim() || null,
@@ -103,5 +113,6 @@ export function creditsOf(collection: StacCollection | null): Credits {
       : [],
     note: noteOf(collection),
     methodsUrl: methods ? assetUrl(collection, methods) : null,
+    ...(pageUrl ? { methodsPageUrl: pageUrl } : {}),
   };
 }

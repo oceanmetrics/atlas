@@ -51,6 +51,16 @@ uv run pipeline/build.py build --collection biotrack_indicators
 - Hex grids: a collection-level `hex` asset (PMTiles, layer `hex`, id field `FID`, geometry only) and per-item
   `values` Parquet assets (`FID` + value columns, `table:columns`); H3 twins as `h3` Parquet assets with
   `sdm:h3_resolution`. Rasters: COG assets rendered through titiler.
+- `atlas:flower {"dimension", "composite"}` on a Collection is the flower hook (`src/lib/catalog/flower.ts`): a raster
+  click shows a flower whose petals are the sibling Items across `dimension` for the current other selections, each
+  read by its asset's `atlas:bidx` from ONE all-band `/cog/point` answer, and whose centre is the `composite` Item's
+  band (the producer defines it as the mean of the reportable petals). Petals are coloured by the dimension value
+  (`FLOWER_COLORS`, else `--cat-other`) and labelled from `cube:dimensions[dimension]["atlas:labels"]`; nodata (a
+  masked pixel, the band's `raster:bands` nodata, or a value outside `atlas:value_range`) is an empty slot. Never name
+  a collection id in `src/`; the hook is the field.
+- `atlas:absent: true` (Item property) marks an Item that has no data by construction (AquaMaps models no seabirds or
+  seagrasses): the flower draws its slot empty and the table says `atlas:absent_note`, default "(not in AquaMaps)" --
+  absent, never zero. An Item with no `title` is titled by its dimension labels joined with " · ".
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
 ## Conventions

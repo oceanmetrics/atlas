@@ -93,6 +93,15 @@
             data-testid="methods-open"
             onclick={() => (methodsOpen = true)}>Methods and field dictionary</button
           >
+          {#if credits.methodsPageUrl}
+            ·
+            <a
+              href={credits.methodsPageUrl}
+              target="_blank"
+              rel="noopener"
+              data-testid="methods-page">Method notebook</a
+            >
+          {/if}
         </dd>
       </div>
     {/if}

@@ -50,6 +50,24 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
     ).toBe("https://atlas.test/atlas/README.md");
   });
 
+  it("a rendered HTML describedby is its own link; the Methods dialog gets the markdown README whatever the order", () => {
+    const html = {
+      rel: "describedby",
+      href: "https://oceanmetrics.io/workflows/aquamaps_eov.html",
+      type: "text/html",
+    };
+    const md = { rel: "describedby", href: "./README.md", type: "text/markdown" };
+    for (const links of [
+      [html, md],
+      [md, html],
+    ]) {
+      const c = creditsOf(base({ links }));
+      expect(c.methodsUrl).toBe("https://atlas.test/atlas/c/README.md");
+      expect(c.methodsPageUrl).toBe("https://oceanmetrics.io/workflows/aquamaps_eov.html");
+    }
+    expect(creditsOf(base({ links: [md] })).methodsPageUrl).toBeUndefined();
+  });
+
   it("with no license link, a plain SPDX id links to the SPDX page; 'proprietary' links nowhere", () => {
     expect(creditsOf(base({ license: "CC-BY-4.0" })).licenseUrl).toBe(
       "https://spdx.org/licenses/CC-BY-4.0.html",
