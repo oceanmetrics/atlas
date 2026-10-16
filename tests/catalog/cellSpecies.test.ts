@@ -202,11 +202,19 @@ describe("readTile: one cell out of a sorted tile", () => {
     };
     const r = await readTile(counting, 9844266, cols);
     expect(r.ok && r.value.length).toBe(6);
-    const bytes = ranges.reduce((n, [a, b]) => n + (b - a), 0);
     // the fixture has four 3-row row groups and the cell's six rows span two of them: footer + 2
     // groups = 3 ranges; a full read (the shorthand filter) would touch all four plus the footer = 5
     expect(ranges.length).toBeLessThanOrEqual(3);
-    expect(bytes).toBeLessThan(file.byteLength);
+    // the first and last row groups (cells 9844265 and 9844267) are never fetched as data: no range
+    // other than the footer read (the one that ends at the file's end) covers their first data page
+    const { parquetMetadata } = await import("hyparquet");
+    const meta = parquetMetadata(file);
+    const dataRanges = ranges.filter(([, b]) => b !== file.byteLength);
+    for (const g of [0, 3]) {
+      const off = Number(meta.row_groups[g].columns[0].meta_data?.data_page_offset ?? -1);
+      expect(off).toBeGreaterThan(0);
+      expect(dataRanges.some(([a, b]) => a <= off && off < b)).toBe(false);
+    }
   });
 
   it("the cell's rows, suitability high to low (the file is sorted by cell then suit desc)", () => {
