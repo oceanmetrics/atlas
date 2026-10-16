@@ -1166,6 +1166,8 @@
     // WP4: the gazetteer collections toggled in the "Place layers" group
     placeOverlays: placesMap.overlays.specs,
     selection: placesSelection,
+    // the Collections lens' clicked raster position (ring + the cell's square), above every layer
+    highlight: sel.lens === "collection" ? collectionLens.mapInputs.highlight : null,
     // gazetteer-places: the "Pick from gazetteer" tile polygons, only while that picker is on
     gazetteer: placesMap.gazetteer,
     layerStack,

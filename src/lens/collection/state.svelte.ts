@@ -45,6 +45,7 @@ import {
 import { extentBounds } from "../../lib/catalog/extent";
 import { layerExtent, worldView } from "../../lib/catalog/layerExtent";
 import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
+import { parseCellSpecies, type CellGrid } from "../../lib/catalog/cellSpecies";
 import { carryDecision, makeReturnTo, returnStillValid, type ReturnTarget } from "./returnTo";
 import {
   likelyCountIndex,
@@ -953,6 +954,15 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   });
 
   // --- what the map draws ------------------------------------------------------------------------
+  // the cell grid of the layer on screen: the collection's own (`atlas:cell_species.grid`) or, for the
+  // AquaMaps registry, its surface (0.5 degree native, 0.05 degree downscaled); `null` = ring alone
+  const highlightGrid = $derived.by((): CellGrid | null => {
+    const own = parseCellSpecies(entry?.collection)?.grid;
+    if (own) return own;
+    if (!isRegistry) return null;
+    const res = registry.rep === "005" ? 0.05 : 0.5;
+    return { ncol: Math.round(360 / res), nrow: Math.round(180 / res), x0: -180, y0: 90, res };
+  });
   const mapInputs = $derived.by(() => {
     if (selStore.sel.lens !== "collection") return EMPTY_COLLECTION_INPUTS;
     const rp = rasterPoint;
@@ -963,6 +973,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           ? cell.value
           : null;
     // the legend names the surface on screen: the downscaled one is not the collection's own native one
+    // the clicked position stays on the map (the same condition as `rasterPointView`): a ring, and the
+    // cell's square where the layer has a grid (`atlas:cell_species.grid`, or the registry's surface)
+    const point =
+      rp && entry && item && rp.collection === entry.id && rp.item === item.id
+        ? { lngLat: rp.lngLat, grid: highlightGrid }
+        : null;
     const legendEntry =
       entry && isRegistry
         ? { ...entry, title: registry.rep === "005" ? DOWNSCALED_TITLE : NATIVE_TITLE }
@@ -975,6 +991,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       marker,
       histogram: rasterHistogram,
       cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
+      point,
     });
     // a raster is held back until its footprint is known (the legend and the summaries stay)
     return extentPending && inputs.raster ? { ...inputs, raster: null } : inputs;

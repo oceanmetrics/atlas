@@ -6,6 +6,7 @@ import {
   COLLECTION_RASTER_ID,
   EMPTY_COLLECTION_INPUTS,
   collectionMapInputs,
+  highlightOf,
   formatCollectionValue,
   formatRasterValue,
   itemLabel,
@@ -271,5 +272,74 @@ describe("WP14: a raster item's legend histogram, value text and domain", () => 
     expect(formatRasterValue(null, "percent")).toBe("no data");
     expect(formatRasterValue(NaN, "percent")).toBe("no data");
     expect(formatRasterValue(undefined, "")).toBe("no data");
+  });
+});
+
+describe("the clicked-position highlight", () => {
+  const cogItem = {
+    type: "Feature",
+    id: "Fis-1",
+    properties: { title: "A fish", "atlas:value_range": [1, 100] },
+    links: [],
+    assets: {
+      cog: {
+        href: "https://x.test/Fis-1.tif",
+        type: "image/tiff; application=geotiff; profile=cloud-optimized",
+        roles: ["data"],
+      },
+    },
+  } as unknown as StacItem;
+  const cogEntry = {
+    ...entry,
+    id: "am",
+    title: "AquaMaps",
+    collection: { type: "Collection", id: "am", links: [] },
+  } as unknown as CollectionEntry;
+  const grid = { ncol: 7200, nrow: 3600, x0: -180, y0: 90, res: 0.05 };
+  const inputs = (point?: Parameters<typeof collectionMapInputs>[0]["point"]) =>
+    collectionMapInputs({
+      entry: cogEntry,
+      item: cogItem,
+      style: null,
+      values: null,
+      marker: null,
+      point,
+    });
+
+  it("appears with a point, with the cell's square when the grid is known", () => {
+    const h = inputs({ lngLat: [-86.73, 21.62], grid }).highlight;
+    expect(h?.lngLat).toEqual([-86.73, 21.62]);
+    // cell col = floor(93.27 / 0.05) = 1865 -> west -86.75; row = floor(68.38 / 0.05) = 1367 -> north 21.65
+    expect(h?.cell?.map(([x, y]) => [+x.toFixed(2), +y.toFixed(2)])).toEqual([
+      [-86.75, 21.65],
+      [-86.7, 21.65],
+      [-86.7, 21.6],
+      [-86.75, 21.6],
+      [-86.75, 21.65],
+    ]);
+  });
+
+  it("is the ring alone without a grid, and absent without a point or without an item", () => {
+    expect(inputs({ lngLat: [-86.73, 21.62], grid: null }).highlight).toEqual({
+      lngLat: [-86.73, 21.62],
+      cell: null,
+    });
+    expect(inputs().highlight).toBeNull();
+    expect(inputs(null).highlight).toBeNull();
+    expect(EMPTY_COLLECTION_INPUTS.highlight).toBeNull();
+  });
+
+  it("wraps the longitude (a click on another copy of the world) and keeps the cell on the grid", () => {
+    const h = highlightOf([273.27, 21.62], grid);
+    expect(h?.lngLat[0]).toBeCloseTo(-86.73, 6);
+    expect(h?.cell?.[0][0]).toBeCloseTo(-86.75, 6);
+    // the last column: its east edge is +180, never beyond
+    const edge = highlightOf([179.99, 0.01], grid);
+    expect(edge?.cell?.[1][0]).toBeCloseTo(180, 6);
+  });
+
+  it("a position north of the grid keeps the ring alone; a non-finite one is nothing", () => {
+    expect(highlightOf([0, 90.5], grid)).toEqual({ lngLat: [0, 90.5], cell: null });
+    expect(highlightOf([Number.NaN, 0], grid)).toBeNull();
   });
 });

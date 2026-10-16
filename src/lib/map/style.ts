@@ -33,6 +33,7 @@ import {
   gazetteerLineLayer,
   gazetteerSource,
 } from "./layers/gazetteer";
+import { HIGHLIGHT_SOURCE_ID, highlightLayers, highlightSource } from "./layers/highlight";
 import { overlayLayers, overlaySource, overlaySourceId } from "./layers/overlays";
 // R3 layer stack model (round-2 plan §5 U4, docs/usability.md §7 R3): the user-reorderable/
 // dimmable GROUPS a merged CARTO layer or a data layer belongs to. `layerStack.ts` is the pure
@@ -50,6 +51,7 @@ import {
 import type {
   BasemapSpec,
   GazetteerLayerSpec,
+  HighlightSpec,
   PlaceOverlaySpec,
   LayerSpecification,
   Projection,
@@ -179,6 +181,9 @@ export const LAYER_ORDER = [
   "gazetteer-line",
   "selection-fill",
   "selection-line",
+  // the Collections lens' clicked raster cell (its square, then the ring at the point): above everything
+  "highlight-line",
+  "highlight-ring",
 ] as const;
 
 export type LayerRole = (typeof LAYER_ORDER)[number];
@@ -209,6 +214,8 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   "gazetteer-line": "data-places",
   "selection-fill": "data-places",
   "selection-line": "data-places",
+  "highlight-line": "data-places",
+  "highlight-ring": "data-places",
 };
 
 /** each group's constituent fine roles, in their OWN fixed sub-order (never user-reorderable —
@@ -222,7 +229,14 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-labels": ["basemap-labels"],
   "data-raster": ["hex", "hex-selected", "raster", "range", "overlay"],
   "data-overlays": ["place-overlay-fill", "place-overlay-line", "place-overlay-circle"],
-  "data-places": ["gazetteer-fill", "gazetteer-line", "selection-fill", "selection-line"],
+  "data-places": [
+    "gazetteer-fill",
+    "gazetteer-line",
+    "selection-fill",
+    "selection-line",
+    "highlight-line",
+    "highlight-ring",
+  ],
 };
 
 /**
@@ -291,6 +305,8 @@ export interface ComposeStyleInput {
   /** extra rasters above the main one, e.g. "cells outside Program Areas". */
   overlays?: readonly RasterLayerSpec[];
   selection?: SelectionSpec | null;
+  /** the clicked raster position and its cell (Collections lens), above every other layer. */
+  highlight?: HighlightSpec | null;
   /** the gazetteer collections toggled on in the "Place layers" group (WP4) -- absent for none. */
   placeOverlays?: readonly PlaceOverlaySpec[];
   /** the gazetteer collection shown for "Pick from gazetteer" -- `null`/absent for none. */
@@ -463,6 +479,13 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   if (input.selection) {
     sources[SELECTION_SOURCE_ID] = { type: "geojson", data: input.selection.features };
     roled.push(...selectionLayers(input.selection));
+  }
+
+  if (input.highlight) {
+    sources[HIGHLIGHT_SOURCE_ID] = highlightSource(input.highlight);
+    const h = highlightLayers();
+    for (const layer of h.line) roled.push({ role: "highlight-line", layer });
+    for (const layer of h.ring) roled.push({ role: "highlight-ring", layer });
   }
 
   // R3: the user's layer stack decides BOTH the final draw order (via `rankForStack`, which

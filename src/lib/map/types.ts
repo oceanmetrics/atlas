@@ -97,6 +97,17 @@ export interface SelectionSpec {
 }
 
 /**
+ * The clicked raster position, kept on the map after the popup closes (Collections lens): a ring at the
+ * point and, where the grid is known, the square of the cell the point falls in. Drawn above the data.
+ */
+export interface HighlightSpec {
+  /** [lon, lat], longitude wrapped to [-180, 180) (MapLibre repeats the world, so one copy draws on all). */
+  lngLat: [number, number];
+  /** the cell's closed ring (5 positions, [lon, lat]); `null` = no grid known, the ring alone. */
+  cell: [number, number][] | null;
+}
+
+/**
  * A PMTiles vector "presence" fill — atlas-5's ranges branch (an IUCN/BirdLife/critical-habitat
  * range polygon, `atlas-refs/"parity species app.md"` §6.2's PMTiles branch). A range is per-SPECIES-input, filtered to one `mdl_key`, and carries no outline/label.
  */

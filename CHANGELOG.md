@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- **The clicked raster cell stays marked on the map.** A click on a raster layer used to leave only a transient popup and the legend marker. The map now keeps a white ring (dark halo, so it reads on any colour ramp) at the clicked point, and where the layer's cell grid is known (the AquaMaps EOV share's 0.05 degree grid, the AquaMaps native 0.5 degree and downscaled 0.05 degree surfaces) the square of the cell itself. It is drawn above every data layer, stays through "Atlas" links and "Back", and clears with "Clear selection" or when you pick another collection. It is a new `highlight` input of `composeStyle` (the same group as the places selection in the Layers panel).
+
 ## 0.3.1
 
 - **The clicked cell stays highlighted when you follow a species' Atlas link.** The marker, its value and the Details panel used to disappear because the click belonged to the EOV collection. The point is now carried to the species' layer and read there (the species' suitability at the same pixel); picking another collection by hand still clears it.

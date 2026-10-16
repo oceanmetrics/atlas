@@ -61,6 +61,7 @@ composeStyle({
   range, // RangeLayerSpec | null: a species PMTiles presence fill (atlas-5)
   overlays, // RasterLayerSpec[]: e.g. "cells outside Program Areas"
   selection, // SelectionSpec | null: the #ff00aa highlight
+  highlight, // HighlightSpec | null: the clicked raster position (ring + cell square), the very top (0.3.2)
   basemapStyle, // override ONLY in a test: skips the network fetch, merges this instead
   layerStack, // R3: the user's layer stack (order + each group's visible/opacity) — see below
 });
@@ -77,7 +78,7 @@ name, so there is no way to add a layer without deciding where it sits.
 
 **Layer order is declared, bottom to top:** `background · basemap-land · basemap-bathymetry ·
 basemap-boundaries · basemap-roads · basemap-labels · raster · range · overlay · choropleth ·
-zone-fill · zone-line · zone-label · selection-fill · selection-line` (`choropleth` added by M5,
+zone-fill · zone-line · zone-label · selection-fill · selection-line · highlight-line · highlight-ring` (`choropleth` added by M5,
 review round 1 — see point 7 below). Because the order is a table rather than
 a chain of `before` ids, a missing layer removes exactly itself — the v1 failure where one absent
 `before_id` cascaded into "a map with nothing but labels" cannot happen here. `range` (atlas-5,

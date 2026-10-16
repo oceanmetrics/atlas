@@ -14,7 +14,9 @@ import { titilerTileTemplate } from "../../lib/map/layers/titiler";
 import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
 import { RANGE_FILL_COLOR, RANGE_FILL_OPACITY } from "../../lib/map/layers/ranges";
-import type { RangeLayerSpec, RasterLayerSpec } from "../../lib/map/types";
+import type { HighlightSpec, RangeLayerSpec, RasterLayerSpec } from "../../lib/map/types";
+import { cellOf, type CellGrid } from "../../lib/catalog/cellSpecies";
+import { wrapLon } from "../../lib/raster/pointRead";
 import { PALETTES } from "../../lib/state/types";
 import type { Palette } from "../../lib/state/types";
 import { paletteStopsWithFallback, type LegendStop } from "../../lib/raster/ramps";
@@ -49,6 +51,8 @@ export interface CollectionMapInputs {
   cogUrl: string | null;
   /** the band of that COG the map draws (`atlas:bidx`), `null` = band 1. */
   cogBidx: number | null;
+  /** the clicked raster position (a ring, plus the cell's square when the grid is known); `null` for none. */
+  highlight: HighlightSpec | null;
 }
 
 export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
@@ -58,6 +62,7 @@ export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
   legend: null,
   cogUrl: null,
   cogBidx: null,
+  highlight: null,
 };
 
 /** the id of the collection raster's source and layer. */
@@ -120,6 +125,35 @@ export function rasterDomainOf(
   return rescale && !hasOwnRange ? rescale : valueDomain(item, collection);
 }
 
+/**
+ * The highlight of a clicked raster position: the point (longitude wrapped) and, when the layer's cell grid is
+ * known, the closed ring of the cell it falls in. A position outside the grid keeps the ring alone.
+ */
+export function highlightOf(
+  lngLat: readonly [number, number],
+  grid: CellGrid | null,
+): HighlightSpec | null {
+  const [lon, lat] = lngLat;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  const point: [number, number] = [lon >= -180 && lon < 180 ? lon : wrapLon(lon), lat];
+  const c = grid ? cellOf(point[0], point[1], grid) : null;
+  if (!grid || !c) return { lngLat: point, cell: null };
+  const w = grid.x0 + c.col * grid.res;
+  const e = w + grid.res;
+  const n = grid.y0 - c.row * grid.res;
+  const s = n - grid.res;
+  return {
+    lngLat: point,
+    cell: [
+      [w, n],
+      [e, n],
+      [e, s],
+      [w, s],
+      [w, n],
+    ],
+  };
+}
+
 export function collectionMapInputs(args: {
   entry: CollectionEntry | null;
   item: StacItem | null;
@@ -134,9 +168,12 @@ export function collectionMapInputs(args: {
   /** a raster item's COG footprint (`/cog/info`), which restricts the tiles MapLibre requests to it;
    * absent/`null` = unknown (draw unbounded, as before). */
   cogBounds?: [number, number, number, number] | null;
+  /** the clicked raster position of THIS item, with the cell grid when the layer has one; absent = none. */
+  point?: { lngLat: [number, number]; grid: CellGrid | null } | null;
 }): CollectionMapInputs {
-  const { entry, item, style, values, marker, cogBounds, histogram } = args;
+  const { entry, item, style, values, marker, cogBounds, histogram, point } = args;
   if (!entry?.collection || !item) return EMPTY_COLLECTION_INPUTS;
+  const highlight = point ? highlightOf(point.lngLat, point.grid) : null;
   const collection = entry.collection;
   const domain = valueDomain(item, collection);
   const lt = legendTitle({
@@ -165,6 +202,7 @@ export function collectionMapInputs(args: {
       range: null,
       cogUrl: null,
       cogBidx: null,
+      highlight,
       legend: {
         kind: "continuous",
         title: lt.title,
@@ -191,6 +229,7 @@ export function collectionMapInputs(args: {
     const colors = [...(paletteStopsWithFallback(null, colormap) ?? [])];
     return {
       hex: null,
+      highlight,
       cogUrl: cog.url,
       cogBidx: cog.bidx ?? null,
       range: null,
@@ -237,6 +276,7 @@ export function collectionMapInputs(args: {
       },
       cogUrl: null,
       cogBidx: null,
+      highlight,
       legend: {
         kind: "presence",
         title: lt.title,

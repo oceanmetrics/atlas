@@ -62,6 +62,10 @@ export const ZONE_LABEL_HALO_LIGHT = "rgba(255,255,255,0.85)";
 /** the selection highlight — a cell ring, a zone outline, a drawn place (atlas-4 §6.6/§7.1-7.3). */
 export const SELECTION_COLOR = "#ff00aa";
 
+/** the clicked raster cell's marker (a ring and the cell's square): white over a dark halo, so it reads on any ramp. */
+export const HIGHLIGHT_COLOR = "#ffffff";
+export const HIGHLIGHT_HALO_COLOR = "#0b1020";
+
 /** `manifest.overlays._outside_pra`'s explicit colormap, `{"1":[34,34,34,255]}` (atlas-4 §6.3). */
 export const OUTSIDE_PRA_RGBA: readonly [number, number, number, number] = [34, 34, 34, 255];
 

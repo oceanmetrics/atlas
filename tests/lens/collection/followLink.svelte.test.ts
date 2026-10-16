@@ -136,6 +136,9 @@ describe("the clicked point across a followed link", () => {
   it("is carried to the new collection and re-read there, not dropped", async () => {
     click(80);
     expect(lens.point?.value).toBe(80);
+    // the eov collection declares a grid, so the clicked cell's square is on the map with the ring
+    expect(lens.mapInputs.highlight?.lngLat).toEqual(CLICK);
+    expect(lens.mapInputs.highlight?.cell).toHaveLength(5);
     lens.followLink({ c: "twin", i: undefined, map: CAMERA });
     await ready("twin");
     // the same pixel, now the twin item's value (one band read at the click position)
@@ -146,6 +149,8 @@ describe("the clicked point across a followed link", () => {
       lngLat: CLICK,
       loading: false,
     });
+    // still marked on the species' layer (no grid there: the ring alone)
+    expect(lens.mapInputs.highlight).toEqual({ lngLat: CLICK, cell: null });
     expect(pointValue).toHaveBeenCalledTimes(1);
     expect(pointValue.mock.calls[0][0]).toMatchObject({ lon: CLICK[0], lat: CLICK[1] });
   });
@@ -155,7 +160,15 @@ describe("the clicked point across a followed link", () => {
     lens.selectCollection("twin");
     await ready("twin");
     expect(lens.point).toBeNull();
+    expect(lens.mapInputs.highlight).toBeNull();
     expect(pointValue).not.toHaveBeenCalled();
+  });
+
+  it("clearing the cell removes the highlight", () => {
+    click(80);
+    expect(lens.mapInputs.highlight).not.toBeNull();
+    lens.clearCell();
+    expect(lens.mapInputs.highlight).toBeNull();
   });
 
   it("is not carried after the cell is cleared, or into a follow that finds no point", async () => {
@@ -210,6 +223,7 @@ describe("returnTo and goBack", () => {
     // the flower's collection reads every band of the pixel; fish is band 2
     await settle(() => expect(lens.point?.value).toBe(80));
     expect(lens.point?.flower).not.toBeNull();
+    expect(lens.mapInputs.highlight?.cell).toHaveLength(5); // back on the grid layer, same pixel
     // the layer we returned to is in another frame, and auto-zoom is on, yet the back flight stands alone
     expect(flyTo).toHaveBeenCalledTimes(1);
     expect(flyToBounds).not.toHaveBeenCalled();

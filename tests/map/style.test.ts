@@ -114,7 +114,11 @@ describe("orderLayers", () => {
     // R3: the single "basemap" bucket is now five sub-roles (`basemap-land` first — everything the
     // old flat bucket held sat where THIS sub-role now sits, see style.ts's own header).
     expect(LAYER_ORDER[1]).toBe("basemap-land");
-    expect(LAYER_ORDER[LAYER_ORDER.length - 1]).toBe("selection-line");
+    // the lens' clicked-cell highlight is the very top, over the places selection
+    expect(LAYER_ORDER[LAYER_ORDER.length - 1]).toBe("highlight-ring");
+    expect(LAYER_ORDER.indexOf("selection-line")).toBeLessThan(
+      LAYER_ORDER.indexOf("highlight-line"),
+    );
     expect(LAYER_ORDER.indexOf("basemap-land")).toBeLessThan(LAYER_ORDER.indexOf("raster"));
     expect(LAYER_ORDER.indexOf("basemap-labels")).toBeLessThan(LAYER_ORDER.indexOf("raster"));
     // the collection's hex fill is data, like the raster, so it sits under the gazetteer/selection
@@ -750,5 +754,51 @@ describe("preserveDrawLayers", () => {
     const result = preserveDrawLayers(current, emptyStyle);
     expect(Object.keys(result.sources)).toEqual([`${DRAW_LAYER_PREFIX}x`]);
     expect(result.layers.map((l) => l.id)).toEqual([`${DRAW_LAYER_PREFIX}x`]);
+  });
+});
+
+describe("composeStyle: the clicked-cell highlight", () => {
+  const square: [number, number][] = [
+    [-86.75, 21.65],
+    [-86.7, 21.65],
+    [-86.7, 21.6],
+    [-86.75, 21.6],
+    [-86.75, 21.65],
+  ];
+  const ids = (s: ReturnType<typeof composeStyle>) => s.layers.map((l) => l.id);
+
+  it("adds a source and the halo + line (cell) and halo + ring (point) layers above the data, none without it", () => {
+    const raster = { id: "r", tiles: ["https://t.test/{z}/{x}/{y}.png"], opacity: 0.8 };
+    const none = composeStyle({ theme: "navy", basemap: null, raster });
+    expect(ids(none).some((id) => id.startsWith("cell-highlight"))).toBe(false);
+    expect(none.sources["cell_highlight"]).toBeUndefined();
+
+    const s = composeStyle({
+      theme: "navy",
+      basemap: null,
+      raster,
+      highlight: { lngLat: [-86.73, 21.62], cell: square },
+    });
+    expect(ids(s).slice(-4)).toEqual([
+      "cell-highlight-line-halo",
+      "cell-highlight-line",
+      "cell-highlight-ring-halo",
+      "cell-highlight-ring",
+    ]);
+    expect(ids(s).indexOf("r")).toBeLessThan(ids(s).indexOf("cell-highlight-line-halo"));
+    const src = s.sources["cell_highlight"] as {
+      data: { features: { geometry: { type: string } }[] };
+    };
+    expect(src.data.features.map((f) => f.geometry.type)).toEqual(["Point", "Polygon"]);
+  });
+
+  it("a point without a grid is the ring alone (no polygon feature)", () => {
+    const s = composeStyle({
+      theme: "navy",
+      basemap: null,
+      highlight: { lngLat: [-86.73, 21.62], cell: null },
+    });
+    const src = s.sources["cell_highlight"] as { data: { features: unknown[] } };
+    expect(src.data.features).toHaveLength(1);
   });
 });
