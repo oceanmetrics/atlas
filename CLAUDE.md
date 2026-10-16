@@ -23,7 +23,7 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
 
 ```sh
 npm ci; npm run dev            # http://localhost:5173
-npm run check; npm test        # svelte-check; vitest
+npm run check; npm test        # svelte-check; vitest (project `logic` = node; `runes` = `*.svelte.test.ts`, the real lens state)
 npm run build; npm run size-budget
 cd pipeline && uv run --group dev pytest -q
 uv run pipeline/build.py build --collection biotrack_indicators
@@ -66,7 +66,10 @@ uv run pipeline/build.py build --collection biotrack_indicators
   `lookup_asset` (a Parquet keyed by `lookup_key`, with `scientific_name`, `common_name`, `redlist_code`, `weight`,
   the `group_column` and `share.total_column`), `value_column`/`value_label`/`value_range`, and `links` (a URL
   `column`, or an `href_template` with `same_app: true` for this app's own `?c=..&sp={sp_key}`, which the app turns
-  into `rep=005` plus the current `map=`). Tiles are Parquet sorted by key with small row groups (hyparquet prunes by
+  into `rep=005` plus the current `map=`). The lens follows it with `lens.followLink` (not a bare `selStore.set`): the
+  clicked point is carried to the new collection and re-read there, `lens.returnTo` remembers the layer and camera for a
+  "Back to ..." button (`goBack`), and the camera follows the global auto-zoom preference (the panel's checkbox and the
+  Layers panel's "Auto-zoom to layer" are the same `lens.autoZoom`). Rules: `src/lens/collection/returnTo.ts`. Tiles are Parquet sorted by key with small row groups (hyparquet prunes by
   statistics); a missing tile is an empty cell. Hex collections keep the single `cell_species` table of `species.ts`.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 

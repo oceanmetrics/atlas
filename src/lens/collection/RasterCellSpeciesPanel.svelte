@@ -45,9 +45,24 @@
     map: MapView | undefined;
     /** follow a same-app link in place. */
     onNavigate: (patch: Partial<Sel>) => void;
+    /** the app's "Auto-zoom to layer" preference (the Layers panel's switch: one preference, one storage key),
+     * which decides whether following an Atlas link flies to the species' extent. */
+    autoZoom: boolean;
+    onAutoZoomChange: (on: boolean) => void;
   }
 
-  let { desc, stem, lngLat, selected, composite, groups, map, onNavigate }: Props = $props();
+  let {
+    desc,
+    stem,
+    lngLat,
+    selected,
+    composite,
+    groups,
+    map,
+    onNavigate,
+    autoZoom,
+    onAutoZoomChange,
+  }: Props = $props();
 
   const TOP = 15;
   const store = $derived(createCellSpeciesStore(desc));
@@ -118,7 +133,7 @@
   const linksOf = (r: CellSpeciesRow): CellSpeciesLink[] => linksFor(r, desc, map);
 
   function follow(e: MouseEvent, l: CellSpeciesLink) {
-    // a plain click follows in place (the camera stays); a modified one is the browser's (new tab, download)
+    // a plain click follows in place (the camera per the auto-zoom preference); a modified one is the browser's (new tab, download)
     if (
       !l.sameApp ||
       !l.patch ||
@@ -145,6 +160,15 @@
   aria-label="Species in this cell"
 >
   <h4>Species in this cell</h4>
+  <label class="autozoom">
+    <input
+      type="checkbox"
+      checked={autoZoom}
+      data-testid="cell-species-autozoom"
+      onchange={(e) => onAutoZoomChange(e.currentTarget.checked)}
+    />
+    Zoom to species extent when following Atlas links
+  </label>
   {#if !cell}
     <p class="note">This position is outside the grid.</p>
   {:else if phase === "loading"}
@@ -277,6 +301,14 @@
   h4 {
     margin: 0;
     font-size: var(--text-sm);
+  }
+  .autozoom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
   }
   .note,
   .count {

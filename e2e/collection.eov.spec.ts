@@ -155,3 +155,31 @@ test("an EOV item lists that EOV first, with a toggle for all of them", async ({
   await panel.getByRole("button", { name: "Show all groups" }).click();
   await expect(rows).toHaveCount(6);
 });
+
+test("the zoom toggle is the auto-zoom preference, and an Atlas link leaves a way back", async ({
+  page,
+}) => {
+  await boot(page, []);
+  await clickCancun(page);
+  const panel = page.getByTestId("raster-cell-species");
+  const rows = panel.getByTestId("raster-cell-species-row");
+  await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+  // one preference: on by default, off is the browser's stored choice (the Layers panel's switch reads the same)
+  const toggle = panel.getByTestId("cell-species-autozoom");
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  expect(await page.evaluate(() => localStorage.getItem("atlas.autozoom"))).toBe("off");
+  await expect(page.getByTestId("collection-back")).toHaveCount(0);
+  // following the link keeps the clicked point's panel and offers the way back to the layer we left
+  await rows.first().getByRole("link", { name: "Atlas" }).click();
+  expect(new URL(page.url()).searchParams.get("c")).toBe("aquamaps_native");
+  const back = page.getByTestId("collection-back");
+  await expect(back).toHaveText(/Back to .*Risk-weighted share/);
+  await expect(panel).toBeVisible();
+  await back.click();
+  await expect(back).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("c")).not.toBe("aquamaps_native");
+  expect(new URL(page.url()).searchParams.get("sp")).toBeNull();
+  await expect(panel.getByTestId("raster-cell-species-count")).toHaveText("6 species in this cell");
+  await expect(toggle).not.toBeChecked();
+});

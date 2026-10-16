@@ -130,6 +130,17 @@
 
 {#snippet detailsContent()}
   <div class="collection-details" data-testid="collection-details">
+    {#if lens.returnTo}
+      <!-- after an Atlas link: back to the layer and the view we followed it from (the point comes along) -->
+      <button
+        type="button"
+        class="back"
+        data-testid="collection-back"
+        onclick={() => lens.goBack()}
+      >
+        ← Back to {lens.returnTo.label}
+      </button>
+    {/if}
     {#if lens.entry}
       <p class="collection-title">{lens.entry.title}</p>
     {/if}
@@ -205,7 +216,10 @@
           composite={flowerSpecOf(lens.entry?.collection)?.composite ?? null}
           groups={cellSpeciesGroups}
           map={sel.map ?? mapHandle?.camera()}
-          onNavigate={(patch) => selStore.set({ ...patch, map: patch.map ?? mapHandle?.camera() })}
+          onNavigate={(patch) =>
+            lens.followLink({ ...patch, map: patch.map ?? mapHandle?.camera() })}
+          autoZoom={lens.autoZoom}
+          onAutoZoomChange={(on) => lens.setAutoZoom(on)}
         />
       {/if}
       <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
@@ -415,6 +429,7 @@
     font-size: var(--text-sm);
   }
   .retry,
+  .back,
   .clear {
     margin-left: var(--space-2);
     padding: 0 var(--space-2);
@@ -425,6 +440,10 @@
     font: inherit;
     font-size: var(--text-xs);
     cursor: pointer;
+  }
+  .back {
+    margin-left: 0;
+    align-self: flex-start;
   }
   .data-controls {
     display: flex;

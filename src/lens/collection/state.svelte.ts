@@ -45,6 +45,7 @@ import {
 import { extentBounds } from "../../lib/catalog/extent";
 import { layerExtent, worldView } from "../../lib/catalog/layerExtent";
 import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
+import { carryDecision, makeReturnTo, returnStillValid, type ReturnTarget } from "./returnTo";
 import {
   likelyCountIndex,
   likelySpeciesText,
@@ -111,6 +112,7 @@ import {
 } from "../../lib/map/layers/hex";
 import type { MapHandle } from "../../lib/map/map";
 import type { SelStore } from "../../lib/state/sel.svelte";
+import type { Sel } from "../../lib/state/types";
 import { createMstSource, type MstSource } from "./mst.svelte";
 import {
   createRegistrySource,
@@ -276,6 +278,13 @@ export interface CollectionLens {
   selectCollection(id: string): void;
   selectDim(key: string, value: string): void;
   clearCell(): void;
+  /** follow a same-app link (the species panel's "Atlas") in place: the layer changes, the clicked point
+   * is carried to it (re-read there, not dropped) and the layer we came from is remembered in `returnTo`. */
+  followLink(patch: Partial<Sel>): void;
+  /** where "Back to ..." returns to (the layer and camera before the last `followLink`); `null` for none. */
+  readonly returnTo: ReturnTarget | null;
+  /** return to the layer and camera before the last `followLink`, carrying the clicked point back. */
+  goBack(): void;
   reload(): void;
 }
 
@@ -603,8 +612,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const bands = url ? (bandsRead.get(bandsKey(url, ll)) ?? null) : null;
     rasterPoint = { ...p, value, loading: false, bands, bandsUrl: bands ? url : null };
   }
+  // set by `followLink` / `goBack` for the one follow that carries the clicked point to another collection;
+  // `fromKey` is the COG we left, so the item still on screen from it is never taken for the new one
+  let carry: { fromKey: string | null } | null = null;
   // the clicked position follows the item (another band or taxon: the same place, this layer's value);
-  // another collection, or a hex item, drops it
+  // another collection, or a hex item, drops it (unless a follow carries it, above)
   const reread = createLatestRead<[number, number], number | null>(readPoint, setPointValue);
   $effect(() => {
     const key = cogKey;
@@ -613,6 +625,32 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     untrack(() => {
       const p = rasterPoint;
       if (!p) return;
+      // a same-app follow (`followLink`, `goBack`) carries the point to the other collection: wait for
+      // its item (never the one we came from), then re-key and re-read the pixel there
+      const decision = carryDecision({
+        carrying: carry !== null,
+        pointCollection: p.collection,
+        entryId: e?.id ?? null,
+        hasItem: !!it && !!key,
+        key,
+        fromKey: carry?.fromKey ?? null,
+      });
+      if (decision === "wait") return;
+      if (decision === "rekey" && it) {
+        carry = null;
+        reread.cancel();
+        rasterPoint = {
+          ...p,
+          collection: e!.id,
+          item: it.id,
+          value: null,
+          loading: true,
+          bands: null,
+          bandsUrl: null,
+        };
+        reread.run(p.lngLat);
+        return;
+      }
       if (!key || !it || !e || p.collection !== e.id) {
         reread.cancel();
         rasterPoint = null;
@@ -890,6 +928,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   // the last fit (another season of one hex grid) leaves the camera where the user put it
   let seenLayer = false;
   let lastFrame: string | null = null;
+  let skipAutoZoomOnce = false;
   $effect(() => {
     if (selStore.sel.lens !== "collection") return;
     const frame = layerFrame;
@@ -904,6 +943,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       if (key === lastFrame) return;
       const hasMapParam = !!selStore.sel.map;
       lastFrame = key;
+      // `goBack` flies to the camera it saved: the layer it returns to must not fly away from it
+      if (skipAutoZoomOnce) {
+        skipAutoZoomOnce = false;
+        return;
+      }
       if (shouldAutoZoom({ on, first, hasMapParam })) fitTo(frame.bounds);
     });
   });
@@ -1016,6 +1060,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         const it = untrack(() => item);
         if (!e || !it) return;
         reread.cancel();
+        carry = null;
         rasterPoint = {
           collection: e.id,
           item: it.id,
@@ -1032,11 +1077,48 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     return () => interaction.destroy();
   });
 
+  // --- following a same-app link, and the way back -------------------------------------------------
+  let returnTo = $state.raw<ReturnTarget | null>(null);
+  // the way back is only good while the layer it was made for is on screen: another collection picked in
+  // the selector, or a leave from this lens, ends it (and a point still waiting to be carried)
+  $effect(() => {
+    const lens = selStore.sel.lens;
+    const c = selStore.sel.c ?? entry?.id ?? null;
+    untrack(() => {
+      if (lens !== "collection") carry = null;
+      if (returnTo && !returnStillValid(returnTo, lens, c)) returnTo = null;
+    });
+  });
+  function followLink(patch: Partial<Sel>): void {
+    const e = entry;
+    returnTo = makeReturnTo({
+      sel: selStore.sel,
+      camera: deps.mapHandle()?.camera() ?? null,
+      label: (item ? itemTitleOf(item, view.dims) : "") || (e?.title ?? ""),
+      target: patch.c ?? e?.id ?? "",
+    });
+    carry = rasterPoint ? { fromKey: cogKey } : null;
+    selStore.set(patch);
+  }
+  function goBack(): void {
+    const back = returnTo;
+    if (!back) return;
+    carry = rasterPoint ? { fromKey: cogKey } : null;
+    skipAutoZoomOnce = true;
+    returnTo = null;
+    selStore.set(back.sel);
+    deps
+      .mapHandle()
+      ?.flyTo({ key: "back", lon: back.camera.lon, lat: back.camera.lat, zoom: back.camera.zoom });
+  }
+
   // --- actions ------------------------------------------------------------------------------------
   function selectCollection(id: string): void {
     const e = entries.find((x) => x.id === id && x.status === "ok");
     if (!e) return;
     store.set(null);
+    carry = null;
+    returnTo = null;
     switchNotice = null;
     // the taxon travels between the v7 taxon collections (compare the IUCN range with AquaMaps for the
     // same species) and is dropped from the URL elsewhere, where `sp` would mean nothing
@@ -1225,8 +1307,14 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     clearCell() {
       store.set(null);
       reread.cancel();
+      carry = null;
       rasterPoint = null;
     },
+    followLink,
+    get returnTo() {
+      return returnTo;
+    },
+    goBack,
     reload() {
       clearCatalogCache(deps.loadOptions?.cache);
       catalog = null;
