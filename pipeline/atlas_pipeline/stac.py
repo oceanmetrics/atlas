@@ -24,12 +24,25 @@ EXT = {
 }
 SOURCE_URL = "https://marinebon.org/"   # producer's public page; the raw files came from T. Couto by Google Drive
 
-# ---- credits (placeholders pending Neil Hammerschlag's confirmation) ----
+# ---- credits (citation and contacts from T. Couto 2026-10-16; license and funders pending Neil Hammerschlag) ----
 
 LICENSE_PLACEHOLDER = "CC-BY-4.0"
-CITATION = ("Couto, T.B.A., Hammerschlag, N., et al. (in prep). Multi-species biodiversity indicators from "
-            "integrated occupancy models of acoustic telemetry and OBIS records, US Atlantic and Gulf of Mexico. "
-            "MBON BioTrack.")
+CITATION = ("Couto, T. B. A., Zulian, V., D'Antonio, B., ... & Hammerschlag, N. (under review). Unlocking the "
+            "potential of acoustic telemetry to scale up marine biodiversity assessment. Frontiers in Ecology and "
+            "the Environment.")
+# full author list (T. Couto, 2026-10-16); the short form above is the one he suggested for the collection
+CITATION_FULL = (
+  "Couto, T. B. A., Zulian, V., D'Antonio, B., Ajemian, M., Aoki, D. M., Bopp, J., Buckel, J. A., Brundage, H. M. "
+  "III, Cook, G. S., Dance, M. A., Doser, J., Drymon, J. M., Dureuil, M., Ellis, R. D., Fox, A. G., Fuentes, "
+  "M. M. P. B., Gahagan, B., Gallagher, A. J., Gallagher, R. M., Gibson-Banks, K., Grothues, T. M., Guertin, "
+  "J. R., Guttridge, T. L., Hale, E. A., Harborne, A. R., Heim, V., Hilton, E. J., Hoffman, W. S., Ingram, E. C., "
+  "Lidgard, D., Lowerre-Barbieri, S. K., Massie, J. A., McGarigal, C., McGrath, P. E., Morley, D., "
+  "Muller-Karger, F. E., Naisbett-Jones, L. C., Ogburn, M. B., O'Donnell, P. M., Otis, D., Papastamatiou, Y., "
+  "Pate, J. H., Perrault, J. R., Powers, S., Price, C. S., Pye, J. D., Rehage, J. S., Rider, M. J., Rooker, J. R., "
+  "Roday, R. E., Rudershausen, P. J., Sasso, C. R., Savoy, T., Murray, T., Shillinger, G. L., Smukall, M. J., "
+  "Streich, M. K., Stunz, G. W., TinHan, T. C., van Zinnicq Bergmann, M., Wells, R. J. D., Whoriskey, F. G., "
+  "Wunder, C., Young, J., & Hammerschlag, N. (under review). Unlocking the potential of acoustic telemetry to "
+  "scale up marine biodiversity assessment. Frontiers in Ecology and the Environment.")
 FUNDERS = ["NOAA IOOS MBON"]
 VERSION = "2025.05"
 OBS_START, OBS_END = "2000-01-01T00:00:00Z", "2023-12-31T23:59:59Z"
@@ -37,10 +50,13 @@ OBS_START, OBS_END = "2000-01-01T00:00:00Z", "2023-12-31T23:59:59Z"
 CONTACTS = [
   {"name": "Neil Hammerschlag", "organization": "Shark Research Foundation / MBON BioTrack",
    "position": "Principal investigator",
-   "emails": [{"value": "neilhammerschlag@gmail.com"}], "roles": ["principal investigator"]},
-  {"name": "Thiago B. A. Couto", "organization": "Lancaster University",
+   "emails": [{"value": "drneilhammer@sharkresearch.org"}], "roles": ["principal investigator"]},
+  {"name": "Thiago B. A. Couto", "organization": "University of East Anglia",
    "position": "Author",
-   "emails": [{"value": "couto.thiagoba@gmail.com"}], "roles": ["author"]},
+   "emails": [{"value": "t.couto@uea.ac.uk"}], "roles": ["author"]},
+  {"name": "Viviane Zulian", "organization": "Universidade Federal de Santa Catarina",
+   "position": "Author",
+   "emails": [{"value": "zulian.vi@gmail.com"}], "roles": ["author"]},
 ]
 PROVIDERS = [
   {"name": "MBON BioTrack", "roles": ["producer"], "url": "https://marinebon.org/"},
@@ -52,7 +68,8 @@ PREDICTORS = ["depth", "sea surface temperature", "chlorophyll", "total suspende
 INDICATOR_METHOD = (
   "Derived merge of per-species integrated spatial occupancy models (spOccupancy, acoustic telemetry + OBIS "
   "records) over 66 species in 27,841 10-km hexagonal cells, per season (summer = May-Aug, winter = Nov-Feb). "
-  "Richness = sum of per-species occupancy probabilities in a cell; ecoregion-weighted richness (the public "
+  "Richness = sum of the latent occupancy states (z) across species in a cell, averaged over 1,000 retained "
+  "model iterations; ecoregion-weighted richness (the public "
   "richness metric) = cell richness divided by the maximum mean richness of its ecoregion (11 ecoregions). "
   "Cumulative uncertainty = sum of per-species standard deviations, scaled and ecoregion-weighted likewise "
   "(the public uncertainty metric). Groups: all, fish, ray, redlisted, shark, turtle.")
@@ -186,7 +203,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
     "updated": now_rfc3339(),
     "title": "MBON BioTrack biodiversity indicators",
     "description": (
-      "Ecoregion-weighted species richness and cumulative uncertainty for the US Atlantic and Gulf of Mexico, "
+      "Ecoregion-weighted species richness and cumulative uncertainty for the US Atlantic, the Gulf of Mexico and the Caribbean, "
       "for all species, fish, rays, red-listed species, sharks and turtles in summer and winter, in "
       f"{n_hex:,} 10-km hexagonal cells. Derived from integrated spatial occupancy models of acoustic "
       "telemetry (A-BioTrack) and OBIS records for 66 species (Couto, Hammerschlag et al.). Methods and "

@@ -29,7 +29,8 @@ def test_indicator_collection_required_fields_and_extensions():
   assert c["cube:dimensions"]["group"]["values"] == ["all", "fish", "ray", "redlisted", "shark", "turtle"]
   assert c["cube:dimensions"]["season"]["values"] == ["summer", "winter"]
   assert c["cube:dimensions"]["metric"]["values"] == ["richness", "uncertainty"]
-  assert c["sci:citation"].startswith("Couto, T.B.A., Hammerschlag, N., et al. (in prep).")
+  assert c["sci:citation"].startswith("Couto, T. B. A., Zulian, V., D'Antonio, B., ... & Hammerschlag, N. (under review).")
+  assert "Frontiers in Ecology and the Environment" in c["sci:citation"] and "in prep" not in c["sci:citation"]
 
 
 def test_indicator_collection_assets_and_links():
@@ -42,7 +43,19 @@ def test_indicator_collection_assets_and_links():
     assert r in rels
   assert rels.count("item") == 24
   assert all(not l["href"].startswith("/") for l in c["links"])
-  assert [x["roles"][0] for x in c["contacts"]] == ["principal investigator", "author"]
+  assert [x["roles"][0] for x in c["contacts"]] == ["principal investigator", "author", "author"]
+
+
+def test_credits_follow_couto_2026_10_16():
+  # regression: citation, contacts and emails as corrected by T. Couto (2026-10-16)
+  by_name = {x["name"]: x for x in stac.CONTACTS}
+  assert by_name["Neil Hammerschlag"]["emails"][0]["value"] == "drneilhammer@sharkresearch.org"
+  assert by_name["Thiago B. A. Couto"]["organization"] == "University of East Anglia"
+  assert by_name["Thiago B. A. Couto"]["emails"][0]["value"] == "t.couto@uea.ac.uk"
+  assert by_name["Viviane Zulian"]["organization"] == "Universidade Federal de Santa Catarina"
+  assert stac.CITATION_FULL.startswith("Couto, T. B. A., Zulian, V., D'Antonio, B., Ajemian, M.,")
+  assert stac.CITATION_FULL.endswith("Frontiers in Ecology and the Environment.")
+  assert "Wunder, C., Young, J., & Hammerschlag, N. (under review)" in stac.CITATION_FULL
 
 
 def test_indicator_collection_lists_hex_centroids_asset():

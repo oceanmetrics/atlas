@@ -12,19 +12,20 @@ SPECTRAL_11_REV = ["#5e4fa2", "#3288bd", "#66c2a5", "#abdda4", "#e6f598", "#ffff
 METHODS = """\
 Two datasets were integrated: acoustic telemetry detections of tagged animals (A-BioTrack) and OBIS
 occurrence records, both quality controlled. Monthly detection histories were built for 66 species across
-27,841 10-km hexagonal cells covering the US Atlantic and Gulf of Mexico. Integrated spatial occupancy models
+27,841 10-km hexagonal cells covering the US Atlantic, the Gulf of Mexico, and the Caribbean. Integrated spatial occupancy models
 (R package spOccupancy) were fitted per species and season (warm = May-Aug, called summer; cold = Nov-Feb,
 called winter). Occupancy covariates were depth, sea surface temperature, chlorophyll, total suspended matter
 and sea surface height; detection covariates were depth and the number of receivers per cell (telemetry) and
 the number of same-clade records per cell (OBIS). Model performance was assessed with the Bayesian p-value and
 k-fold cross-validation.
 
-Richness is the sum of per-species occupancy probabilities in a cell. Ecoregion-weighted richness is the cell
-richness divided by the maximum mean richness of the cell's ecoregion (11 ecoregions), so it ranges 0-1.
-Cumulative uncertainty is the sum of per-species standard deviations of the occupancy probability, scaled
-(z-score of the seasonal estimates) and weighted by ecoregion likewise. Probability classes for species lists:
-0.6-0.8 Likely, 0.8-1.0 Very likely; lower values are Unlikely and can be ignored.
-(Summary of T. Couto's method description, 2025-04-10.)"""
+Species richness was estimated by summing the latent occupancy states (z) across all species in each grid cell
+and averaging the resulting species counts across 1,000 retained model iterations. Ecoregion-weighted richness
+is the cell richness divided by the maximum mean richness of the cell's ecoregion (11 ecoregions), so it ranges
+0-1. Cumulative uncertainty is the sum of per-species standard deviations of the occupancy probability, scaled
+(z-score of the seasonal estimates) and weighted by ecoregion. Probability classes for species lists: 0.6-0.8
+Likely, 0.8-1.0 Very likely; lower values are considered less likely and were ignored.
+(T. Couto's method description, revised 2026-10-16.)"""
 
 
 def credits_block(restricted: bool = False) -> str:
@@ -37,7 +38,8 @@ def credits_block(restricted: bool = False) -> str:
   return f"""\
 ## Credits
 
-- Citation (placeholder): {stac.CITATION}
+- Citation: {stac.CITATION}
+- Full author list: {stac.CITATION_FULL}
 - License: {lic}
 - Contacts:
 {contacts}
@@ -65,7 +67,7 @@ def indicators_readme(fields: list[dict], counts: dict) -> str:
 # MBON BioTrack biodiversity indicators
 
 Prototype (`atlas:status: prototype`). Ecoregion-weighted species richness and cumulative uncertainty for the US
-Atlantic and Gulf of Mexico, by species group (all, fish, ray, redlisted, shark, turtle) and season (summer,
+Atlantic, the Gulf of Mexico and the Caribbean, by species group (all, fish, ray, redlisted, shark, turtle) and season (summer,
 winter), in {counts['n_hex']:,} 10-km hexagonal cells, as GeoParquet-style tables plus a geometry-only PMTiles
 grid. Part of the OceanMetrics Atlas (https://oceanmetrics.io/atlas/), funded by NOAA IOOS MBON.
 
