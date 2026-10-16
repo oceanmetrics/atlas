@@ -165,11 +165,11 @@ describe("cellAreaKm2 / shareOf: the spherical band the workflow uses", () => {
     expect(cellAreaKm2(10.025)).toBeCloseTo(exact, 10);
   });
 
-  it("share = suit/100 · area / total", () => {
+  it("share = suit · area / total (total is summed with suitability on the 1-100 scale)", () => {
     const a = cellAreaKm2(LAT);
-    expect(shareOf(100, LAT, a)).toBeCloseTo(1, 12);
-    expect(shareOf(50, LAT, a)).toBeCloseTo(0.5, 12);
-    expect(shareOf(95, LAT, 9.5e7)).toBeCloseTo((0.95 * a) / 9.5e7, 15);
+    expect(shareOf(100, LAT, 100 * a)).toBeCloseTo(1, 12);
+    expect(shareOf(50, LAT, 100 * a)).toBeCloseTo(0.5, 12);
+    expect(shareOf(95, LAT, 9.5e7)).toBeCloseTo((95 * a) / 9.5e7, 15);
   });
 
   it("no total (missing, zero, negative): no share, never Infinity", () => {
@@ -267,7 +267,7 @@ describe("readLookup / joinRows", () => {
       redlist: "NT",
       weight: 0.2,
     });
-    expect(tuna.share).toBeCloseTo((0.95 * cellAreaKm2(LAT)) / 9.5e7, 15);
+    expect(tuna.share).toBeCloseTo((95 * cellAreaKm2(LAT)) / 9.5e7, 15);
   });
 
   it("a species the lookup does not know stays in the table, named by its id, with no share", () => {

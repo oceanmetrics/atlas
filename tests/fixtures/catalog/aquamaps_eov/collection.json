@@ -100,7 +100,7 @@
     "group_dimension": "eov",
     "share": {
       "total_column": "total_suit_area",
-      "formula": "suit/100 * area_km2(lat) / total_suit_area"
+      "formula": "suit * area_km2(lat) / total_suit_area"
     },
     "links": [
       { "label": "Atlas", "href_template": "?c=aquamaps_native&sp={sp_key}", "same_app": true },

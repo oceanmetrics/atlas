@@ -217,7 +217,7 @@ export function cellAreaKm2(lat: number, res = 0.05): number {
 }
 
 /**
- * The cell's fraction (0-1) of a species' global suitable habitat: `suit/100 · area_km2(lat) / total`, with
+ * The cell's fraction (0-1) of a species' global suitable habitat: `suit · area_km2(lat) / total` (total is summed with suitability on the 1-100 scale), with
  * `total` the species' published total suitable area (the same weighting, in the same unit, as the product).
  * `null` when the total is missing or not positive.
  */
@@ -229,7 +229,8 @@ export function shareOf(
 ): number | null {
   if (typeof totalSuitArea !== "number" || !Number.isFinite(totalSuitArea) || totalSuitArea <= 0)
     return null;
-  return ((suit / 100) * cellAreaKm2(lat, res)) / totalSuitArea;
+  // total_suit_area is the sum of v * area with v on the 1-100 scale, so suit stays on that scale too
+  return (suit * cellAreaKm2(lat, res)) / totalSuitArea;
 }
 
 // --- reading ---------------------------------------------------------------------------------------------
