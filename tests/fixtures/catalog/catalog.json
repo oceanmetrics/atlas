@@ -17,6 +17,12 @@
     },
     {
       "rel": "child",
+      "href": "./aquamaps_eov/collection.json",
+      "type": "application/json",
+      "title": "AquaMaps EOV share"
+    },
+    {
+      "rel": "child",
       "href": "./biotrack_indicators/collection.json",
       "type": "application/json",
       "title": "MBON BioTrack biodiversity indicators"

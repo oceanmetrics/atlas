@@ -28,8 +28,19 @@ export interface ValueRequest {
   signal?: AbortSignal;
 }
 
+/** every band of a COG at one position (`/cog/point` without `bidx`): `values[i]` is band `i + 1`, `null` for
+ * a masked (nodata) pixel; `bandNames` when the tile server names the bands (`b1`...). */
+export interface PointValues {
+  values: (number | null)[];
+  bandNames?: string[];
+}
+
 export interface ValueSource {
+  /** one band (`req.bidx`, default 1) as a number; `null` = no data or a failed read. */
   pointValue(req: ValueRequest): Promise<number | null>;
+  /** ALL bands of the COG in ONE request (`req.bidx` is ignored): a flower plot reads every petal from it.
+   * `null` = a failed read or a response with no `values`. */
+  pointValues(req: ValueRequest): Promise<PointValues | null>;
 }
 
 /** throws unless `req.domain` is `species` or `collection` — the runtime guard the module header promises. Call
@@ -67,19 +78,40 @@ export function createTitilerValueSource(
   fetchJson: PointJsonFetcher,
   config: TitilerConfig = DEFAULT_TITILER_CONFIG,
 ): ValueSource {
+  const read = async (url: string, signal?: AbortSignal): Promise<unknown> => {
+    try {
+      return await fetchJson(url, signal);
+    } catch {
+      return null; // network/parse failure -> null, matching msens::cog_point_value()'s NA-on-failure contract
+    }
+  };
+  const finite = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
   return {
     async pointValue(req: ValueRequest): Promise<number | null> {
       assertSpeciesValueRequest(req);
-      const url = titilerPointUrl(config, req.lon, req.lat, req.cogUrl, req.bidx);
-      let raw: unknown;
-      try {
-        raw = await fetchJson(url, req.signal);
-      } catch {
-        return null; // network/parse failure -> null, matching msens::cog_point_value()'s NA-on-failure contract
-      }
+      const raw = await read(
+        titilerPointUrl(config, req.lon, req.lat, req.cogUrl, req.bidx),
+        req.signal,
+      );
       const values = (raw as { values?: unknown } | null)?.values;
-      const first = Array.isArray(values) ? values[0] : undefined;
-      return typeof first === "number" && Number.isFinite(first) ? first : null;
+      return Array.isArray(values) ? finite(values[0]) : null;
+    },
+    async pointValues(req: ValueRequest): Promise<PointValues | null> {
+      assertSpeciesValueRequest(req);
+      // no `bidx`: titiler answers with every band, in band order
+      const raw = (await read(titilerPointUrl(config, req.lon, req.lat, req.cogUrl), req.signal)) as {
+        values?: unknown;
+        band_names?: unknown;
+      } | null;
+      if (!raw || !Array.isArray(raw.values)) return null;
+      const names = raw.band_names;
+      return {
+        values: raw.values.map(finite),
+        ...(Array.isArray(names) && names.every((n) => typeof n === "string")
+          ? { bandNames: names as string[] }
+          : {}),
+      };
     },
   };
 }

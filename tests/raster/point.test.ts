@@ -109,3 +109,43 @@ describe("WP14: a Collections raster item's value (domain collection, band)", ()
     ).resolves.toBeNull();
   });
 });
+
+describe("pointValues: every band of the COG from ONE /cog/point request", () => {
+  const req: ValueRequest = { domain: "collection", lon: 1, lat: 2, cogUrl: COG_URL, bidx: 3 };
+  it("returns the full values array and band_names, and never sends bidx", async () => {
+    const seen: string[] = [];
+    const source = createTitilerValueSource(async (url) => {
+      seen.push(url);
+      return { values: [50, 40, null, 12.5], band_names: ["b1", "b2", "b3", "b4"] };
+    });
+    const got = await source.pointValues(req);
+    expect(got).toEqual({ values: [50, 40, null, 12.5], bandNames: ["b1", "b2", "b3", "b4"] });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain("bidx");
+  });
+  it("omits bandNames when titiler names none; non-finite entries become null", async () => {
+    const source = createTitilerValueSource(async () => ({ values: [1, "x", NaN, 255] }));
+    expect(await source.pointValues(req)).toEqual({ values: [1, null, null, 255] });
+  });
+  it("null for a failed read or a response with no values array", async () => {
+    const failing = createTitilerValueSource(async () => {
+      throw new Error("down");
+    });
+    expect(await failing.pointValues(req)).toBeNull();
+    expect(await createTitilerValueSource(async () => ({})).pointValues(req)).toBeNull();
+  });
+  it("keeps the values[0] behaviour of pointValue unchanged on the same response", async () => {
+    const source = createTitilerValueSource(async () => ({ values: [7, 8, 9] }));
+    expect(await source.pointValue(req)).toBe(7);
+  });
+  it("is guarded like pointValue: a scores-domain request throws before any fetch", async () => {
+    let called = false;
+    const source = createTitilerValueSource(async () => {
+      called = true;
+      return { values: [1] };
+    });
+    const bad = { ...req, domain: "scores" } as unknown as ValueRequest;
+    await expect(source.pointValues(bad)).rejects.toThrow(/species values/i);
+    expect(called).toBe(false);
+  });
+});

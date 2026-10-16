@@ -282,7 +282,18 @@ def test_catalog_links_aquamaps_native_as_a_child():
   cat = stac.root_catalog(stac.EXTERNAL_CHILDREN)
   kids = [(l["href"], l["title"]) for l in cat["links"] if l["rel"] == "child"]
   assert ("./aquamaps_native/collection.json", aq.TITLE) in kids
-  assert [h for h, _ in kids][:2] == ["./biotrack_indicators/collection.json", "./aquamaps_native/collection.json"]
+  assert [h for h, _ in kids][:3] == [
+    "./aquamaps_eov/collection.json", "./biotrack_indicators/collection.json", "./aquamaps_native/collection.json"]
+
+
+def test_catalog_opens_on_aquamaps_eov_first():
+  # the app's default layer is the FIRST child's first item (all x risk); the notebook writes the collection, this
+  # catalog only has to link it ahead of every other child, external ones included
+  cat = stac.root_catalog(stac.EXTERNAL_CHILDREN)
+  kids = [l for l in cat["links"] if l["rel"] == "child"]
+  assert kids[0]["href"] == "./aquamaps_eov/collection.json" and kids[0]["title"] == "AquaMaps EOV share"
+  assert [l["href"] for l in kids].count("./aquamaps_eov/collection.json") == 1
+  assert kids.index(next(l for l in kids if "biotrack_indicators" in l["href"])) == 1
 
 
 def test_catalog_lists_the_v7_collections_one_by_one_without_aquamaps_005():

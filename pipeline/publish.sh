@@ -39,7 +39,9 @@ if [ -d "$stage/aquamaps_native" ]; then
     rm -rf "$tmp"
   fi
 fi
-aws s3 cp "$stage/catalog.json" "s3://$bucket/atlas/catalog.json" --content-type application/json $flag
+# aquamaps_eov/ is NOT synced from here: it is written (and uploaded) by oceanmetrics/workflows/aquamaps_eov.qmd.
+# Only catalog.json is published from this repo, and it links ./aquamaps_eov/collection.json as its FIRST child.
+aws s3 cp "$stage/catalog.json""s3://$bucket/atlas/catalog.json" --content-type application/json $flag
 
 # restricted: unlisted prefix, never linked from catalog.json
 if [ -d "$stage/biotrack_species" ]; then

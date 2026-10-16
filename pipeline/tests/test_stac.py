@@ -105,7 +105,7 @@ def test_restricted_collection_not_linked_from_root_catalog():
   text = json.dumps(cat)
   assert "biotrack_species" not in text and "restricted" not in text
   children = [l["href"] for l in cat["links"] if l["rel"] == "child"]
-  assert children[0] == "./biotrack_indicators/collection.json"
+  assert children[:2] == ["./aquamaps_eov/collection.json", "./biotrack_indicators/collection.json"]
   assert "https://file.marinesensitivity.org/stac/v7/ms_merge/collection.json" in children
   assert "https://file.marinesensitivity.org/stac/v8/gm/collection.json" in children
   assert "https://file.marinesensitivity.org/stac/v8/nc/collection.json" in children

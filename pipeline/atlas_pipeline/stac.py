@@ -500,6 +500,10 @@ def species_items(bbox: list[float], taxa_rows: list[dict], value_ranges: dict[t
 
 # ---- root catalog ----
 
+# the AquaMaps EOV share product: staged and uploaded by oceanmetrics/workflows/aquamaps_eov.qmd; only the root
+# catalog (this file's output) links it
+EOV_TITLE = "AquaMaps EOV share"
+
 def root_catalog(external_children: list[dict]) -> dict:
   """OceanMetrics Atlas root; the restricted species collection is deliberately absent."""
   return {
@@ -510,7 +514,7 @@ def root_catalog(external_children: list[dict]) -> dict:
     "updated": now_rfc3339(),
     "title": "OceanMetrics Atlas",
     "description": (
-      "Maps of species distribution and biodiversity products: MBON BioTrack richness and uncertainty "
+      "Maps of species distribution and biodiversity products: the AquaMaps EOV share, MBON BioTrack richness and uncertainty "
       "indicators, AquaMaps habitat suitability (native 0.5 degree and global 0.05 degree), plus the MarineSensitivity SDM collections by reference. Supported by the Marine Minerals Administration (MMA) and the "
       "Marine Biodiversity Observation Network (MBON). Built by OceanMetrics."),
     "links": [
@@ -518,6 +522,9 @@ def root_catalog(external_children: list[dict]) -> dict:
       {"rel": "self", "href": "./catalog.json", "type": JSON_T},
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Human-readable documentation"},
       {"rel": "agents", "href": "./AGENTS.md", "type": MD_T, "title": "Agent/LLM usage guide"},
+      # aquamaps_eov is FIRST: the atlas opens on the first child (its `all` x `risk` item), see CHANGELOG 0.2.0.
+      # It is written and uploaded by oceanmetrics/workflows/aquamaps_eov.qmd, not built here.
+      {"rel": "child", "href": "./aquamaps_eov/collection.json", "type": JSON_T, "title": EOV_TITLE},
       {"rel": "child", "href": "./biotrack_indicators/collection.json", "type": JSON_T,
        "title": "MBON BioTrack biodiversity indicators"},
       {"rel": "child", "href": "./aquamaps_native/collection.json", "type": JSON_T,
