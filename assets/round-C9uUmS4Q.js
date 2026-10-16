@@ -1,0 +1,1 @@
+function e(e){if(!Number.isFinite(e))return e;let t=Math.floor(e),n=e-t;return n>.5?t+1:n<.5||t%2==0?t:t+1}function t(e,t=9){if(!Number.isFinite(e)||Math.abs(e)>=0xe8d4a51000)return e;let n=10**t;return Math.round(e*n)/n}function n(t,n=3){if(!Number.isFinite(t)||t===0)return t;let r=10**(n-Math.floor(Math.log10(Math.abs(t)))-1);return e(t*r)/r}export{n,t as r,e as t};
