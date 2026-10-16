@@ -61,6 +61,13 @@ uv run pipeline/build.py build --collection biotrack_indicators
 - `atlas:absent: true` (Item property) marks an Item that has no data by construction (AquaMaps models no seabirds or
   seagrasses): the flower draws its slot empty and the table says `atlas:absent_note`, default "(not in AquaMaps)" --
   absent, never zero. An Item with no `title` is titled by its dimension labels joined with " · ".
+- `atlas:cell_species` on a Collection (`src/lib/catalog/cellSpecies.ts`) is the raster cell -> species hook: `layout:
+"tiles"`, `tile_deg`, `href_template` (`{tile}`), `grid {ncol,nrow,x0,y0,res}`, `key_column`, `species_column`,
+  `lookup_asset` (a Parquet keyed by `lookup_key`, with `scientific_name`, `common_name`, `redlist_code`, `weight`,
+  the `group_column` and `share.total_column`), `value_column`/`value_label`/`value_range`, and `links` (a URL
+  `column`, or an `href_template` with `same_app: true` for this app's own `?c=..&sp={sp_key}`, which the app turns
+  into `rep=005` plus the current `map=`). Tiles are Parquet sorted by key with small row groups (hyparquet prunes by
+  statistics); a missing tile is an empty cell. Hex collections keep the single `cell_species` table of `species.ts`.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
 ## Conventions

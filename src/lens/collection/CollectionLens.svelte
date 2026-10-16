@@ -20,7 +20,10 @@
   import type { LayerGroupId } from "../../lib/map/layerStack";
   import Flower from "../../lib/ui/Flower.svelte";
   import { formatLatLon } from "../../lib/format";
+  import { parseCellSpecies } from "../../lib/catalog/cellSpecies";
+  import { flowerSpecOf } from "../../lib/catalog/flower";
   import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
+  import RasterCellSpeciesPanel from "./RasterCellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
   import { formatCellValue } from "./mapInputs";
   import MstDetails from "./MstDetails.svelte";
@@ -109,6 +112,11 @@
         : lens.registry.row.scientificName
       : null,
   );
+  // `atlas:cell_species`: the species table of a clicked pixel (a raster collection with a tiled cell -> species table)
+  const cellSpecies = $derived(parseCellSpecies(lens.entry?.collection));
+  const cellSpeciesGroups = $derived(
+    lens.dims.find((d) => d.key === cellSpecies?.groupDimension)?.values ?? [],
+  );
   // the flower's reference ring: the top of the item's own value range (a 0-100 score reads "max 100")
   const flowerMax = $derived.by(() => {
     const r = lens.item?.properties?.["atlas:value_range"];
@@ -186,6 +194,19 @@
             size={320}
           />
         </div>
+      {/if}
+      {#if cellSpecies}
+        <!-- the collection's `atlas:cell_species`: the species with habitat in this pixel (one tile read) -->
+        <RasterCellSpeciesPanel
+          desc={cellSpecies}
+          stem={lens.entry?.id ?? "collection"}
+          lngLat={pt.lngLat}
+          selected={lens.selected}
+          composite={flowerSpecOf(lens.entry?.collection)?.composite ?? null}
+          groups={cellSpeciesGroups}
+          map={sel.map ?? mapHandle?.camera()}
+          onNavigate={(patch) => selStore.set({ ...patch, map: patch.map ?? mapHandle?.camera() })}
+        />
       {/if}
       <button type="button" class="clear" onclick={() => lens.clearCell()}>Clear selection</button>
     {:else}

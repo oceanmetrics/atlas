@@ -15,7 +15,7 @@ test.use({ viewport: { width: 1280, height: 900 } });
 const BANDS = [50, 80, 60, 40, 20, null, null, 50, 5];
 const TILER = "https://titiler-v8.marinesensitivity.org";
 
-async function boot(page: Page, pointRequests: string[]) {
+async function boot(page: Page, pointRequests: string[], path = "/") {
   await blockWasm(page);
   await routeBucket(page);
   await routeAtlasData(page, { frameEov: false });
@@ -44,7 +44,7 @@ async function boot(page: Page, pointRequests: string[]) {
       }),
     ),
   );
-  await page.goto("/");
+  await page.goto(path);
   await waitForHydration(page);
   await page.waitForFunction(() => !!(window as unknown as { __atlasMap?: unknown }).__atlasMap, {
     timeout: 15_000,
@@ -89,4 +89,69 @@ test("a click shows the flower: one /cog/point request, petals from bands, absen
   // ONE read served the value line and all seven petals, and it asked for every band (no bidx)
   expect(points).toHaveLength(1);
   expect(points[0]).not.toContain("bidx");
+});
+
+// the fixture's tile 954 holds cells 9844265-9844267; (-86.73, 21.62) is cell 9844266 (six species)
+async function clickCancun(page: Page) {
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __atlasMap: { handle: { map: { fire(type: string, props: object): void } } };
+      }
+    ).__atlasMap.handle.map.fire("click", {
+      lngLat: { lng: -86.73, lat: 21.62 },
+      point: { x: 0, y: 0 },
+    });
+  });
+  await page.locator("[data-atlas-open-details]").first().click();
+}
+
+test("a click lists the species of the cell, with an Atlas link that keeps the camera", async ({
+  page,
+}) => {
+  const files: string[] = [];
+  page.on("request", (r) => {
+    if (/\.parquet(\?|$)/.test(r.url()) && r.method() === "GET") files.push(r.url());
+  });
+  await boot(page, []);
+  await clickCancun(page);
+  const panel = page.getByTestId("raster-cell-species");
+  await expect(panel.getByTestId("raster-cell-species-count")).toHaveText(
+    "6 species in this cell",
+    { timeout: 15_000 },
+  );
+  const rows = panel.getByTestId("raster-cell-species-row");
+  await expect(rows).toHaveCount(6);
+  // suitability high to low
+  await expect(rows.first()).toContainText("Thunnus albacares");
+  await expect(rows.first()).toContainText("Yellowfin tuna");
+  await expect(rows.first()).toContainText("95%");
+  await expect(rows.last()).toContainText("Chelonia mydas");
+  // the Atlas link: this app, the taxon on the 0.05 degree surface, the current camera
+  const atlas = rows.first().getByRole("link", { name: "Atlas" });
+  const href = (await atlas.getAttribute("href")) ?? "";
+  expect(href.startsWith("?")).toBe(true);
+  const q = new URLSearchParams(href);
+  expect([q.get("c"), q.get("sp"), q.get("rep")]).toEqual(["aquamaps_native", "Fis-24082", "005"]);
+  expect(q.get("map")).toMatch(/^-?[\d.]+,-?[\d.]+,[\d.]+/);
+  const worms = rows.first().getByRole("link", { name: "WoRMS" });
+  await expect(worms).toHaveAttribute("target", "_blank");
+  await expect(worms).toHaveAttribute("href", /marinespecies\.org.*id=100001/);
+  // one tile and the lookup, each read once
+  expect(files.filter((u) => u.includes("/cell_species/tile=954/"))).not.toHaveLength(0);
+  expect(files.filter((u) => u.endsWith("/species.parquet"))).toHaveLength(1);
+  // the filter narrows the list
+  await panel.getByTestId("raster-cell-species-filter").fill("coral");
+  await expect(rows).toHaveCount(2);
+});
+
+test("an EOV item lists that EOV first, with a toggle for all of them", async ({ page }) => {
+  await boot(page, [], "/?i=hardCorals_risk");
+  await clickCancun(page);
+  const panel = page.getByTestId("raster-cell-species");
+  const rows = panel.getByTestId("raster-cell-species-row");
+  await expect(rows).toHaveCount(2, { timeout: 15_000 });
+  await expect(panel.getByTestId("raster-cell-species-count")).toHaveText("6 species in this cell");
+  await panel.getByRole("button", { name: "Show all groups" }).click();
+  await expect(rows).toHaveCount(6);
 });

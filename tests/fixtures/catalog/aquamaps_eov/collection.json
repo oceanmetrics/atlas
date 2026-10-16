@@ -82,6 +82,33 @@
     "dimension": "eov",
     "composite": "all"
   },
+  "atlas:cell_species": {
+    "asset": "cell_species",
+    "lookup_asset": "species",
+    "layout": "tiles",
+    "tile_deg": 5,
+    "href_template": "./cell_species/tile={tile}/data_0.parquet",
+    "grid": { "ncol": 7200, "nrow": 3600, "x0": -180, "y0": 90, "res": 0.05 },
+    "key_column": "cell_id",
+    "species_column": "aphia_id",
+    "lookup_key": "aphia_id",
+    "value_column": "suit",
+    "value_unit": "percent",
+    "value_range": [1, 100],
+    "value_label": "Suitability",
+    "group_column": "eov",
+    "group_dimension": "eov",
+    "share": {
+      "total_column": "total_suit_area",
+      "formula": "suit/100 * area_km2(lat) / total_suit_area"
+    },
+    "links": [
+      { "label": "Atlas", "href_template": "?c=aquamaps_native&sp={sp_key}", "same_app": true },
+      { "label": "WoRMS", "column": "worms_url" },
+      { "label": "IUCN", "column": "iucn_url" },
+      { "label": "AquaMaps", "column": "aquamaps_url" }
+    ]
+  },
   "cube:dimensions": {
     "x": {
       "type": "spatial",
@@ -136,6 +163,27 @@
     }
   },
   "assets": {
+    "species": {
+      "href": "./species.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Species lookup (eov_taxa + names, keys and links)",
+      "roles": ["metadata"],
+      "table:row_count": 7,
+      "file:size": 4238
+    },
+    "cell_species": {
+      "href": "./cell_species/",
+      "title": "Cell to species table, one Parquet per 5 degree tile",
+      "roles": ["metadata"],
+      "atlas:n_tiles": 1,
+      "table:row_count": 12,
+      "file:size": 2697,
+      "table:columns": [
+        { "name": "cell_id", "type": "int32" },
+        { "name": "aphia_id", "type": "int32" },
+        { "name": "suit", "type": "uint8" }
+      ]
+    },
     "eov_taxa": {
       "href": "./eov_taxa.parquet",
       "type": "application/vnd.apache.parquet",

@@ -65,6 +65,8 @@ export function speciesAssetsOf(collection: StacCollection | null): SpeciesAsset
   const cs = collection?.assets?.cell_species;
   const sp = collection?.assets?.species;
   if (!collection || !cs || !sp) return null;
+  // a raster collection's `cell_species` is a DIRECTORY of tiles read per click (`cellSpecies.ts`), not this table
+  if (collection["atlas:cell_species"]) return null;
   const cellSpeciesUrl = assetUrl(collection, cs);
   const speciesUrl = assetUrl(collection, sp);
   return cellSpeciesUrl && speciesUrl ? { cellSpeciesUrl, speciesUrl } : null;
