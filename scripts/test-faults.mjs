@@ -112,8 +112,8 @@ export const FAULTS = [
     id: "feedback-restricted-posted",
     patch: "tests/faults/feedback-restricted-posted.patch",
     describe:
-      "sendFeedback() drops its restricted guard -- a restricted report is POSTed to the shared Apps " +
-      "Script, which files every report as a public issue",
+      "sendFeedback() drops its restricted guard -- a restricted report is POSTed even while restricted " +
+      "reports are held back (RESTRICTED_MAY_SEND false)",
     gate: [
       "npx",
       "vitest",
@@ -136,6 +136,22 @@ export const FAULTS = [
       "tests/feedback/restrictedCollection.test.ts",
       "-t",
       "wires the view's access",
+    ],
+  },
+  // --- 0.3.5: restricted reports are filed publicly, so the share link must stay out of them ------
+  {
+    id: "feedback-share-link-in-issue",
+    patch: "tests/faults/feedback-share-link-in-issue.patch",
+    describe:
+      "searchForAccess() keeps `collection`/`catalog` -- a report from a collection under review, filed as " +
+      "a public issue since 0.3.5, carries the unlisted share link and so the data",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/feedback/restrictedCollection.test.ts",
+      "-t",
+      "never carries the share link",
     ],
   },
   // --- atlas-8 step 3: the two accessibility faults the plan's pyramid row names ------------------

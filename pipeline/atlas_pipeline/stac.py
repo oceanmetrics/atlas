@@ -544,7 +544,12 @@ CCE_USE_CONSTRAINTS = (
   'dataset limitations, restrictions or intended use. In no event will NMFS be liable to you or to any third party '
   'for any direct, indirect, incidental, consequential, special or exemplary damages or lost profit resulting from '
   'any use or misuse of these data.')
-CCE_LICENSE = "other"
+# public domain as a US Government work (17 U.S.C. 105), Ben 2026-10-22, to check with SWFSC: InPort states no
+# license. CC-PDDC is the atlas' id for a US Government work (the BOEM gazetteer collections use it) and, unlike
+# "other", has an SPDX page.
+CCE_LICENSE = "CC-PDDC"
+CCE_LICENSE_URL = "https://www.usa.gov/government-copyright"
+CCE_LICENSE_TITLE = "Public domain: a US Government work, 17 U.S.C. § 105 (to check; InPort 64349 states no license)"
 CCE_NOTE = (
   "Under review: shared by link for provider and BOEM/MMA review; not for distribution. Density as delivered "
   "(animals per km²), area-weighted onto a 0.05° grid by Ocean Metrics for the Marine Sensitivity Toolkit; not "
@@ -692,8 +697,9 @@ def cce_collection(rows: list[dict], bbox: list[float], base_url: str, assets: d
        "title": "Becker et al. 2020, NOAA-TM-NMFS-SWFSC-638"},
       {"rel": "via", "href": CCE_INPORT, "type": "text/html", "title": "InPort 64349 (NOAA Fisheries metadata)"},
       {"rel": "related", "href": CCE_ARCGIS, "type": "text/html", "title": "Delivered file geodatabase (ArcGIS Online)"},
+      {"rel": "license", "href": CCE_LICENSE_URL, "type": "text/html", "title": CCE_LICENSE_TITLE},
       {"rel": "license", "href": CCE_INPORT, "type": "text/html",
-       "title": "No license stated; NOAA Fisheries use constraints (No Warranty) on InPort 64349"},
+       "title": "NOAA Fisheries use constraints (No Warranty), InPort 64349"},
     ],
   }
 

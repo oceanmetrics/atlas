@@ -17,7 +17,7 @@
 // (or a real browser's network panel) ever sees -- it silently looked like "the endpoint is
 // unreachable" instead of "the request was too big to keep alive." Dropping the flag removes the
 // quota entirely; there is no more competing navigation for it to survive.
-import { ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED } from "./endpoint";
+import { RESTRICTED_MAY_SEND } from "./endpoint";
 
 /** the verdict's `error` when a restricted report is held back (never sent). */
 export const RESTRICTED_NOT_SENT = "restricted view: not sent";
@@ -104,11 +104,11 @@ export async function sendFeedback(
   url: string,
   payload: unknown,
   doFetch: FetchLike,
-  endpointSkipsIssue: boolean = ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED,
+  restrictedMaySend: boolean = RESTRICTED_MAY_SEND,
 ): Promise<FeedbackVerdict> {
-  // the last gate before the network: a restricted report never leaves the device while the endpoint
-  // would file it publicly (endpoint.ts), whatever the dialog did
-  if (isRestrictedPayload(payload) && !endpointSkipsIssue) {
+  // the last gate before the network: a restricted report never leaves the device while restricted
+  // reports are held back (endpoint.ts), whatever the dialog did
+  if (isRestrictedPayload(payload) && !restrictedMaySend) {
     return { ok: false, error: RESTRICTED_NOT_SENT };
   }
   try {

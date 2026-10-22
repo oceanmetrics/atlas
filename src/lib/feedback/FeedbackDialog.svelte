@@ -26,6 +26,7 @@
     canSendFeedback,
     ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED,
     feedbackEndpoint,
+    RESTRICTED_MAY_SEND,
   } from "./endpoint";
   import { sendFeedback } from "./postFeedback";
   import { githubIssueUrl } from "./githubIssue";
@@ -71,9 +72,13 @@
   }: Props = $props();
 
   const restricted = $derived(access === "restricted");
-  // a restricted view whose endpoint would still file a public issue (endpoint.ts): nothing is
-  // captured or sent, the dialog only says where to send the report instead
-  const blocked = $derived(restricted && !ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED);
+  // a restricted view while restricted reports are held back (endpoint.ts): nothing is captured or
+  // sent, the dialog only says where to send the report instead
+  const blocked = $derived(restricted && !RESTRICTED_MAY_SEND);
+  // whether a report from this view becomes a public GitHub issue: always for a public view, and for
+  // a restricted one unless the endpoint skips the issue (0.3.5: it does not, and Ben accepts that;
+  // the page link in it never carries the share link either way)
+  const publicIssue = $derived(!restricted || !ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED);
 
   // --- form state --------------------------------------------------------------------------------
   let kind = $state<FeedbackKind>("bug");
@@ -485,7 +490,7 @@
         <a href={result.issueUrl} target="_blank" rel="noopener noreferrer">{result.issueUrl}</a>
       </p>
     {/if}
-    {#if restricted}
+    {#if !publicIssue}
       <p class="hint">This collection is under review, so no public GitHub issue was filed.</p>
     {/if}
   {:else if blocked}
@@ -583,6 +588,11 @@
         labelled <code>{kind}</code> — filed either way, whether or not you give an email. Your email,
         if you give one, never appears in the issue; it stays in the team's own mail and sheet, with a
         copy sent back to you.
+      {:else if publicIssue}
+        and as a public GitHub issue in <code>oceanmetrics/atlas</code> labelled
+        <code>{kind}</code>. This collection is under review: the issue shows your text and the
+        screenshot (untick it to leave it out) but never the link this collection was shared by.
+        Your email, if you give one, never appears in the issue.
       {:else}
         . This collection is under review, so no public GitHub issue is filed.
       {/if}
@@ -591,7 +601,7 @@
     {#if !endpoint}
       <p class="hint warn">
         This build has no feedback endpoint configured yet
-        {#if !restricted}
+        {#if publicIssue}
           — use "Open as GitHub issue" below.
         {:else}
           , and this collection is under review, so feedback cannot be sent from here right now.
@@ -600,12 +610,12 @@
     {/if}
     {#if result && !result.ok}
       <p class="hint warn">
-        Not sent: {result.error}{!restricted ? " Try again, or open the issue yourself." : ""}
+        Not sent: {result.error}{publicIssue ? " Try again, or open the issue yourself." : ""}
       </p>
     {/if}
 
     <div class="actions">
-      {#if !restricted}
+      {#if publicIssue}
         <a
           class="btn"
           href={githubHref}

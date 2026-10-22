@@ -7,10 +7,12 @@
 //      carries `?collection=`/`?catalog=`, is restricted;
 //   2. a restricted view's page link drops the share link (`collection`, `catalog`) before it reaches
 //      the payload or the zero-backend issue link;
-//   3. a restricted payload is never POSTed while the endpoint would file it publicly;
+//   3. a restricted payload is never POSTed while restricted reports are held back;
 //   4. Shell.svelte wires 1-2 into the dialog (`access={feedbackAccess}`).
+// 0.3.5 (Ben, 2026-10-22): restricted reports are no longer held back by default -- they are filed as
+// public issues like any other, so rule 2 is what keeps the share link (and so the data) out of them.
 // Seeded faults (npm run test:faults): feedback-unlisted-not-restricted, feedback-restricted-posted,
-// feedback-access-unwired.
+// feedback-access-unwired, feedback-share-link-in-issue.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,7 +23,11 @@ import {
 } from "../../src/lib/catalog/access";
 import { loadCatalog, type CatalogCache } from "../../src/lib/catalog/load";
 import { buildFeedbackPayload, type FeedbackPayloadInput } from "../../src/lib/feedback/payload";
-import { canSendFeedback } from "../../src/lib/feedback/endpoint";
+import {
+  canSendFeedback,
+  RESTRICTED_MAY_SEND,
+  RESTRICTED_PUBLIC_ISSUE_OK,
+} from "../../src/lib/feedback/endpoint";
 import {
   RESTRICTED_NOT_SENT,
   sendFeedback,
@@ -138,7 +144,7 @@ describe("searchForAccess: a restricted view's page link never carries the share
   });
 });
 
-describe("a restricted report is never POSTed while the endpoint would file it publicly", () => {
+describe("a restricted report is never POSTed while restricted reports are held back", () => {
   const spy = () => {
     const calls: string[] = [];
     const doFetch: FetchLike = async (url) => {
@@ -148,14 +154,14 @@ describe("a restricted report is never POSTed while the endpoint would file it p
     return { calls, doFetch };
   };
 
-  it("sendFeedback makes no request for a restricted payload (the deployed endpoint ignores the flag)", async () => {
+  it("sendFeedback makes no request for a restricted payload when they are held back", async () => {
     const { calls, doFetch } = spy();
     const payload = buildFeedbackPayload({ ...BASE, access: "restricted" });
-    const verdict = await sendFeedback("https://script.google.test/exec", payload, doFetch);
+    const verdict = await sendFeedback("https://script.google.test/exec", payload, doFetch, false);
     expect(calls).toEqual([]);
     expect(verdict).toEqual({ ok: false, error: RESTRICTED_NOT_SENT });
   });
-  it("posts it once the endpoint is known to skip the public issue", async () => {
+  it("posts it when restricted reports may be sent", async () => {
     const { calls, doFetch } = spy();
     const payload = buildFeedbackPayload({ ...BASE, access: "restricted" });
     await sendFeedback("https://script.google.test/exec", payload, doFetch, true);
@@ -167,11 +173,43 @@ describe("a restricted report is never POSTed while the endpoint would file it p
     expect((await sendFeedback("https://script.google.test/exec", payload, doFetch)).ok).toBe(true);
     expect(calls).toHaveLength(1);
   });
-  it("canSendFeedback: no endpoint never; restricted only when the endpoint skips the issue", () => {
+  it("canSendFeedback: no endpoint never; restricted only when restricted reports may be sent", () => {
     expect(canSendFeedback(null, false)).toBe(false);
+    expect(canSendFeedback(null, true)).toBe(false);
     expect(canSendFeedback("https://x.test/exec", false)).toBe(true);
-    expect(canSendFeedback("https://x.test/exec", true)).toBe(false);
+    expect(canSendFeedback("https://x.test/exec", true, false)).toBe(false);
     expect(canSendFeedback("https://x.test/exec", true, true)).toBe(true);
+  });
+});
+
+describe("0.3.5: a restricted report is sent by default, and its public issue never carries the share link", () => {
+  it("the policy is on (Ben, 2026-10-22), so a restricted view can send", () => {
+    expect(RESTRICTED_PUBLIC_ISSUE_OK).toBe(true);
+    expect(RESTRICTED_MAY_SEND).toBe(true);
+    expect(canSendFeedback("https://x.test/exec", true)).toBe(true);
+  });
+  it("the posted body has the page link without the share link, even with the link box ticked", async () => {
+    const bodies: string[] = [];
+    const doFetch: FetchLike = async (_url, init) => {
+      bodies.push(String(init?.body ?? ""));
+      return { ok: true, text: async () => JSON.stringify({ ok: true }) };
+    };
+    // the page link as Shell.svelte builds it for a restricted view
+    const pageUrl = `https://oceanmetrics.io/atlas/${searchForAccess(SEARCH, "restricted")}`;
+    const payload = buildFeedbackPayload({
+      ...BASE,
+      pageUrl,
+      includeUrl: true,
+      access: "restricted",
+    });
+    const verdict = await sendFeedback("https://script.google.test/exec", payload, doFetch);
+    expect(verdict.ok).toBe(true);
+    expect(bodies).toHaveLength(1);
+    const sent = JSON.parse(bodies[0]) as { url?: string; restricted: boolean };
+    expect(sent.restricted).toBe(true);
+    expect(sent.url).toBe("https://oceanmetrics.io/atlas/?lens=collection&map=3%2F-120%2F35");
+    expect(bodies[0]).not.toContain("atlas-restricted");
+    expect(bodies[0]).not.toContain("collection=");
   });
 });
 

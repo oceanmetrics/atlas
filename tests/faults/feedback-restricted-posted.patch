@@ -3,12 +3,12 @@ diff --git a/src/lib/feedback/postFeedback.ts b/src/lib/feedback/postFeedback.ts
 +++ b/src/lib/feedback/postFeedback.ts
 @@ -108,7 +108,9 @@
  ): Promise<FeedbackVerdict> {
-   // the last gate before the network: a restricted report never leaves the device while the endpoint
-   // would file it publicly (endpoint.ts), whatever the dialog did
--  if (isRestrictedPayload(payload) && !endpointSkipsIssue) {
+   // the last gate before the network: a restricted report never leaves the device while restricted
+   // reports are held back (endpoint.ts), whatever the dialog did
+-  if (isRestrictedPayload(payload) && !restrictedMaySend) {
 +  // SEEDED FAULT (tests/faults/feedback-restricted-posted.patch): the guard is gone, a restricted
-+  // report is posted to an endpoint that files it as a public issue.
-+  if (false && isRestrictedPayload(payload) && !endpointSkipsIssue) {
++  // report is posted even while restricted reports are held back.
++  if (false && isRestrictedPayload(payload) && !restrictedMaySend) {
      return { ok: false, error: RESTRICTED_NOT_SENT };
    }
    try {

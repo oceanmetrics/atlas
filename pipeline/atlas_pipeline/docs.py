@@ -429,8 +429,8 @@ Density in animals per km2. The WoRMS id is the one delivered.{worms_note}
 - Producer: NOAA Southwest Fisheries Science Center (lead author Elizabeth A. Becker). Distributor: NOAA Fisheries
   Office of Science and Technology, InPort item 64349 ({stac.CCE_INPORT}).
 - Processing (0.05 degree grid): Ocean Metrics, for the Marine Sensitivity Toolkit.
-- License: none is stated on InPort; the product is published by NOAA Fisheries. Use constraints, quoted from
-  InPort 64349:
+- License: public domain as a US Government work, 17 U.S.C. § 105 (to check: none is stated on InPort; the
+  product is published by NOAA Fisheries). Use constraints, quoted from InPort 64349:
 
   > {stac.CCE_USE_CONSTRAINTS}
 

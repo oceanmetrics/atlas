@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- **Feedback is back on for a collection under review.** 0.3.4 held every report from an unlisted (`?collection=`) or `atlas:access: "restricted"` collection back, because the shared feedback endpoint files each one as a public GitHub issue. Ben decided (2026-10-22) that is acceptable: the issue shows the reviewer's text and the screenshot but never the link the collection was shared by (the page link still drops `collection` and `catalog`), so it does not hand anyone the data. The dialog takes the screenshot again, says the report becomes a public issue without the share link, and offers "Open as GitHub issue" as on any other view. `RESTRICTED_PUBLIC_ISSUE_OK` (`src/lib/feedback/endpoint.ts`) set to `false` restores 0.3.4. New seeded fault `feedback-share-link-in-issue`.
+- Pipeline: `swfsc_cce_becker2020b` license is `CC-PDDC`, public domain as a US Government work, marked "to check" (InPort states no license); "other" had linked a missing SPDX page. The NOAA Fisheries use constraints stay as a second license link and in the README.
+
 ## 0.3.4
 
 - **Fix: feedback from a collection under review no longer becomes a public GitHub issue.** A report sent while viewing an unlisted collection (opened from a `?collection=` link, picker group "Unlisted (shared by link)") was filed as a public issue with a screenshot of it, because the dialog was never told the view was restricted. A view is now restricted when its collection is unlisted or declares `atlas:access: "restricted"`, or when its URL carries `?collection=` or `?catalog=`. There the dialog takes no screenshot and sends nothing (the shared feedback endpoint files every report publicly); it says the collection is under review and asks for comments to go to whoever shared the link. The page link in any feedback (the "Report a problem" fallback link too) leaves out the share link. Analytics already left out `collection` and `catalog`.

@@ -169,9 +169,12 @@ def test_citation_doi_license_and_use_constraints_from_inport():
   assert c["sci:citation"].startswith("Becker, E. A., Forney, K. A., Miller, D. L., Fiedler, P. C., Barlow, J., & Moore, J. E. (2020).")
   assert "NOAA Technical Memorandum NMFS-SWFSC-638" in c["sci:citation"]
   assert c["sci:doi"] == "10.25923/3znq-yx13"
-  assert c["license"] == "other"
+  # public domain as a US Government work, to check (Ben 2026-10-22); "other" had linked a 404 SPDX page
+  assert c["license"] == "CC-PDDC"
   lic = [l for l in c["links"] if l["rel"] == "license"]
-  assert lic and lic[0]["href"] == "https://www.fisheries.noaa.gov/inport/item/64349"
+  assert [l["href"] for l in lic] == ["https://www.usa.gov/government-copyright",
+                                       "https://www.fisheries.noaa.gov/inport/item/64349"]
+  assert "US Government work" in lic[0]["title"] and "to check" in lic[0]["title"]
   assert c["atlas:use_constraints"].startswith("*** No Warranty*** The user assumes the entire risk")
   assert c["atlas:use_constraints"].endswith("resulting from any use or misuse of these data.")
   readme = docs.cce_readme(_rows())
