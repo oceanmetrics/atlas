@@ -1,5 +1,6 @@
-// atlas-3 step 2: exports the custom properties in src/lib/brand/tokens.css, resolved per theme, as
-// a deterministic src/lib/brand/tokens.json. Downstream consumers that cannot read CSS custom
+// atlas-3 step 2: exports the custom properties in the instance's tokens.css
+// (instances/<VITE_INSTANCE>/tokens.css, scripts/instance.mjs), resolved per theme, as a
+// deterministic tokens.json beside it. Downstream consumers that cannot read CSS custom
 // properties directly (a Node script, a design tool) read this instead of the source of truth.
 //
 // `exportTokens()` is a PURE function: given the tokens.css text, it returns the resolved object.
@@ -9,9 +10,10 @@
 // ever shelling out (a token change without re-export must fail that comparison).
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { instanceTokensCss, instanceTokensJson } from "./instance.mjs";
 
-export const TOKENS_CSS_FILE = "src/lib/brand/tokens.css";
-export const OUTPUT_FILE = "src/lib/brand/tokens.json";
+export const TOKENS_CSS_FILE = instanceTokensCss();
+export const OUTPUT_FILE = instanceTokensJson();
 
 /** Pull the custom properties out of one `{ ... }` block matched by `selectorRegex`. */
 function parseBlock(css, selectorRegex) {
@@ -41,7 +43,7 @@ function sortedResolved(props) {
 
 /**
  * PURE: resolve every custom property in both themes from the tokens.css source text.
- * @param {string} css the contents of src/lib/brand/tokens.css
+ * @param {string} css the contents of the instance's tokens.css
  * @returns {{ navy: Record<string,string>, paper: Record<string,string> }}
  */
 export function exportTokens(css) {

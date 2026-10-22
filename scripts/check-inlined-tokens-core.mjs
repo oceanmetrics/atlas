@@ -1,5 +1,5 @@
 // atlas-3 step 3: index.html's inlined critical CSS `@import`s src/shell/shell.css, which itself
-// `@import`s src/lib/brand/tokens.css -- Vite's html/CSS pipeline resolves both at dev/build time
+// `@import`s @instance/tokens.css (instances/<id>/tokens.css) -- Vite's html/CSS pipeline resolves both at dev/build time
 // and inlines the resolved (and, in a real build, minified) declarations directly into the page's
 // `<style>` tag. That is the "build step" the review checklist requires: nobody hand-types a token
 // value into index.html. This module is the mechanical proof that the copy is faithful: it re-parses
@@ -97,7 +97,7 @@ export function extractInlineStyleCss(html) {
 /**
  * Every token tokens.css declares (per theme) that dist's inlined CSS either lacks or disagrees
  * with, once both sides are normalized. Empty = the inlined copy is faithful.
- * @param {string} tokensCss the source text of src/lib/brand/tokens.css
+ * @param {string} tokensCss the source text of the instance's tokens.css
  * @param {string} indexHtml a built dist/index.html's full text
  * @returns {TokenDrift[]}
  */

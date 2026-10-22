@@ -16,6 +16,8 @@
 //      -- nothing else called it): it keeps the full absolute URL (the exact string the Share
 //      button already copies, `location.href`) and drops only `theme`.
 
+import { BRAND_NAME } from "../brand/instance";
+
 export interface FooterInfo {
   /** the SHORT layer/species title -- a metric's short label (never its long description) or a
    * species' scientific name; the caller resolves which is short (`Shell.svelte`'s
@@ -71,7 +73,7 @@ export function titleWithUnit(title: string, unit?: string): string {
  * `^v[0-9]+[a-z]?$`-shaped label -- never prefixed with a second "v" here. */
 export function footerLines(info: FooterInfo): string[] {
   const first = titleWithUnit(info.title, info.unit);
-  const last = `OceanMetrics Atlas · ${info.ver ? `${info.ver} · ` : ""}${canonicalShareUrl(info.url)}`;
+  const last = `${BRAND_NAME} · ${info.ver ? `${info.ver} · ` : ""}${canonicalShareUrl(info.url)}`;
   return info.description ? [first, info.description, last] : [first, last];
 }
 

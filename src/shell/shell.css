@@ -23,7 +23,7 @@
  *
  * No hex literal: every color is `var(--token)` (scripts/check-hex-literals.mjs scans this file).
  */
-@import "../lib/brand/tokens.css";
+@import "@instance/tokens.css";
 /* atlas-3 step 4 fix round 1 (SC 2.5.8): the shared coarse-pointer touch-target floor, imported
    once at the app root as that step's own report asks -- it targets several src/lib/ui/*
    selectors (`.seg button`, `button.chip`, ...) that the shell's own hand-built version chip and
@@ -249,8 +249,8 @@ a {
   height: var(--motif-wave-height);
   background: var(--motif-color);
   opacity: var(--motif-wave-opacity);
-  -webkit-mask: url("../lib/brand/motifs/wave.svg") repeat-x center / auto 100%;
-  mask: url("../lib/brand/motifs/wave.svg") repeat-x center / auto 100%;
+  -webkit-mask: url("@instance/assets/motifs/wave.svg") repeat-x center / auto 100%;
+  mask: url("@instance/assets/motifs/wave.svg") repeat-x center / auto 100%;
   pointer-events: none;
 }
 
@@ -264,12 +264,13 @@ a {
   margin: 0;
 }
 
-/* the wordmark: "Ocean" in ink, "Metrics" in the accent, "Atlas" in regular weight. Text and CSS only
-   (no logo file); the same three spans sit in index.html's skeleton h1, so there is no shift. */
-.brand-title .wm-metrics {
+/* the wordmark (Wordmark.svelte): part 0 in ink, part 1 in the accent, part 2 in regular weight
+   ("Ocean" "Metrics" "Atlas"). Text and CSS only (no logo file); the same spans sit in index.html's
+   skeleton h1, so there is no shift. */
+.brand-title .wm-1 {
   color: var(--text-accent);
 }
-.brand-title .wm-atlas {
+.brand-title .wm-2 {
   font-weight: 400;
 }
 

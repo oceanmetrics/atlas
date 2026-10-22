@@ -1,0 +1,130 @@
+/*
+ * atlas-3 step 2, Deliverable 2: fonts. Century Gothic and Calibri are licensed faces (Monotype /
+ * Microsoft) and are NEVER redistributed — the two @font-face blocks below for them carry ONLY
+ * `local()` sources, so a browser without either installed simply falls through the rest of the
+ * stack in tokens.css's `--font-display` / `--font-body` (both already end in a self-hosted open
+ * fallback, then a generic family). No font FILE for either face lives in this repo.
+ *
+ * Self-hosted open fallbacks (both OFL 1.1, both Latin-basic subset WOFF2 via fonttools/pyftsubset,
+ * each license kept beside its font):
+ *   - display: Jost (src/lib/brand/fonts/jost-{regular,bold}-latin.woff2, jost-OFL.txt). TeX Gyre
+ *     Adventor was the spec's first choice, but the GUST Font License's renaming clause (a modified
+ *     — i.e. subset — copy may not keep presenting itself under a name GUST reserves without
+ *     re-deriving that clause's exact scope) made Jost the simpler, unambiguous pick: Google's OFL
+ *     copy declares no Reserved Font Name at all, so a Latin-basic subset may still call itself
+ *     "Jost". It is also a geometric sans in the same family as Century Gothic/Futura, which is why
+ *     spec.md §4 already lists it as the stack's last resort before `sans-serif`.
+ *   - body: Carlito (src/lib/brand/fonts/carlito-{regular,bold}-latin.woff2, carlito-OFL.txt),
+ *     purpose-built as a metric-compatible Calibri substitute. Its OFL copy DOES reserve the name
+ *     "Carlito" (condition 3: no Modified Version may present that Reserved Font Name as its
+ *     primary name). A Latin-basic subset is a Modified Version, so the subset FILE's own name
+ *     table was renamed to "Carlito MMA Subset" before subsetting (see the OFL text) — the
+ *     `font-family` this stylesheet declares is still "Carlito" (the label tokens.css's stack
+ *     already uses, and a real local Carlito is still matched by the `local()` term below); only
+ *     the file's internal identity changed, which is what the clause is actually about.
+ *
+ * Metric overrides (so a swap from the browser's temporary fallback to the self-hosted face does
+ * not reflow the page): `size-adjust` matches each face's average character width to Arial's (the
+ * de facto reference every generic `sans-serif` resolves close to), then `ascent-override` /
+ * `descent-override` / `line-gap-override` restore that face's own vertical metrics on top of the
+ * resized em, so its line-box height stays visually where it was before size-adjust shrank it.
+ * These are the numbers Google's own "font fallback" guidance and tools like Fontaine compute the
+ * same way; see tests/fonts.test.ts for the mechanical checks over this file.
+ *
+ * `font-display: swap` on both self-hosted faces; the LICENSED faces above have no swap concern —
+ * `local()`-only sources either resolve immediately or fall through in the same paint.
+ *
+ * Nothing here is wired into index.html yet (that is atlas-3 step 3's shell); this stylesheet is
+ * not on any build entry's critical path. Only the two self-hosted WOFF2 files' bytes cost the
+ * budget in docs/design/spec.md §12, and only once something imports this file.
+ */
+
+@font-face {
+  font-family: "Century Gothic";
+  src: local("Century Gothic"), local("CenturyGothic");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Century Gothic";
+  src: local("Century Gothic Bold"), local("CenturyGothic-Bold"), local("Century Gothic");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibri";
+  src: local("Calibri"), local("Calibri Regular");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibri";
+  src: local("Calibri Bold");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- self-hosted fallback: Jost (display), Latin-basic subset, OFL 1.1 (jost-OFL.txt) ---------- */
+@font-face {
+  font-family: "Jost";
+  src:
+    local("Jost"),
+    url("./fonts/jost-regular-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 80.84%;
+  ascent-override: 132.35%;
+  descent-override: 46.39%;
+  line-gap-override: 4.05%;
+}
+
+@font-face {
+  font-family: "Jost";
+  src:
+    local("Jost Bold"),
+    url("./fonts/jost-bold-latin.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 80.84%;
+  ascent-override: 132.35%;
+  descent-override: 46.39%;
+  line-gap-override: 4.05%;
+}
+
+/* --- self-hosted fallback: Carlito (body), Latin-basic subset, OFL 1.1 (carlito-OFL.txt) -------- */
+@font-face {
+  font-family: "Carlito";
+  src:
+    local("Carlito"),
+    url("./fonts/carlito-regular-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 86.26%;
+  ascent-override: 110.38%;
+  descent-override: 31.13%;
+  line-gap-override: 3.79%;
+}
+
+@font-face {
+  font-family: "Carlito";
+  src:
+    local("Carlito Bold"),
+    url("./fonts/carlito-bold-latin.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 86.26%;
+  ascent-override: 110.38%;
+  descent-override: 31.13%;
+  line-gap-override: 3.79%;
+}

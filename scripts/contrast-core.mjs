@@ -1,6 +1,6 @@
 // atlas-3 gate: every text/surface token pair >= 4.5:1 and every non-text pair >= 3:1, in BOTH
 // themes. The pairs are NOT a list kept in this script — they are read from the `@contrast` block
-// inside src/lib/brand/tokens.css, so the contract lives next to the tokens it constrains and a
+// inside the instance's tokens.css, so the contract lives next to the tokens it constrains and a
 // token cannot be added without being classified (an unclassified color token is a FAIL).
 //
 // Why a "contrast basis": a glass panel is `color-mix(...)` over the map, and a ratio can only be

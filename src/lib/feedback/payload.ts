@@ -14,6 +14,8 @@
 // so this file has to stay honest on its own -- it never references the live `location` global,
 // by any spelling, anywhere (not even in a comment).
 
+import { INSTANCE } from "../brand/instance";
+
 export type FeedbackKind = "bug" | "idea" | "question" | "data";
 
 /** the four kinds Ben decided (R6): each becomes both a radio option in the dialog and the exact
@@ -74,7 +76,7 @@ export interface FeedbackPayloadInput {
 
 export interface FeedbackPayload {
   /** the key the shared Ocean Metrics Apps Script knows this app by (its `APPS` map; an unknown app is refused). */
-  app: "oceanmetrics-atlas";
+  app: string;
   kind: FeedbackKind;
   title: string;
   text: string;
@@ -98,7 +100,7 @@ export interface FeedbackPayload {
 export function buildFeedbackPayload(input: FeedbackPayloadInput): FeedbackPayload {
   const restricted = input.access === "restricted";
   const payload: FeedbackPayload = {
-    app: "oceanmetrics-atlas",
+    app: INSTANCE.feedback.app,
     kind: input.kind,
     title: input.title.trim().slice(0, MAX_TITLE_LENGTH),
     text: input.text.trim().slice(0, MAX_TEXT_LENGTH),

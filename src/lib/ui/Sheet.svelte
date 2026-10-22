@@ -190,8 +190,8 @@
     height: var(--motif-wave-height);
     background: var(--motif-color);
     opacity: var(--motif-wave-opacity);
-    -webkit-mask: url("../brand/motifs/wave.svg") repeat-x center / auto 100%;
-    mask: url("../brand/motifs/wave.svg") repeat-x center / auto 100%;
+    -webkit-mask: url("@instance/assets/motifs/wave.svg") repeat-x center / auto 100%;
+    mask: url("@instance/assets/motifs/wave.svg") repeat-x center / auto 100%;
     transform: scaleY(-1);
     pointer-events: none;
   }

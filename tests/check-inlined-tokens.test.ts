@@ -1,6 +1,6 @@
 // atlas-3 step 3 review checklist: "the token VALUES may be inlined only by a build step that
 // copies them from tokens.css, never typed by hand." index.html's inline critical CSS `@import`s
-// src/shell/shell.css, which `@import`s src/lib/brand/tokens.css -- Vite's own CSS pipeline (not
+// src/shell/shell.css, which `@import`s instances/<id>/tokens.css -- Vite's own CSS pipeline (not
 // anything this repo wrote) resolves and inlines both at dev/build time. This is the mechanical
 // proof that the copy stays faithful, run against synthetic fixtures here (the fast, pure-function
 // tier) and against a REAL `vite build`'s dist/index.html by `node scripts/check-inlined-tokens.mjs
@@ -8,6 +8,7 @@
 // after `npm run build`).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { instanceTokensCss } from "../scripts/instance.mjs";
 import {
   extractInlineStyleCss,
   findInlinedTokenDrift,
@@ -15,7 +16,7 @@ import {
   parseTokenBlocks,
 } from "../scripts/check-inlined-tokens-core.mjs";
 
-const REAL_TOKENS_CSS = readFileSync("src/lib/brand/tokens.css", "utf8");
+const REAL_TOKENS_CSS = readFileSync(instanceTokensCss(), "utf8");
 
 function htmlWithStyle(css: string): string {
   return `<!doctype html><html><head><style>${css}</style></head><body></body></html>`;

@@ -9,13 +9,15 @@
 // sites (module contract). Score/metric values, cell ids and zonal statistics never flow through
 // here; only the PNG tiles this renders. See point.ts for the one sanctioned `/cog/point` exception
 // (species click values only) and ramps.ts for the color ramps `colormap_name` names.
+import { INSTANCE } from "../brand/instance";
 import { encodeUrlReserved } from "./urlEncode";
 
-/** the titiler deployment every release's `/cog` tiles and `/cog/point` are served from — hardcoded
- * for every release version (atlas-refs/"parity scores app.md": `tile_base_url <-
- * "https://titiler-v8.marinesensitivity.org"`, "hardcoded for every version"). This constant is the
- * one place that literal lives; everything else reads `TitilerConfig.host`. */
-export const DEFAULT_TITILER_HOST = "https://titiler-v8.marinesensitivity.org";
+/** the titiler deployment every release's `/cog` tiles and `/cog/point` are served from: the
+ * instance's `titiler.host` (instances/<id>/instance.json; for both instances today
+ * `https://titiler-v8.marinesensitivity.org`, "hardcoded for every version" per atlas-refs/"parity
+ * scores app.md"). This constant is the one place the code reads it; everything else reads
+ * `TitilerConfig.host`. */
+export const DEFAULT_TITILER_HOST = INSTANCE.titiler.host;
 
 export interface TitilerConfig {
   /** titiler origin, no trailing slash. */

@@ -15,6 +15,7 @@
 // (no items, only `child` links: the v7 `collection.json`, still valid as a link) is flattened into its
 // children, which keep the parent's group. Items are fetched only when a
 // collection is opened (`loadItems`), a few at a time, and cached per collection.
+import { INSTANCE } from "../brand/instance";
 import { catalogUrl, resolveHref, resolveCatalogBase } from "./base";
 import { mstTitle } from "./mst/kinds";
 import type { StacAsset, StacCatalog, StacCollection, StacItem, StacLink } from "./types";
@@ -42,21 +43,30 @@ function fail<T>(kind: LoadErrorKind, url: string, message: string, status?: num
 /** which picker group a collection belongs to. */
 export type CatalogGroup = "oceanmetrics" | "mst-v7" | "mst-v8" | "external" | "unlisted";
 
-export const GROUP_LABEL: Record<CatalogGroup, string> = {
-  oceanmetrics: "OceanMetrics",
-  "mst-v7": "MarineSensitivity v7",
-  "mst-v8": "MarineSensitivity v8",
-  external: "Other",
-  unlisted: "Unlisted (shared by link)",
-};
-
-/** the order groups appear in the picker. */
-export const GROUP_ORDER: readonly CatalogGroup[] = [
+/** every group the code knows, the run-time twin of {@link CatalogGroup}. */
+export const CATALOG_GROUPS: readonly CatalogGroup[] = [
   "oceanmetrics",
   "mst-v7",
   "mst-v8",
   "external",
   "unlisted",
+];
+
+const isCatalogGroup = (id: string): id is CatalogGroup =>
+  (CATALOG_GROUPS as readonly string[]).includes(id);
+
+/** the instance's groups (`catalog.groups`), the known ids only, in its order; a known group the
+ * instance leaves out goes last, labelled by its id, so no collection can fall out of the picker. */
+const INSTANCE_GROUPS = INSTANCE.catalog.groups.filter((g) => isCatalogGroup(g.id));
+
+export const GROUP_LABEL: Record<CatalogGroup, string> = Object.fromEntries(
+  CATALOG_GROUPS.map((id) => [id, INSTANCE_GROUPS.find((g) => g.id === id)?.label ?? id]),
+) as Record<CatalogGroup, string>;
+
+/** the order groups appear in the picker. */
+export const GROUP_ORDER: readonly CatalogGroup[] = [
+  ...INSTANCE_GROUPS.map((g) => g.id as CatalogGroup),
+  ...CATALOG_GROUPS.filter((id) => !INSTANCE_GROUPS.some((g) => g.id === id)),
 ];
 
 export interface CollectionEntry {

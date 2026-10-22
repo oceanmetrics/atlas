@@ -20,8 +20,7 @@
   import type { LayerGroupId } from "../../lib/map/layerStack";
   import Flower from "../../lib/ui/Flower.svelte";
   import { formatLatLon } from "../../lib/format";
-  import { parseCellSpecies } from "../../lib/catalog/cellSpecies";
-  import { flowerSpecOf } from "../../lib/catalog/flower";
+  import { hookSpec } from "../../lib/catalog/hooks";
   import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
   import RasterCellSpeciesPanel from "./RasterCellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
@@ -113,7 +112,7 @@
       : null,
   );
   // `atlas:cell_species`: the species table of a clicked pixel (a raster collection with a tiled cell -> species table)
-  const cellSpecies = $derived(parseCellSpecies(lens.entry?.collection));
+  const cellSpecies = $derived(hookSpec(lens.entry?.collection, "atlas:cell_species"));
   const cellSpeciesGroups = $derived(
     lens.dims.find((d) => d.key === cellSpecies?.groupDimension)?.values ?? [],
   );
@@ -213,7 +212,7 @@
           stem={lens.entry?.id ?? "collection"}
           lngLat={pt.lngLat}
           selected={lens.selected}
-          composite={flowerSpecOf(lens.entry?.collection)?.composite ?? null}
+          composite={hookSpec(lens.entry?.collection, "atlas:flower")?.composite ?? null}
           groups={cellSpeciesGroups}
           map={sel.map ?? mapHandle?.camera()}
           onNavigate={(patch) =>

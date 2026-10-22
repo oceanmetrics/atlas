@@ -1,10 +1,17 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { instanceDir, instanceId } from "./scripts/instance.mjs";
 
 // two projects: the pure-logic one (node, no Svelte compiler: almost every test), and `*.svelte.test.ts`,
 // which runs the real runes-based lens state (`lens/collection/state.svelte.ts`) under the Svelte compiler
 // as client code (effects do not run in svelte's server build). Both still run under `npm test`.
+// `@instance` resolves to the instance VITE_INSTANCE selects, the same alias vite.config.ts sets
+const instanceAlias = {
+  find: "@instance",
+  replacement: fileURLToPath(new URL(`./${instanceDir(instanceId())}`, import.meta.url)),
+};
+
 const exclude = ["tests/fixtures/**", "node_modules/**", "spikes/**", ".claude/**"];
 
 export default defineConfig({
@@ -12,6 +19,7 @@ export default defineConfig({
     projects: [
       {
         extends: false,
+        resolve: { alias: [instanceAlias] },
         test: {
           name: "logic",
           environment: "node", // pure logic only (version/session resolution, size-budget, dist checks) — no DOM
@@ -28,6 +36,7 @@ export default defineConfig({
         // client build too (its server build makes `flushSync`, `tick` and `$effect.root` no-ops)
         resolve: {
           alias: [
+            instanceAlias,
             {
               find: /^svelte$/,
               replacement: fileURLToPath(

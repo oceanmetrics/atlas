@@ -1,7 +1,7 @@
 <script lang="ts">
   // "Supported by" with each supporter's logo (dark-theme variant when it has one), used by About
   // and the catalog footer so the two cannot drift.
-  import { SUPPORTERS } from "./brand";
+  import { SUPPORTERS } from "./instance";
   let { testid = "supporter-logos" }: { testid?: string } = $props();
 </script>
 

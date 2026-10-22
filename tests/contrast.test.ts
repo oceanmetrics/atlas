@@ -3,6 +3,7 @@
 // is `teal on paper is a FAIL` below, so the gate can never quietly stop being able to fail.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { instanceTokensCss } from "../scripts/instance.mjs";
 import {
   checkContrast,
   contrastRatio,
@@ -10,7 +11,7 @@ import {
   parseThemes,
 } from "../scripts/contrast-core.mjs";
 
-const TOKENS = readFileSync("src/lib/brand/tokens.css", "utf8");
+const TOKENS = readFileSync(instanceTokensCss(), "utf8");
 
 /** a minimal two-theme tokens file with one pair, used to exercise one rule at a time */
 function fixture({

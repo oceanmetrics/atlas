@@ -1,14 +1,19 @@
 <script lang="ts">
-  import OmMark from "../lib/brand/OmMark.svelte";
   import SupporterLogos from "../lib/brand/SupporterLogos.svelte";
+  import Wordmark from "../lib/brand/Wordmark.svelte";
   // The catalog page: every collection the loader returns, grouped OceanMetrics / MarineSensitivity
   // v7 / v8, each with its credits block. Reads the same `catalog.json` the map does (`?catalog=`
   // overrides the base, validated by `base.ts`), so the two pages never disagree.
   import { onMount } from "svelte";
   import { loadCatalog, type AtlasCatalog, type LoadError } from "../lib/catalog/load";
   import { resolveCatalogBase } from "../lib/catalog/base";
-  import { BRAND_CREDIT, BRAND_NAME } from "../lib/brand/brand";
-  import { ABOUT_LINKS, CITE_ATLAS, CITE_COLLECTION_NOTE } from "../lib/brand/about";
+  import {
+    ABOUT_LINKS,
+    BRAND_CREDIT,
+    BRAND_NAME,
+    CITE_ATLAS,
+    CITE_COLLECTION_NOTE,
+  } from "../lib/brand/instance";
   import { groupCards, type CardGroup } from "./model";
   import CollectionCard from "./CollectionCard.svelte";
 
@@ -42,10 +47,7 @@
 <header class="top">
   <div class="top-inner">
     <a class="wordmark" href="./catalog.html" aria-label="{BRAND_NAME} catalog">
-      <OmMark size="1.1em" /><span class="wm-ocean">Ocean</span><span class="wm-metrics"
-        >Metrics</span
-      >
-      <span class="wm-atlas">Atlas</span>
+      <Wordmark size="1.1em" />
     </a>
     <nav aria-label="Pages">
       <a href="./index.html">Open the map</a>
@@ -54,7 +56,7 @@
 </header>
 
 <main id="main">
-  <h1>OceanMetrics Atlas catalog</h1>
+  <h1>{BRAND_NAME} catalog</h1>
   <p class="lede">
     Every collection the atlas can map, with who made it, how to cite it and under what license.
     Cite each collection by its own citation; to cite the atlas itself: {CITE_ATLAS}.

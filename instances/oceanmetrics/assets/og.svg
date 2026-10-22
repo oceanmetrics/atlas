@@ -13,6 +13,6 @@
     <text x="450" y="260" font-size="96" font-weight="700" fill="#ffffff">Ocean<tspan fill="#2fc7b8">Metrics</tspan></text>
     <text x="450" y="350" font-size="72" fill="#e9dcb4">Atlas</text>
     <text x="450" y="420" font-size="28" fill="#c5d8e6">Species distribution model products, with their credits.</text>
-    <text x="450" y="468" font-size="26" fill="#c5d8e6">Supported by BOEM and MBON</text>
+    <text x="450" y="468" font-size="26" fill="#c5d8e6">Supported by MMA and MBON</text>
   </g>
 </svg>

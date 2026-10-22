@@ -2,7 +2,7 @@
 // NOT hardcoded here — R writes them into `boot.palettes` at publish time
 // (`colorRampPalette(space = "Lab")(11)`, msens) and this module only operates on whatever boot.json
 // hands it, so a brand or ramp change is a DATA change, never a code change. Ramp colors are data
-// colors, not brand tokens: they must never be added to src/lib/brand/tokens.css (that file's rule
+// colors, not brand tokens: they must never be added to instances/<id>/tokens.css (that file's rule
 // is enforced by scripts/check-hex-literals.mjs, a separate gate from this one).
 //
 // Every legend, click popup, zone choropleth and report gradient key must import from here —

@@ -4,6 +4,7 @@
 // (v8's "primary producer" flower component is not in msens' hard-coded hue_pal(8) name vector).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { instanceTokensCss } from "../../scripts/instance.mjs";
 import {
   CATEGORIES,
   CATEGORY_KEYS,
@@ -60,7 +61,7 @@ describe("CATEGORIES: one row per species category", () => {
   });
 
   it("every color token this module names actually exists in tokens.css, with a contrast pair", () => {
-    const css = readFileSync("src/lib/brand/tokens.css", "utf8");
+    const css = readFileSync(instanceTokensCss(), "utf8");
     for (const row of CATEGORIES) {
       // declared as a real custom property in the navy theme block (not just mentioned in a comment)
       expect(css, `${row.color} not declared in tokens.css`).toMatch(

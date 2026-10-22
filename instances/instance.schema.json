@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oceanmetrics.io/atlas/instances/instance.schema.json",
+  "title": "Atlas instance",
+  "description": "One instance of the atlas codebase (instances/<id>/instance.json): the brand, the default catalog and lens, and the tool list. VITE_INSTANCE=<id> selects it at build time. Every key here is read by the code (src/lib/brand/instance.ts, scripts/instance.mjs); nothing else is allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "wordmark",
+    "title",
+    "description",
+    "og",
+    "favicon",
+    "mark",
+    "supporters",
+    "credit",
+    "cite",
+    "about",
+    "catalog",
+    "defaults",
+    "tools",
+    "feedback",
+    "places",
+    "titiler"
+  ],
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "https": { "type": "string", "pattern": "^https://[^\\s]+$" },
+    "assetFile": {
+      "description": "a file under instances/<id>/assets/, served next to the page",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+    },
+    "relativeUrl": {
+      "description": "a page-relative URL of a file under instances/<id>/assets/ (\"./logos/x.png\")",
+      "type": "string",
+      "pattern": "^\\./[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "href"],
+      "properties": { "label": { "$ref": "#/$defs/text" }, "href": { "$ref": "#/$defs/https" } }
+    },
+    "token": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+  },
+  "properties": {
+    "id": {
+      "description": "the folder name under instances/ (VITE_INSTANCE)",
+      "$ref": "#/$defs/token"
+    },
+    "name": {
+      "description": "the brand name in prose (\"OceanMetrics Atlas\")",
+      "$ref": "#/$defs/text"
+    },
+    "wordmark": {
+      "description": "the topbar/About/catalog wordmark: three parts [ink, accent, light] rendered as the first two run together, a space, then the third (\"OceanMetrics Atlas\"), or one string rendered as is",
+      "oneOf": [
+        { "$ref": "#/$defs/text" },
+        {
+          "type": "array",
+          "prefixItems": [
+            { "$ref": "#/$defs/text" },
+            { "$ref": "#/$defs/text" },
+            { "$ref": "#/$defs/text" }
+          ],
+          "items": false,
+          "minItems": 3
+        }
+      ]
+    },
+    "title": {
+      "description": "the HTML <title> of the map page before the app sets its own",
+      "$ref": "#/$defs/text"
+    },
+    "description": {
+      "description": "the meta and og:description of the map page",
+      "$ref": "#/$defs/text"
+    },
+    "og": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["siteName", "siteUrl"],
+      "properties": {
+        "siteName": { "$ref": "#/$defs/text" },
+        "siteUrl": {
+          "description": "where the build is published (og:url); og:image is resolved against it",
+          "type": "string",
+          "pattern": "^https://[^\\s]+/$"
+        },
+        "image": {
+          "description": "the 1200x630 PNG card under assets/ (rendered from its .svg by scripts/render-og.mjs); without it no og:image tags are written",
+          "$ref": "#/$defs/assetFile"
+        },
+        "imageAlt": { "$ref": "#/$defs/text" }
+      },
+      "dependentRequired": { "image": ["imageAlt"] }
+    },
+    "favicon": { "description": "an SVG under assets/", "$ref": "#/$defs/assetFile" },
+    "mark": {
+      "description": "the mark, an SVG file in the instance folder inlined by src/lib/brand/Mark.svelte (colours from currentColor and custom properties only)",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+\\.svg$"
+    },
+    "supporters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "name", "href", "logo"],
+        "properties": {
+          "label": { "$ref": "#/$defs/text" },
+          "name": { "$ref": "#/$defs/text" },
+          "href": { "$ref": "#/$defs/https" },
+          "logo": { "$ref": "#/$defs/relativeUrl" },
+          "logoDark": { "$ref": "#/$defs/relativeUrl" }
+        }
+      }
+    },
+    "credit": {
+      "description": "the line the map attribution chip and the catalog footer carry",
+      "$ref": "#/$defs/text"
+    },
+    "cite": { "description": "how to cite the atlas itself", "$ref": "#/$defs/text" },
+    "about": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "links"],
+      "properties": {
+        "description": { "$ref": "#/$defs/text" },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/link" } }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "groups"],
+      "properties": {
+        "base": {
+          "description": "the default catalog base (src/lib/catalog/base.ts); ?catalog= and VITE_CATALOG_BASE override it",
+          "type": "string",
+          "pattern": "^https://[^\\s]+/$"
+        },
+        "groups": {
+          "description": "the picker groups in display order, each a CatalogGroup id (src/lib/catalog/load.ts) and its label",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label"],
+            "properties": { "id": { "$ref": "#/$defs/token" }, "label": { "$ref": "#/$defs/text" } }
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lens", "theme", "tour"],
+      "properties": {
+        "lens": {
+          "description": "a member of the Lens union (src/lib/state/types.ts)",
+          "$ref": "#/$defs/token"
+        },
+        "theme": { "enum": ["dark", "light", "auto"] },
+        "tour": { "enum": ["on", "off"] }
+      }
+    },
+    "tools": {
+      "description": "the rail, in order; members of the ToolName union (src/shell/tools.ts)",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app"],
+      "properties": {
+        "app": {
+          "description": "the key the shared feedback Apps Script knows this app by",
+          "$ref": "#/$defs/token"
+        }
+      }
+    },
+    "places": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["site", "attribution"],
+      "properties": {
+        "site": {
+          "description": "the places site (layer pages are <site>l/<slug>)",
+          "type": "string",
+          "pattern": "^https://[^\\s]+/$"
+        },
+        "attribution": {
+          "description": "the credit of the built-in places collection",
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "titiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "description": "the titiler origin, no trailing slash",
+          "type": "string",
+          "pattern": "^https://[^\\s/]+$"
+        }
+      }
+    }
+  }
+}

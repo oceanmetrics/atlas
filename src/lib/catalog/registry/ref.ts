@@ -6,6 +6,10 @@ import { assetUrl } from "../load";
 import type { StacCollection } from "../types";
 import { PALETTES, type Palette } from "../../state/types";
 
+/** the collection property this module is the hook for (registered in `hooks.ts`); its companion
+ * `atlas:item_template` is read by {@link itemTemplateOf}. */
+export const TAXA_REGISTRY_HOOK = "atlas:taxa_registry";
+
 /** where a registry collection's taxa live. Every URL is absolute (resolved against the collection). */
 export interface RegistryRef {
   collectionId: string;
@@ -29,7 +33,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * `atlas:taxa_registry`, or it names an asset the collection does not list). */
 export function registryRefOf(collection: StacCollection | null | undefined): RegistryRef | null {
   if (!collection) return null;
-  const spec = collection["atlas:taxa_registry"];
+  const spec = collection[TAXA_REGISTRY_HOOK];
   if (!isRecord(spec)) return null;
   const assetName = typeof spec.asset === "string" ? spec.asset : "registry";
   const asset = collection.assets?.[assetName];

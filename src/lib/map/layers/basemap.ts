@@ -163,7 +163,7 @@ export const LABEL_FONT: readonly string[] = ["Open Sans Regular"];
 /**
  * The `--surface-map` token of each theme, as a plain hex the WebGL background layer can take (a
  * style is not CSS and cannot read a custom property). `tests/map/basemap.test.ts` asserts these
- * equal `src/lib/brand/tokens.json`'s `--surface-map` in both themes, so the map's background can
+ * equal `instances/<id>/tokens.json`'s `--surface-map` in both themes, so the map's background can
  * never drift from the page background the shell paints behind it — and it is the colour that
  * shows when the CARTO fetch fails and {@link EMPTY_BASEMAP_STYLE} is all `composeStyle()` has.
  */

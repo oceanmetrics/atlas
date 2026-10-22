@@ -1,6 +1,6 @@
 // gazetteer/config.ts -- where the Ocean Metrics places gazetteer lives, and the one credit line the
-// atlas can always say about it. Tiny and dependency-free ON PURPOSE: the map shell (static graph)
-// imports this file; everything that pulls in hyparquet is in ./resolve.ts, reached by dynamic
+// atlas can always say about it. Tiny ON PURPOSE (it imports only the instance's strings): the map
+// shell (static graph) imports this file; everything that pulls in hyparquet is in ./resolve.ts, reached by dynamic
 // import() only (scripts/size-budget-core.mjs forbids "hyparquet" in the entry's static graph).
 //
 // TWO BASES, ONE TREE. The published root is https://storage.oceanmetrics.io/gazetteer/, but that
@@ -11,6 +11,8 @@
 // erddap-places' Then-vs-Now does. `GAZETTEER_ROOT` is the canonical, human-facing address (used in
 // docs, citations and the credit link); `GAZETTEER_DATA_BASE` is what is fetched. Override both with
 // `VITE_GAZETTEER_BASE` (a staging copy of the tree); the trailing slash is optional.
+
+import { INSTANCE } from "../brand/instance";
 
 /** the canonical, published root of the gazetteer (what a person is told and cited). */
 export const GAZETTEER_ROOT = "https://storage.oceanmetrics.io/gazetteer/";
@@ -51,9 +53,7 @@ export const PROCESSED_BY = "Processed by Ocean Metrics.";
  * The `places` collection's credit (its STAC providers: NOAA ONMS, Marine Regions, ProtectedSeas),
  * the fallback for a `places` tile or a place whose own credit cannot be fetched.
  */
-export const PLACES_ATTRIBUTION =
-  "NOAA Office of National Marine Sanctuaries; Marine Regions (VLIZ); ProtectedSeas. " +
-  PROCESSED_BY;
+export const PLACES_ATTRIBUTION = INSTANCE.places.attribution;
 
 /** the credit for a place_id whose collection is unknown and whose index entry cannot be read. */
 export const GENERIC_ATTRIBUTION = `Ocean Metrics places gazetteer (${GAZETTEER_ROOT}). ${PROCESSED_BY}`;

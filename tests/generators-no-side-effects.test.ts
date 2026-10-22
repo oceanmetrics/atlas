@@ -7,8 +7,9 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { instanceTokensJson } from "../scripts/instance.mjs";
 
-const WATCHED = ["src/lib/ui/icon-paths.ts", "src/lib/brand/tokens.json"];
+const WATCHED = ["src/lib/ui/icon-paths.ts", instanceTokensJson()];
 
 function fingerprint() {
   return WATCHED.map((p) => {

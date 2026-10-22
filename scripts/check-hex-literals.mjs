@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Usage: node scripts/check-hex-literals.mjs [repoRoot=.]
-// atlas-3: no hex color literal outside src/lib/brand/tokens.css. Seeded fault: put one back into
+// atlas-3: no hex color literal outside an instance's tokens.css (instances/<id>/tokens.css). Seeded fault: put one back into
 // a mockup stylesheet and this goes red, naming the file and line.
 import { findHexLiterals, SCAN_ROOTS, TOKENS_FILE } from "./check-hex-literals-core.mjs";
 
@@ -16,5 +16,5 @@ if (hits.length) {
 }
 
 process.stdout.write(
-  `check-hex-literals: PASS — no color literal under ${SCAN_ROOTS.join(", ")} outside ${TOKENS_FILE}\n`,
+  `check-hex-literals: PASS — no color literal under ${SCAN_ROOTS.join(", ")} outside instances/*/tokens.css (the selected one: ${TOKENS_FILE})\n`,
 );

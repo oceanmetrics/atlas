@@ -19,6 +19,9 @@ import type { StacCollection } from "./types";
 
 // --- the descriptor -----------------------------------------------------------------------------------
 
+/** the collection property this module is the hook for (registered in `hooks.ts`). */
+export const CELL_SPECIES_HOOK = "atlas:cell_species";
+
 export interface CellGrid {
   ncol: number;
   nrow: number;
@@ -86,7 +89,7 @@ function resolveTemplate(base: string, template: string): string | null {
 export function parseCellSpecies(
   collection: StacCollection | null | undefined,
 ): CellSpeciesDescriptor | null {
-  const d = collection?.["atlas:cell_species"];
+  const d = collection?.[CELL_SPECIES_HOOK];
   if (!collection || !isObj(d)) return null;
   if (d.layout !== "tiles") return null;
   const template = str(d.href_template);

@@ -1,0 +1,321 @@
+/*
+ * atlas-3 · brand tokens — the ONLY file in this repo allowed to contain a color literal.
+ *
+ * Palette: OceanMetrics navy, teal and sand (WP5, 2026-10-14; the fork's MMA gold/steel palette is
+ * gone). Structure and the contrast contract come from the upstream atlas-3 brand work (D10, D13). Component CSS reads custom properties only — `scripts/check-hex-literals.mjs`
+ * makes that a build-time rule, not a convention.
+ *
+ * Structure (the contrast checker depends on it):
+ *   :root                                   → palette + non-color tokens, shared by both themes
+ *   :root, :root[data-theme="navy"]         → the `navy` theme (dark, the default)
+ *   :root[data-theme="paper"]               → the `paper` theme (light)
+ * A pre-paint inline script in index.html sets `data-theme` from ?theme= / localStorage /
+ * prefers-color-scheme (falling back to navy), so there is no flash of the wrong theme and no
+ * duplicated @media block here.
+ *
+ * Brand colors are chrome only, never data (D10). Data colors (--cat-*, --ramp-*) are a separate,
+ * CVD-safe system and carry no brand meaning.
+ */
+
+/* @contrast
+ * The contrast contract, kept next to the tokens it constrains: `node scripts/contrast.mjs` reads
+ * THIS block, resolves every token in BOTH themes, and fails if a text pair is under 4.5:1 or a
+ * non-text pair is under 3:1. Every color token must appear here as a subject or a surface —
+ * an unclassified color token is a FAIL, so a new token cannot skip the gate.
+ *
+ * text    --text-primary    : --surface-map, --surface-panel-basis, --surface-raised, --surface-sunken
+ * text    --text-secondary  : --surface-panel-basis, --surface-raised, --surface-sunken
+ * text    --text-accent     : --surface-panel-basis, --surface-raised
+ * text    --text-link       : --surface-panel-basis, --surface-raised
+ * text    --text-danger     : --surface-panel-basis, --surface-raised
+ * text    --text-on-accent  : --fill-accent
+ * text    --text-on-cat     : --cat-bird, --cat-coral, --cat-fish, --cat-invertebrate, --cat-mammal, --cat-mangrove, --cat-other, --cat-primprod, --cat-turtle
+ * nontext --border-accent   : --surface-panel-basis, --surface-raised, --surface-map
+ * nontext --border-control  : --surface-panel-basis, --surface-raised, --surface-map
+ * nontext --focus-ring      : --surface-panel-basis, --surface-raised, --surface-map
+ * nontext --stroke-outline  : --surface-map
+ * nontext --icon-muted      : --surface-panel-basis, --surface-raised
+ * nontext --icon-inactive   : --fill-control, --surface-panel-basis
+ * nontext --cat-bird        : --surface-panel-basis
+ * nontext --cat-coral       : --surface-panel-basis
+ * nontext --cat-fish        : --surface-panel-basis
+ * nontext --cat-invertebrate: --surface-panel-basis
+ * nontext --cat-mammal      : --surface-panel-basis
+ * nontext --cat-mangrove    : --surface-panel-basis
+ * nontext --cat-other       : --surface-panel-basis
+ * nontext --cat-primprod    : --surface-panel-basis
+ * nontext --cat-turtle      : --surface-panel-basis
+ * nontext --cat-nodata      : --surface-panel-basis
+ *
+ * exempt  --surface-panel : the glass fill itself; every pair above uses --surface-panel-basis, the
+ *                            worst-case OPAQUE composite of that glass over the map (see spec.md)
+ * exempt  --om-navy        : raw palette; reaches the screen only through a theme token above
+ * exempt  --om-teal        : raw palette
+ * exempt  --om-mark-spark  : decorative, the fixed yellow spark inside the OceanMetrics mark (mark.svg)
+ * exempt  --om-teal-deep   : raw palette
+ * exempt  --om-sand        : raw palette
+ * exempt  --om-crimson     : raw palette
+ * exempt  --fill-accent     : R5 y1 — adjacent fill; the active state's boundary is --border-accent
+ * exempt  --fill-control    : adjacent fill of a control whose boundary is --border-control (paired)
+ * exempt  --fill-track      : adjacent fill inside a control; the control's boundary is paired
+ * exempt  --divider         : decorative rule between rows inside one surface (WCAG 1.4.11 exempts it)
+ * exempt  --motif-color     : decorative texture, capped at 10 % opacity, never behind body text
+ * exempt  --surface-seal-plate : the plain white plate the unmodified seal sits on in BOTH themes
+ *                            (guide p. 3: the full-colour seal is placed carefully against what is
+ *                            around it). It carries the seal only, never text.
+ * exempt  --scrim           : translucent modal overlay, not a boundary anything is identified by
+ * exempt  --shadow-color    : shadow, never a boundary on its own
+ * exempt  --ramp-score-0    : data ramp (Spectral, atlas-2 `ramps.ts`); a continuous ramp cannot meet
+ * exempt  --ramp-score-1    : 3:1 stop-to-stop, so it is labelled with tick values and mirrored by a
+ * exempt  --ramp-score-2    : table instead (see docs/design/spec.md, "Data color")
+ * exempt  --ramp-score-3    : data ramp
+ * exempt  --ramp-score-4    : data ramp
+ */
+
+:root {
+  /* the warm spark on the horizon of the OceanMetrics mark (mark.svg); fixed in both themes */
+  --om-mark-spark: #f5b528;
+  /* --- OceanMetrics palette: navy, teal, sand. Chrome only, never data. ----------------------- */
+  --om-navy: #05294d; /* ink on teal, paper's text, the wordmark */
+  --om-teal: #2fc7b8; /* the active accent: fill, ring and focus on dark; a fill (never text) on paper */
+  --om-teal-deep: #0a6a73; /* teal that is legal as text and focus ring on white (6.0:1) */
+  --om-sand: #e9dcb4; /* warm neutral: dark motifs, the wordmark's second line, paper's wheat tints */
+  --om-crimson: #6e110f;
+
+  /* --- type ---------------------------------------------------------------------------------- */
+  /* a neutral system font stack for now (the OceanMetrics brand face is not chosen yet). */
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 12px; /* legends, motif captions, table meta */
+  --text-sm: 13px; /* dense table cells, chips */
+  --text-md: 14px; /* body default */
+  --text-lg: 16px; /* panel body, phone body */
+  --text-xl: 20px; /* panel title */
+  --text-2xl: 28px; /* modal / report title */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --tracking-display: 0.01em;
+
+  /* --- spacing (4 px base) ------------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* --- sizes --------------------------------------------------------------------------------- */
+  --size-topbar: 48px;
+  --size-rail: 56px;
+  --size-touch: 44px; /* minimum interactive target */
+  --size-seal-min: 72px; /* D10: the seal is never smaller than this, and never in the top bar */
+  --size-panel: 380px;
+  --size-sheet-peek: 96px;
+  --size-sheet-half: 46svh;
+
+  /* --- radius / elevation -------------------------------------------------------------------- */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+  --glass-opacity: 88%;
+  --glass-blur: 10px;
+  --elev-1: 0 1px 2px var(--shadow-color);
+  --elev-2: 0 4px 12px var(--shadow-color);
+  --elev-3: 0 12px 32px var(--shadow-color);
+
+  /* --- motifs (guide pp. 9-10): secondary elements, 10 % opacity, never competing with the
+         message. `scripts/check-hex-literals.mjs` + tests/brand-tokens.test.ts cap these. -------- */
+  --motif-hex-opacity: 0.1;
+  --motif-wave-opacity: 0.1;
+  --motif-hex-size: 56px;
+  --motif-wave-height: 10px;
+
+  /* --- motion (all of it collapses to 0 under prefers-reduced-motion) ------------------------- */
+  --motion-fast: 150ms;
+  --motion-panel: 200ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-panel: 0ms;
+  }
+}
+
+/* ============================================================================================== */
+/* theme: navy (dark) — the default, matching what both Shiny apps ship today                     */
+/* ============================================================================================== */
+:root,
+:root[data-theme="navy"] {
+  color-scheme: dark;
+
+  --surface-map: #0b1635; /* dark-matter basemap average */
+  --surface-panel: #112a45; /* the glass card's own color, mixed at --glass-opacity over the map */
+  --surface-panel-basis: #2e4454; /* that glass over the ramp's LIGHTEST stop (#ffffbf): the worst
+                                     case a label on a panel can land on. The checker uses this. */
+  --surface-raised: #19395a; /* modal, popover, active row */
+  --surface-seal-plate: #ffffff; /* the seal's plate; white in both themes (see the @contrast note) */
+  --surface-sunken: #0a1c33; /* input, table stripe */
+
+  --text-primary: #ffffff;
+  --text-secondary: #c5d8e6;
+  --text-accent: var(--om-teal); /* teal is legal as text only on dark */
+  --text-link: #8fd0f0;
+  --text-danger: #ff9c94;
+  --text-on-accent: var(--om-navy);
+  --text-on-cat: var(--om-navy); /* R5 y1: label text drawn on a --cat-* fill */
+  --border-accent: var(--om-teal); /* R5 y1: the ring that carries an active state's boundary */
+
+  /* the accent that carries an ACTIVE state: teal on both themes. Teal on a white panel is far
+     under 3:1, so on paper the active state's boundary is --border-accent (navy) instead. */
+  --fill-accent: var(--om-teal); /* active hex button, PREVIEW chip, selected place outline */
+  --fill-control: #1f4062;
+  --fill-track: #2a5078;
+  --border-control: #82a6c2;
+  --divider: #26486b;
+  --focus-ring: var(--om-teal);
+  /* UI-10 (round 3, Opus 5.5 eyes-on review): every native `<input type="range">`/checkbox in
+     `src/` used the browser DEFAULT accent (system blue) -- the Layers opacity sliders on paper,
+     the Columns menu checkboxes, "Only species in US waters", the welcome "Don't show this again"
+     box, in BOTH themes. `accent-color` is the one property that styles a native control's own
+     fill/thumb without reimplementing it; set to the SAME value `--focus-ring` already uses (never
+     `--fill-accent` directly -- that token stays LITERAL teal in both themes, which is exactly the
+     1.7:1-on-paper contrast failure `--focus-ring` was already defined to avoid there). */
+  accent-color: var(--focus-ring);
+  /* R9 (owner, 2026-09-24): the Program-Area/Plan-Area zone outline stroke on the MAP itself
+     (src/lib/map/colors.ts's ZONE_LINE_WHITE, "verbatim" from msens's zone_line_args() table) --
+     white reads fine on the dark-matter basemap this token set was designed against, so navy
+     keeps that value unchanged. The paper theme's own light basemap is what changes underneath
+     it (see the paper block). Not itself painted by any component CSS; read once, by theme, at
+     map-compose time (src/lib/map/colors.ts's ZONE_OUTLINE_STROKE_BY_THEME mirrors it, the same
+     way MAP_BACKGROUND_BY_THEME already mirrors --surface-map -- a MapLibre style is not CSS and
+     cannot read a custom property, so the value is duplicated by necessity and a drift-guard test
+     keeps the duplicate honest). */
+  --stroke-outline: #ffffff;
+  --icon-muted: #a9c4d8;
+  /* an INACTIVE control's glyph: the rail's Flower button in the Species lens fades to this instead
+     of disappearing (Ben, 2026-09-21: removal is "jerky"). Still >= 3:1 on the control's own face,
+     because an inactive-but-focusable control must stay identifiable. */
+  --icon-inactive: #97adbf;
+  /* motifs at 10 %: deep teal at 10 % over a navy surface is invisible, so the dark theme takes
+     sand and the light theme deep teal. */
+  --motif-color: var(--om-sand);
+  --scrim: #03101f;
+  --shadow-color: #020a14;
+
+  /* data color: eight CVD-safe category hues (Okabe-Ito derived), lightened for a dark surface so
+     each clears 3:1 against the panel. Hue is the identity; lightness follows the theme.
+     R3-A3 (round-3 plan, Ben + Opus review, 2026-09-25): Bird/Fish and Mammal/Turtle were
+     near-identical in both themes (Ben's own report); re-hued Fish to blue-violet (H~258, clear of
+     Bird's sky blue AND of --cat-primprod's teal-green -- Ben's first suggestion, teal, collided
+     with primprod) and Turtle to moss/olive (H~75-85, clear of Mammal's gold AND of
+     primprod). A pairwise CIE76 ΔE + deuteranopia/protanopia simulation script (round-3 report)
+     found Coral/Mammal, while >=20 ΔE in normal vision, collapsed under protanopia (paper: ΔE 1.6)
+     -- Mammal is nudged darker/more golden in both themes to restore separation there too (still
+     reads as "gold/bronze", not a hue-family change). Every --cat-* stays >=4.5:1 text /
+     >=3:1 nontext (the @contrast block below); the full ΔE matrix + CVD numbers are in the round-3
+     report, not duplicated here. */
+  --cat-bird: #7cc7f0;
+  --cat-coral: #f08a3c;
+  --cat-fish: #9f81e4;
+  --cat-invertebrate: #e79ec4;
+  --cat-mammal: #e6c700;
+  /* red mangrove (the AquaMaps EOV flower, 0.2.0): the only red-family hue of the set, picked by the same CIE76 + protan/deutan
+     search as above (min deltaE to the other eight: 36.7 normal, 20.4 protan, 14.1 deutan); label text on it is >=4.5:1 */
+  --cat-mangrove: #ee6f6f;
+  --cat-other: #b6bfd0;
+  --cat-primprod: #4cc9a0;
+  --cat-turtle: #a1c76b;
+  --cat-nodata: #9aa6c2; /* "not reportable" hatch — paired with a label, never color alone */
+
+  /* data ramp: Spectral (reversed), the ramp the published COGs already use (`spectral_r`).
+     atlas-2's ramps.ts is the source of truth; these five stops are the legend's. */
+  --ramp-score-0: #3288bd;
+  --ramp-score-1: #99d594;
+  --ramp-score-2: #ffffbf;
+  --ramp-score-3: #fc8d59;
+  --ramp-score-4: #d53e4f;
+}
+
+/* ============================================================================================== */
+/* theme: paper (light)                                                                           */
+/* ============================================================================================== */
+:root[data-theme="paper"] {
+  color-scheme: light;
+
+  --surface-map: #eaeef3; /* positron basemap average */
+  --surface-panel: #ffffff;
+  --surface-panel-basis: #e6f1f7; /* white glass over the ramp's DARKEST stop (#3288bd) */
+  --surface-raised: #ffffff;
+  --surface-seal-plate: #ffffff;
+  --surface-sunken: #fbf6e6; /* R5 y1: cream, was slate #f2f5f9 */
+
+  --text-primary: var(--om-navy);
+  --text-secondary: #3d4c74;
+  --text-accent: var(--om-teal-deep); /* NOT teal: teal on white is under 2:1 */
+  --text-link: #0b5f8f;
+  --text-danger: var(--om-crimson);
+  --text-on-accent: var(--om-navy); /* navy on teal */
+  --text-on-cat: #ffffff; /* R5 y1: label text drawn on a --cat-* fill */
+  --border-accent: var(--om-navy); /* R5 y1: the ring that carries an active state's boundary */
+
+  /* the same teal as the dark theme's active fill, so both themes coordinate. On its own it is 1.49:1 against the panel (EXEMPT,
+     see the @contrast note above), so --border-accent (navy) carries the state at >= 3:1 instead,
+     per WCAG 1.4.11. y3 (`docs/design/candidates/tokens-y3.css`, `#876700`) is the drop-in
+     fallback if the ~10-selector ring round (docs/usability.md §7 R5) is ever unwanted. */
+  --fill-accent: var(--om-teal);
+  --fill-control: #f8f1dc; /* R5 y1: cream, was slate #eef2f8 */
+  --fill-track: #ece0bd; /* R5 y1: wheat, was slate #dde5f0 */
+  --border-control: #7a6a45; /* R5 y1: warm bronze, was slate #5d6d92 */
+  --divider: #e6dab4; /* R5 y1: wheat, was slate #d7dfec */
+  --focus-ring: var(--om-teal-deep); /* teal fails 3:1 as a focus ring on paper */
+  /* UI-10 (round 3): see the navy block's own header -- the deep-teal pair here (never teal, the
+     literal `--fill-accent` value) is what makes a native checkbox/range legible on paper. */
+  accent-color: var(--focus-ring);
+  /* R9 (owner, 2026-09-24): the SAME zone outline stroke as the navy block's own note -- white
+     (msens's zone_line_args() value, unchanged there) is near-invisible on this theme's light
+     basemap, so paper substitutes brand navy ink instead of the data table's own literal. */
+  --stroke-outline: var(--om-navy);
+  --icon-muted: #6a5c3a; /* R5 y1: warm bronze, was slate #56658a */
+  --icon-inactive: #7d7155; /* R5 y1: warm grey, was slate #6b7793 */
+  --motif-color: var(--om-teal-deep);
+  --scrim: var(--om-navy); /* R5 y1: brand navy, was slate #223252 */
+  --shadow-color: #b8a67a; /* R5 y1: warm, was slate #8595b4 */
+
+  /* darkened one step from #1c7fb8 (still the same hue): the original passed its
+     --surface-panel-basis pairing at 3.83:1 but only 4.4:1 against --text-on-accent (white) --
+     Treemap's cell-label text on a bird-category cell -- just short of the 4.5:1 text minimum. */
+  /* R3-A3: see the navy block's own header for the full rationale (Fish -> blue-violet, Turtle ->
+     moss/olive, Mammal nudged for a protanopia-safe gap from Coral). */
+  /* D4 fix (Opus 5.5 eyes-on review round 2, 2026-09-25): the R3-A3 nudge picked #372506, L*~16 --
+     "near-black brown" against navy's bright #e6c700, breaking Mammal's hue family across themes
+     (every OTHER category keeps its hue, only lightness/saturation follows the theme). #82773d
+     (H~50, matching navy Mammal's own H~52) is the LIGHTEST in-family amber/gold that still clears
+     BOTH the >=15 CVD-deltaE floor against Coral (15.41, was 1.6 pre-R3-A3) and against Turtle
+     (15.20) -- a real, measured cliff, not an arbitrary stop: the search swept the whole L range
+     and found the middle (L*~24-30, the brief's own suggested "#7a5200-#8a5e00-ish" examples)
+     scores WORST of all (deltaE as low as 9.4-10.7), climbing back up only past L*~36. Full search
+     + the final pairwise table are in the round-3 W4 report; `npm run contrast` stays green
+     (text 4.51:1, nontext 3.93:1 -- both real margins, not a rounding artefact: the raw ratio is
+     4.4965, which the SAME `Math.round(x*100)/100` `scripts/contrast-core.mjs` uses rounds to
+     4.50, >= the 4.5 minimum). */
+  --cat-bird: #166a99;
+  --cat-coral: #b34d00;
+  --cat-fish: #4822a0;
+  --cat-invertebrate: #a3517e;
+  --cat-mammal: #82773d;
+  --cat-mangrove: #9c1f2e; /* red mangrove; min deltaE to the other eight 35.5 normal, 18.8 protan, 5.6 deutan (labelled, never colour alone) */
+  --cat-other: #5b6472;
+  --cat-primprod: #00765a;
+  --cat-turtle: #495625;
+  --cat-nodata: #6b7488;
+
+  --ramp-score-0: #3288bd;
+  --ramp-score-1: #99d594;
+  --ramp-score-2: #ffffbf;
+  --ramp-score-3: #fc8d59;
+  --ramp-score-4: #d53e4f;
+}

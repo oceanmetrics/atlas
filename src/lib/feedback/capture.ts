@@ -1,7 +1,7 @@
 // U3 "Send feedback": the screenshot the dialog previews, lets the user annotate or remove, and
 // (only if kept) attaches to the payload. Ported from
 // ../../CalCOFI/explore/src/capture.ts: html-to-image's `toCanvas` over the shell root, never
-// html2canvas (it rejects on `color-mix()`, which src/lib/brand/tokens.css's light-theme palette
+// html2canvas (it rejects on `color-mix()`, which instances/<id>/tokens.css's light-theme palette
 // uses -- the identical reason CalCOFI's explorer picked html-to-image,
 // atlas-refs/"calcofi explore review.md"). MapLibre's canvas needs `preserveDrawingBuffer` for its
 // pixels to survive `toCanvas`'s readback -- src/lib/map/map.ts already sets it

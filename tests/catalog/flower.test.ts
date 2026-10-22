@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { instanceTokensCss } from "../../scripts/instance.mjs";
 import {
   ABSENT_NOTE,
   FLOWER_COLORS,
@@ -88,7 +89,7 @@ describe("flowerPetalsFor: petal mapping", () => {
   });
 
   it("every colour token the map names exists in tokens.css, in both themes", () => {
-    const css = readFileSync("src/lib/brand/tokens.css", "utf8");
+    const css = readFileSync(instanceTokensCss(), "utf8");
     for (const token of [...Object.values(FLOWER_COLORS), "--cat-other"]) {
       const defs = css.match(new RegExp(`^\\s*${token}:`, "gm")) ?? [];
       expect(defs.length, token).toBe(2);

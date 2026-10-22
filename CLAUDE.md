@@ -87,6 +87,14 @@ error fails the build; the old `check_stac_required` checks stay. Schemas: `$OM_
 `jsonschema` is a main dependency. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
 tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
 
+## Instances and hooks
+
+- Another instance: copy `instances/oceanmetrics/` to `instances/<id>/` and edit `instance.json` (it must validate
+  against `instances/instance.schema.json`; `npm test`), `tokens.css`, `mark.svg` and `assets/`; build with
+  `VITE_INSTANCE=<id>` (the brand scripts read the same variable). Never name a brand in `src/`: read `lib/brand/instance.ts`.
+- A new renderer hook: its module exports its `atlas:*` name and a `parse(collection) -> spec | null`, and
+  `src/lib/catalog/hooks.ts` registers it (the one place that names hook -> module); a plain data field goes in `DATA_FIELDS`.
+
 ## Conventions
 
 2-space indent, snake_case in Python and SQL, camelCase in TypeScript, lowercase comments, `----` section

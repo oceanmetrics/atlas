@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- **Instances: one codebase, several atlases.** Everything that names the OceanMetrics brand now lives in `instances/oceanmetrics/`: `instance.json` (name, wordmark, titles and descriptions, og tags, favicon, mark, supporters, credit, citation, About copy and links, the default catalog base and picker groups, the default lens, theme and tour, the tool list, the feedback app key, the places site and credit, the titiler host), `tokens.css` (moved from `src/lib/brand/`), the mark and `assets/` (favicon, og card, logos, motifs, moved from `public/` and `src/lib/brand/`). `VITE_INSTANCE` (default `oceanmetrics`) picks the folder; `index.html` and `catalog.html` are filled from it at build time, and the brand checks (`contrast`, `check:hex-literals`, `check:inlined-tokens`, `export-tokens`, `render-og`) read the same variable. `instances/instance.schema.json` is the contract, checked by `tests/instances.test.ts` and by the build. The app looks the same; the static path grew 1.2 KB gzip (393.0 to 394.2 KB).
+- `instances/marinesensitivity/`: a scaffold with the values known from MarineSensitivity/atlas (name, MMA palette, mark, favicon, the `report` tool, the `scores` lens, the marine-atlas release base, titiler, feedback key). Its Scores lens, Report export, seal and gallery arrive in build week 4 (2026-11-20 to 11-26).
+- **The hook registry.** `src/lib/catalog/hooks.ts` maps each collection hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`) to its module; the Collections lens asks it which hooks a collection declares. `unknownHooks` lists declared `atlas:*` renderer hooks this build lacks (such as `atlas:uncertainty`).
+- The og card says "Supported by MMA and MBON" (it said BOEM). `.env.example` drops the MarineSensitivity seal flags (`VITE_SEAL`, `VITE_AGENCY`, `VITE_SEAL_URL`); they return with that instance.
+
 ## 0.3.6
 
 - **AquaMaps no-data is visible to the raster layer.** `rasterAssetOf` read a band's nodata from `raster:bands` only, so the AquaMaps assets, which list their bands as STAC 1.1 core `bands` (uint8, nodata 0), never exposed it. It now falls back to core `bands` when `raster:bands` is absent (`raster:bands` still wins when both exist). Two vitest cases cover both shapes.

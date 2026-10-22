@@ -16,6 +16,7 @@
 // already sets in the other direction (it imports `Outline` FROM this file) — this module still has
 // no svelte/DOM/MapLibre dependency, only a plain type import.
 import type { LayerStackEntry } from "../map/layerStack";
+import { INSTANCE } from "../brand/instance";
 export type { LayerStackEntry } from "../map/layerStack";
 
 export type Lens = "collection" | "species";
@@ -137,6 +138,16 @@ export const REPRESENTATIONS: readonly Representation[] = ["native", "model", "0
 export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
 export const LENSES: readonly Lens[] = ["collection", "species"];
 
+/** the instance's own default for a key (`defaults` in instances/<id>/instance.json) when it is a
+ * member of `allowed`, else `fallback`: an instance can choose among the values this build knows,
+ * never add one. */
+function instanceDefault<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+/** the lens a fresh view opens on (the instance's `defaults.lens`). */
+export const INSTANCE_LENS: Lens = instanceDefault(INSTANCE.defaults.lens, LENSES, "collection");
+
 /**
  * `lens`'s context-dependent default: `"species"` when a species key is present in the URL and no
  * collection is, `"collection"` otherwise. A collection id (`c`) wins because the Collections lens
@@ -146,7 +157,7 @@ export const LENSES: readonly Lens[] = ["collection", "species"];
  * symmetrically in both directions (the URL round-trip property).
  */
 export function defaultLens(sp: string | undefined, c?: string): Lens {
-  return sp && !c ? "species" : "collection";
+  return sp && !c ? "species" : INSTANCE_LENS;
 }
 
 /**
@@ -184,7 +195,8 @@ export function isPlacesSelectionEmpty(sel: string | undefined, placeCount = 0):
  * not constants). Used both to seed a fresh `Sel` and as the "is this a default?" comparison for
  * every other field when formatting. */
 export const DEFAULT_SEL: Sel = {
-  lens: "collection",
+  // the instance's defaults (lens, theme, tour; instances/<id>/instance.json `defaults`)
+  lens: INSTANCE_LENS,
   pal: "spectral_r",
   map: undefined,
   proj: "globe",
@@ -202,8 +214,8 @@ export const DEFAULT_SEL: Sel = {
   // Theme value (an old `?theme=auto` link, or a future auto-follow control, still resolves
   // through prefers-color-scheme via resolveTheme()) -- it is simply no longer what an absent or
   // malformed `?theme=` falls back to. See docs/usability.md p3 and "Ben's items" (theme default).
-  theme: "dark",
-  tour: "on",
+  theme: instanceDefault(INSTANCE.defaults.theme, THEMES, "dark"),
+  tour: instanceDefault(INSTANCE.defaults.tour, ["on", "off"] as const, "on"),
   c: undefined,
   i: undefined,
   catalog: undefined,

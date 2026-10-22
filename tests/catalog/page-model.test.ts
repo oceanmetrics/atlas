@@ -21,8 +21,13 @@ import {
   temporalLabel,
 } from "../../src/catalog/model";
 import { WORLD_PATH } from "../../src/catalog/world";
-import { BRAND_CREDIT, SUPPORTERS, openInMapHref } from "../../src/lib/brand/brand";
-import { ABOUT_LINKS, CATALOG_PAGE_HREF } from "../../src/lib/brand/about";
+import {
+  ABOUT_LINKS,
+  BRAND_CREDIT,
+  CATALOG_PAGE_HREF,
+  SUPPORTERS,
+  openInMapHref,
+} from "../../src/lib/brand/instance";
 import { loadCatalog, type CatalogCache, type CollectionEntry } from "../../src/lib/catalog/load";
 import type { StacCollection } from "../../src/lib/catalog/types";
 import { FIXTURE_BASE, fakeFetch } from "./support";

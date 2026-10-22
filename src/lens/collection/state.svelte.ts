@@ -18,12 +18,8 @@ import {
 } from "../../lib/catalog/cellSelection";
 import { creditsOf, type Credits } from "../../lib/catalog/credits";
 import { resolveCatalogBase } from "../../lib/catalog/base";
-import {
-  bandValueOf,
-  flowerPetalsFor,
-  flowerSpecOf,
-  type FlowerView,
-} from "../../lib/catalog/flower";
+import { bandValueOf, flowerPetalsFor, type FlowerView } from "../../lib/catalog/flower";
+import { hookSpec, hooksOf } from "../../lib/catalog/hooks";
 import {
   itemDims,
   itemTitleOf,
@@ -45,7 +41,7 @@ import {
 import { extentBounds } from "../../lib/catalog/extent";
 import { layerExtent, worldView } from "../../lib/catalog/layerExtent";
 import { boundsKey, loadAutoZoom, saveAutoZoom, shouldAutoZoom } from "../../lib/map/autoZoom";
-import { parseCellSpecies, type CellGrid } from "../../lib/catalog/cellSpecies";
+import type { CellGrid } from "../../lib/catalog/cellSpecies";
 import { carryDecision, makeReturnTo, returnStillValid, type ReturnTarget } from "./returnTo";
 import {
   likelyCountIndex,
@@ -589,7 +585,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     };
     // a flower collection reads ALL bands in one request (the petals are bands of this pixel); the item's
     // own value is its band of that answer
-    const flower = untrack(() => flowerSpecOf(entry?.collection) !== null);
+    const flower = untrack(() => hooksOf(entry?.collection).includes("atlas:flower"));
     if (flower) {
       const pv = await valueSource.pointValues(req);
       if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");
@@ -957,7 +953,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   // the cell grid of the layer on screen: the collection's own (`atlas:cell_species.grid`) or, for the
   // AquaMaps registry, its surface (0.5 degree native, 0.05 degree downscaled); `null` = ring alone
   const highlightGrid = $derived.by((): CellGrid | null => {
-    const own = parseCellSpecies(entry?.collection)?.grid;
+    const own = hookSpec(entry?.collection, "atlas:cell_species")?.grid;
     if (own) return own;
     if (!isRegistry) return null;
     const res = registry.rep === "005" ? 0.05 : 0.5;

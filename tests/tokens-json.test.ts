@@ -1,4 +1,4 @@
-// atlas-3 step 2: src/lib/brand/tokens.json is a deterministic export of tokens.css, for any
+// atlas-3 step 2: instances/<id>/tokens.json is a deterministic export of tokens.css, for any
 // consumer that cannot read CSS custom properties (Node scripts, design tooling). Regenerating it
 // in memory from the committed tokens.css must be byte-identical to the committed tokens.json —
 // exactly the fault this seeds: change a token without re-exporting, and this goes red.

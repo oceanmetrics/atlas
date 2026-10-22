@@ -2,14 +2,21 @@
 //
 // Component CSS and motif assets read custom properties only — that is what makes two
 // themes, a contrast gate and a future brand revision one-file changes. This checker makes the rule
-// mechanical over the surfaces atlas-3 owns. Two deliberate carve-outs, both narrow:
-//   1. src/lib/brand/tokens.css — the single place a color literal is allowed to exist.
+// mechanical over the surfaces atlas-3 owns. Three deliberate carve-outs, all narrow:
+//   1. instances/<id>/tokens.css — the single place per instance a color literal may exist (and
+//      its generated tokens.json, below).
 //   2. src/lib/brand/vendor/** — brand marks copied from another repo, unmodified except for the
 //      provenance comment. Each must carry a "vendored verbatim from" line naming its source, or it
 //      is reported as a failure too: a carve-out nobody can use by accident.
+//   3. instances/<id>/assets/** except motifs/ — the files served beside the page that live outside
+//      the app's `data-theme` cascade (the favicon, the og card, supporter logos): a browser tab or a
+//      crawler renders them, so their colours are literal (this was public/, never scanned). The
+//      motifs are CSS masks the app tints with a token, so assets/motifs/ IS scanned, as is the
+//      instance's mark (custom properties only) and everything else in the instance folder.
 // Markdown is not scanned: docs/design/spec.md documents the palette, quoting hex on purpose.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { instanceTokensCss, instanceTokensJson } from "./instance.mjs";
 
 // atlas-3 step 1 surfaces, plus step 2's component library. Step 3 adds "index.html"
 // (the shell's inlined critical CSS) and "src/shell/shell.css" (the file that CSS is `@import`ed
@@ -22,6 +29,7 @@ export const SCAN_ROOTS = [
   "src/shell/shell.css",
   "src/catalog",
   "catalog.html",
+  "instances",
 ];
 const SCANNED_EXTENSIONS = new Set([
   ".css",
@@ -33,14 +41,29 @@ const SCANNED_EXTENSIONS = new Set([
   ".js",
   ".json",
 ]);
-export const TOKENS_FILE = join("src", "lib", "brand", "tokens.css");
+/** the selected instance's tokens.css (VITE_INSTANCE), named in this gate's messages. */
+export const TOKENS_FILE = join(...instanceTokensCss().split("/"));
 // tokens.json is a generated, deterministic RE-EXPORT of tokens.css (scripts/export-tokens.mjs):
 // every hex literal in it already went through the one allowed source above, so it gets the same
 // narrow carve-out as tokens.css itself — nothing else may skip this gate by pattern-matching a
 // filename, only this one generated file.
-export const TOKENS_JSON_FILE = join("src", "lib", "brand", "tokens.json");
+export const TOKENS_JSON_FILE = join(...instanceTokensJson().split("/"));
 export const VENDOR_DIR = join("src", "lib", "brand", "vendor") + sep;
 const PROVENANCE_RE = /vendored verbatim from/i;
+
+/** `instances/<id>/tokens.css` or `.../tokens.json`, for ANY instance (each owns its palette). */
+export function isTokensFile(rel) {
+  const p = rel.split(sep);
+  return (
+    p.length === 3 && p[0] === "instances" && (p[2] === "tokens.css" || p[2] === "tokens.json")
+  );
+}
+
+/** `instances/<id>/assets/**` outside `assets/motifs/` (carve-out 3 in the header). */
+export function isServedAsset(rel) {
+  const p = rel.split(sep);
+  return p.length >= 4 && p[0] === "instances" && p[2] === "assets" && p[3] !== "motifs";
+}
 
 // #rgb | #rgba | #rrggbb | #rrggbbaa, as it would appear in a style value
 const HEX_LITERAL_RE = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g;
@@ -80,7 +103,7 @@ export function findHexLiterals(rootDir = ".", readFile = (p) => readFileSync(p,
       const rel = relative(rootDir, file);
       const ext = file.slice(file.lastIndexOf("."));
       if (!SCANNED_EXTENSIONS.has(ext)) continue;
-      if (rel === TOKENS_FILE || rel === TOKENS_JSON_FILE) continue;
+      if (isTokensFile(rel) || isServedAsset(rel)) continue;
       const content = readFile(file);
       if (rel.startsWith(VENDOR_DIR)) {
         // vendored assets keep their own colors, but only if they say where they came from
@@ -100,7 +123,7 @@ export function findHexLiterals(rootDir = ".", readFile = (p) => readFileSync(p,
             path: rel,
             line: i + 1,
             match: m[0],
-            reason: `hex color literal outside ${TOKENS_FILE} — use a custom property`,
+            reason: `hex color literal outside an instance's tokens.css — use a custom property`,
           });
         }
       });

@@ -1,19 +1,19 @@
 <script lang="ts">
   // The About dialog (opened from TopBarActions' About button and its phone ⋯ item): what the atlas is,
   // who supports it, where the related products live, how to cite it. Every string and link comes from
-  // `lib/brand/brand.ts` and `about.ts`, the same files the catalog page footer and the map attribution read, so the
+  // `lib/brand/instance.ts` (the instance's instance.json), the same file the catalog page footer and the map attribution read, so the
   // credit line cannot drift. The app is the only thing here that varies per build (`appVersion`).
   import Modal from "../lib/ui/Modal.svelte";
-  import { BRAND_NAME } from "../lib/brand/brand";
-  import OmMark from "../lib/brand/OmMark.svelte";
   import SupporterLogos from "../lib/brand/SupporterLogos.svelte";
+  import Wordmark from "../lib/brand/Wordmark.svelte";
   import {
     ABOUT_DESCRIPTION,
     ABOUT_LINKS,
+    BRAND_NAME,
     CATALOG_PAGE_HREF,
     CITE_ATLAS,
     CITE_COLLECTION_NOTE,
-  } from "../lib/brand/about";
+  } from "../lib/brand/instance";
 
   interface Props {
     open: boolean;
@@ -29,9 +29,7 @@
 
 <Modal {open} title="About {BRAND_NAME}" {onclose}>
   <p class="wordmark" aria-hidden="true">
-    <OmMark size="1.2em" /><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span
-    >
-    <span class="wm-atlas">Atlas</span>
+    <Wordmark size="1.2em" />
   </p>
   <p class="lede">{ABOUT_DESCRIPTION}</p>
 
@@ -72,10 +70,10 @@
     letter-spacing: var(--tracking-display);
     color: var(--text-primary);
   }
-  .wm-metrics {
+  .wordmark :global(.wm-1) {
     color: var(--text-accent);
   }
-  .wm-atlas {
+  .wordmark :global(.wm-2) {
     font-weight: 400;
     color: var(--text-secondary);
   }

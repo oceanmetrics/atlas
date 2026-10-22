@@ -1,8 +1,8 @@
 /*
  * atlas-3 · brand tokens — the ONLY file in this repo allowed to contain a color literal.
  *
- * Palette: OceanMetrics navy, teal and sand (WP5, 2026-10-14; the fork's MMA gold/steel palette is
- * gone). Structure and the contrast contract come from the upstream atlas-3 brand work (D10, D13). Component CSS reads custom properties only — `scripts/check-hex-literals.mjs`
+ * Source: "MMA Branding Guide 2026" (July 2026), read 2026-09-20; plan decisions D10 (brand) and
+ * D13 (size budget). Component CSS reads custom properties only — `scripts/check-hex-literals.mjs`
  * makes that a build-time rule, not a convention.
  *
  * Structure (the contrast checker depends on it):
@@ -29,7 +29,7 @@
  * text    --text-link       : --surface-panel-basis, --surface-raised
  * text    --text-danger     : --surface-panel-basis, --surface-raised
  * text    --text-on-accent  : --fill-accent
- * text    --text-on-cat     : --cat-bird, --cat-coral, --cat-fish, --cat-invertebrate, --cat-mammal, --cat-mangrove, --cat-other, --cat-primprod, --cat-turtle
+ * text    --text-on-cat     : --cat-bird, --cat-coral, --cat-fish, --cat-invertebrate, --cat-mammal, --cat-other, --cat-primprod, --cat-turtle
  * nontext --border-accent   : --surface-panel-basis, --surface-raised, --surface-map
  * nontext --border-control  : --surface-panel-basis, --surface-raised, --surface-map
  * nontext --focus-ring      : --surface-panel-basis, --surface-raised, --surface-map
@@ -41,7 +41,6 @@
  * nontext --cat-fish        : --surface-panel-basis
  * nontext --cat-invertebrate: --surface-panel-basis
  * nontext --cat-mammal      : --surface-panel-basis
- * nontext --cat-mangrove    : --surface-panel-basis
  * nontext --cat-other       : --surface-panel-basis
  * nontext --cat-primprod    : --surface-panel-basis
  * nontext --cat-turtle      : --surface-panel-basis
@@ -49,12 +48,10 @@
  *
  * exempt  --surface-panel : the glass fill itself; every pair above uses --surface-panel-basis, the
  *                            worst-case OPAQUE composite of that glass over the map (see spec.md)
- * exempt  --om-navy        : raw palette; reaches the screen only through a theme token above
- * exempt  --om-teal        : raw palette
- * exempt  --om-mark-spark  : decorative, the fixed yellow spark inside the OceanMetrics mark (OmMark.svelte)
- * exempt  --om-teal-deep   : raw palette
- * exempt  --om-sand        : raw palette
- * exempt  --om-crimson     : raw palette
+ * exempt  --mma-gold        : raw palette; reaches the screen only through a theme token above
+ * exempt  --mma-steel       : raw palette
+ * exempt  --mma-navy        : raw palette
+ * exempt  --mma-crimson     : raw palette
  * exempt  --fill-accent     : R5 y1 — adjacent fill; the active state's boundary is --border-accent
  * exempt  --fill-control    : adjacent fill of a control whose boundary is --border-control (paired)
  * exempt  --fill-track      : adjacent fill inside a control; the control's boundary is paired
@@ -73,19 +70,18 @@
  */
 
 :root {
-  /* the warm spark on the horizon of the OceanMetrics mark (OmMark.svelte); fixed in both themes */
-  --om-mark-spark: #f5b528;
-  /* --- OceanMetrics palette: navy, teal, sand. Chrome only, never data. ----------------------- */
-  --om-navy: #05294d; /* ink on teal, paper's text, the wordmark */
-  --om-teal: #2fc7b8; /* the active accent: fill, ring and focus on dark; a fill (never text) on paper */
-  --om-teal-deep: #0a6a73; /* teal that is legal as text and focus ring on white (6.0:1) */
-  --om-sand: #e9dcb4; /* warm neutral: dark motifs, the wordmark's second line, paper's wheat tints */
-  --om-crimson: #6e110f;
+  /* --- MMA palette (guide p. 7). Chrome only, never data. ------------------------------------ */
+  --mma-gold: #e8c24a;
+  --mma-steel: #173d6d;
+  --mma-navy: #001a57;
+  --mma-crimson: #6e110f;
 
   /* --- type ---------------------------------------------------------------------------------- */
-  /* a neutral system font stack for now (the OceanMetrics brand face is not chosen yet). */
-  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Century Gothic is a licensed Monotype face: local() only, NEVER redistributed. The self-hosted
+     open fallback (TeX Gyre Adventor or Jost, atlas-3 step 2) carries the same geometric metrics. */
+  --font-display:
+    "Century Gothic", CenturyGothic, "TeX Gyre Adventor", "URW Gothic", Jost, sans-serif;
+  --font-body: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --text-xs: 12px; /* legends, motif captions, table meta */
@@ -153,36 +149,37 @@
   color-scheme: dark;
 
   --surface-map: #0b1635; /* dark-matter basemap average */
-  --surface-panel: #112a45; /* the glass card's own color, mixed at --glass-opacity over the map */
-  --surface-panel-basis: #2e4454; /* that glass over the ramp's LIGHTEST stop (#ffffbf): the worst
+  --surface-panel: #142446; /* the glass card's own color, mixed at --glass-opacity over the map */
+  --surface-panel-basis: #303e55; /* that glass over the ramp's LIGHTEST stop (#ffffbf): the worst
                                      case a label on a panel can land on. The checker uses this. */
-  --surface-raised: #19395a; /* modal, popover, active row */
+  --surface-raised: #1c2f57; /* modal, popover, active row */
   --surface-seal-plate: #ffffff; /* the seal's plate; white in both themes (see the @contrast note) */
-  --surface-sunken: #0a1c33; /* input, table stripe */
+  --surface-sunken: #0a1533; /* input, table stripe */
 
   --text-primary: #ffffff;
-  --text-secondary: #c5d8e6;
-  --text-accent: var(--om-teal); /* teal is legal as text only on dark */
-  --text-link: #8fd0f0;
+  --text-secondary: #c7d2e8;
+  --text-accent: var(--mma-gold); /* 9.5:1 on navy — gold is legal as text only on dark */
+  --text-link: #9cc8f2;
   --text-danger: #ff9c94;
-  --text-on-accent: var(--om-navy);
-  --text-on-cat: var(--om-navy); /* R5 y1: label text drawn on a --cat-* fill */
-  --border-accent: var(--om-teal); /* R5 y1: the ring that carries an active state's boundary */
+  --text-on-accent: var(--mma-navy);
+  --text-on-cat: var(--mma-navy); /* R5 y1: label text drawn on a --cat-* fill */
+  --border-accent: var(--mma-gold); /* R5 y1: the ring that carries an active state's boundary */
 
-  /* the accent that carries an ACTIVE state: teal on both themes. Teal on a white panel is far
-     under 3:1, so on paper the active state's boundary is --border-accent (navy) instead. */
-  --fill-accent: var(--om-teal); /* active hex button, PREVIEW chip, selected place outline */
-  --fill-control: #1f4062;
-  --fill-track: #2a5078;
-  --border-control: #82a6c2;
-  --divider: #26486b;
-  --focus-ring: var(--om-teal);
+  /* the accent that carries an ACTIVE state: Gold on dark, Steel on light. Gold on a white panel
+     is 1.71:1 — it cannot carry a state on paper, so paper's active fill is Steel (the guide's own
+     "reversed white on Steel Blue" lockup) and Gold stays a dark-surface accent there. */
+  --fill-accent: var(--mma-gold); /* active hex button, PREVIEW chip, selected place outline */
+  --fill-control: #23375f;
+  --fill-track: #2c4272;
+  --border-control: #8494bd;
+  --divider: #2a3d68;
+  --focus-ring: var(--mma-gold);
   /* UI-10 (round 3, Opus 5.5 eyes-on review): every native `<input type="range">`/checkbox in
      `src/` used the browser DEFAULT accent (system blue) -- the Layers opacity sliders on paper,
      the Columns menu checkboxes, "Only species in US waters", the welcome "Don't show this again"
      box, in BOTH themes. `accent-color` is the one property that styles a native control's own
      fill/thumb without reimplementing it; set to the SAME value `--focus-ring` already uses (never
-     `--fill-accent` directly -- that token stays LITERAL teal in both themes, which is exactly the
+     `--fill-accent` directly -- that token stays LITERAL gold in both themes, which is exactly the
      1.7:1-on-paper contrast failure `--focus-ring` was already defined to avoid there). */
   accent-color: var(--focus-ring);
   /* R9 (owner, 2026-09-24): the Program-Area/Plan-Area zone outline stroke on the MAP itself
@@ -195,16 +192,16 @@
      cannot read a custom property, so the value is duplicated by necessity and a drift-guard test
      keeps the duplicate honest). */
   --stroke-outline: #ffffff;
-  --icon-muted: #a9c4d8;
+  --icon-muted: #aab8d8;
   /* an INACTIVE control's glyph: the rail's Flower button in the Species lens fades to this instead
      of disappearing (Ben, 2026-09-21: removal is "jerky"). Still >= 3:1 on the control's own face,
      because an inactive-but-focusable control must stay identifiable. */
-  --icon-inactive: #97adbf;
-  /* motifs at 10 %: deep teal at 10 % over a navy surface is invisible, so the dark theme takes
-     sand and the light theme deep teal. */
-  --motif-color: var(--om-sand);
-  --scrim: #03101f;
-  --shadow-color: #020a14;
+  --icon-inactive: #98a3bd;
+  /* the guide specifies the motifs in Steel Blue or Gold at 10 %; Steel at 10 % over a navy
+     surface is invisible, so the dark theme takes the Gold option and the light theme Steel. */
+  --motif-color: var(--mma-gold);
+  --scrim: #04091c;
+  --shadow-color: #02060f;
 
   /* data color: eight CVD-safe category hues (Okabe-Ito derived), lightened for a dark surface so
      each clears 3:1 against the panel. Hue is the identity; lightness follows the theme.
@@ -223,9 +220,6 @@
   --cat-fish: #9f81e4;
   --cat-invertebrate: #e79ec4;
   --cat-mammal: #e6c700;
-  /* red mangrove (the AquaMaps EOV flower, 0.2.0): the only red-family hue of the set, picked by the same CIE76 + protan/deutan
-     search as above (min deltaE to the other eight: 36.7 normal, 20.4 protan, 14.1 deutan); label text on it is >=4.5:1 */
-  --cat-mangrove: #ee6f6f;
   --cat-other: #b6bfd0;
   --cat-primprod: #4cc9a0;
   --cat-turtle: #a1c76b;
@@ -253,36 +247,37 @@
   --surface-seal-plate: #ffffff;
   --surface-sunken: #fbf6e6; /* R5 y1: cream, was slate #f2f5f9 */
 
-  --text-primary: var(--om-navy);
+  --text-primary: var(--mma-navy);
   --text-secondary: #3d4c74;
-  --text-accent: var(--om-teal-deep); /* NOT teal: teal on white is under 2:1 */
-  --text-link: #0b5f8f;
-  --text-danger: var(--om-crimson);
-  --text-on-accent: var(--om-navy); /* navy on teal */
+  --text-accent: var(--mma-steel); /* NOT gold: gold on white is 1.7:1 (guide p. 7 + measured) */
+  --text-link: #15467f;
+  --text-danger: var(--mma-crimson);
+  --text-on-accent: var(--mma-navy); /* R5 y1: navy on gold, 9.53:1 (was white, for Steel) */
   --text-on-cat: #ffffff; /* R5 y1: label text drawn on a --cat-* fill */
-  --border-accent: var(--om-navy); /* R5 y1: the ring that carries an active state's boundary */
+  --border-accent: var(--mma-navy); /* R5 y1: the ring that carries an active state's boundary */
 
-  /* the same teal as the dark theme's active fill, so both themes coordinate. On its own it is 1.49:1 against the panel (EXEMPT,
+  /* R5 y1: the same brand gold as the dark theme's active fill, so both themes coordinate — the
+     guide's own colour, not a slate substitute. On its own it is 1.49:1 against the panel (EXEMPT,
      see the @contrast note above), so --border-accent (navy) carries the state at >= 3:1 instead,
      per WCAG 1.4.11. y3 (`docs/design/candidates/tokens-y3.css`, `#876700`) is the drop-in
      fallback if the ~10-selector ring round (docs/usability.md §7 R5) is ever unwanted. */
-  --fill-accent: var(--om-teal);
+  --fill-accent: var(--mma-gold);
   --fill-control: #f8f1dc; /* R5 y1: cream, was slate #eef2f8 */
   --fill-track: #ece0bd; /* R5 y1: wheat, was slate #dde5f0 */
   --border-control: #7a6a45; /* R5 y1: warm bronze, was slate #5d6d92 */
   --divider: #e6dab4; /* R5 y1: wheat, was slate #d7dfec */
-  --focus-ring: var(--om-teal-deep); /* teal fails 3:1 as a focus ring on paper */
-  /* UI-10 (round 3): see the navy block's own header -- the deep-teal pair here (never teal, the
+  --focus-ring: var(--mma-steel); /* unchanged: gold fails 3:1 as a focus ring on paper */
+  /* UI-10 (round 3): see the navy block's own header -- the steel pair here (never gold, the
      literal `--fill-accent` value) is what makes a native checkbox/range legible on paper. */
   accent-color: var(--focus-ring);
   /* R9 (owner, 2026-09-24): the SAME zone outline stroke as the navy block's own note -- white
      (msens's zone_line_args() value, unchanged there) is near-invisible on this theme's light
      basemap, so paper substitutes brand navy ink instead of the data table's own literal. */
-  --stroke-outline: var(--om-navy);
+  --stroke-outline: var(--mma-navy);
   --icon-muted: #6a5c3a; /* R5 y1: warm bronze, was slate #56658a */
   --icon-inactive: #7d7155; /* R5 y1: warm grey, was slate #6b7793 */
-  --motif-color: var(--om-teal-deep);
-  --scrim: var(--om-navy); /* R5 y1: brand navy, was slate #223252 */
+  --motif-color: var(--mma-steel);
+  --scrim: var(--mma-navy); /* R5 y1: brand navy, was slate #223252 */
   --shadow-color: #b8a67a; /* R5 y1: warm, was slate #8595b4 */
 
   /* darkened one step from #1c7fb8 (still the same hue): the original passed its
@@ -307,7 +302,6 @@
   --cat-fish: #4822a0;
   --cat-invertebrate: #a3517e;
   --cat-mammal: #82773d;
-  --cat-mangrove: #9c1f2e; /* red mangrove; min deltaE to the other eight 35.5 normal, 18.8 protan, 5.6 deutan (labelled, never colour alone) */
   --cat-other: #5b6472;
   --cat-primprod: #00765a;
   --cat-turtle: #495625;

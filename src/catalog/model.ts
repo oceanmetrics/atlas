@@ -18,7 +18,7 @@ import type {
   StacContact,
   StacProvider,
 } from "../lib/catalog/types";
-import { openInMapHref } from "../lib/brand/brand";
+import { openInMapHref } from "../lib/brand/instance";
 import { licenseModelOf, type LicenseModel } from "../lib/catalog/licenses";
 import { noteOf, type CollectionNote } from "../lib/catalog/note";
 

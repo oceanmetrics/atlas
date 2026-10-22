@@ -11,9 +11,13 @@
 // information (Species lens) and the clicked-cell detail (Collection lens); neither lens needs its
 // own entry. Every tool is active in both lenses, so `buildRailItems` needs no lens argument or
 // inactive/inactiveReason concept.
+import { INSTANCE } from "../lib/brand/instance";
 import type { IconName } from "../lib/ui/icon-paths";
 
 export type ToolName = "layers" | "details" | "table" | "places";
+
+/** every tool this build has, the run-time twin of {@link ToolName}; an instance enables a subset. */
+export const ALL_TOOLS: readonly ToolName[] = ["layers", "details", "table", "places"];
 
 /** structurally identical to src/lib/ui/Rail.svelte's exported `RailItem` -- Svelte's prop typing
  * accepts this by shape, not by declaration identity. */
@@ -23,10 +27,12 @@ export interface ToolRailItem {
   label: string;
 }
 
-/** spec.md §5.1 / control-grammar.md: the spine is FOUR controls, the SAME four, in the SAME order,
- * on every viewport and every lens. This array's order IS that order -- `buildRailItems` below
- * never reorders it. */
-export const TOOL_ORDER: readonly ToolName[] = ["layers", "details", "table", "places"];
+/** spec.md §5.1 / control-grammar.md: the spine is the SAME controls, in the SAME order, on every
+ * viewport and every lens: the instance's `tools` (instances/<id>/instance.json), the members of
+ * {@link ToolName} only. This array's order IS that order -- `buildRailItems` below never reorders it. */
+export const TOOL_ORDER: readonly ToolName[] = INSTANCE.tools.filter((t): t is ToolName =>
+  (ALL_TOOLS as readonly string[]).includes(t),
+);
 
 export const TOOL_LABEL: Record<ToolName, string> = {
   layers: "Layers",

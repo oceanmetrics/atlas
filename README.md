@@ -52,9 +52,40 @@ repo, or set `OM_SCHEMAS_DIR`; without any of the three the pipeline tests and t
 naming them. The pipeline tests do not run in CI (`pages.yml` ignores `pipeline/**` and has no Python job), so
 the check runs where the pipeline runs.
 
+## Instances
+
+One codebase serves several atlases (vision doc 2026-10-21, "The atlas, one codebase with skins").
+`instances/<id>/` holds what differs: `instance.json` (name, wordmark, titles, og tags, favicon, mark,
+supporters, credit and citation, About copy, the default catalog base and picker groups, the default
+lens, theme and tour, the tool list, the feedback app key, the places site and credit, the titiler
+host), `tokens.css` with its `@contrast` block (and the exported `tokens.json`), the `mark.svg`, and
+`assets/` (favicon, og card, logos, motifs). `instances/instance.schema.json` (JSON Schema 2020-12,
+closed) is the contract; `tests/instances.test.ts` validates every instance and the build refuses an
+invalid one.
+
+- `VITE_INSTANCE=<id>` picks the folder (default `oceanmetrics`; `.env` or the environment). Vite
+  aliases `@instance` to it; `src/lib/brand/instance.ts` is the only reader of `instance.json` in
+  `src/`, and `shell.css`/`catalog.css` import `@instance/tokens.css`.
+- `index.html` and `catalog.html` carry `%instance.*%` text placeholders and `instance:*` comment
+  blocks, filled by the `atlas-instance` plugin in `vite.config.ts` (`scripts/instance.mjs`,
+  `renderInstanceHtml`). The same plugin serves `assets/` beside the page (a dev middleware; `emitFile`
+  at build) while `public/` keeps the files every instance shares (`public/mst/`).
+- The brand scripts (`contrast`, `check:hex-literals`, `check:inlined-tokens`, `export-tokens`,
+  `render-og`) read `VITE_INSTANCE` too: `VITE_INSTANCE=marinesensitivity npm run contrast`.
+- `Lens`, `ToolName` and `CatalogGroup` stay compile-time unions: an instance chooses among their
+  members (its `defaults.lens`, `tools`, `catalog.groups`), it cannot add one.
+- `oceanmetrics` is the live atlas. `marinesensitivity` is a scaffold with the values known from
+  MarineSensitivity/atlas; its Scores lens, Report export, seal and gallery arrive in build week 4
+  (2026-11-20 to 11-26), see `instances/marinesensitivity/README.md`.
+
+Collections declare their renderers in STAC through `atlas:*` hooks; `src/lib/catalog/hooks.ts` is the
+one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`) to its module.
+`unknownHooks` lists a collection's `atlas:*` keys that are neither a registered hook nor a data field.
+
 ## Build-time configuration (all optional)
 
-`VITE_CATALOG_BASE`, `VITE_FEEDBACK_URL`, `VITE_LOG_URL`, `VITE_GA_ID` (see `.github/workflows/pages.yml`).
+`VITE_INSTANCE` (above), `VITE_CATALOG_BASE`, `VITE_FEEDBACK_URL`, `VITE_LOG_URL`, `VITE_GA_ID` (see
+`.github/workflows/pages.yml`).
 Analytics are off unless `VITE_GA_ID` / `VITE_LOG_URL` are set.
 
 ## Docs

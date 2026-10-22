@@ -7,7 +7,8 @@
 // of these tests; `tests/map/no-raster-basemap.test.ts` is the permanent regression guard that
 // those literals never come back.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import tokens from "../../src/lib/brand/tokens.json";
+import { readFileSync } from "node:fs";
+import { instanceTokensJson } from "../../scripts/instance.mjs";
 import {
   CARTO_STYLE_BASE,
   EMPTY_BASEMAP_STYLE,
@@ -21,6 +22,11 @@ import {
   type BasemapStyleResponseLike,
   type CartoStyleLike,
 } from "../../src/lib/map/layers/basemap";
+
+const tokens = JSON.parse(readFileSync(instanceTokensJson(), "utf8")) as Record<
+  "navy" | "paper",
+  Record<string, string>
+>;
 
 beforeEach(() => {
   resetBasemapStyleCacheForTests();

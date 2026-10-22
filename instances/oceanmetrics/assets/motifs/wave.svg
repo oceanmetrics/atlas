@@ -1,0 +1,11 @@
+<!-- MMA wave element (guide p. 10), redrawn as a tileable edge. One `currentColor`, no literal
+     color: used as a CSS mask (tint from --motif-color, opacity from --motif-wave-opacity, capped
+     at 10 %). It draws the top bar's lower edge, the bottom sheet's upper edge, modal dividers and
+     the report header/footer — never behind a block of body text. Tile: 120 × 12. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 12" width="120" height="12"
+     preserveAspectRatio="none" aria-hidden="true" focusable="false">
+  <path fill="currentColor"
+        d="M0 12 V7 q15 -7 30 0 t30 0 t30 0 t30 0 V12 Z"/>
+  <path fill="currentColor" opacity="0.55"
+        d="M0 12 V9 q15 -5 30 0 t30 0 t30 0 t30 0 V12 Z"/>
+</svg>

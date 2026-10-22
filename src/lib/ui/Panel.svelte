@@ -435,8 +435,8 @@
     inset: 0;
     background: var(--motif-color);
     opacity: var(--motif-hex-opacity);
-    -webkit-mask: url("../brand/motifs/hex.svg") repeat center / var(--motif-hex-size);
-    mask: url("../brand/motifs/hex.svg") repeat center / var(--motif-hex-size);
+    -webkit-mask: url("@instance/assets/motifs/hex.svg") repeat center / var(--motif-hex-size);
+    mask: url("@instance/assets/motifs/hex.svg") repeat center / var(--motif-hex-size);
     pointer-events: none;
   }
 

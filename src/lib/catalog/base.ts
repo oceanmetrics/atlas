@@ -21,7 +21,10 @@
 // Precedence: `?catalog=` > `VITE_CATALOG_BASE` > the default. A malformed override is ignored (it
 // falls through to the next), never thrown on.
 
-export const CATALOG_BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/";
+import { INSTANCE } from "../brand/instance";
+
+/** the instance's default catalog base (`catalog.base` in instances/<id>/instance.json). */
+export const CATALOG_BASE = INSTANCE.catalog.base;
 
 /**
  * Validate a candidate catalog base. Strict, because the value arrives as data (a query string):

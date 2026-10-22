@@ -47,9 +47,9 @@ describe("hyparquet and the vendored gazetteer client are dynamic imports only",
     });
   }
 
-  it("config.ts (the static-safe half) imports nothing lazy", () => {
+  it("config.ts (the static-safe half) imports nothing lazy: only the instance's strings", () => {
     const src = readFileSync(join(gazDir, "config.ts"), "utf8");
-    expect(staticImportsOf(src)).toEqual([]);
+    expect(staticImportsOf(src)).toEqual(["../brand/instance"]);
   });
 
   it("WP4: the manifest reader and the ?ov= grammar (static-safe, used by the Layers panel) import nothing lazy", () => {

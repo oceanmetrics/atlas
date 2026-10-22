@@ -1,5 +1,5 @@
 <script lang="ts">
-  import OmMark from "../lib/brand/OmMark.svelte";
+  import Wordmark from "../lib/brand/Wordmark.svelte";
   // The hydrated shell. Reads and writes view state ONLY through src/lib/state (createSelStore ->
   // history.replaceState, never pushState -- CLAUDE.md "URL-is-the-view"; see
   // tests/shell/shell-invariants.test.ts's source-scan guard, the same technique
@@ -75,7 +75,7 @@
     BASEMAP_ATTRIBUTION,
     type CartoStyleLike,
   } from "../lib/map/layers/basemap";
-  import { BRAND_CREDIT } from "../lib/brand/brand";
+  import { BRAND_CREDIT, BRAND_NAME } from "../lib/brand/instance";
   import {
     FALLBACK_FULL_STUDY_AREA,
     studyAreaFromBoot,
@@ -583,8 +583,8 @@
       sel.lens === "species" && speciesLens.docTitle
         ? speciesLens.docTitle
         : sel.lens === "collection" && collectionLens.itemTitle
-          ? `${collectionLens.itemTitle} · OceanMetrics Atlas`
-          : `${sel.lens === "species" ? "Species" : "Collections"} · OceanMetrics Atlas`;
+          ? `${collectionLens.itemTitle} · ${BRAND_NAME}`
+          : `${sel.lens === "species" ? "Species" : "Collections"} · ${BRAND_NAME}`;
   });
 
   // 0.10.79 size-budget fix round: the RUNTIME `places/model.ts` module (see the type-only import
@@ -1437,10 +1437,7 @@
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">
     <h1 class="brand-title" id="app-title">
-      <OmMark size="1.05em" /><span class="wm-ocean">Ocean</span><span class="wm-metrics"
-        >Metrics</span
-      >
-      <span class="wm-atlas">Atlas</span>
+      <Wordmark size="1.05em" />
     </h1>
   </span>
 

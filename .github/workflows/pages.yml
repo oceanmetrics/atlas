@@ -101,7 +101,7 @@ jobs:
       # on disk after the build (not just what was downloaded).
       - run: node scripts/check-duckdb-ext.mjs dist
 
-      # index.html's inlined critical CSS copies its token VALUES from src/lib/brand/tokens.css via a
+      # index.html's inlined critical CSS copies its token VALUES from instances/<id>/tokens.css via a
       # real build step (an `@import` chain Vite's CSS pipeline resolves), never by hand -- this
       # re-parses the built dist/index.html and proves every token still matches.
       - run: node scripts/check-inlined-tokens.mjs dist

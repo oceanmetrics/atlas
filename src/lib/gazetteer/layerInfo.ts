@@ -5,13 +5,14 @@
 // Pure except `loadLayerCollection` (a plain `fetch`, no parquet): the view-model builder
 // (`layerInfoModel`) is a function of the manifest row and the parsed collection, tested with the
 // published `gebco_undersea` collection as a fixture. Nothing here pulls the places index (hyparquet).
+import { INSTANCE } from "../brand/instance";
 import { GAZETTEER_ROOT, gazetteerDataBase } from "./config";
 import type { Layer } from "./vendor/types";
 import { licenseInfo, spdxPageUrl, type LicenseInfo } from "../catalog/licenses";
 import { resolveHref } from "../catalog/base";
 
 /** the places site's page for one layer (`oceanmetrics/places` web: history router, `/l/<slug>`). */
-export const PLACES_SITE = "https://oceanmetrics.io/places/";
+export const PLACES_SITE = INSTANCE.places.site;
 export const placesLayerPage = (slug: string): string =>
   `${PLACES_SITE}l/${encodeURIComponent(slug)}`;
 

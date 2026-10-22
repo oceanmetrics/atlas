@@ -24,7 +24,10 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    // `@instance` is a Vite alias for instances/<VITE_INSTANCE>/ (vite.config.ts); the type checker
+    // reads the default instance, and src/lib/brand/instance.ts types the JSON by its own interface.
+    "paths": { "@instance/*": ["./instances/oceanmetrics/*"] }
   },
   "include": [
     "src/**/*.ts",

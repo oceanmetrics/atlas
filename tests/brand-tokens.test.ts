@@ -5,13 +5,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { instanceAssetsDir, instanceTokensCss } from "../scripts/instance.mjs";
 import {
   findHexLiterals,
   SCAN_ROOTS,
   TOKENS_JSON_FILE,
 } from "../scripts/check-hex-literals-core.mjs";
 
-const TOKENS = readFileSync("src/lib/brand/tokens.css", "utf8");
+const TOKENS = readFileSync(instanceTokensCss(), "utf8");
 const MOTIF_CAP = 0.1; // MMA Branding Guide 2026, pp. 9-10
 
 let dir: string | null = null;
@@ -44,7 +45,7 @@ describe("no hex literal outside tokens.css", () => {
 
   it("flags a planted literal in a component under src/lib/ui (the step 2 seeded fault)", () => {
     const d = makeRepo({
-      "src/lib/brand/tokens.css": ":root { --mma-gold: #e8c24a; }",
+      "instances/x/tokens.css": ":root { --mma-gold: #e8c24a; }",
       "src/lib/ui/HexButton.svelte": "<style>.hex { background: #e8c24a; }</style>",
     });
     const hits = findHexLiterals(d);
@@ -59,7 +60,7 @@ describe("no hex literal outside tokens.css", () => {
 
   it("exempts ONLY tokens.json, generated verbatim from tokens.css, not every .json file", () => {
     const withTokensJson = makeRepo({
-      "src/lib/brand/tokens.json": '{"navy":{"--mma-gold":"#e8c24a"}}',
+      "instances/x/tokens.json": '{"navy":{"--mma-gold":"#e8c24a"}}',
     });
     expect(findHexLiterals(withTokensJson)).toEqual([]);
 
@@ -75,7 +76,7 @@ describe("no hex literal outside tokens.css", () => {
 
   it("flags a planted literal in the inlined critical CSS of index.html (the seeded fault)", () => {
     const d = makeRepo({
-      "src/lib/brand/tokens.css": ":root { --mma-gold: #e8c24a; }",
+      "instances/x/tokens.css": ":root { --mma-gold: #e8c24a; }",
       "index.html": "<style>.chip { color: #e8c24a; }</style>",
     });
     const hits = findHexLiterals(d);
@@ -84,8 +85,43 @@ describe("no hex literal outside tokens.css", () => {
   });
 
   it("allows literals inside tokens.css itself", () => {
-    const d = makeRepo({ "src/lib/brand/tokens.css": ":root { --mma-navy: #001a57; }" });
+    const d = makeRepo({ "instances/x/tokens.css": ":root { --mma-navy: #001a57; }" });
     expect(findHexLiterals(d)).toEqual([]);
+  });
+
+  it("scans every instance folder, and a tokens.css anywhere else is not exempt", () => {
+    expect(SCAN_ROOTS).toContain("instances");
+    const d = makeRepo({
+      "instances/x/fonts.css": ".x { color: #001a57; }",
+      "instances/x/sub/tokens.css": ":root { --a: #001a57; }",
+      "src/lib/brand/tokens.css": ":root { --a: #001a57; }",
+    });
+    expect(
+      findHexLiterals(d)
+        .map((h) => h.path)
+        .sort(),
+    ).toEqual([
+      join("instances", "x", "fonts.css"),
+      join("instances", "x", "sub", "tokens.css"),
+      join("src", "lib", "brand", "tokens.css"),
+    ]);
+  });
+
+  it("exempts the instance's served assets (favicon, og card) but scans its motifs and mark", () => {
+    const d = makeRepo({
+      "instances/x/assets/favicon.svg": '<svg><path fill="#001a57"/></svg>',
+      "instances/x/assets/og.svg": '<svg><rect fill="#05294d"/></svg>',
+      "instances/x/assets/motifs/wave.svg": '<svg><path fill="#05294d"/></svg>',
+      "instances/x/mark.svg": '<svg><path fill="#05294d"/></svg>',
+    });
+    expect(
+      findHexLiterals(d)
+        .map((h) => h.path)
+        .sort(),
+    ).toEqual([
+      join("instances", "x", "assets", "motifs", "wave.svg"),
+      join("instances", "x", "mark.svg"),
+    ]);
   });
 
   it("does not mistake a fragment link or an svg id reference for a color", () => {
@@ -138,7 +174,7 @@ describe("motif opacity is capped at 10 % (guide pp. 9-10)", () => {
 
   it("uses `currentColor` and no literal in the motif assets, so the tint comes from a token", () => {
     for (const f of ["hex.svg", "wave.svg"]) {
-      const svg = readFileSync(`src/lib/brand/motifs/${f}`, "utf8");
+      const svg = readFileSync(`${instanceAssetsDir()}/motifs/${f}`, "utf8");
       expect(svg).toMatch(/currentColor/);
       expect(svg).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     }

@@ -140,7 +140,7 @@ const FONTS_TIMEOUT_MS = 10_000;
 
 /**
  * Wait for the document's fonts to settle. OceanMetrics Atlas ships NO web fonts (a system font stack,
- * `src/lib/brand/tokens.css`), so there is normally nothing to load; this stays as a bounded wait so a
+ * the instance's `tokens.css`), so there is normally nothing to load; this stays as a bounded wait so a
  * future face cannot move a box between the skeleton and the hydrated frame unnoticed. It is bounded
  * (`document.fonts.ready` is a whole-document promise that can hang on WebKit) and it asserts nothing
  * is still loading afterwards.

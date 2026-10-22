@@ -3,12 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>OceanMetrics Atlas catalog</title>
+    <!-- the names and the favicon come from the instance (vite.config.ts's atlas-instance plugin) -->
+    <title>%instance.name% catalog</title>
     <meta
       name="description"
-      content="Every collection in the OceanMetrics Atlas, with its citation, license, people, providers, funders, methods and data assets."
+      content="Every collection in the %instance.name%, with its citation, license, people, providers, funders, methods and data assets."
     />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="%instance.favicon%" />
 
     <!--
       pre-paint theme (same `?theme=` vocabulary as index.html): dark|navy -> navy, light|paper ->

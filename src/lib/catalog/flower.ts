@@ -47,9 +47,12 @@ export interface FlowerSpec {
   composite: string;
 }
 
+/** the collection property this module is the hook for (registered in `hooks.ts`). */
+export const FLOWER_HOOK = "atlas:flower";
+
 /** the collection's `atlas:flower`, or null when it declares none (or an unusable one). */
 export function flowerSpecOf(collection: StacCollection | null | undefined): FlowerSpec | null {
-  const f = collection?.["atlas:flower"] as Partial<FlowerSpec> | undefined;
+  const f = collection?.[FLOWER_HOOK] as Partial<FlowerSpec> | undefined;
   if (!f || typeof f.dimension !== "string" || typeof f.composite !== "string") return null;
   return f.dimension && f.composite ? { dimension: f.dimension, composite: f.composite } : null;
 }

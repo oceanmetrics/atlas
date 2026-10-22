@@ -3,37 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>OceanMetrics Atlas</title>
-    <meta
-      name="description"
-      content="OceanMetrics Atlas: a catalog of species distribution model products with explicit credits, plus places, for U.S. marine areas. Supported by MMA and MBON."
-    />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <!-- link previews: og:image must be absolute (crawlers do not resolve it against the page); the
-         atlas is published at https://oceanmetrics.io/atlas/ (pages.yml). public/og.png is rendered
-         from public/og.svg by scripts/render-og.mjs. -->
+    <!-- the title, descriptions, favicon and link-preview tags come from the instance
+         (instances/<id>/instance.json, VITE_INSTANCE): vite.config.ts's atlas-instance plugin fills
+         every `%instance.*%` text placeholder and `instance:*` comment block in this file at dev and build time
+         (scripts/instance.mjs#renderInstanceHtml). og:image is absolute (crawlers do not resolve it
+         against the page): the instance's `og.image` against its `og.siteUrl`; the PNG is rendered
+         from instances/<id>/assets/og.svg by scripts/render-og.mjs. -->
+    <title>%instance.title%</title>
+    <meta name="description" content="%instance.description%" />
+    <link rel="icon" type="image/svg+xml" href="%instance.favicon%" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="OceanMetrics Atlas" />
-    <meta property="og:title" content="OceanMetrics Atlas" />
-    <meta
-      property="og:description"
-      content="A catalog of species distribution model products with explicit credits, built on STAC. Supported by MMA and MBON."
-    />
-    <meta property="og:url" content="https://oceanmetrics.io/atlas/" />
-    <meta property="og:image" content="https://oceanmetrics.io/atlas/og.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="OceanMetrics Atlas: a hexagon holding a wave, beside the name."
-    />
+    <meta property="og:site_name" content="%instance.siteName%" />
+    <meta property="og:title" content="%instance.title%" />
+    <meta property="og:description" content="%instance.description%" />
+    <meta property="og:url" content="%instance.siteUrl%" />
+    <!--instance:og-image-->
     <meta name="twitter:card" content="summary_large_image" />
 
     <!--
       critical CSS, inlined so the shell paints before any JavaScript bundle loads or parses (plan
       atlas-0 Deliverable 2, carried into atlas-3 step 3). `@import` pulls in src/shell/shell.css
-      (which itself imports src/lib/brand/tokens.css) -- Vite's html-inline-proxy resolves BOTH
-      imports and inlines the resolved CSS text directly into this tag, in dev and in build alike
+      (which itself imports @instance/tokens.css = instances/<id>/tokens.css) -- Vite's
+      html-inline-proxy resolves BOTH imports and inlines the resolved CSS text directly into this
+      tag, in dev and in build alike
       (see vite.config.ts's comment on the html/css pipeline). That is the "build step that copies
       [token values] from tokens.css" the review checklist asks for: nobody types a token value by
       hand here, the bundler copies it -- tests/check-inlined-tokens.test.ts proves the copy is
@@ -145,19 +137,10 @@
       <header class="topbar" data-tour="topbar">
         <span data-tour="brand" style="display: flex; align-items: center; gap: var(--space-2)">
           <h1 class="brand-title" id="app-title">
-            <!-- the ensō mark's box (src/lib/brand/OmMark.svelte, size 1.05em): same size and baseline
-                 offset as the hydrated SVG, empty here, so the wordmark does not shift when it arrives -->
-            <svg
-              class="om-mark"
-              viewBox="0 0 2048 2048"
-              width="1.05em"
-              height="1.05em"
-              aria-hidden="true"
-              focusable="false"
-              style="display: inline-block; vertical-align: -0.15em; flex: none"
-            ></svg
-            ><span class="wm-ocean">Ocean</span><span class="wm-metrics">Metrics</span>
-            <span class="wm-atlas">Atlas</span>
+            <!-- the instance's mark box (src/lib/brand/Mark.svelte, size 1.05em: same size, viewBox and
+                 baseline offset as the hydrated SVG, empty here) and its wordmark spans
+                 (Wordmark.svelte), so nothing shifts when the app arrives -->
+            <!--instance:mark-box--><!--instance:wordmark-->
           </h1>
         </span>
 

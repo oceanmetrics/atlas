@@ -1,7 +1,7 @@
 // atlas-3 step 2b: ONE table for the eight species categories (docs/design/spec.md "Data color" /
 // the plan's "Species categories get ONE table: key, label, icon, color"). `color` is a CSS custom
 // PROPERTY NAME (e.g. "--cat-bird"), never a resolved hex value -- callers write `var(color)`, so a
-// re-hue or a theme change is a src/lib/brand/tokens.css-only edit. The nine `--cat-*` tokens (the
+// re-hue or a theme change is a instances/<id>/tokens.css-only edit. The nine `--cat-*` tokens (the
 // eight categories plus `--cat-nodata`) and their `@contrast` pairs already exist in tokens.css
 // (added with the rest of the design tokens); this module is what turns that CSS-only table into
 // something Flower.svelte, Treemap.svelte and DataTable.svelte can look up from real data.

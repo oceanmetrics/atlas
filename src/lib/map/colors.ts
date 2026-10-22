@@ -7,7 +7,7 @@ import type { ResolvedTheme } from "../state/types";
 // (atlas-4 §6.6), the binary-mask overlay's RGBA (`cog_tile_url(color = "#222222")`,
 // viz.R:412-420), and the `--surface-map`/`--stroke-outline` values a WebGL background/line layer
 // needs but cannot read from CSS. Every one of them is fixed by a parity reference or a design
-// token, none of them encodes a value, and none may move into `src/lib/brand/tokens.css` — that
+// token, none of them encodes a value, and none may move into `instances/<id>/tokens.css` — that
 // file's rule is that a token is CHROME (spec.md §2: "brand colors are chrome; data colors are
 // data"). `--stroke-outline` (R9, 2026-09-24) is the one deliberate exception alongside
 // `--surface-map`: msens's own `zone_line_args()` table picks white for the programarea/planarea/
@@ -21,7 +21,7 @@ import type { ResolvedTheme } from "../state/types";
 // defined here. Put a new map colour in this file or nowhere.
 
 /** `--surface-map` per theme, as a plain hex. `tests/map/basemap.test.ts` asserts these equal
- * `src/lib/brand/tokens.json`'s value in both themes, so the map background cannot drift from the
+ * `instances/<id>/tokens.json`'s value in both themes, so the map background cannot drift from the
  * page background the shell paints behind it. */
 export const MAP_BACKGROUND_NAVY = "#0b1635";
 export const MAP_BACKGROUND_PAPER = "#eaeef3";
@@ -34,7 +34,7 @@ export const ZONE_LINE_WHITE = "#ffffff";
 export const ZONE_LINE_BLACK = "#000000";
 
 /** R9 (owner, 2026-09-24): the RENDERED colour for a `ZONE_LINE_WHITE` stroke (programarea /
- * planarea / the default row), by theme -- mirrors `src/lib/brand/tokens.css`'s `--stroke-outline`
+ * planarea / the default row), by theme -- mirrors `instances/<id>/tokens.css`'s `--stroke-outline`
  * (a MapLibre style is not CSS and cannot read a custom property, so the value is duplicated by
  * necessity, exactly the way `MAP_BACKGROUND_NAVY`/`MAP_BACKGROUND_PAPER` above already mirror
  * `--surface-map`). `tests/map/zoneOutline.test.ts` pins them equal. Navy is unchanged from
@@ -78,7 +78,7 @@ export const QUERY_FILL_COLOR = "#000000";
 /** atlas-5's species "range" fill (`msens::add_fill_layer(fill_color = "#3388ff")`,
  * `atlas-refs/"parity species app.md"` §6.2's PMTiles branch) — a fixed data color, not a ramp
  * (one swatch, not 11 stops) and not brand chrome, so it lives here rather than in `ramps.ts` or
- * `src/lib/brand/tokens.css`. Also the categorical legend swatch and the click-popup swatch for a
+ * `instances/<id>/tokens.css`. Also the categorical legend swatch and the click-popup swatch for a
  * "presence only" click (`map/layers/ranges.ts`, `src/lens/species/popup.ts`). */
 export const RANGE_FILL_COLOR = "#3388ff";
 

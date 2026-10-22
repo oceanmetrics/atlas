@@ -1,0 +1,14 @@
+<!-- MMA hexagon pattern (guide p. 9), redrawn as a tileable honeycomb. One `currentColor` and no
+     literal color: it is used as a CSS mask so the tint comes from --motif-color and the opacity
+     from --motif-hex-opacity (capped at 10 % by tests/brand-tokens.test.ts).
+     Tile: pointy-top hexes, circumradius 16 → width 2·(√3/2·16) = 27.713, height 3·16 = 48. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 27.713 48" width="27.713" height="48"
+     aria-hidden="true" focusable="false">
+  <g fill="none" stroke="currentColor" stroke-width="1.25">
+    <path d="M0 -16 L13.856 -8 L13.856 8 L0 16 L-13.856 8 L-13.856 -8 Z"/>
+    <path d="M27.713 -16 L41.569 -8 L41.569 8 L27.713 16 L13.856 8 L13.856 -8 Z"/>
+    <path d="M13.856 8 L27.713 16 L27.713 32 L13.856 40 L0 32 L0 16 Z"/>
+    <path d="M0 32 L13.856 40 L13.856 56 L0 64 L-13.856 56 L-13.856 40 Z"/>
+    <path d="M27.713 32 L41.569 40 L41.569 56 L27.713 64 L13.856 56 L13.856 40 Z"/>
+  </g>
+</svg>
