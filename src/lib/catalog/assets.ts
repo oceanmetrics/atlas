@@ -71,7 +71,8 @@ export interface RasterAsset {
   colormap?: string;
   /** `[min, max]` or `"auto"` (`atlas:rescale`); absent = the item's own value range. */
   rescale?: [number, number] | "auto";
-  /** the band's nodata value (`raster:bands[bidx - 1].nodata`), when the asset declares one. */
+  /** the band's nodata value (`raster:bands[bidx - 1].nodata`, else the STAC 1.1 core `bands[bidx - 1].nodata`),
+   * when the asset declares a finite one. */
   nodata?: number;
 }
 
@@ -103,7 +104,9 @@ export function rasterAssetOf(item: StacItem | null): RasterAsset | null {
   const colormap = asset["atlas:colormap"];
   const rescale = rescaleOf(asset["atlas:rescale"]);
   const band = typeof bidx === "number" && Number.isInteger(bidx) && bidx >= 1 ? bidx : 1;
-  const nodata = (asset["raster:bands"] as { nodata?: unknown }[] | undefined)?.[band - 1]?.nodata;
+  // `raster:bands` (raster 1.1) when the asset has it, else the STAC 1.1 core `bands` (the AquaMaps assets)
+  const bands = (asset["raster:bands"] ?? asset["bands"]) as { nodata?: unknown }[] | undefined;
+  const nodata = Array.isArray(bands) ? bands[band - 1]?.nodata : undefined;
   return {
     url,
     ...(band > 1 || bidx === 1 ? { bidx: band } : {}),

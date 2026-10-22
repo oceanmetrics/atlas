@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- **AquaMaps no-data is visible to the raster layer.** `rasterAssetOf` read a band's nodata from `raster:bands` only, so the AquaMaps assets, which list their bands as STAC 1.1 core `bands` (uint8, nodata 0), never exposed it. It now falls back to core `bands` when `raster:bands` is absent (`raster:bands` still wins when both exist). Two vitest cases cover both shapes.
+- Pipeline: the platform STAC profiles (`atlas-collection`, `atlas-item`, `sdm-dossier`, `cog`) are checked at build time (`pipeline/atlas_pipeline/profiles.py`, called by `check_staging`), with the schemas read from `$OM_SCHEMAS_DIR`, `node_modules/@oceanmetrics/catalog/schemas` or the sibling `../platform` checkout. `swfsc_cce_becker2020b` items now carry `proj:code` (`EPSG:4326`, from the raster) and per-band `statistics` computed from the COG, and write `nodata: null` where a COG has none; the AquaMaps item template carries `proj:code` and its documented `statistics` constants. `jsonschema` moved to the pipeline's main dependencies.
+
 ## 0.3.5
 
 - **Feedback is back on for a collection under review.** 0.3.4 held every report from an unlisted (`?collection=`) or `atlas:access: "restricted"` collection back, because the shared feedback endpoint files each one as a public GitHub issue. Ben decided (2026-10-22) that is acceptable: the issue shows the reviewer's text and the screenshot but never the link the collection was shared by (the page link still drops `collection` and `catalog`), so it does not hand anyone the data. The dialog takes the screenshot again, says the report becomes a public issue without the share link, and offers "Open as GitHub issue" as on any other view. `RESTRICTED_PUBLIC_ISSUE_OK` (`src/lib/feedback/endpoint.ts`) set to `false` restores 0.3.4. New seeded fault `feedback-share-link-in-issue`.

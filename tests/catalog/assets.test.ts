@@ -106,6 +106,45 @@ describe("rasterAssetOf: cloud-optimized GeoTIFF items render through titiler", 
     expect(rasterAssetOf(items[0])).toBeNull(); // the biotrack items are hex, not COG
     expect(rasterAssetOf(null)).toBeNull();
   });
+
+  const withBands = (assetBands: Record<string, unknown>, bidx = 2) =>
+    ({
+      type: "Feature",
+      id: "x",
+      properties: {},
+      links: [],
+      assets: {
+        cog: {
+          href: "https://a.test/d.tif",
+          type: cog,
+          roles: ["data"],
+          "atlas:bidx": bidx,
+          ...assetBands,
+        },
+      },
+    }) as unknown as StacItem;
+
+  it("reads the band's nodata from raster:bands (raster 1.1)", () => {
+    const it = withBands({ "raster:bands": [{ nodata: -1 }, { nodata: 255 }] });
+    expect(rasterAssetOf(it)).toEqual({ url: "https://a.test/d.tif", bidx: 2, nodata: 255 });
+  });
+
+  it("reads the band's nodata from the STAC 1.1 core bands when raster:bands is absent (AquaMaps)", () => {
+    const it = withBands({ bands: [{ nodata: 0 }] }, 1);
+    expect(rasterAssetOf(it)).toEqual({ url: "https://a.test/d.tif", bidx: 1, nodata: 0 });
+    const second = withBands({ bands: [{ nodata: 0 }, { nodata: 255 }] });
+    expect(rasterAssetOf(second)?.nodata).toBe(255);
+  });
+
+  it("raster:bands wins over core bands; null, nan and absent nodata give none", () => {
+    const both = withBands({ "raster:bands": [{ nodata: 7 }], bands: [{ nodata: 0 }] }, 1);
+    expect(rasterAssetOf(both)?.nodata).toBe(7);
+    expect(rasterAssetOf(withBands({ bands: [{ nodata: null }] }, 1))).not.toHaveProperty("nodata");
+    expect(rasterAssetOf(withBands({ bands: [{ nodata: "nan" }] }, 1))).not.toHaveProperty(
+      "nodata",
+    );
+    expect(rasterAssetOf(withBands({}, 1))).not.toHaveProperty("nodata");
+  });
 });
 
 describe("styleUrlOf", () => {
