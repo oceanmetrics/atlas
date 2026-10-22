@@ -14,7 +14,11 @@
     "atlas:metric": "richness",
     "atlas:value_range": [0.0, 0.9],
     "sdm:value_unit": "unitless",
-    "sdm:value_range": [0, 1]
+    "sdm:value_range": [0, 1],
+    "sdm:response_type": "mixed",
+    "sdm:method": "derived_merge",
+    "sdm:source_authority": "MBON BioTrack",
+    "sdm:temporal_interval": "seasonal"
   },
   "assets": {
     "values": {

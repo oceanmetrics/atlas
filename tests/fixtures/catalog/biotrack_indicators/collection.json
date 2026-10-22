@@ -154,5 +154,8 @@
       "href": "https://creativecommons.org/licenses/by/4.0/",
       "type": "text/html"
     }
-  ]
+  ],
+  "sdm:method": "derived_merge",
+  "sdm:source_authority": "MBON BioTrack",
+  "sdm:temporal_interval": "seasonal"
 }

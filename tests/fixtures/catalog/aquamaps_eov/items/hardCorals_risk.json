@@ -1,7 +1,10 @@
 {
   "type": "Feature",
   "stac_version": "1.1.0",
-  "stac_extensions": ["https://stac-extensions.github.io/raster/v1.1.0/schema.json"],
+  "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
+  ],
   "id": "hardCorals_risk",
   "collection": "aquamaps_eov",
   "geometry": {
@@ -33,7 +36,8 @@
     "atlas:metric": "risk",
     "atlas:value_range": [0, 100],
     "sdm:value_unit": "score",
-    "sdm:value_range": [0, 100]
+    "sdm:value_range": [0, 100],
+    "proj:code": "EPSG:4326"
   },
   "assets": {
     "cog": {
@@ -48,55 +52,118 @@
           "name": "all",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "fish",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "hardCorals",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "mangroves",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "marineMammals",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "seabirds",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "seagrasses",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "seaTurtles",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "score"
+          "unit": "score",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 100,
+            "mean": 24.5,
+            "stddev": 18.2,
+            "valid_percent": 71.5
+          }
         },
         {
           "name": "n_eov",
           "data_type": "uint8",
           "nodata": 255,
-          "unit": "count"
+          "unit": "count",
+          "statistics": {
+            "minimum": 0,
+            "maximum": 8,
+            "mean": 3.2,
+            "stddev": 1.9,
+            "valid_percent": 71.5
+          }
         }
       ]
     }
