@@ -576,10 +576,27 @@ CCE_VARIABLES = ["density", "cv"]
 CCE_VARIABLE_LABELS = {"density": "Density (animals per km²)", "cv": "Coefficient of variation"}
 CCE_UNITS = {"density": "animals/km2", "cv": "unitless"}
 CCE_BIDX = {"density": 1, "cv": 2}
-# density: [min, p98] of the band, read by the app from titiler /cog/statistics; cv: a fixed 0-2 so species compare
-# (the delivered cv's 98th percentile runs 0.26 to 3.96 across the 13 species; a cv of 1 is a standard error as
-# large as the density, above 2 draws at the top colour)
-CCE_RESCALE = {"density": "auto", "cv": [0, 2]}
+# density: a FIXED [0, p98] per species, p98 = models.csv density_p98 (the ingest's 98th percentile of the band) to 3
+# significant figures, so the legend reads 0 -> p98 and the app makes no /cog/statistics read for the range. ("auto"
+# drew [min, p98] and sent the minimum, e.g. 1.85e-14, as titiler's histogram_range, whose pattern rejects a negative
+# exponent: 422, no legend histogram for 7 of 13 species.) cv: a fixed 0-2 so species compare (the delivered cv's
+# 98th percentile runs 0.26 to 3.96 across the 13 species; a cv of 1 is a standard error as large as the density,
+# above 2 draws at the top colour).
+CCE_CV_RESCALE = [0, 2]
+
+
+def cce_density_rescale(row: dict) -> list[float]:
+  """[0, p98] to 3 significant figures (density_max when p98 is not positive); never an exponent below 1e-6, which
+  the app would send to titiler as a negative-exponent histogram_range."""
+  hi = float(row["density_p98"])
+  if not hi > 0:
+    hi = float(row["density_max"])
+  if not hi > 0:
+    raise ValueError(f"{row.get('species')}: density_p98 and density_max are not positive")
+  hi = float(f"{hi:.3g}")
+  if hi < 1e-6:
+    raise ValueError(f"{row.get('species')}: p98 {hi} is below 1e-6 (an exponent in the app's histogram request)")
+  return [0, hi]
 CCE_COLORMAP = {"density": "viridis", "cv": "magma"}
 COG_T = "image/tiff; application=geotiff; profile=cloud-optimized"
 S3_PATH_STYLE = "https://s3.us-east-1.amazonaws.com"
@@ -744,7 +761,9 @@ def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base
         "assets": {
           "cog": {"href": href, "type": COG_T, "roles": ["data"],
                   "title": f"{r['species']}, {CCE_VARIABLE_LABELS[v]} (band {CCE_BIDX[v]})",
-                  "atlas:bidx": CCE_BIDX[v], "atlas:rescale": CCE_RESCALE[v], "atlas:colormap": CCE_COLORMAP[v],
+                  "atlas:bidx": CCE_BIDX[v],
+                  "atlas:rescale": cce_density_rescale(r) if v == "density" else CCE_CV_RESCALE,
+                  "atlas:colormap": CCE_COLORMAP[v],
                   "raster:bands": _cce_bands(nd)},
         },
         "collection": CCE_ID,

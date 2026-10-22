@@ -411,12 +411,13 @@ value (CV)", with the same area weighting: where a 0.05 degree cell straddles so
 an area-weighted blend of their CVs, an approximation for a coefficient of variation; there the dominant source
 cell supplies a median 93.5 % of the area (the ingest's figures, 2026-10-22). The total abundance is kept: `abundance_source` and `abundance_regridded` in `models.csv` agree. Values stay density
 as delivered (animals per km2), not rescaled; they are not yet used in any Marine Sensitivity score. The map draws
-density from its minimum to its 98th percentile (`atlas:rescale: auto`) and cv on a fixed 0-2 range, the same for
+density from 0 to its 98th percentile (`density_p98` in `models.csv`, 3 significant figures, fixed per species)
+and cv on a fixed 0-2 range, the same for
 every species (a cv of 1 is a standard error as large as the density; above 2 draws at the top colour).
 
 ## Species
 
-| species | scientific name | WoRMS | cells | density p98 | density max | cv median |
+| species | scientific name | WoRMS | cells | density p98 (map maximum) | density max | cv median |
 |---|---|---:|---:|---:|---:|---:|
 {table}
 

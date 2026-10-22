@@ -217,11 +217,11 @@ def test_species_by_variable_cube_with_bidx_and_rescale():
   assert dims["variable"]["atlas:labels"] == {"density": "Density (animals per km²)", "cv": "Coefficient of variation"}
   d, v = items[f"{HUMPBACK}_density"], items[f"{HUMPBACK}_cv"]
   assert d["properties"]["atlas:dims"] == {"species": str(HUMPBACK), "variable": "density"}
-  assert d["assets"]["cog"]["atlas:bidx"] == 1 and d["assets"]["cog"]["atlas:rescale"] == "auto"
+  assert d["assets"]["cog"]["atlas:bidx"] == 1 and d["assets"]["cog"]["atlas:rescale"] == [0, 0.004]   # [0, p98]
   assert v["assets"]["cog"]["atlas:bidx"] == 2 and v["assets"]["cog"]["atlas:rescale"] == [0, 2]
   assert d["assets"]["cog"]["href"] == v["assets"]["cog"]["href"]      # one 2-band COG per species
   assert d["properties"]["sdm:value_unit"] == "animals/km2" and v["properties"]["sdm:value_unit"] == "unitless"
-  # an `auto` rescale is read by the app only when the item has no atlas:value_range of its own
+  # a fixed rescale is the app's range only when the item has no atlas:value_range of its own
   assert "atlas:value_range" not in d["properties"] and "atlas:value_range" not in v["properties"]
   assert d["properties"]["sdm:taxon"] == {"scientific_name": "Megaptera novaeangliae", "common_name": "Humpback whale",
                                           "authorities": {"worms": HUMPBACK}, "group": "mammal"}
@@ -245,6 +245,21 @@ def test_readme_says_what_the_cv_is_and_which_layers_are_delivered():
   assert "74.6 %" in readme and "93.5 %" in readme
   assert "sperm whale" in readme and "neither is in the geodatabase" in readme
   assert "ingest_swfsc_cce.html" not in readme   # the methods page is not live yet: no link to it
+
+
+def test_density_rescale_is_0_to_p98_at_3_significant_figures():
+  # regression: "auto" sent the band minimum (1.85e-14 for the humpback) as titiler's histogram_range -> 422
+  row = {"species": "x", "density_p98": "0.00598184", "density_max": "0.09315"}
+  assert stac.cce_density_rescale(row) == [0, 0.00598]
+  assert stac.cce_density_rescale(row | {"density_p98": "1.96123"}) == [0, 1.96]
+  assert stac.cce_density_rescale(row | {"density_p98": "0.0508462"}) == [0, 0.0508]
+  assert stac.cce_density_rescale(row | {"density_p98": "0"}) == [0, 0.0931]          # p98 not positive: the max
+  with pytest.raises(ValueError, match="below 1e-6"):
+    stac.cce_density_rescale(row | {"density_p98": "4e-9"})
+  _, items = collection_and_items()
+  for it in items.values():
+    lo, hi = it["assets"]["cog"]["atlas:rescale"]
+    assert lo == 0 and hi > 0 and "e-" not in repr(hi) and it["assets"]["cog"]["atlas:rescale"] != "auto"
 
 
 def test_duplicate_worms_id_is_refused():
