@@ -3,6 +3,7 @@
 ## 0.4.1
 
 - The gazetteer client comes from npm (`@oceanmetrics/places` 0.5.1); the vendored 0.1.3 copy (`src/lib/gazetteer/vendor/`) is gone. Places by reference, search, the picker and credits behave as before. Following the 0.5.1 manifest: a layer marked `access: "unlisted"` is not offered by the gazetteer picker and is left out of the Layers panel's "Place layers" list unless a link (`?ov=`) turns it on; raster and derived reference layers (no PMTiles of ours) stay out of both, as before. hyparquet stays one copy at the exact pins (1.31.3, 1.1.2), which the client's ranges admit. `@oceanmetrics/catalog` 0.2.0 is a dev dependency, so the pipeline finds the platform STAC profiles in `node_modules` without a `../platform` checkout. Sizes: the static path 394.2 to 394.4 KB gzip (the unlisted rule; the client adds nothing to it), the lazy gazetteer chunk 3.7 to 6.3 KB gzip (the 0.5.1 client is larger than the trimmed copy; hyparquet stays its own chunk).
+- Client 0.5.2: `@oceanmetrics/places` ^0.5.2, whose `dist/` imports its own modules with `.js` specifiers, so Node and vitest load it as published and the vitest inline workaround is gone; the lazy gazetteer chunk is 6.5 KB gzip, the static path unchanged (394.4 KB).
 
 ## 0.4.0
 

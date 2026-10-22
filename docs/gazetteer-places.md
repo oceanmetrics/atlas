@@ -73,18 +73,17 @@ A failed fetch never removes the token: the place stays in the link and the list
 
 ## Decisions to know about
 
-- **The client is the npm package.** `@oceanmetrics/places` ^0.5.1 (`oceanmetrics/platform`
+- **The client is the npm package.** `@oceanmetrics/places` ^0.5.2 (`oceanmetrics/platform`
   `packages/places`) is a dependency; until atlas 0.4.1 a trimmed copy of 0.1.3 lived in
   `src/lib/gazetteer/vendor/`. `resolve.ts` is the one module that calls it (`createClient`, `getPlace`
   with `unwrap` and `slug`, `listLayers`, `creditsFor`, `search`) and is reached only by dynamic
   `import()`; elsewhere only its types are imported (`import type`, erased), so neither the client nor
   hyparquet enters the static graph (`tests/gazetteer/lazyImports.test.ts`, the size budget). Its
   `hyparquet ^1.30.1` / `hyparquet-compressors ^1.1.1` resolve to the atlas's own exact pins (1.31.3 /
-  1.1.2): one copy. Two 0.5.1 rules the atlas follows: `listLayers()` leaves out `access: "unlisted"`
+  1.1.2): one copy. Two rules of the client (since 0.5.1) the atlas follows: `listLayers()` leaves out `access: "unlisted"`
   rows, so the picker does not offer them, and the Layers panel lists an unlisted layer only while a
   link (`?ov=`) has it on (hidden from lists, not from a link); raster and derived layers carry
-  `pmtiles: null` and are not drawn or offered. The package's `dist/` imports its own modules without
-  extensions, so `vitest.config.ts` inlines it (Vite resolves them; Node's ESM loader does not).
+  `pmtiles: null` and are not drawn or offered.
 - **Reads go to the bucket URL, not `storage.oceanmetrics.io`.** That host 302s every object request,
   including the CORS preflight a `Range` read triggers, and browsers reject a redirected preflight
   (`OPTIONS .../places.parquet` -> 302, checked 2026-10-08). The same tree on
