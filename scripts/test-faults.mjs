@@ -92,6 +92,52 @@ export const FAULTS = [
       "than a minute, and the property under test is a pure function.",
     gate: ["npx", "vitest", "run", "tests/feedback/noHash.test.ts"],
   },
+  // --- 0.3.4: feedback from a collection under review never reaches a public place -----------------
+  {
+    id: "feedback-unlisted-not-restricted",
+    patch: "tests/faults/feedback-unlisted-not-restricted.patch",
+    describe:
+      "collectionAccess() stops treating the unlisted picker group as restricted -- a report sent from a " +
+      "?collection= share link is filed as a public GitHub issue with a screenshot again",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/feedback/restrictedCollection.test.ts",
+      "-t",
+      "regression 0.3.4",
+    ],
+  },
+  {
+    id: "feedback-restricted-posted",
+    patch: "tests/faults/feedback-restricted-posted.patch",
+    describe:
+      "sendFeedback() drops its restricted guard -- a restricted report is POSTed to the shared Apps " +
+      "Script, which files every report as a public issue",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/feedback/restrictedCollection.test.ts",
+      "-t",
+      "never POSTed",
+    ],
+  },
+  {
+    id: "feedback-access-unwired",
+    patch: "tests/faults/feedback-access-unwired.patch",
+    describe:
+      "Shell.svelte stops passing access={feedbackAccess} to the feedback dialog -- the 0.3.4 bug itself: " +
+      "every report reads as public",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/feedback/restrictedCollection.test.ts",
+      "-t",
+      "wires the view's access",
+    ],
+  },
   // --- atlas-8 step 3: the two accessibility faults the plan's pyramid row names ------------------
   // These are the first PLAYWRIGHT gates in this manifest. They need a real browser against a real
   // build of the PATCHED tree, so each runs on its own `PW_PORT` (playwright.config.ts honours it

@@ -21,3 +21,23 @@ export function feedbackEndpoint(): string | null {
   }
   return null;
 }
+
+// --- restricted views ---------------------------------------------------------------------------
+// The endpoint this app posts to is the SHARED Ocean Metrics Apps Script (oceanmetrics/erddap-places
+// scripts/feedback/Code.gs, `APPS["oceanmetrics-atlas"]`). Unlike this repo's own
+// scripts/feedback/Code.gs, it does not read the payload's `restricted` flag: it files the public
+// GitHub issue (and commits the screenshot to the repo) for every report. So a restricted view (a
+// collection under review, `catalog/access.ts`) is never posted at all until the deployed script
+// skips the issue for `restricted: true`; then set this to `true` (and say so in CHANGELOG.md).
+export const ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED = false;
+
+/** whether a report may be POSTed: an endpoint exists, and the view is not restricted unless the
+ * endpoint is known to keep restricted reports out of public places. */
+export function canSendFeedback(
+  endpoint: string | null,
+  restricted: boolean,
+  endpointSkipsIssue: boolean = ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED,
+): boolean {
+  if (!endpoint) return false;
+  return !restricted || endpointSkipsIssue;
+}

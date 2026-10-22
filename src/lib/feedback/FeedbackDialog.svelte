@@ -22,7 +22,11 @@
     FEEDBACK_KIND_LABEL,
     type FeedbackKind,
   } from "./payload";
-  import { feedbackEndpoint } from "./endpoint";
+  import {
+    canSendFeedback,
+    ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED,
+    feedbackEndpoint,
+  } from "./endpoint";
   import { sendFeedback } from "./postFeedback";
   import { githubIssueUrl } from "./githubIssue";
   import type { AnnotateShape, AnnotateTool } from "./annotate";
@@ -33,7 +37,8 @@
     onclose: () => void;
     /** the resolved release, or `null` before it settles. */
     ver: string | null;
-    /** the resolved release's `versions.json` `access` field -- only `"restricted"` matters here. */
+    /** the view's access (`catalog/access.ts#viewAccess`: an unlisted or `atlas:access: "restricted"`
+     * collection, or a `?collection=`/`?catalog=` link) -- only `"restricted"` matters here. */
     access?: string;
     lens: string;
     appVersion: string;
@@ -66,6 +71,9 @@
   }: Props = $props();
 
   const restricted = $derived(access === "restricted");
+  // a restricted view whose endpoint would still file a public issue (endpoint.ts): nothing is
+  // captured or sent, the dialog only says where to send the report instead
+  const blocked = $derived(restricted && !ENDPOINT_SKIPS_ISSUE_WHEN_RESTRICTED);
 
   // --- form state --------------------------------------------------------------------------------
   let kind = $state<FeedbackKind>("bug");
@@ -157,7 +165,7 @@
     if (open && !wasOpen) {
       resetForm();
       track?.("feedback_open", { kind, restricted });
-      void takeShot();
+      if (!blocked) void takeShot();
     }
     wasOpen = open;
   });
@@ -324,7 +332,8 @@
   const ready = $derived(text.trim().length > 0);
 
   async function send() {
-    if (!endpoint || !ready || sending || capturing) return;
+    if (!endpoint || !canSendFeedback(endpoint, restricted) || !ready || sending || capturing)
+      return;
     sending = true;
     result = null;
     let imageDataUrl: string | undefined;
@@ -477,8 +486,17 @@
       </p>
     {/if}
     {#if restricted}
-      <p class="hint">This release is under review, so no public GitHub issue was filed.</p>
+      <p class="hint">This collection is under review, so no public GitHub issue was filed.</p>
     {/if}
+  {:else if blocked}
+    <p data-testid="feedback-restricted">
+      This collection is under review and was shared with you by link, so feedback is not sent from
+      here: this form files a public GitHub issue with a screenshot. Please send your comments to
+      the person who shared the link with you.
+    </p>
+    <div class="actions">
+      <button type="button" class="btn primary" onclick={handleClose}>Close</button>
+    </div>
   {:else}
     <fieldset class="f">
       <legend>What kind of feedback is this?</legend>
@@ -566,7 +584,7 @@
         if you give one, never appears in the issue; it stays in the team's own mail and sheet, with a
         copy sent back to you.
       {:else}
-        . This release is under review, so no public GitHub issue is filed.
+        . This collection is under review, so no public GitHub issue is filed.
       {/if}
     </p>
 
@@ -576,7 +594,7 @@
         {#if !restricted}
           — use "Open as GitHub issue" below.
         {:else}
-          , and this release is under review, so feedback cannot be sent from here right now.
+          , and this collection is under review, so feedback cannot be sent from here right now.
         {/if}
       </p>
     {/if}
@@ -602,7 +620,7 @@
       <button
         type="button"
         class="btn primary"
-        disabled={!endpoint || !ready || sending || capturing}
+        disabled={!canSendFeedback(endpoint, restricted) || !ready || sending || capturing}
         onclick={() => void send()}
       >
         {sending ? "Sending…" : "Send"}

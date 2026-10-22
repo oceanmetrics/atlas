@@ -1,0 +1,11 @@
+diff --git a/src/shell/Shell.svelte b/src/shell/Shell.svelte
+--- a/src/shell/Shell.svelte
++++ b/src/shell/Shell.svelte
+@@ -2002,7 +2002,6 @@
+     open={feedbackOpen}
+     onclose={() => (feedbackOpen = false)}
+     ver={sel.lens === "species" ? earlyVersion : null}
+-    access={feedbackAccess}
+     lens={sel.lens}
+     appVersion={__APP_VERSION__}
+     appSha={__APP_SHA__}

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- **Fix: feedback from a collection under review no longer becomes a public GitHub issue.** A report sent while viewing an unlisted collection (opened from a `?collection=` link, picker group "Unlisted (shared by link)") was filed as a public issue with a screenshot of it, because the dialog was never told the view was restricted. A view is now restricted when its collection is unlisted or declares `atlas:access: "restricted"`, or when its URL carries `?collection=` or `?catalog=`. There the dialog takes no screenshot and sends nothing (the shared feedback endpoint files every report publicly); it says the collection is under review and asks for comments to go to whoever shared the link. The page link in any feedback (the "Report a problem" fallback link too) leaves out the share link. Analytics already left out `collection` and `catalog`.
+
 ## 0.3.3
 
 - **The summary chips of "Species in this cell" are filters.** Click a group chip ("Hard corals 93") to list only that group (one at a time; click it again, or "Show all groups", to see them all), and the Red List chips (CR, EN, VU, NT) to keep species of those categories (any number, combined with the group and the text filter). Chips are buttons with a pressed state (outlined, the others dimmed); group chips always count the whole cell, Red List chips count within the chosen group. While anything narrows the list a line reads "Showing M of N" with "Clear filters" (back to the item's own group, no category, empty text); the CSV download exports what is shown.

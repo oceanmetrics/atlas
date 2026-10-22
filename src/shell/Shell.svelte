@@ -116,6 +116,7 @@
   // the same reason as the species lens: its map inputs must exist whether or not its panel (a lazy
   // chunk below) has ever mounted. hyparquet stays a lazy chunk INSIDE it (lib/catalog/values.ts).
   import { createCollectionLens } from "../lens/collection/state.svelte";
+  import { searchForAccess, viewAccess } from "../lib/catalog/access";
   // atlas-6 step 1: the Places panel mounts here (the shell's one reserved panel slot); it never
   // touches MapLibre directly -- `placesMap` is the reactive bridge this file's own composeStyle
   // effect (below) folds into the ONE `selection` input, per docs/map.md. `placesMap.svelte.ts` is
@@ -1202,6 +1203,18 @@
   // change instead of freezing at mount (plan D8's privacy rule: the hash, which carries a drawn
   // place, must never reach this at all -- `pageUrlFromLocation`'s own `PageLocationLike` has no
   // field for it).
+  // 0.3.4 regression fix: a view of a collection under review (an unlisted `?collection=` link, an
+  // `atlas:access: "restricted"` collection, or a `?catalog=` override) is RESTRICTED -- the dialog
+  // then posts nothing that could become a public issue, and the page link (the zero-backend issue
+  // link's `URL:` line too) never carries the share link (`catalog/access.ts`).
+  const feedbackAccess = $derived(
+    viewAccess({
+      lens: sel.lens,
+      collectionParam: sel.collection,
+      catalogParam: sel.catalog,
+      entry: sel.lens === "collection" ? collectionLens.entry : null,
+    }),
+  );
   const feedbackCtx = $derived<FeedbackContext>({
     appVersion: __APP_VERSION__,
     appSha: __APP_SHA__,
@@ -1210,7 +1223,7 @@
     pageUrl: pageUrlFromLocation({
       origin: location.origin,
       pathname: location.pathname,
-      search: formatSel(sel).search,
+      search: searchForAccess(formatSel(sel).search, feedbackAccess),
     }),
     userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
     viewport: `${viewportW}x${viewportH}`,
@@ -1989,6 +2002,7 @@
     open={feedbackOpen}
     onclose={() => (feedbackOpen = false)}
     ver={sel.lens === "species" ? earlyVersion : null}
+    access={feedbackAccess}
     lens={sel.lens}
     appVersion={__APP_VERSION__}
     appSha={__APP_SHA__}

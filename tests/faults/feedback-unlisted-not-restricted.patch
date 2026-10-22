@@ -1,0 +1,14 @@
+diff --git a/src/lib/catalog/access.ts b/src/lib/catalog/access.ts
+--- a/src/lib/catalog/access.ts
++++ b/src/lib/catalog/access.ts
+@@ -29,7 +29,9 @@
+  * `atlas:access: "restricted"`; `"public"` otherwise, including no entry at all. */
+ export function collectionAccess(entry: AccessEntry | null | undefined): ViewAccess {
+   if (!entry) return "public";
+-  if (entry.group === "unlisted") return "restricted";
++  // SEEDED FAULT (tests/faults/feedback-unlisted-not-restricted.patch): the unlisted group no longer
++  // counts, so a collection opened from a ?collection= share link reads as public again.
++  if (false && entry.group === "unlisted") return "restricted";
+   if (entry.collection?.["atlas:access"] === "restricted") return "restricted";
+   return "public";
+ }
