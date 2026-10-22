@@ -42,8 +42,9 @@ asset is a cloud-optimized GeoTIFF, `cog` (`properties["proj:code"]`; each band 
 `statistics`). `pipeline/atlas_pipeline/profiles.py` runs them inside `cli.check_staging`, so a build fails on a profile
 error (reported as `<collection>: <document id>: [<profile>] <json pointer>: <message>`); `pipeline/tests/` also
 validates every Collection and Item under `tests/fixtures/catalog/` and `tests/fixtures/registry/` (not the external
-`catalog/mst/` mirrors). The writers fill the `cog` fields from the raster itself (`stac.band_statistics`,
-`stac.projection_code`); the AquaMaps registry Items are built in the browser from `atlas:item_template`, so their
+`catalog/mst/` mirrors). The writers fill the `cog` fields from the raster itself (`cog.band_summary`,
+`stac.projection_code`) and write each COG's EPSG:3857 copy as a second data asset, `cog_3857`
+([`pipeline/README.md`](./pipeline/README.md)); the AquaMaps registry Items are built in the browser from `atlas:item_template`, so their
 `statistics` are the template constants {minimum 1, maximum 100} (see `pipeline/docs/aquamaps-native.md`).
 
 The schemas are read from `$OM_SCHEMAS_DIR`, else `node_modules/@oceanmetrics/catalog/schemas` (after the npm

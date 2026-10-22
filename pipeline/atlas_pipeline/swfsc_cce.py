@@ -7,6 +7,8 @@ Input (`src`, default ~/_big/msens/derived/preview/swfsc_cce/, override ATLAS_CC
   models.csv                          one row per species
   DONE                                written last by the ingest; nothing is staged without it
 Output: catalog/staging/swfsc_cce_becker2020b/ {collection.json, items/, cog/, models.csv, README.md, thumbnail*.png}.
+cog/ holds each COG as staged (its overviews rebuilt nearest, `cog.ensure_overviews`) and its EPSG:3857 copy
+`<stem>_3857.tif` (`cog.web_mercator_copy`), the two data assets of every Item (`cog.publish_cog_item`).
 The STAC JSON is written by stac.cce_collection / stac.cce_items; publish.sh --only swfsc_cce_becker2020b uploads it.
 """
 
@@ -22,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import docs, stac
+from . import cog, docs, stac
 
 PIPE_DIR = Path(__file__).resolve().parent.parent
 SRC_DEFAULT = Path(os.environ.get("ATLAS_CCE_SRC", "~/_big/msens/derived/preview/swfsc_cce")).expanduser()
@@ -189,7 +191,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   if dest.exists():
     shutil.rmtree(dest)   # a rebuild never keeps an item or COG the new models.csv no longer lists
   (dest / "cog").mkdir(parents=True)
-  boxes, nodata, info, stats, crs = {}, {}, {}, {}, {}
+  boxes, nodata, info, stats, crs, summaries, zoom = {}, {}, {}, {}, {}, {}, {}
   for r in rows:
     f = src / "cog" / r["cog"]
     if not f.exists():
@@ -200,8 +202,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
       if bad:
         raise ValueError(f"{f.name}: " + "; ".join(bad))
       nodata[r["worms_id"]] = ds.nodata
-      # per band (density, cv) from the file itself, and the CRS the raster states (EPSG:4326 when it states none)
-      stats[r["worms_id"]] = [stac.band_statistics(ds, b) for b in (1, 2)]
+      # the CRS the raster states (EPSG:4326 when it states none)
       crs[r["worms_id"]] = stac.projection_code(ds)
       # on the grid's own edges, not the transform's float noise (-131.0000044 -> -131.0)
       res = GRID["res"]
@@ -211,9 +212,19 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
     if box is None:
       raise ValueError(f"{f.name}: band 1 has no valid cell")
     boxes[r["worms_id"]] = box
-    shutil.copy2(f, dest / "cog" / r["cog"])
-    info[r["cog"]] = _cog_file_info(dest / "cog" / r["cog"])
-    log(f"{r['species']}: {f.name} bbox {box}")
+    staged = dest / "cog" / r["cog"]
+    shutil.copy2(f, staged)
+    # the staged copy (never the ingest's file): nearest overviews, then statistics and histograms per band (density,
+    # cv) from its full resolution, then the EPSG:3857 copy beside it
+    cog.ensure_overviews(staged, resampling="nearest")
+    summaries[r["worms_id"]] = cog.band_summaries(staged)
+    empty = [i for i, x in enumerate(summaries[r["worms_id"]], 1) if x is None]
+    if empty:
+      raise ValueError(f"{f.name}: band {empty[0]} has no valid pixel")
+    stats[r["worms_id"]] = [x["statistics"] for x in summaries[r["worms_id"]]]
+    _, zoom[r["worms_id"]] = cog.web_mercator_copy(staged, staged.with_name(f"{staged.stem}{cog.COPY_SUFFIX}.tif"))
+    info[r["cog"]] = _cog_file_info(staged)
+    log(f"{r['species']}: {f.name} bbox {box}, {cog.WEB_MERCATOR} copy zoom {zoom[r['worms_id']]}")
   prefix = new_prefix(prefix_file)
   base = stac.restricted_base_url(prefix, stac.CCE_ID)
   bbox = union_bbox(list(boxes.values()))
@@ -225,7 +236,12 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
     assets["thumbnail"] = stac.thumbnail_asset("Thumbnail: Summer-Fall density of four species (0 to p98)")
   items = stac.cce_items(rows, boxes, base, nodata, stats, crs)
   for iid, it in items.items():
-    it["assets"]["cog"] |= info[Path(it["assets"]["cog"]["href"]).name]
+    name = Path(it["assets"]["cog"]["href"]).name
+    it["assets"]["cog"] |= info[name]
+    wid = int(it["properties"]["atlas:dims"]["species"])
+    # the two data assets: the 4326 original (numbers) and cog_3857 (drawn), the same bands with histograms
+    it, _ = cog.publish_cog_item(it, dest / "cog" / name, dest / "cog", key="cog", summaries=summaries[wid])
+    items[iid] = it
     stac.write_json(dest / "items" / f"{iid}.json", it)
   coll = stac.cce_collection(rows, bbox, base, assets)
   if thumbnail:
@@ -235,7 +251,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   if done_stamp(src) != done:
     raise RuntimeError(f"{src} changed while staging (the ingest re-ran): build again once it has finished")
   return {"dest": dest, "items": len(items), "species": len(rows), "prefix_file": prefix_file, "base": base,
-          "bbox": bbox}
+          "bbox": bbox, "zoom": zoom}
 
 
 def check_collection(coll_dir: Path, coll: dict, prefix: str | None) -> list[str]:

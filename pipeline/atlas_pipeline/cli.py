@@ -1,4 +1,4 @@
-"""command line: `build --collection <slug>` and `check` (see pipeline/build.py)."""
+"""command line: `build --collection <slug>`, `check` and `cog-assets <item.json>... <tif>` (see pipeline/build.py)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import aquamaps, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
+from . import aquamaps, cog, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
@@ -376,6 +376,29 @@ def validate_stac(out: Path = STAGING) -> list[str]:
   return bad
 
 
+# ---- cog-assets: the browser COG assets of Items another repo writes (workflows/R/eov_share.R) ----
+
+def cog_assets(item_paths: list[Path], tif: Path, staging_dir: Path | None = None, key: str | None = None,
+               resampling: str = "nearest") -> dict:
+  """rewrite each Item JSON in place with the two data assets of `tif` (`cog.publish_cog_item`): the original's
+  overviews rebuilt, its `<stem>_3857.tif` written beside it (or in `staging_dir`) once, the band statistics and
+  histograms read once and shared by every Item; each Item must pass the `cog` profile. Returns the report."""
+  t0 = time.perf_counter()
+  summaries, rep, first = None, None, None
+  bad = []
+  for p in item_paths:
+    item = load_json(Path(p))
+    item, rep = cog.publish_cog_item(item, Path(tif), staging_dir, key=key, resampling=resampling,
+                                     summaries=summaries, log=log)
+    first = first or rep   # the first Item's run did the work (the rebuild, the warp, the summaries)
+    summaries = rep["summaries"]
+    bad += [f"{Path(p).name}: {m}" for m in profiles.check_cog_assets(item)]
+    stac.write_json(Path(p), item)
+  if bad:
+    raise ValueError("cog profile: " + "; ".join(bad))
+  return {**(first or {}), "items": len(item_paths), "total_seconds": round(time.perf_counter() - t0, 1)}
+
+
 # ---- main ----
 
 def main(argv=None) -> int:
@@ -390,7 +413,23 @@ def main(argv=None) -> int:
   c = sub.add_parser("check", help="check the staged catalog (offline)")
   c.add_argument("--out", type=Path, default=STAGING)
   c.add_argument("--validate", action="store_true", help="also run pystac + stac-sdm schema validation (network)")
+  g = sub.add_parser("cog-assets", help="add the browser COG assets (EPSG:3857 copy, statistics, histogram) to Items over one COG")
+  g.add_argument("items", type=Path, nargs="+", help="Item JSON file(s), rewritten in place")
+  g.add_argument("tif", type=Path, help="the EPSG:4326 COG the Items' data asset names (its overviews are rebuilt in place)")
+  g.add_argument("--staging-dir", type=Path, default=None, help="where <stem>_3857.tif goes (default: beside the COG)")
+  g.add_argument("--key", default=None, help="the data asset key (default: the one whose href names the COG)")
+  g.add_argument("--resampling", choices=sorted(cog.RESAMPLING), default="nearest", help="overviews: nearest, or mode for classes")
   a = ap.parse_args(argv)
+
+  if a.cmd == "cog-assets":
+    r = cog_assets(a.items, a.tif, a.staging_dir, a.key, a.resampling)
+    o = r["overviews"]
+    log(f"{a.tif.name}: overviews {'rebuilt' if o['rebuilt'] else 'kept'} ({o['resampling']}) {o['levels']}"
+        f" (before: {o['before']['resampling']} {o['before']['levels']})")
+    if r.get("copy"):
+      log(f"{r['copy']}: {r['bytes']:,} B, zoom {r['zoom'][0]}-{r['zoom'][1]}")
+    log(f"done: {r['items']} item(s) in {r['total_seconds']} s (first item: {r['seconds']})")
+    return 0
 
   if a.cmd == "build":
     todo = COLLECTIONS if a.collection == "all" else [a.collection]

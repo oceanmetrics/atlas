@@ -85,7 +85,12 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
 Collection; `atlas-item`, `sdm-dossier` and, for a `data` COG, `cog` per Item. `cli.check_staging` calls it, so a profile
 error fails the build; the old `check_stac_required` checks stay. Schemas: `$OM_SCHEMAS_DIR`, else
 `node_modules/@oceanmetrics/catalog/schemas` (after `npm ci`), else the sibling `../platform/packages/catalog/schemas`. A COG Item needs `properties["proj:code"]` and, per data band,
-`data_type`, `nodata` (`null` when none) and `statistics`, read from the file at write time (`stac.band_statistics`).
+`data_type`, `nodata` (`null` when none) and `statistics`, read from the file at write time. From build week 2 every
+published COG Item has two data assets, the 4326 original and `cog_3857` (its EPSG:3857 copy `<stem>_3857.tif`, roles
+`["data", "visual"]`), each with its own `proj:code` and checked against `cog` on its own; band `statistics` and
+`histogram` come from the full-resolution 4326 original (`cog.band_summary`, never the copy or an overview); overviews
+are nearest or mode, never averaging (`pipeline/atlas_pipeline/cog.py`, `pipeline/README.md`; `build.py cog-assets` for
+Items written elsewhere).
 `jsonschema` is a main dependency; `@oceanmetrics/catalog` is a devDependency, so `npm ci` provides the schemas. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
 tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
 

@@ -637,19 +637,6 @@ def _sig(v: float, digits: int = 6) -> float:
   return float(f"{float(v):.{digits}g}")
 
 
-def band_statistics(ds, bidx: int) -> dict:
-  """the `cog` profile's band statistics {minimum, maximum, mean, stddev, valid_percent} of band `bidx` of an open
-  rasterio dataset: nodata and non-finite pixels masked, population stddev (as GDAL's ComputeStatistics), values to
-  6 significant figures, valid_percent to 2 decimals. Raises ValueError when the band has no valid pixel."""
-  import numpy as np
-  a = ds.read(bidx, masked=True).astype("float64")
-  a = np.ma.masked_invalid(a)
-  if a.count() == 0:
-    raise ValueError(f"band {bidx} has no valid pixel")
-  return {"minimum": _sig(a.min()), "maximum": _sig(a.max()), "mean": _sig(a.mean()), "stddev": _sig(a.std()),
-          "valid_percent": round(100.0 * a.count() / a.size, 2)}
-
-
 def projection_code(ds, default: str = "EPSG:4326") -> str:
   """`proj:code` of an open rasterio dataset: its EPSG code when the raster has one, else `default` (the collection's
   known CRS: every grid is EPSG:4326 today)."""
@@ -659,7 +646,7 @@ def projection_code(ds, default: str = "EPSG:4326") -> str:
 
 def _cce_bands(nodata, stats: list[dict] | None = None) -> list[dict]:
   """the two bands of a CCE COG; `nodata` None writes `nodata: null` (the profile's spelling of "none"), `stats` is
-  [band 1 statistics, band 2 statistics] from `band_statistics`."""
+  [band 1 statistics, band 2 statistics] (`cog.band_summary(...)["statistics"]`)."""
   nd = None if nodata is None else ("nan" if nodata != nodata else nodata)
   bands = [
     {"name": "density", "description": "density, animals per km2", "data_type": "float32", "unit": "animals/km2", "nodata": nd},

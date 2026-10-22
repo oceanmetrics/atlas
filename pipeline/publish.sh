@@ -50,7 +50,10 @@ if [ -n "$only" ]; then
   # COGs first, then items and the rest, collection.json last (no-cache): a visitor never gets a collection whose
   # items or COGs are not there yet
   if [ -d "$src/cog" ]; then
-    aws s3 sync "$src/cog" "$dest/cog" --exclude '*' --include '*.tif' --content-type image/tiff $flag
+    # the EPSG:4326 originals (numbers), then their EPSG:3857 copies <stem>_3857.tif beside them (what the browser's
+    # cog protocol draws; written by atlas_pipeline/cog.py), both before the items that name them
+    aws s3 sync "$src/cog" "$dest/cog" --exclude '*' --include '*.tif' --exclude '*_3857.tif' --content-type image/tiff $flag
+    aws s3 sync "$src/cog" "$dest/cog" --exclude '*' --include '*_3857.tif' --content-type image/tiff $flag
   fi
   if [ -d "$src/items" ]; then
     aws s3 sync "$src/items" "$dest/items" --exclude '*' --include '*.json' --content-type application/json $flag

@@ -9,7 +9,7 @@ from PIL import Image
 from rasterio.transform import from_origin
 
 from atlas_pipeline import aquamaps as aq
-from atlas_pipeline import cli, docs, stac, thumbs
+from atlas_pipeline import cli, cog, docs, stac, thumbs
 
 NATIVE = "https://example.org/native/am/{h}.tif"
 COG005 = "https://example.org/cog/global05/{h}.tif"
@@ -282,7 +282,7 @@ def test_registry_statistics_hold_for_an_aquamaps_byte_grid(tmp_path):
                      transform=from_origin(-5, 5.5, 1, 1), nodata=0) as ds:
     ds.write(grid, 1)
   with rasterio.open(f) as ds:
-    st = stac.band_statistics(ds, 1)
+    st = cog.band_summary(ds, 1)["statistics"]
     assert stac.projection_code(ds) == aq.PROJ_CODE
   assert st == {"minimum": 1.0, "maximum": 100.0, "mean": 50.5, "stddev": 28.8661, "valid_percent": 90.91}
   const = aq.BANDS[0]["statistics"]

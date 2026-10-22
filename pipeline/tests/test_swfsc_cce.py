@@ -398,7 +398,9 @@ def test_build_refuses_a_done_marker_rewritten_while_staging(tmp_path, monkeypat
 def test_build_stages_items_cogs_readme_and_passes_its_own_check(built):
   r, dest = built
   assert r["items"] == 4 and r["species"] == 2
-  assert sorted(p.name for p in (dest / "cog").iterdir()) == sorted(x["cog"] for x in ROWS)
+  # each COG and its EPSG:3857 copy beside it
+  assert sorted(p.name for p in (dest / "cog").iterdir()) == sorted(
+    n for x in ROWS for n in (x["cog"], x["cog"].replace(".tif", "_3857.tif")))
   assert (dest / "README.md").exists() and (dest / "models.csv").exists()
   coll = json.loads((dest / "collection.json").read_text())
   assert swfsc_cce.check_collection(dest, coll, PREFIX) == []
@@ -424,20 +426,6 @@ def write_tiny(path: Path, bands: list[np.ndarray], nodata=-9999.0, crs="EPSG:43
     for i, b in enumerate(bands, 1):
       ds.write(np.array(b, dtype="float32"), i)
   return path
-
-
-def test_band_statistics_are_read_from_each_band_with_nodata_and_nan_masked(tmp_path):
-  f = write_tiny(tmp_path / "t.tif", [[[1, 2, 3], [4, 5, -9999]], [[0.5, 1.5, np.nan], [2.5, 3.5, -9999]]])
-  with rasterio.open(f) as ds:
-    b1, b2 = stac.band_statistics(ds, 1), stac.band_statistics(ds, 2)
-  assert b1 == {"minimum": 1.0, "maximum": 5.0, "mean": 3.0, "stddev": 1.41421, "valid_percent": 83.33}
-  assert b2 == {"minimum": 0.5, "maximum": 3.5, "mean": 2.0, "stddev": 1.11803, "valid_percent": 66.67}
-
-
-def test_band_statistics_refuses_a_band_with_no_valid_pixel(tmp_path):
-  f = write_tiny(tmp_path / "t.tif", [[[-9999] * 3] * 2])
-  with rasterio.open(f) as ds, pytest.raises(ValueError, match="no valid pixel"):
-    stac.band_statistics(ds, 1)
 
 
 def test_projection_code_is_the_rasters_epsg_else_the_collections_known_crs(tmp_path):
@@ -472,6 +460,27 @@ def test_build_writes_proj_code_and_per_band_statistics_from_the_cog_and_passes_
   assert blue["assets"]["cog"]["raster:bands"][1]["statistics"]["valid_percent"] == 1.67   # 40 of 2400, NaN nodata
 
 
+def test_build_writes_the_3857_copy_and_histograms_for_the_browser_renderer(built):
+  """build week 2: every CCE Item has the 4326 original and its EPSG:3857 copy, the same bands with statistics and a
+  32-bucket histogram from the full-resolution original; both pass the `cog` profile on their own."""
+  r, dest = built
+  hb = json.loads((dest / "items" / f"{HUMPBACK}_cv.json").read_text())
+  o, c = hb["assets"]["cog"], hb["assets"]["cog_3857"]
+  assert o["proj:code"] == "EPSG:4326" and o["roles"] == ["data"]
+  assert c["proj:code"] == "EPSG:3857" and c["roles"] == ["data", "visual"]
+  assert c["href"] == o["href"].replace(".tif", "_3857.tif") and c["raster:bands"] == o["raster:bands"]
+  assert (c["atlas:bidx"], c["atlas:rescale"], c["atlas:colormap"]) == (2, [0, 2], "magma")
+  assert o["raster:bands"][0]["histogram"] == {"count": 32, "min": 0.002, "max": 0.002, "buckets": [100] + [0] * 31}
+  # 0.05 degree (5.6 km) stays at zoom 5 (4.9 km); the file sizes are the staged files'
+  assert c["atlas:zoom"][1] == 5 and r["zoom"][HUMPBACK][1] == 5
+  staged = dest / "cog" / ROWS[0]["cog"].replace(".tif", "_3857.tif")
+  assert c["file:size"] == staged.stat().st_size
+  assert o["file:size"] == (dest / "cog" / ROWS[0]["cog"]).stat().st_size
+  with rasterio.open(staged) as ds:
+    assert ds.crs.to_epsg() == 3857 and ds.block_shapes[0] == (256, 256)
+  assert profiles.check_cog_assets(hb) == []
+
+
 def test_check_collection_flags_each_planted_fault(built):
   _, dest = built
   coll = json.loads((dest / "collection.json").read_text())
@@ -503,7 +512,8 @@ def test_a_rebuild_drops_items_the_new_models_csv_no_longer_lists(tmp_path):
   (src / "DONE").write_text("second run")   # the ingest finished again, DONE last
   swfsc_cce.build(src, out, prefix_file=pf, thumbnail=False, log=lambda m: None)
   assert sorted(p.name for p in (out / stac.CCE_ID / "items").iterdir()) == [f"{HUMPBACK}_cv.json", f"{HUMPBACK}_density.json"]
-  assert [p.name for p in (out / stac.CCE_ID / "cog").iterdir()] == [ROWS[0]["cog"]]
+  assert sorted(p.name for p in (out / stac.CCE_ID / "cog").iterdir()) == [ROWS[0]["cog"],
+                                                                           ROWS[0]["cog"].replace(".tif", "_3857.tif")]
 
 
 # ---- publish.sh --only ----
@@ -545,9 +555,26 @@ def test_publish_only_touches_nothing_but_the_collections_restricted_prefix(buil
   joined = "\n".join(calls)
   assert "catalog.json" not in joined and "biotrack" not in joined and "aquamaps" not in joined
   assert calls[0].startswith(f"s3 sync {dest}/cog {target}cog") and "--content-type image/tiff" in calls[0]
-  assert "--content-type application/json" in calls[1] and f"{target}items" in calls[1]
+  assert "--exclude *_3857.tif" in calls[0]
+  assert "--content-type application/json" in calls[2] and f"{target}items" in calls[2]
   assert calls[-1].startswith(f"s3 cp {dest}/collection.json {target}collection.json")
   assert "--cache-control no-cache" in calls[-1] and "--content-type application/json" in calls[-1]
+
+
+def test_publish_only_uploads_the_3857_copies_beside_the_originals_before_the_items(built, tmp_path):
+  _, dest = built
+  (tmp_path / "restricted_prefix_swfsc_cce.txt").write_text(PREFIX + "\n")
+  r, calls = run_publish(tmp_path, dest.parent, tmp_path, "--only", stac.CCE_ID)
+  assert r.returncode == 0, r.stderr
+  target = f"s3://oceanmetrics.io-public/atlas-restricted/{PREFIX}/{stac.CCE_ID}/cog"
+  i = next(i for i, c in enumerate(calls) if "--include *_3857.tif" in c)
+  assert calls[i] == (f"s3 sync {dest}/cog {target} --exclude * --include *_3857.tif --content-type image/tiff --dryrun")
+  assert i < next(i for i, c in enumerate(calls) if "/items" in c)
+  # every item names a staged copy, beside its original
+  for p in (dest / "items").glob("*.json"):
+    a = json.loads(p.read_text())["assets"]
+    assert a["cog_3857"]["href"] == a["cog"]["href"].replace(".tif", "_3857.tif")
+    assert (dest / "cog" / a["cog_3857"]["href"].rsplit("/", 1)[-1]).exists()
 
 
 def test_publish_only_really_drops_the_dryrun_flag(built, tmp_path):
