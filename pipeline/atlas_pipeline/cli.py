@@ -16,13 +16,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import aquamaps, docs, grid, stac, taxa, thumbs
+from . import aquamaps, docs, grid, stac, swfsc_cce, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
 RAW_DIR    = Path("~/My Drive/projects/oceanmetrics/data/raw/couto.thiagoba@gmail.com_indicators").expanduser()
 STAGING    = REPO_DIR / "catalog" / "staging"
 COLLECTIONS = ["biotrack_indicators", "biotrack_species", "aquamaps_native", "catalog"]
+# built on its own (`--collection swfsc_cce_becker2020b`), never by `all`: its input is another repo's ingest output
+EXTRA_COLLECTIONS = [stac.CCE_ID]
 CROCKFORD  = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 H3_DECIMALS = 4
 
@@ -288,7 +290,7 @@ def check_staging(out: Path = STAGING) -> list[str]:
     return [f"{cat} missing"]
   c = load_json(cat)
   bad += [f"catalog: {m}" for m in stac.check_stac_required({**c, "type": "Catalog"}) if m.startswith("missing") and "extent" not in m]
-  if "biotrack_species" in json.dumps(c) or "atlas-restricted" in json.dumps(c):
+  if any(k in json.dumps(c) for k in ("biotrack_species", stac.CCE_ID, "atlas-restricted")):
     bad.append("catalog.json links the restricted collection")
   # the atlas' AquaMaps entry is aquamaps_native: neither the v7 parent (it lists am_0.05) nor an MST AquaMaps child
   for l in c.get("links", []):
@@ -330,6 +332,10 @@ def check_staging(out: Path = STAGING) -> list[str]:
             bad.append(f"{ip.name}: {a['atlas:value_column']} not a column of {a['href']}")
     if coll_dir.name == "aquamaps_native":
       bad += [f"aquamaps_native: {m}" for m in aquamaps.check_collection(coll_dir, coll)]
+    if coll_dir.name == stac.CCE_ID:
+      pf = swfsc_cce.PREFIX_FILE
+      prefix = pf.read_text().strip() if pf.exists() else None
+      bad += [f"{stac.CCE_ID}: {m}" for m in swfsc_cce.check_collection(coll_dir, coll, prefix)]
     if coll_dir.name == "biotrack_indicators":
       hx = coll_dir / "hex.pmtiles"
       if hx.exists() and grid.pmtiles_attribute_names(hx) != ["FID"]:
@@ -372,7 +378,8 @@ def main(argv=None) -> int:
   ap = argparse.ArgumentParser(prog="build.py", description=__doc__)
   sub = ap.add_subparsers(dest="cmd", required=True)
   b = sub.add_parser("build", help="build one collection into catalog/staging/")
-  b.add_argument("--collection", choices=COLLECTIONS + ["all"], required=True)
+  b.add_argument("--collection", choices=COLLECTIONS + EXTRA_COLLECTIONS + ["all"], required=True)
+  b.add_argument("--src", type=Path, default=swfsc_cce.SRC_DEFAULT, help="ingest output (swfsc_cce_becker2020b only)")
   b.add_argument("--raw", type=Path, default=RAW_DIR)
   b.add_argument("--out", type=Path, default=STAGING)
   b.add_argument("--skip-tiles", action="store_true", help="reuse an existing hex.pmtiles")
@@ -391,6 +398,9 @@ def main(argv=None) -> int:
       elif slug == "aquamaps_native":
         r = aquamaps.build(a.out, log=log)
         log(f"done: {r['stats']['n_taxa']:,} taxa, registry {r['registry_bytes']:,} B")
+      elif slug == stac.CCE_ID:
+        r = swfsc_cce.build(a.src, a.out, log=log)
+        log(f"done: {r['species']} species, {r['items']} items, bbox {r['bbox']}; prefix in {r['prefix_file'].name}")
       elif slug == "biotrack_species":
         r = build_species(a.raw, a.out)
         log(f"done: {r['species']} species, {r['items']} items, cell_species {r['cell_rows']:,} rows, {r['cell_bytes']/1e6:.1f} MB")

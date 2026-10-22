@@ -48,6 +48,7 @@ docs/*_files/
 /catalog/staging/
 /pipeline/cache/
 /pipeline/restricted_prefix.txt
+/pipeline/restricted_prefix_*.txt
 /pipeline/.venv/
 __pycache__/
 .pytest_cache/

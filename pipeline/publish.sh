@@ -2,23 +2,74 @@
 # publish the staged atlas catalog to S3. DRY RUN by default; pass --really to upload.
 #   pipeline/publish.sh            # aws s3 sync --dryrun
 #   pipeline/publish.sh --really   # real upload (needs AWS keys with write access to the bucket)
-# the restricted species collection goes to an unlisted prefix kept in pipeline/restricted_prefix.txt (git-ignored).
+#   pipeline/publish.sh --only swfsc_cce_becker2020b [--really]   # ONE restricted collection (+ its COGs), nothing else
+# the restricted species collection goes to an unlisted prefix kept in pipeline/restricted_prefix.txt (git-ignored);
+# a collection published with --only has its own prefix file (pipeline/restricted_prefix_<name>.txt, git-ignored).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(dirname "$here")"
-stage="$repo/catalog/staging"
+stage="${ATLAS_STAGE:-$repo/catalog/staging}"
+prefix_dir="${ATLAS_PREFIX_DIR:-$here}"
 bucket="${ATLAS_BUCKET:-oceanmetrics.io-public}"
 
 flag="--dryrun"
-for a in "$@"; do
-  case "$a" in
+only=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --really) flag="" ;;
-    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
-    *) echo "unknown argument: $a" >&2; exit 2 ;;
+    --only) [ $# -ge 2 ] || { echo "--only needs a collection name" >&2; exit 2; }; only="$2"; shift ;;
+    --only=*) only="${1#--only=}" ;;
+    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 [ -n "$flag" ] && echo "DRY RUN (add --really to publish)" || echo "PUBLISHING to s3://$bucket"
+
+# ---- --only <collection>: one restricted collection to its own unlisted prefix; touches nothing else ----
+# the collections this mode knows, each with its prefix file. catalog.json, the public collections and biotrack_species
+# are never uploaded here.
+only_prefix_file() {
+  case "$1" in
+    swfsc_cce_becker2020b) echo "$prefix_dir/restricted_prefix_swfsc_cce.txt" ;;
+    *) return 1 ;;
+  esac
+}
+if [ -n "$only" ]; then
+  pf="$(only_prefix_file "$only")" || { echo "--only: unknown collection '$only' (known: swfsc_cce_becker2020b)" >&2; exit 2; }
+  src="$stage/$only"
+  [ -f "$src/collection.json" ] || { echo "nothing staged at $src (run: uv run pipeline/build.py build --collection $only)" >&2; exit 1; }
+  [ -f "$pf" ] || { echo "missing $pf (the build creates it)" >&2; exit 1; }
+  prefix="$(tr -d '[:space:]' < "$pf")"
+  dest="s3://$bucket/atlas-restricted/$prefix/$only"
+  # the guard: a 26-character ULID prefix and exactly this collection, or nothing runs
+  [[ "$dest" =~ ^s3://[a-z0-9.-]+/atlas-restricted/[0-9A-HJKMNP-TV-Z]{26}/${only}$ ]] || {
+    echo "refusing: destination $dest is not atlas-restricted/<ULID>/$only" >&2; exit 1; }
+  echo "target: $dest/"
+  # COGs first, then items and the rest, collection.json last (no-cache): a visitor never gets a collection whose
+  # items or COGs are not there yet
+  if [ -d "$src/cog" ]; then
+    aws s3 sync "$src/cog" "$dest/cog" --exclude '*' --include '*.tif' --content-type image/tiff $flag
+  fi
+  if [ -d "$src/items" ]; then
+    aws s3 sync "$src/items" "$dest/items" --exclude '*' --include '*.json' --content-type application/json $flag
+  fi
+  if [ -f "$src/README.md" ]; then
+    aws s3 cp "$src/README.md" "$dest/README.md" --content-type "text/markdown; charset=utf-8" $flag
+  fi
+  if [ -f "$src/models.csv" ]; then
+    aws s3 cp "$src/models.csv" "$dest/models.csv" --content-type "text/csv; charset=utf-8" $flag
+  fi
+  for png in "$src"/thumbnail*.png; do
+    if [ -f "$png" ]; then
+      aws s3 cp "$png" "$dest/$(basename "$png")" --content-type image/png $flag
+    fi
+  done
+  aws s3 cp "$src/collection.json" "$dest/collection.json" --content-type application/json --cache-control "no-cache" $flag
+  echo "restricted collection: atlas-restricted/$prefix/$only/collection.json (do not share publicly)"
+  exit 0
+fi
 
 [ -d "$stage/biotrack_indicators" ] || { echo "nothing staged at $stage (run: uv run pipeline/build.py build --collection all)" >&2; exit 1; }
 

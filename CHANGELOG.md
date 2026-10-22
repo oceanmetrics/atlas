@@ -3,6 +3,7 @@
 ## 0.3.4
 
 - **Fix: feedback from a collection under review no longer becomes a public GitHub issue.** A report sent while viewing an unlisted collection (opened from a `?collection=` link, picker group "Unlisted (shared by link)") was filed as a public issue with a screenshot of it, because the dialog was never told the view was restricted. A view is now restricted when its collection is unlisted or declares `atlas:access: "restricted"`, or when its URL carries `?collection=` or `?catalog=`. There the dialog takes no screenshot and sends nothing (the shared feedback endpoint files every report publicly); it says the collection is under review and asks for comments to go to whoever shared the link. The page link in any feedback (the "Report a problem" fallback link too) leaves out the share link. Analytics already left out `collection` and `catalog`.
+- Pipeline: a builder for a restricted collection shared by link, `swfsc_cce_becker2020b` (NOAA SWFSC California Current cetacean density, Becker et al. 2020: species x variable, density and cv bands of one COG each, under review), with its own unlisted prefix (`pipeline/restricted_prefix_swfsc_cce.txt`, git-ignored) and never linked from `catalog.json`; `pipeline/publish.sh --only swfsc_cce_becker2020b` uploads that one collection and its COGs and refuses any destination outside `atlas-restricted/<ULID>/swfsc_cce_becker2020b/`.
 
 ## 0.3.3
 

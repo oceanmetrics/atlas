@@ -27,6 +27,8 @@ npm run check; npm test        # svelte-check; vitest (project `logic` = node; `
 npm run build; npm run size-budget
 cd pipeline && uv run --group dev pytest -q
 uv run pipeline/build.py build --collection biotrack_indicators
+uv run pipeline/build.py build --collection swfsc_cce_becker2020b   # restricted; input = workflows ingest_swfsc_cce.qmd (DONE)
+pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collection alone, dry run unless --really
 ```
 
 ## Rules carried over from the MST atlas (still enforced by tests and scripts)

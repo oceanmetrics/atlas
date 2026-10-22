@@ -21,6 +21,7 @@ EXT = {
   "version":    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
   "file":       "https://stac-extensions.github.io/file/v2.1.0/schema.json",
   "portolan":   "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+  "raster":     "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
 }
 SOURCE_URL = "https://marinebon.org/"   # producer's public page; the raw files came from T. Couto by Google Drive
 
@@ -511,6 +512,242 @@ def species_items(bbox: list[float], taxa_rows: list[dict], value_ranges: dict[t
                   "pmtiles:layers": ["hex"], "atlas:id_field": "FID"},
         },
         "collection": "biotrack_species",
+      }
+  return items
+
+
+# ---- swfsc_cce_becker2020b (restricted) ----
+# NOAA SWFSC habitat-based cetacean density models for the California Current (Becker et al. 2020), as delivered
+# (animals per km2) and area-weighted onto the 0.05 degree global grid by oceanmetrics/workflows ingest_swfsc_cce.qmd.
+# Shared by an unlisted link for provider and BOEM/MMA review: its OWN unlisted prefix
+# (pipeline/restricted_prefix_swfsc_cce.txt, git-ignored), never biotrack's, and never linked from catalog.json.
+
+CCE_ID = "swfsc_cce_becker2020b"
+CCE_INPORT = "https://www.fisheries.noaa.gov/inport/item/64349"
+CCE_DOI = "10.25923/3znq-yx13"
+CCE_ARCGIS = "https://noaa.maps.arcgis.com/home/item.html?id=566b4ad31f1d40eeb65b8cf3a4f087ca"
+CCE_REPORT = "https://repository.library.noaa.gov/view/noaa/27826"
+# InPort 64349 "Data Set Credit" (checked 2026-10-22), in the atlas' citation style
+CCE_CITATION = (
+  "Becker, E. A., Forney, K. A., Miller, D. L., Fiedler, P. C., Barlow, J., & Moore, J. E. (2020). Habitat-based "
+  "density estimates for cetaceans in the California Current Ecosystem based on 1991-2018 survey data. U.S. "
+  "Department of Commerce, NOAA Technical Memorandum NMFS-SWFSC-638. https://doi.org/10.25923/3znq-yx13")
+# InPort 64349 "Use Constraints" / "Data Use Constraints", verbatim (the ArcGIS item's licenseInfo is the same text).
+# InPort states no license; NOAA Fisheries publishes the product.
+CCE_USE_CONSTRAINTS = (
+  '*** No Warranty*** The user assumes the entire risk related to its use of these data. NMFS is providing these '
+  'data "as is," and NMFS disclaims any and all warranties, whether express or implied, including (without '
+  'limitation) any implied warranties of merchantability or fitness for a particular purpose. No warranty expressed '
+  'or implied is made regarding the accuracy or utility of the data on any other system or for general or '
+  'scientific purposes, nor shall the act of distribution constitute any such warranty. It is strongly recommended '
+  'that careful attention be paid to the contents of the metadata file associated with these data to evaluate '
+  'dataset limitations, restrictions or intended use. In no event will NMFS be liable to you or to any third party '
+  'for any direct, indirect, incidental, consequential, special or exemplary damages or lost profit resulting from '
+  'any use or misuse of these data.')
+CCE_LICENSE = "other"
+CCE_NOTE = (
+  "Under review: shared by link for provider and BOEM/MMA review; not for distribution. Density as delivered "
+  "(animals per km²), area-weighted onto a 0.05° grid by Ocean Metrics for the Marine Sensitivity Toolkit; not "
+  "yet used in any score.")
+# no email is shown for anyone (the collection is shared by link)
+CCE_CONTACTS = [
+  {"name": "Elizabeth A. Becker", "organization": "NOAA Southwest Fisheries Science Center",
+   "position": "Lead author, NOAA-TM-NMFS-SWFSC-638", "roles": ["principal investigator"]},
+]
+CCE_PROVIDERS = [
+  {"name": "NOAA Southwest Fisheries Science Center (SWFSC)", "roles": ["producer"],
+   "url": "https://www.fisheries.noaa.gov/about/southwest-fisheries-science-center",
+   "description": "habitat-based density models, Becker et al. 2020 (NOAA-TM-NMFS-SWFSC-638)"},
+  {"name": "NOAA Fisheries Office of Science and Technology", "roles": ["host"], "url": CCE_INPORT,
+   "description": "distributor of the delivered file geodatabase (InPort 64349)"},
+  {"name": "Ocean Metrics", "roles": ["processor", "host"], "url": "https://oceanmetrics.io",
+   "description": "area-weighted onto the 0.05 degree grid of the Marine Sensitivity Toolkit"},
+]
+CCE_START, CCE_END = "1991-07-01T00:00:00Z", "2018-11-30T23:59:59Z"
+CCE_SEASON = "summer-fall"
+CCE_SEASON_LABEL = "Summer-Fall (July-November)"
+CCE_METHOD_DETAIL = (
+  "Habitat-based density models (generalized additive models of line-transect sightings, with segment-specific "
+  "detection probability and dynamic covariates from an ocean model calibrated to the California Current "
+  "Ecosystem) fit to NOAA SWFSC ship surveys 1991-2018 (Becker et al. 2020); Summer-Fall (July-November) density "
+  "in animals per km2 and its coefficient of variation, as delivered, area-weighted onto the 0.05 degree global "
+  "grid by Ocean Metrics.")
+CCE_VARIABLES = ["density", "cv"]
+CCE_VARIABLE_LABELS = {"density": "Density (animals per km²)", "cv": "Coefficient of variation"}
+CCE_UNITS = {"density": "animals/km2", "cv": "unitless"}
+CCE_BIDX = {"density": 1, "cv": 2}
+# density: [min, p98] of the band, read by the app from titiler /cog/statistics; cv: a fixed 0-2 so species compare
+# (the delivered cv's 98th percentile runs 0.26 to 3.96 across the 13 species; a cv of 1 is a standard error as
+# large as the density, above 2 draws at the top colour)
+CCE_RESCALE = {"density": "auto", "cv": [0, 2]}
+CCE_COLORMAP = {"density": "viridis", "cv": "magma"}
+COG_T = "image/tiff; application=geotiff; profile=cloud-optimized"
+S3_PATH_STYLE = "https://s3.us-east-1.amazonaws.com"
+
+
+def restricted_base_url(prefix: str, coll_id: str, bucket: str = "oceanmetrics.io-public") -> str:
+  """the absolute, path-style S3 URL of a restricted collection's folder (titiler reads it; the storage host's
+  302 lacks CORS); ends with '/'."""
+  if not prefix or "/" in prefix:
+    raise ValueError(f"bad restricted prefix {prefix!r}")
+  return f"{S3_PATH_STYLE}/{bucket}/atlas-restricted/{prefix}/{coll_id}/"
+
+
+def cce_label(row: dict) -> str:
+  """"Humpback whale (Megaptera novaeangliae)"; a name WoRMS no longer accepts keeps its delivered name and adds the
+  accepted one, the genus abbreviated when it is the same: "Long-beaked common dolphin (Delphinus capensis; WoRMS
+  accepted: D. delphis)"."""
+  sci, acc = row["scientific_name"], (row.get("scientific_name_accepted") or "").strip()
+  if not acc or acc == sci:
+    return f"{row['species']} ({sci})"
+  g_sci, g_acc, *rest = sci.split()[:1] + acc.split()
+  short = f"{g_acc[0]}. {' '.join(rest)}" if g_sci == g_acc and rest else acc
+  return f"{row['species']} ({sci}; WoRMS accepted: {short})"
+
+
+def cce_item_id(row: dict, variable: str) -> str:
+  return f"{int(row['worms_id'])}_{variable}"
+
+
+def _cce_bands(nodata) -> list[dict]:
+  nd = {} if nodata is None else {"nodata": "nan" if nodata != nodata else nodata}
+  return [
+    {"name": "density", "description": "density, animals per km2", "data_type": "float32", "unit": "animals/km2", **nd},
+    {"name": "cv", "description": "coefficient of variation of density", "data_type": "float32", "unit": "unitless", **nd},
+  ]
+
+
+def cce_collection(rows: list[dict], bbox: list[float], base_url: str, assets: dict | None = None) -> dict:
+  """restricted collection: species x variable (density band 1, cv band 2) over the shared 2-band COGs of the
+  delivered Summer-Fall models; not linked from catalog.json. `rows` are models.csv rows; `base_url` is
+  restricted_base_url(...); `assets` adds collection assets (thumbnail, models.csv)."""
+  ids = [str(int(r["worms_id"])) for r in rows]
+  if len(set(ids)) != len(ids):
+    raise ValueError("duplicate worms_id in models.csv")
+  n = len(rows)
+  return {
+    "type": "Collection",
+    "stac_version": STAC_VERSION,
+    "stac_extensions": [EXT["sdm"], EXT["scientific"], EXT["datacube"], EXT["contacts"], EXT["raster"], EXT["file"]],
+    "id": CCE_ID,
+    "updated": now_rfc3339(),
+    "title": "California Current cetacean density, SWFSC (Becker et al. 2020), under review",
+    "description": (
+      f"Habitat-based density models for {n} cetacean species in the California Current Ecosystem from NOAA SWFSC "
+      "ship line-transect surveys 1991-2018 (Becker et al. 2020, NOAA-TM-NMFS-SWFSC-638). One season, Summer-Fall "
+      "(July-November). Pick a species and a variable: density (animals per km2) or its coefficient of "
+      "variation, both as delivered, area-weighted onto a 0.05 degree grid. UNDER REVIEW: shared by link for "
+      "provider and BOEM/MMA review; not for distribution. Methods and credits: README.md."),
+    "license": CCE_LICENSE,
+    "deprecated": False,
+    "sci:citation": CCE_CITATION,
+    "sci:doi": CCE_DOI,
+    "contacts": CCE_CONTACTS,
+    "providers": CCE_PROVIDERS,
+    "atlas:funders": [],
+    "atlas:status": "under review",
+    "atlas:access": "restricted",
+    "atlas:note": CCE_NOTE,
+    "atlas:use_constraints": CCE_USE_CONSTRAINTS,
+    "extent": {"spatial": {"bbox": [bbox]}, "temporal": {"interval": [[CCE_START, CCE_END]]}},
+    "sdm:response_type": "density",
+    "sdm:method": "density_surface_model",
+    "sdm:method_detail": CCE_METHOD_DETAIL,
+    "sdm:source_authority": "NOAA SWFSC",
+    "sdm:temporal_interval": "seasonal",
+    "sdm:climatological": True,
+    "cube:dimensions": {
+      "species": {"type": "other", "title": "Species", "description": "species (WoRMS AphiaID; common and scientific name)",
+                  "values": ids, "atlas:labels": {str(int(r["worms_id"])): cce_label(r) for r in rows},
+                  "atlas:taxon_dim": True},
+      "variable": {"type": "other", "title": "Variable", "description": "density (band 1) or its coefficient of variation (band 2)",
+                   "values": CCE_VARIABLES, "atlas:labels": CCE_VARIABLE_LABELS},
+    },
+    "summaries": {"sdm:response_type": ["density"], "variable": CCE_VARIABLES, "atlas:season": [CCE_SEASON]},
+    "assets": dict(assets or {}),
+    "links": [
+      {"rel": "root", "href": "./collection.json", "type": JSON_T},
+      {"rel": "self", "href": "./collection.json", "type": JSON_T},
+      *[{"rel": "item", "href": f"./items/{cce_item_id(r, v)}.json", "type": "application/geo+json",
+         "title": f"{cce_label(r)} · {CCE_VARIABLE_LABELS[v]}"} for r in rows for v in CCE_VARIABLES],
+      {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods, review status and credits"},
+      {"rel": "cite-as", "href": f"https://doi.org/{CCE_DOI}", "type": "text/html",
+       "title": "Becker et al. 2020, NOAA-TM-NMFS-SWFSC-638"},
+      {"rel": "via", "href": CCE_INPORT, "type": "text/html", "title": "InPort 64349 (NOAA Fisheries metadata)"},
+      {"rel": "related", "href": CCE_ARCGIS, "type": "text/html", "title": "Delivered file geodatabase (ArcGIS Online)"},
+      {"rel": "license", "href": CCE_INPORT, "type": "text/html",
+       "title": "No license stated; NOAA Fisheries use constraints (No Warranty) on InPort 64349"},
+    ],
+  }
+
+
+def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base_url: str,
+              nodata=None) -> dict[str, dict]:
+  """2 Items per species ({worms_id}_density, {worms_id}_cv) over ONE 2-band COG each; hrefs are absolute under the
+  restricted prefix (`base_url` + cog/<file>). `bbox` and `nodata` are one value for all, or {worms_id: value} (each
+  COG's own data extent and nodata)."""
+  items = {}
+  for r in rows:
+    wid = int(r["worms_id"])
+    box = bbox[wid] if isinstance(bbox, dict) else bbox
+    nd = nodata.get(wid) if isinstance(nodata, dict) else nodata
+    href = f"{base_url}cog/{r['cog']}"
+    taxon = {"scientific_name": r["scientific_name"], "common_name": r["species"], "authorities": {"worms": wid},
+             "group": "mammal"}
+    for v in CCE_VARIABLES:
+      iid = cce_item_id(r, v)
+      props = {
+        "title": f"{cce_label(r)} · {CCE_VARIABLE_LABELS[v]}",
+        "description": (f"{CCE_VARIABLE_LABELS[v]} of {r['species']} ({r['scientific_name']}), {CCE_SEASON_LABEL}, "
+                        "California Current Ecosystem (Becker et al. 2020), on the 0.05 degree grid. Under review."),
+        "datetime": None, "start_datetime": CCE_START, "end_datetime": CCE_END,
+        "atlas:dims": {"species": str(wid), "variable": v},
+        "atlas:season": CCE_SEASON,
+        "atlas:mdl_key": r.get("mdl_key"),
+        # the delivered WoRMS id is kept as the key; its accepted id when WoRMS no longer accepts it
+        "atlas:worms_status": r.get("worms_status") or None,
+        "atlas:worms_id_accepted": (int(float(r["worms_id_accepted"]))
+                                    if str(r.get("worms_id_accepted") or "").strip()
+                                    and int(float(r["worms_id_accepted"])) != wid else None),
+        "atlas:scientific_name_accepted": (r.get("scientific_name_accepted")
+                                           if r.get("scientific_name_accepted")
+                                           and r.get("scientific_name_accepted") != r["scientific_name"] else None),
+        "sdm:response_type": "density",
+        "sdm:method": "density_surface_model",
+        "sdm:method_detail": CCE_METHOD_DETAIL,
+        "sdm:source_authority": "NOAA SWFSC",
+        "sdm:temporal_interval": "seasonal",
+        "sdm:climatological": True,
+        "sdm:value_unit": CCE_UNITS[v],
+        "sdm:taxon": taxon,
+      }
+      if v == "density":
+        props |= {"sdm:value_range": [float(r["density_min"]), float(r["density_max"])],
+                  "atlas:density_p98": float(r["density_p98"]), "atlas:n_cells": int(r["n_cells"])}
+      else:
+        props |= {"atlas:cv_median": float(r["cv_median"])}
+      props = {k: x for k, x in props.items() if x is not None}
+      items[iid] = {
+        "type": "Feature",
+        "stac_version": STAC_VERSION,
+        "stac_extensions": [EXT["sdm"], EXT["raster"]],
+        "id": iid,
+        "bbox": box,
+        "geometry": bbox_polygon(box),
+        "properties": props,
+        "links": [
+          {"rel": "root",       "href": "../collection.json", "type": JSON_T},
+          {"rel": "parent",     "href": "../collection.json", "type": JSON_T},
+          {"rel": "collection", "href": "../collection.json", "type": JSON_T},
+          {"rel": "self",       "href": f"./{iid}.json", "type": "application/geo+json"},
+        ],
+        "assets": {
+          "cog": {"href": href, "type": COG_T, "roles": ["data"],
+                  "title": f"{r['species']}, {CCE_VARIABLE_LABELS[v]} (band {CCE_BIDX[v]})",
+                  "atlas:bidx": CCE_BIDX[v], "atlas:rescale": CCE_RESCALE[v], "atlas:colormap": CCE_COLORMAP[v],
+                  "raster:bands": _cce_bands(nd)},
+        },
+        "collection": CCE_ID,
       }
   return items
 

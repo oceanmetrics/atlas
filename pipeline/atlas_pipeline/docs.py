@@ -359,3 +359,86 @@ Non-commercial use only (CC BY-NC 3.0); say the maps and numbers come from AquaM
    Never compute numbers from tile pixels.
 5. Related: the downscale's MarineSensitivity collection is {aq.V8_COLLECTION} (release v8).
 """
+
+
+# ---- swfsc_cce_becker2020b (restricted) ----
+
+def cce_readme(rows: list[dict]) -> str:
+  """README.md (describedby) of the restricted SWFSC California Current density collection. No email, no URL of
+  the unlisted prefix (the README sits under it already)."""
+  from . import stac
+  table = "\n".join(
+    f"| {r['species']} | *{r['scientific_name']}* | {int(r['worms_id'])} | {int(r['n_cells']):,} | "
+    f"{float(r['density_p98']):.3g} | {float(r['density_max']):.3g} | {float(r['cv_median']):.2f} |"
+    for r in rows)
+  moved = [r for r in rows if str(r.get("worms_id_accepted") or "").strip()
+           and int(float(r["worms_id_accepted"])) != int(r["worms_id"])]
+  worms_note = "" if not moved else (
+    " WoRMS no longer accepts " + "; ".join(
+      f"*{r['scientific_name']}* ({int(r['worms_id'])}, {r.get('worms_status') or 'not accepted'}; accepted: "
+      f"{('*' + r['scientific_name_accepted'] + '*, ') if r.get('scientific_name_accepted') else ''}"
+      f"{int(float(r['worms_id_accepted']))})" for r in moved)
+    + ", recorded on their Items as `atlas:worms_id_accepted`.")
+  return f"""\
+# California Current cetacean density, SWFSC (Becker et al. 2020): UNDER REVIEW
+
+> {stac.CCE_NOTE}
+
+This collection is not linked from the public `catalog.json`; it sits under an unlisted prefix and is shared by link
+only. Do not share the link or redistribute the data.
+
+## What it is
+
+NOAA Southwest Fisheries Science Center habitat-based density models for {len(rows)} cetacean species in the California
+Current Ecosystem (Becker et al. 2020, NOAA Technical Memorandum NMFS-SWFSC-638), from ship line-transect surveys
+1991-2018. One season, **Summer-Fall** (July-November, the survey season). Each species has one 2-band
+cloud-optimized GeoTIFF: band 1 is density (animals per km2), band 2 its coefficient of variation (cv). The atlas
+shows them as two selectors, species and variable.
+
+The collection has the {len(rows)} layers the delivered geodatabase holds. The InPort abstract also names sperm whale
+and a "small beaked whale guild" (Mesoplodon spp. and Cuvier's beaked whale); neither is in the geodatabase, so
+neither is here.
+
+## Method
+
+{stac.CCE_METHOD_DETAIL}
+
+The delivered model predictions (InPort 64349, a file geodatabase of density and cv per 0.1 degree prediction
+cell) were area-weighted onto the 0.05 degree global grid of the Marine Sensitivity Toolkit by Ocean Metrics
+(`MarineSensitivity/workflows` `ingest_swfsc_cce.qmd`): each 0.05 degree cell takes the area-weighted mean of the
+source cells it overlaps. The cv is the delivered `UNCERTAINTY` field, defined on InPort as "Numerical uncertainty
+value (CV)", with the same area weighting: where a 0.05 degree cell straddles source cells (74.6 % of cells) it is
+an area-weighted blend of their CVs, an approximation for a coefficient of variation; there the dominant source
+cell supplies a median 93.5 % of the area (the ingest's figures, 2026-10-22). The total abundance is kept: `abundance_source` and `abundance_regridded` in `models.csv` agree. Values stay density
+as delivered (animals per km2), not rescaled; they are not yet used in any Marine Sensitivity score. The map draws
+density from its minimum to its 98th percentile (`atlas:rescale: auto`) and cv on a fixed 0-2 range, the same for
+every species (a cv of 1 is a standard error as large as the density; above 2 draws at the top colour).
+
+## Species
+
+| species | scientific name | WoRMS | cells | density p98 | density max | cv median |
+|---|---|---:|---:|---:|---:|---:|
+{table}
+
+Density in animals per km2. The WoRMS id is the one delivered.{worms_note}
+
+## Credits
+
+- Citation: {stac.CCE_CITATION}
+- Producer: NOAA Southwest Fisheries Science Center (lead author Elizabeth A. Becker). Distributor: NOAA Fisheries
+  Office of Science and Technology, InPort item 64349 ({stac.CCE_INPORT}).
+- Processing (0.05 degree grid): Ocean Metrics, for the Marine Sensitivity Toolkit.
+- License: none is stated on InPort; the product is published by NOAA Fisheries. Use constraints, quoted from
+  InPort 64349:
+
+  > {stac.CCE_USE_CONSTRAINTS}
+
+## Files
+
+- `items/`: {2 * len(rows)} Items `{{worms_id}}_density` and `{{worms_id}}_cv` (one COG, `atlas:bidx` 1 or 2).
+- `cog/cce_{{worms_id}}_summer-fall.tif`: the 2-band Float32 COGs (band 1 density, band 2 cv, nodata -9999), a
+  window over the California Current aligned to the global 0.05 degree grid.
+- `models.csv`: one row per species (layer, names, WoRMS id, season, mdl_key, cog file, n_cells, abundance source,
+  density min / p98 / max, cv median) from the ingest.
+- `thumbnail.png`, `thumbnail-sm.png`: a 2x2 panel of four Summer-Fall density surfaces.
+"""
