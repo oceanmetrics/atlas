@@ -11,7 +11,7 @@ import {
   placesLayerPage,
 } from "../../src/lib/gazetteer/layerInfo";
 import { GAZETTEER_BUCKET_BASE, GAZETTEER_ROOT } from "../../src/lib/gazetteer/config";
-import type { Layer } from "../../src/lib/gazetteer/vendor/types";
+import type { Layer } from "@oceanmetrics/places";
 
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(new URL(`../fixtures/gazetteer/${name}`, import.meta.url), "utf8"));
@@ -38,6 +38,7 @@ const manifestRow = (over: Partial<Layer> = {}): Layer =>
     license: "CC-BY-4.0",
     license_url: "https://creativecommons.org/licenses/by/4.0/",
     citation: "",
+    access: "public",
     ...over,
   }) as Layer;
 

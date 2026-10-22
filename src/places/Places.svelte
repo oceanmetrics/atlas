@@ -138,8 +138,8 @@
   });
 
   // --- "Search the gazetteer" (WP4) -----------------------------------------------------------------
-  // The places index (`places_index.parquet`, ~1 MB, every collection) is read ONCE by the vendored
-  // client's `search()` and searched locally; the lazy chunk and the file are only fetched when the
+  // The places index (`places_index.parquet`, ~1 MB, every collection) is read ONCE by the
+  // @oceanmetrics/places client's `search()` and searched locally; the lazy chunk and the file are only fetched when the
   // field is first focused or typed in. A hit is added BY REFERENCE (a `p.` token), exactly like a
   // click on the map.
   let query = $state("");

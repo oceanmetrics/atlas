@@ -1,6 +1,6 @@
 # Gazetteer places in the atlas (the `p.` place_id token)
 
-> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** Current for places by reference (`p.` token), the vendored client, overlays and summaries. The lines that mention `report.html` and `src/report/gazPlaces.ts` describe the retired Report: OceanMetrics Atlas has no report page, and the Places tool's list, summaries and GeoJSON download replace it.
+> **Status in OceanMetrics Atlas (WP11, 2026-10-14).** Current for places by reference (`p.` token), the gazetteer client (`@oceanmetrics/places` from npm since 0.4.1), overlays and summaries. The lines that mention `report.html` and `src/report/gazPlaces.ts` describe the retired Report: OceanMetrics Atlas has no report page, and the Places tool's list, summaries and GeoJSON download replace it.
 
 The atlas can hold a place from the Ocean Metrics places gazetteer **by reference**: the link carries
 the gazetteer `place_id`, not the geometry. This note is the contract the `msens` R package mirrors
@@ -61,7 +61,7 @@ A failed fetch never removes the token: the place stays in the link and the list
 
 - `src/lib/geo/placeCodec.ts`: `GazPlace {kind:"gaz", id, name}`, `p.` encode/decode, `MAX_ID_CHARS`.
 - `src/lib/gazetteer/`: `config.ts` (bases, built-in credits; static-safe), `resolve.ts` (lazy: fetch,
-  unwrap, manifest, credits), `vendor/` (see below).
+  unwrap, manifest, credits) through `@oceanmetrics/places` (see below).
 - Pick from gazetteer: a Places-panel toggle that shows a gazetteer PMTiles collection (composeStyle
   `gazetteer` input, `src/lib/map/layers/gazetteer.ts`, role group "Selection") and adds the clicked
   polygon's `place_id` (`src/places/gazPick.ts`, `model.ts#addGazPlace`). The `places` collection is
@@ -73,12 +73,18 @@ A failed fetch never removes the token: the place stays in the link and the list
 
 ## Decisions to know about
 
-- **Vendored client, not a dependency.** `@oceanmetrics/places` is private and unpublished, and a
-  `file:../../oceanmetrics/places/client` dependency would break `npm ci` everywhere but one machine. The
-  files needed are copied to `src/lib/gazetteer/vendor/` (provenance header in each: v0.1.0, commit
-  `3ff9fbf`); `client.ts` is trimmed (no `addLayer`/`search`: the atlas builds map layers through
-  `composeStyle`). When the package is published, replace the folder with the dependency. It brings
-  `hyparquet@1.31.3` and `hyparquet-compressors@1.1.2` (exact pins, lazy only).
+- **The client is the npm package.** `@oceanmetrics/places` ^0.5.1 (`oceanmetrics/platform`
+  `packages/places`) is a dependency; until atlas 0.4.1 a trimmed copy of 0.1.3 lived in
+  `src/lib/gazetteer/vendor/`. `resolve.ts` is the one module that calls it (`createClient`, `getPlace`
+  with `unwrap` and `slug`, `listLayers`, `creditsFor`, `search`) and is reached only by dynamic
+  `import()`; elsewhere only its types are imported (`import type`, erased), so neither the client nor
+  hyparquet enters the static graph (`tests/gazetteer/lazyImports.test.ts`, the size budget). Its
+  `hyparquet ^1.30.1` / `hyparquet-compressors ^1.1.1` resolve to the atlas's own exact pins (1.31.3 /
+  1.1.2): one copy. Two 0.5.1 rules the atlas follows: `listLayers()` leaves out `access: "unlisted"`
+  rows, so the picker does not offer them, and the Layers panel lists an unlisted layer only while a
+  link (`?ov=`) has it on (hidden from lists, not from a link); raster and derived layers carry
+  `pmtiles: null` and are not drawn or offered. The package's `dist/` imports its own modules without
+  extensions, so `vitest.config.ts` inlines it (Vite resolves them; Node's ESM loader does not).
 - **Reads go to the bucket URL, not `storage.oceanmetrics.io`.** That host 302s every object request,
   including the CORS preflight a `Range` read triggers, and browsers reject a redirected preflight
   (`OPTIONS .../places.parquet` -> 302, checked 2026-10-08). The same tree on
@@ -99,7 +105,7 @@ A failed fetch never removes the token: the place stays in the link and the list
   drawn in both lenses (WP11): `SpeciesLens.svelte` mounts `PlaceLayerList` through `LayersPanel`'s
   `placeLayers` snippet like the Collections lens, and `Shell.svelte` no longer conditions the overlays on
   the lens, so `?ov=` works in either.
-- **Search.** `searchGazetteer()` (`resolve.ts`, lazy) wraps the vendored client's `search()`: areas only,
+- **Search.** `searchGazetteer()` (`resolve.ts`, lazy) wraps the client's `search()`: areas only,
   one hit per place_id. A `p.` token carries the id alone, so an id that lives in two collections
   resolves to the first by authority order (the same lease in both BOEM layers: the same polygon).
 - **Summaries.** `summary.ts` (pure), `summary.svelte.ts` (wiring), `hex_centroids` read by

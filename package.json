@@ -1,7 +1,7 @@
 {
   "name": "oceanmetrics-atlas",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "OceanMetrics Atlas: catalog-driven maps of species distribution model products, with places from the Ocean Metrics gazetteer.",
   "license": "MIT",
   "type": "module",
@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",
+    "@oceanmetrics/places": "^0.5.1",
     "@tmcw/togeojson": "7.1.2",
     "driver.js": "^1.8.0",
     "flatgeobuf": "4.4.0",
@@ -51,7 +52,7 @@
   },
   "pinReasons": {
     "_": "package.json is JSON and cannot carry a real comment, so these entries ARE the inline reason (atlas-refs/'calcofi explore review.md' §11 lesson 10). Full evidence and the wiring each pin depends on: docs/spikes/S1.md, S2.md, S4.md. tests/pins.test.ts fails if a range here drifts from its verdict line.",
-    "hyparquet": "EXACT 1.31.3 + hyparquet-compressors EXACT 1.1.2 (gazetteer-places). The parquet range reader behind the VENDORED @oceanmetrics/places client (src/lib/gazetteer/vendor/, not published to npm): a `p.` place_id token is resolved by a filtered range read of the collection's places.parquet. These are the exact versions that client's own tests ran against. Reached ONLY through src/lib/gazetteer/resolve.ts's dynamic import() -- never in index.html's static graph.",
+    "hyparquet": "EXACT 1.31.3 + hyparquet-compressors EXACT 1.1.2. The atlas's own parquet reader: per-item values, species, hex centroids, raster cell species and the taxa registry (src/lib/catalog/{values,species,centroids,cellSpecies}.ts, registry/rows.ts), each a dynamic import(). The same pair is what @oceanmetrics/places (the gazetteer client, npm ^0.5.1) reads places.parquet and the places index with; its ranges (^1.30.1, ^1.1.1) admit these pins, so npm dedupes to ONE copy (`npm ls hyparquet`): a bump here is a bump for both. Reached ONLY through dynamic import() (the catalog readers, and src/lib/gazetteer/resolve.ts for the client) -- never in index.html's static graph (scripts/size-budget-core.mjs FORBIDDEN_LAZY_MARKERS lists \"hyparquet\"; tests/gazetteer/lazyImports.test.ts is the source-level gate).",
     "driver.js": "^1.8.0 (U6, round 2). The guided tour, the same package + range CalCOFI explore pins (src/tour.ts). No dedicated spike (not S1/S2/S4, so tests/pins.test.ts's spike-verdict gate does not cover this pair) -- pinned anyway for the same reason terra-draw/qrcode-generator are: a version bump changing popover/step behaviour should be a reviewed diff. Reached ONLY through src/shell/tourRuntime.ts's dynamic import() -- it must never enter index.html's static graph (scripts/size-budget-core.mjs's FORBIDDEN_LAZY_MARKERS now lists \"driver\").",
     "html-to-image": "^1.11.13 (U3, round 2). The feedback screenshot capture (src/lib/feedback/capture.ts) -- the SAME package + range CalCOFI explore pins (src/capture.ts), chosen there over html2canvas because html2canvas rejects on `color-mix()` (tokens.css's light-theme palette). No dedicated spike (not S1/S2/S4, so tests/pins.test.ts's spike-verdict gate does not cover this pair) -- pinned anyway for the same reason driver.js/terra-draw are: a version bump changing the DOM-to-canvas serialization should be a reviewed diff, not a silent `npm install`. Reached ONLY through FeedbackDialog.svelte's dynamic import() -- it must never enter index.html's static graph (scripts/size-budget-core.mjs's FORBIDDEN_LAZY_MARKERS now lists \"html-to-image\"; tests/feedback/lazy.test.ts is the source-level wiring gate).",
     "@duckdb/duckdb-wasm": "EXACT 1.32.0, no caret (S1). npm 'latest' (1.33.1-dev57.0) creates OPFS files and never writes to them: the reopen after a reload throws 'Catalog Error: Table with name t does not exist!' on chromium AND firefox. 1.33.1-dev64.0 ('next') also passes but is a moving dist-tag on a dev build. A caret would admit a future stable 1.33.x, which is the line the write bug lives in and which nobody has tested. Bumping this means re-running spikes/1/e2e/persistence.spec.js; dev57 must stay red.",
@@ -67,6 +68,7 @@
     "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
     "@mdi/js": "7.4.47",
+    "@oceanmetrics/catalog": "^0.2.0",
     "@playwright/test": "^1.63.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",

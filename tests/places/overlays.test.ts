@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   groupOverlays,
   kindOf,
+  listedOverlays,
   overlayCreditLine,
   overlayCreditsFor,
   overlayLayerOf,
@@ -9,9 +10,9 @@ import {
   overlaySpecs,
   themeOf,
 } from "../../src/places/overlays";
-import type { Layer } from "../../src/lib/gazetteer/vendor/types";
+import type { TiledLayer } from "../../src/lib/gazetteer/manifest";
 
-const row = (over: Partial<Layer> & { slug: string }): Layer =>
+const row = (over: Partial<TiledLayer> & { slug: string }): TiledLayer =>
   ({
     title: over.slug,
     collection: over.slug,
@@ -33,10 +34,11 @@ const row = (over: Partial<Layer> & { slug: string }): Layer =>
     license: "CC-PDDC",
     license_url: null,
     citation: "",
+    access: "public",
     ...over,
-  }) as Layer;
+  }) as TiledLayer;
 
-const MANIFEST: Layer[] = [
+const MANIFEST: TiledLayer[] = [
   row({
     slug: "noaa_sanctuaries",
     title: "NOAA national marine sanctuaries",
@@ -125,6 +127,29 @@ describe("grouping: by theme when the manifest has place types, else alphabetica
   });
   it("an empty manifest has no groups", () => {
     expect(groupOverlays([])).toEqual([]);
+  });
+});
+
+describe("access (client 0.5.1): an unlisted collection is hidden from the list, not from a link", () => {
+  const withHidden = overlayLayersFrom([
+    ...MANIFEST,
+    row({ slug: "restricted_zones", title: "Restricted zones", access: "unlisted" }),
+  ]);
+  it("`listed` follows `access`; a row from an older manifest (no `access`) is listed", () => {
+    expect(withHidden.find((l) => l.slug === "restricted_zones")!.listed).toBe(false);
+    expect(withHidden.find((l) => l.slug === "boem_wind_leases")!.listed).toBe(true);
+    const old = { ...MANIFEST[0] } as Partial<(typeof MANIFEST)[0]>;
+    delete old.access;
+    expect(overlayLayerOf(old as (typeof MANIFEST)[0]).listed).toBe(true);
+  });
+  it("the list leaves it out until a link turns it on; the map draws it from the link", () => {
+    expect(listedOverlays(withHidden, []).map((l) => l.slug)).not.toContain("restricted_zones");
+    expect(listedOverlays(withHidden, ["restricted_zones"]).map((l) => l.slug)).toContain(
+      "restricted_zones",
+    );
+    expect(overlaySpecs(withHidden, ["restricted_zones"]).map((s) => s.slug)).toEqual([
+      "restricted_zones",
+    ]);
   });
 });
 

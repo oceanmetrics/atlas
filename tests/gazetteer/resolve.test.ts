@@ -1,5 +1,5 @@
-// the lazy half of the `p.` token: fetch a place by id from collection parquet (the REAL vendored
-// client against committed fixtures over local HTTP), and what happens when the gazetteer is
+// the lazy half of the `p.` token: fetch a place by id from collection parquet (the REAL
+// @oceanmetrics/places client against committed fixtures over local HTTP), and what happens when the gazetteer is
 // unreachable. Fixture places (see tests/fixtures/gazetteer): FX:A-1 (a plain polygon at -124..-123),
 // FX:PM (a MultiPolygon cut at +/-180: 170..180, -180..-170 and a detached -165..-164 part),
 // AOA:N1 (a different collection, found through layers.json).
@@ -11,7 +11,7 @@ import {
   resolveGazPlace,
   type GazetteerClient,
 } from "../../src/lib/gazetteer/resolve";
-import { createClient } from "../../src/lib/gazetteer/vendor/client";
+import { createClient } from "@oceanmetrics/places";
 import { analysisGeometry } from "../../src/lib/geo/analysisGeometry";
 import { isUnwrapped } from "../../src/lib/geo/unwrap";
 import { bboxOf, type AreaGeometry } from "../../src/lib/geo/types";
@@ -177,6 +177,47 @@ describe("loadPickLayers (layers.json)", () => {
     const missing = createClient({ base: srv.base + "missing/" });
     expect(await loadPickLayers(missing)).toBeNull();
   });
+
+  it("client 0.5.1: an unlisted layer and a raster layer (no PMTiles of ours) are not offered", async () => {
+    const manifest = {
+      layers: [
+        {
+          slug: "fx_pub",
+          title: "Public",
+          geom_type: "MultiPolygon",
+          pmtiles: "https://storage.oceanmetrics.io/gazetteer/fx_pub/places.pmtiles",
+          source_layer: "fx_pub",
+          attribution: "Pub.",
+          access: "public",
+        },
+        {
+          slug: "fx_hidden",
+          title: "Hidden",
+          geom_type: "MultiPolygon",
+          pmtiles: "https://storage.oceanmetrics.io/gazetteer/fx_hidden/places.pmtiles",
+          source_layer: "fx_hidden",
+          attribution: "Hidden.",
+          access: "unlisted",
+        },
+        {
+          slug: "fx_raster",
+          title: "Raster",
+          kind: "raster",
+          geom_type: "Polygon",
+          pmtiles: null,
+          source_layer: null,
+          attribution: "",
+          access: "public",
+        },
+      ],
+    };
+    const fetchStub = (async () =>
+      new Response(JSON.stringify(manifest), {
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    const stubbed = createClient({ base: srv.base, fetch: fetchStub });
+    expect((await loadPickLayers(stubbed))?.map((l) => l.slug)).toEqual(["fx_pub"]);
+  });
 });
 
 describe("creditsForPlaces", () => {
@@ -199,7 +240,7 @@ describe("creditsForPlaces", () => {
   });
 });
 
-// WP4: searching the places index (`search()` of the vendored client) for areas to add by reference
+// WP4: searching the places index (`search()` of the @oceanmetrics/places client) for areas to add by reference
 describe("searchGazetteer: areas from the index, one per place_id", () => {
   const hit = (over: Record<string, unknown>) => ({
     place_id: "A:1",

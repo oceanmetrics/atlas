@@ -1,12 +1,14 @@
 // places/overlays.ts -- the pure model behind the Layers panel's "Place layers" group: gazetteer
-// collections from `index/layers.json` as toggleable overlays. Which are listed (every collection),
+// collections from `index/layers.json` as toggleable overlays. Which are listed (every public collection;
+// an unlisted one only while a link has it on),
 // how they are grouped (by theme, from the manifest's `place_type`), what each draws (colours from
 // the collection's published paint), and which credits the ones that are ON contribute.
 //
 // No map, no network, no runes: overlays.svelte.ts wires this to the URL (`?ov=`) and the manifest.
 import { GAZETTEER_COLOR } from "../lib/map/colors";
 import { joinCredits } from "../lib/gazetteer/config";
-import type { Layer } from "../lib/gazetteer/vendor/types";
+import type { Layer } from "@oceanmetrics/places";
+import type { TiledLayer } from "../lib/gazetteer/manifest";
 import type { PlaceOverlaySpec } from "../lib/map/types";
 
 export type OverlayKind = PlaceOverlaySpec["kind"];
@@ -28,6 +30,8 @@ export interface OverlayLayer {
   lineWidth: number;
   attribution: string;
   license: string | null;
+  /** false for an `access: "unlisted"` collection: drawn from a link, left out of the list. */
+  listed: boolean;
 }
 
 // --- themes ---------------------------------------------------------------------------------------
@@ -96,7 +100,7 @@ function paintColor(l: Layer, kind: "fill" | "line" | "circle", key: string): st
   return asString((l.paint?.[kind] as Record<string, unknown> | undefined)?.[key]);
 }
 
-export function overlayLayerOf(l: Layer): OverlayLayer {
+export function overlayLayerOf(l: TiledLayer): OverlayLayer {
   const kind = kindOf(l.geom_type);
   const lineColor =
     paintColor(l, "line", "line-color") ??
@@ -122,11 +126,22 @@ export function overlayLayerOf(l: Layer): OverlayLayer {
     lineWidth: Number.isFinite(width) && width > 0 ? width : 1,
     attribution: l.attribution || "",
     license: l.license ?? null,
+    // a manifest from before @oceanmetrics/places 0.5.1 has no `access`: public
+    listed: l.access !== "unlisted",
   };
 }
 
-export function overlayLayersFrom(layers: readonly Layer[]): OverlayLayer[] {
+export function overlayLayersFrom(layers: readonly TiledLayer[]): OverlayLayer[] {
   return layers.map(overlayLayerOf);
+}
+
+/** what the list shows: the listed collections, plus an unlisted one while it is ON (a link named it,
+ * so its switch must be there to turn it off). Hidden from the list, not from a link. */
+export function listedOverlays(
+  layers: readonly OverlayLayer[],
+  on: readonly string[],
+): OverlayLayer[] {
+  return layers.filter((l) => l.listed || on.includes(l.slug));
 }
 
 export interface OverlayGroup {

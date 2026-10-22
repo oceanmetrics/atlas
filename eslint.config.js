@@ -18,8 +18,6 @@ export default ts.config(
       "node_modules",
       "pipeline/.venv", // uv creates it on `uv run`; third-party JS inside
       "pipeline/cache",
-      // vendored copy of @oceanmetrics/places (see its provenance headers); kept diff-able with upstream
-      "src/lib/gazetteer/vendor",
       "tests/fixtures/**/dist", // built fixture output, not source
       "e2e/fixtures/**/dist", // same — e2e/fixtures/analytics-privacy/'s built output
       ".tmp", // sandbox-only TMPDIR override, gitignored

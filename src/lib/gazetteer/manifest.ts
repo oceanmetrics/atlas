@@ -1,17 +1,24 @@
 // The gazetteer's layers manifest (`index/layers.json`) read with a plain `fetch`: no parquet, no
 // hyparquet, so the overlay list can load from the static graph without pulling the places index
-// (which is parquet, lazy, and only read when someone searches). The vendored client reads the same
-// file for `creditsFor`; this is the lean copy for the Layers panel.
+// (which is parquet, lazy, and only read when someone searches). The gazetteer client reads the same
+// file for `creditsFor` (@oceanmetrics/places); this is the lean copy for the Layers panel.
 import { gazetteerDataBase, layersManifestUrl, toDataUrl } from "./config";
-import type { Layer } from "./vendor/types";
+import type { Layer } from "@oceanmetrics/places";
 
-/** `layers.json` is `{layers: [...]}` (the live shape) or a bare array (older publishes). */
-export function layersFromManifest(json: unknown, base = gazetteerDataBase()): Layer[] {
+/** a manifest row the map can draw: our own PMTiles (raster and derived layers carry `pmtiles: null`). */
+export type TiledLayer = Layer & { pmtiles: string };
+
+/**
+ * `layers.json` is `{layers: [...]}` (the live shape) or a bare array (older publishes). Every row
+ * with PMTiles is kept, unlisted ones too (`access: "unlisted"`): a link (`?ov=`) to one still draws
+ * it; the Layers panel leaves them out of its list (`listedOverlays`, places/overlays.ts).
+ */
+export function layersFromManifest(json: unknown, base = gazetteerDataBase()): TiledLayer[] {
   const rows = Array.isArray(json) ? json : (json as { layers?: unknown } | null)?.layers;
   if (!Array.isArray(rows)) return [];
   return rows
     .filter(
-      (r): r is Layer =>
+      (r): r is TiledLayer =>
         !!r && typeof r === "object" && typeof r.slug === "string" && typeof r.pmtiles === "string",
     )
     .map((r) => ({ ...r, pmtiles: toDataUrl(r.pmtiles, base) }));
@@ -24,7 +31,7 @@ export function layersFromManifest(json: unknown, base = gazetteerDataBase()): L
 export async function fetchLayersManifest(
   fetchImpl: typeof fetch = fetch,
   base = gazetteerDataBase(),
-): Promise<Layer[]> {
+): Promise<TiledLayer[]> {
   const url = layersManifestUrl(base);
   let res = await fetchImpl(url);
   if (!res.ok && (res.status === 403 || res.status === 404)) {

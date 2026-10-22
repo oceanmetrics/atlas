@@ -7,7 +7,7 @@
 // published `gebco_undersea` collection as a fixture. Nothing here pulls the places index (hyparquet).
 import { INSTANCE } from "../brand/instance";
 import { GAZETTEER_ROOT, gazetteerDataBase } from "./config";
-import type { Layer } from "./vendor/types";
+import type { Layer } from "@oceanmetrics/places";
 import { licenseInfo, spdxPageUrl, type LicenseInfo } from "../catalog/licenses";
 import { resolveHref } from "../catalog/base";
 

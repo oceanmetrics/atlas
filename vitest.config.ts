@@ -27,6 +27,10 @@ export default defineConfig({
           // "include" is already a strict allowlist under tests/, so spikes/** and the parallel
           // spike-agent worktrees under .claude/ can't match — excluded explicitly anyway, defensively.
           exclude: [...exclude, "tests/**/*.svelte.test.ts"],
+          // @oceanmetrics/places 0.5.1's dist/ imports its own modules without extensions
+          // (`from './client'`), which Node's ESM loader refuses; Vite resolves them, so the package
+          // goes through Vite here as it does in the build. Drop this once the package ships `.js`.
+          server: { deps: { inline: ["@oceanmetrics/places"] } },
         },
       },
       {

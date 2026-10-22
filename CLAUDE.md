@@ -18,6 +18,9 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   collections at https://file.marinesensitivity.org/stac/). `src/lens/collection/` is the generic lens.
 - External: MST titiler `https://titiler.marinesensitivity.org` (stock `/cog`), gazetteer
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
+- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/places` (the gazetteer client; called only from
+  `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
+  `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
 
 ## Commands
 
@@ -81,10 +84,9 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
 (`oceanmetrics/platform` `packages/catalog/schemas`): `atlas-collection` (+ `sdm-dossier` with `sdm:response_type`) per
 Collection; `atlas-item`, `sdm-dossier` and, for a `data` COG, `cog` per Item. `cli.check_staging` calls it, so a profile
 error fails the build; the old `check_stac_required` checks stay. Schemas: `$OM_SCHEMAS_DIR`, else
-`node_modules/@oceanmetrics/catalog/schemas`, else the sibling `../platform/packages/catalog/schemas` (keep
-`oceanmetrics/platform` checked out beside this repo). A COG Item needs `properties["proj:code"]` and, per data band,
+`node_modules/@oceanmetrics/catalog/schemas` (after `npm ci`), else the sibling `../platform/packages/catalog/schemas`. A COG Item needs `properties["proj:code"]` and, per data band,
 `data_type`, `nodata` (`null` when none) and `statistics`, read from the file at write time (`stac.band_statistics`).
-`jsonschema` is a main dependency. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
+`jsonschema` is a main dependency; `@oceanmetrics/catalog` is a devDependency, so `npm ci` provides the schemas. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
 tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
 
 ## Instances and hooks

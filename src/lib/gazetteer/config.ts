@@ -76,8 +76,8 @@ const SUFFIX = /\s*Processed by Ocean Metrics\.?\s*$/i;
 
 /**
  * Join credit strings into one line: whitespace-normalised, deduplicated, and the shared
- * "Processed by Ocean Metrics." said once at the end (the same rule as the client's `creditLine`,
- * vendor/client.ts, which is not imported here to keep hyparquet out of the static graph).
+ * "Processed by Ocean Metrics." said once at the end (the same rule as `creditLine` of
+ * @oceanmetrics/places, which is not imported here to keep hyparquet out of the static graph).
  */
 export function joinCredits(parts: readonly (string | null | undefined)[]): string {
   const seen = new Set<string>();

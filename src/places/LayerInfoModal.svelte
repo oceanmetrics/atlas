@@ -12,7 +12,7 @@
     type LayerCollection,
     type LayerInfoModel,
   } from "../lib/gazetteer/layerInfo";
-  import type { Layer } from "../lib/gazetteer/vendor/types";
+  import type { Layer } from "@oceanmetrics/places";
 
   interface Props {
     open: boolean;

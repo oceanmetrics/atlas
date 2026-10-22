@@ -18,6 +18,19 @@ describe("layers.json", () => {
     expect(layersFromManifest("nope", BASE)).toEqual([]);
     expect(layersFromManifest(null, BASE)).toEqual([]);
   });
+  it("a raster or derived layer (`pmtiles: null`) is dropped; an unlisted one is kept (a link may draw it)", () => {
+    const rows = layersFromManifest(
+      {
+        layers: [
+          { slug: "r", kind: "raster", pmtiles: null, access: "public" },
+          { ...ROW, slug: "u", access: "unlisted" },
+          ROW,
+        ],
+      },
+      BASE,
+    );
+    expect(rows.map((r) => r.slug)).toEqual(["u", "a"]);
+  });
   it("falls back to the root copy on a 403/404, and rejects on a real failure", async () => {
     const calls: string[] = [];
     const mk = (status: number, body?: unknown) =>

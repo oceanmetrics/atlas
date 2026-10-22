@@ -1,8 +1,8 @@
-// GATE (gazetteer-places): hyparquet, the vendored client and everything that reaches them
+// GATE (gazetteer-places): hyparquet, the @oceanmetrics/places client and everything that reaches them
 // (src/lib/gazetteer/resolve.ts) are lazy chunks. `scripts/size-budget-core.mjs` forbids "hyparquet"
 // in index.html's static graph at build time; this is the source-level twin, which also holds the
 // rule for entries the budget does not walk (report.html). Only `import type` (erased) and
-// `import("...")` may name resolve.ts or the vendor folder from outside src/lib/gazetteer/.
+// `import("...")` may name resolve.ts or the client package from outside src/lib/gazetteer/.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, sep } from "node:path";
@@ -31,11 +31,13 @@ const dynamicImportsOf = (src: string): string[] =>
   [...src.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]);
 
 const LAZY = (spec: string) =>
-  /gazetteer\/(resolve|vendor\/)/.test(spec) || /^hyparquet(-compressors)?$/.test(spec);
+  /gazetteer\/resolve$/.test(spec) ||
+  /^@oceanmetrics\/places(\/|$)/.test(spec) ||
+  /^hyparquet(-compressors)?$/.test(spec);
 
 const files = walk(srcDir).map((p) => [p, readFileSync(p, "utf8")] as const);
 
-describe("hyparquet and the vendored gazetteer client are dynamic imports only", () => {
+describe("hyparquet and the gazetteer client are dynamic imports only", () => {
   it("walks real source (an empty walk must not pass vacuously)", () => {
     expect(files.length).toBeGreaterThan(100);
   });
@@ -52,8 +54,8 @@ describe("hyparquet and the vendored gazetteer client are dynamic imports only",
     expect(staticImportsOf(src)).toEqual(["../brand/instance"]);
   });
 
-  it("WP4: the manifest reader and the ?ov= grammar (static-safe, used by the Layers panel) import nothing lazy", () => {
-    for (const f of ["manifest.ts", "overlayUrl.ts"]) {
+  it("WP4: the manifest reader, the ?ov= grammar and the layer info (static-safe, used by the Layers panel) import nothing lazy", () => {
+    for (const f of ["manifest.ts", "overlayUrl.ts", "layerInfo.ts"]) {
       const src = readFileSync(join(gazDir, f), "utf8");
       expect(staticImportsOf(src).filter(LAZY), f).toEqual([]);
     }
@@ -74,6 +76,13 @@ describe("hyparquet and the vendored gazetteer client are dynamic imports only",
     expect(staticImportsOf(seeded).filter(LAZY)).toHaveLength(1);
     expect(
       staticImportsOf('import type { X } from "../lib/gazetteer/resolve";\n').filter(LAZY),
+    ).toEqual([]);
+    // the client package: a value import is lazy-only, a type import is erased
+    expect(
+      staticImportsOf('import { createClient } from "@oceanmetrics/places";\n').filter(LAZY),
+    ).toHaveLength(1);
+    expect(
+      staticImportsOf('import type { Layer } from "@oceanmetrics/places";\n').filter(LAZY),
     ).toEqual([]);
   });
 });

@@ -42,8 +42,8 @@ def schema_dir(root: Path | None = None) -> Path:
     if p.is_dir():
       return p
   raise FileNotFoundError(
-    f"no catalog profiles found; looked in: {listing}. Check out oceanmetrics/platform beside this repo "
-    f"(../platform) or set {SCHEMA_ENV}.")
+    f"no catalog profiles found; looked in: {listing}. Run `npm ci` (devDependency @oceanmetrics/catalog), "
+    f"check out oceanmetrics/platform beside this repo (../platform) or set {SCHEMA_ENV}.")
 
 
 @lru_cache(maxsize=None)

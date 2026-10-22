@@ -1,16 +1,16 @@
 // gazetteer/resolve.ts -- turn a `p.` place_id token into geometry, and read the layer manifest and
-// credits, through the vendored @oceanmetrics/places client. LAZY: this file (and with it hyparquet)
+// credits, through the @oceanmetrics/places client (npm). LAZY: this file (and with it hyparquet)
 // is reached only by dynamic import() -- Places.svelte, the placesMap store and Report.svelte do it
 // on first need; nothing in index.html's static graph imports it (size-budget forbids "hyparquet").
 //
 // The injectable `GazetteerClient` seam keeps the rules testable without a network: tests/gazetteer
-// drives the REAL vendored client against committed parquet fixtures served from a local HTTP
+// drives the REAL client against committed parquet fixtures served from a local HTTP
 // server, and the store-level tests inject a stub.
 import { analysisGeometry } from "../geo/analysisGeometry";
 import { MAX_ID_CHARS, encodeName } from "../geo/placeCodec";
 import { isAreaGeometry, type AreaGeometry } from "../geo/types";
-import { createClient } from "./vendor/client";
-import type { IndexPlace, Layer, PlaceFeature, SearchOptions } from "./vendor/types";
+import { createClient } from "@oceanmetrics/places";
+import type { IndexPlace, Layer, PlaceFeature, SearchOptions } from "@oceanmetrics/places";
 import {
   PLACES_SLUG,
   authorityOf,
@@ -36,14 +36,14 @@ export class GazetteerError extends Error {
 /** a place feature; `collection` (client 0.1.2+) is optional here so a test stub need not carry it. */
 export type AnyPlaceFeature = Omit<PlaceFeature, "collection"> & { collection?: string };
 
-/** the slice of the vendored client this module uses (injectable). */
+/** the slice of the client this module uses (injectable). */
 export interface GazetteerClient {
   getPlace(id: string, opts?: { unwrap?: boolean; slug?: string }): Promise<AnyPlaceFeature | null>;
   listLayers(opts?: { refresh?: boolean }): Promise<Layer[]>;
   creditsFor(refs: string | string[], opts?: { html?: boolean }): Promise<string>;
 }
 
-/** the search slice of the vendored client (separate so a test stub of the rest need not carry it). */
+/** the search slice of the client (separate so a test stub of the rest need not carry it). */
 export interface GazetteerSearcher {
   search(q: string, opts?: SearchOptions): Promise<IndexPlace[]>;
 }
@@ -132,8 +132,13 @@ export async function loadPickLayers(
   } catch {
     return null;
   }
+  // `listLayers()` leaves out `access: "unlisted"` rows (client 0.5.1); raster and derived layers have
+  // no PMTiles of ours (`pmtiles: null`), so the polygon + PMTiles test drops them
   return layers
-    .filter((l) => /polygon/i.test(l.geom_type ?? "") && l.pmtiles && l.source_layer)
+    .filter(
+      (l): l is Layer & { pmtiles: string; source_layer: string } =>
+        /polygon/i.test(l.geom_type ?? "") && !!l.pmtiles && !!l.source_layer,
+    )
     .map((l) => ({
       slug: l.slug,
       title: l.title || l.slug,
