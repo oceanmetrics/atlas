@@ -1,0 +1,1 @@
+import{f as e,u as t}from"./placeCodec-D63ab2nN.js";function n(n){return t(e(n))}export{n as t};
