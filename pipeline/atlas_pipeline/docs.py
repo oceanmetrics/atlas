@@ -295,13 +295,17 @@ have neither).
 ## No per-taxon Item files
 
 {counts['n_taxa']:,} Items would be tens of MB of JSON, so none are written. An app builds a taxon's Item from its
-registry row (`atlas:taxa_registry` and `atlas:item_template` in `collection.json`):
+registry row (`atlas:taxa_registry` and `atlas:item_template` in `collection.json`). The `cog` profile wants `statistics` on every
+data band; these Items are never written, so the template carries the constants `minimum` 1 and `maximum` 100 (the
+grids are Byte 1-100, nodata 0, by construction) instead of statistics read from {counts['n_taxa']:,} COGs, and has no
+`mean`, `stddev` or `valid_percent`:
 
 1. read `registry.parquet` (or `registry_index.json` to search first), find the row by `sp_key` (an old v7 key is
    `sp_key_v7`);
 2. Item id = `sp_key`; assets `cog` = `cog_url` (box `bbox_native`) and `cog_005` = `cog_url_005` (box `bbox_005`), type
-   COG, `bands` uint8 nodata 0, rescale `[1, 100]`, colormap `spectral_r`, band 1; the representation on the map plays
-   the `data` role and its box is the Item `bbox` and `geometry`;
+   COG, `bands` uint8 nodata 0 with `statistics` {{minimum 1, maximum 100}}, rescale `[1, 100]`, colormap `spectral_r`,
+   band 1, and `proj:code` `EPSG:4326`; the representation on the map plays the `data` role and its box is the Item
+   `bbox` and `geometry`;
 3. `sdm:taxon` = scientific and common name, group = `sp_cat`, authorities `worms` = `aphia_id` and `botw` =
    `botw_id`, `redlist_code`; omit what is null;
 4. draw the COG through titiler; read a clicked value with `/cog/point` (1-100; 0 or no data means outside the

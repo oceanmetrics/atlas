@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
+import rasterio
 from PIL import Image
+from rasterio.transform import from_origin
 
 from atlas_pipeline import aquamaps as aq
 from atlas_pipeline import cli, docs, stac, thumbs
@@ -268,6 +270,26 @@ def test_item_template_fields():
   ia = make_collection()["item_assets"]
   assert set(ia) == {"cog", "cog_005"}
   assert ia["cog"]["bands"][0]["nodata"] == 0 and ia["cog_005"]["sdm:value_range"] == [1, 100]
+
+
+def test_registry_statistics_hold_for_an_aquamaps_byte_grid(tmp_path):
+  """the registry Items are built client-side, so their `cog` statistics are template constants (min 1, max 100);
+  a synthetic AquaMaps Byte grid (1-100, nodata 0, EPSG:4326) read the way the CCE writer reads its COGs agrees."""
+  grid = np.zeros((11, 10), dtype="uint8")
+  grid[1:] = np.arange(1, 101, dtype="uint8").reshape(10, 10)   # one row of nodata 0, then 1..100
+  f = tmp_path / "am.tif"
+  with rasterio.open(f, "w", driver="GTiff", height=11, width=10, count=1, dtype="uint8", crs="EPSG:4326",
+                     transform=from_origin(-5, 5.5, 1, 1), nodata=0) as ds:
+    ds.write(grid, 1)
+  with rasterio.open(f) as ds:
+    st = stac.band_statistics(ds, 1)
+    assert stac.projection_code(ds) == aq.PROJ_CODE
+  assert st == {"minimum": 1.0, "maximum": 100.0, "mean": 50.5, "stddev": 28.8661, "valid_percent": 90.91}
+  const = aq.BANDS[0]["statistics"]
+  assert (st["minimum"], st["maximum"]) == (const["minimum"], const["maximum"])
+  tpl = make_collection()["atlas:item_template"]
+  assert tpl["properties"]["proj:code"] == "EPSG:4326"
+  assert tpl["assets"]["cog"]["bands"][0]["statistics"] == const == {"minimum": 1, "maximum": 100}
 
 
 def test_template_placeholders_are_all_registry_columns():

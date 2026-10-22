@@ -75,6 +75,18 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
   statistics); a missing tile is an empty cell. Hex collections keep the single `cell_species` table of `species.ts`.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
+## Profiles (checked at build time)
+
+`pipeline/atlas_pipeline/profiles.py` validates what the pipeline stages against the platform profiles
+(`oceanmetrics/platform` `packages/catalog/schemas`): `atlas-collection` (+ `sdm-dossier` with `sdm:response_type`) per
+Collection; `atlas-item`, `sdm-dossier` and, for a `data` COG, `cog` per Item. `cli.check_staging` calls it, so a profile
+error fails the build; the old `check_stac_required` checks stay. Schemas: `$OM_SCHEMAS_DIR`, else
+`node_modules/@oceanmetrics/catalog/schemas`, else the sibling `../platform/packages/catalog/schemas` (keep
+`oceanmetrics/platform` checked out beside this repo). A COG Item needs `properties["proj:code"]` and, per data band,
+`data_type`, `nodata` (`null` when none) and `statistics`, read from the file at write time (`stac.band_statistics`).
+`jsonschema` is a main dependency. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
+tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
+
 ## Conventions
 
 2-space indent, snake_case in Python and SQL, camelCase in TypeScript, lowercase comments, `----` section

@@ -16,7 +16,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import aquamaps, docs, grid, stac, swfsc_cce, taxa, thumbs
+from . import aquamaps, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
@@ -314,12 +314,14 @@ def check_staging(out: Path = STAGING) -> list[str]:
         want = [c["name"] for c in a["table:columns"]]
         if k in ("cell_species", "species") and have != want:
           bad.append(f"{coll_dir.name}: asset {k} columns {have} differ from table:columns {want}")
+    staged_items = []
     for item_link in [l for l in coll["links"] if l["rel"] == "item"]:
       ip = coll_dir / item_link["href"]
       if not ip.exists():
         bad.append(f"{coll_dir.name}: missing item {item_link['href']}")
         continue
       item = load_json(ip)
+      staged_items.append(item)
       bad += [f"{ip.name}: {m}" for m in stac.check_stac_required(item)]
       for k, a in item["assets"].items():
         if a["href"].startswith("http"):
@@ -330,6 +332,8 @@ def check_staging(out: Path = STAGING) -> list[str]:
           cols = pq.read_schema((ip.parent / a["href"]).resolve()).names
           if a["atlas:value_column"] not in cols:
             bad.append(f"{ip.name}: {a['atlas:value_column']} not a column of {a['href']}")
+    # the platform profiles (atlas-collection, atlas-item, sdm-dossier, cog): a profile error fails the build
+    bad += [f"{coll_dir.name}: {m}" for m in profiles.check_profiles(coll, staged_items)]
     if coll_dir.name == "aquamaps_native":
       bad += [f"aquamaps_native: {m}" for m in aquamaps.check_collection(coll_dir, coll)]
     if coll_dir.name == stac.CCE_ID:

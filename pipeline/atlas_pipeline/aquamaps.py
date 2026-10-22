@@ -58,9 +58,13 @@ SOURCE_RELEASE = "MarineSensitivity v8"
 PREDICTORS    = ["depth", "temperature", "salinity", "primary_production", "sea_ice_concentration", "distance_to_land"]
 VALUE_RANGE   = [1, 100]
 COLORMAP      = "spectral_r"
-# STAC 1.1 core `bands` (the raster extension's `raster:bands` is gone in raster v2.0.0, the version Portolan pins)
+# STAC 1.1 core `bands` (the raster extension's `raster:bands` is gone in raster v2.0.0, the version Portolan pins).
+# The registry Items are built client-side from a template, so their `statistics` are template constants, not read from
+# 17,000+ COGs at write time: the grids are Byte 1-100 with nodata 0 by construction (test_registry_statistics_hold_for_an_aquamaps_byte_grid);
+# only minimum and maximum, which the `cog` profile requires (no mean, stddev or valid_percent per taxon).
 BANDS         = [{"name": "suitability", "data_type": "uint8", "nodata": 0, "unit": "percent",
                   "statistics": {"minimum": 1, "maximum": 100}}]
+PROJ_CODE     = "EPSG:4326"   # both COGs (native 0.5 degree, downscaled 0.05 degree) are on the global lon/lat grid
 COG_TYPE      = "image/tiff; application=geotiff; profile=cloud-optimized"
 INDEX_MIN_BYTES = 1_000_000   # registry_index.json is written only when registry.parquet is larger than this
 THUMB_SPECIES = ["Dermochelys coriacea", "Thunnus thynnus", "Carcharodon carcharias", "Megaptera novaeangliae"]
@@ -276,6 +280,7 @@ def item_template() -> dict:
       "title": "{scientific_name} ({common_name})",
       "title_without_common_name": "{scientific_name}",
       "datetime": None,
+      "proj:code": PROJ_CODE,
       "atlas:value_range": VALUE_RANGE,
       "atlas:representation": "native",
       "sdm:taxon": {

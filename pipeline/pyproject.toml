@@ -19,10 +19,11 @@ dependencies = [
   "matplotlib>=3.8",
   "pillow>=10",
   "rasterio>=1.4",
+  "jsonschema>=4",   # the profile check at build time (atlas_pipeline/profiles.py)
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "pystac>=1.10", "jsonschema>=4"]
+dev = ["pytest>=8", "pystac>=1.10"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

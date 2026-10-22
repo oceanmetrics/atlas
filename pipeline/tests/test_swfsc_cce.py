@@ -19,7 +19,7 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from atlas_pipeline import cli, docs, stac, swfsc_cce
+from atlas_pipeline import cli, docs, profiles, stac, swfsc_cce
 
 PREFIX = "01K8ZZZZZZZZZZZZZZZZZZZZZZ"   # a 26-character Crockford ULID shape
 PIPE = Path(__file__).resolve().parent.parent
@@ -414,6 +414,62 @@ def test_build_stages_items_cogs_readme_and_passes_its_own_check(built):
   # the species picker lists species by common name
   assert coll["cube:dimensions"]["species"]["values"] == [str(BLUE), str(HUMPBACK)]
   assert coll["assets"]["models"]["file:size"] > 0
+
+
+# ---- the `cog` profile: proj:code, band statistics, nodata null ----
+
+def write_tiny(path: Path, bands: list[np.ndarray], nodata=-9999.0, crs="EPSG:4326") -> Path:
+  with rasterio.open(path, "w", driver="GTiff", height=2, width=3, count=len(bands), dtype="float32", crs=crs,
+                     transform=from_origin(WEST, NORTH, RES, RES), nodata=nodata) as ds:
+    for i, b in enumerate(bands, 1):
+      ds.write(np.array(b, dtype="float32"), i)
+  return path
+
+
+def test_band_statistics_are_read_from_each_band_with_nodata_and_nan_masked(tmp_path):
+  f = write_tiny(tmp_path / "t.tif", [[[1, 2, 3], [4, 5, -9999]], [[0.5, 1.5, np.nan], [2.5, 3.5, -9999]]])
+  with rasterio.open(f) as ds:
+    b1, b2 = stac.band_statistics(ds, 1), stac.band_statistics(ds, 2)
+  assert b1 == {"minimum": 1.0, "maximum": 5.0, "mean": 3.0, "stddev": 1.41421, "valid_percent": 83.33}
+  assert b2 == {"minimum": 0.5, "maximum": 3.5, "mean": 2.0, "stddev": 1.11803, "valid_percent": 66.67}
+
+
+def test_band_statistics_refuses_a_band_with_no_valid_pixel(tmp_path):
+  f = write_tiny(tmp_path / "t.tif", [[[-9999] * 3] * 2])
+  with rasterio.open(f) as ds, pytest.raises(ValueError, match="no valid pixel"):
+    stac.band_statistics(ds, 1)
+
+
+def test_projection_code_is_the_rasters_epsg_else_the_collections_known_crs(tmp_path):
+  with rasterio.open(write_tiny(tmp_path / "a.tif", [[[1] * 3] * 2])) as ds:
+    assert stac.projection_code(ds) == "EPSG:4326"
+  with rasterio.open(write_tiny(tmp_path / "b.tif", [[[1] * 3] * 2], crs="EPSG:3857")) as ds:
+    assert stac.projection_code(ds) == "EPSG:3857"
+  with rasterio.open(write_tiny(tmp_path / "c.tif", [[[1] * 3] * 2], crs=None)) as ds:
+    assert stac.projection_code(ds) == "EPSG:4326"   # no CRS in the file: the grid's known one
+
+
+def test_cce_bands_write_nodata_null_when_the_cog_has_none():
+  bands = stac._cce_bands(None)
+  assert [b["nodata"] for b in bands] == [None, None] and all("nodata" in b for b in bands)
+  assert [b["nodata"] for b in stac._cce_bands(float("nan"))] == ["nan", "nan"]
+  assert [b["nodata"] for b in stac._cce_bands(-9999.0)] == [-9999.0, -9999.0]
+
+
+def test_build_writes_proj_code_and_per_band_statistics_from_the_cog_and_passes_the_cog_profile(built):
+  """regression: no CCE item carried proj:code, band statistics, or nodata null, so none passed the `cog` profile."""
+  _, dest = built
+  coll = json.loads((dest / "collection.json").read_text())
+  items = [json.loads(p.read_text()) for p in sorted((dest / "items").glob("*.json"))]
+  assert profiles.check_profiles(coll, items) == []
+  hb = json.loads((dest / "items" / f"{HUMPBACK}_density.json").read_text())
+  assert hb["properties"]["proj:code"] == "EPSG:4326" and stac.EXT["projection"] in hb["stac_extensions"]
+  d, cv = hb["assets"]["cog"]["raster:bands"]
+  # 100 of 40 x 60 = 2400 cells are valid (the rest is the delivered -9999); density 0.002, cv 0.3 everywhere valid
+  assert d["statistics"] == {"minimum": 0.002, "maximum": 0.002, "mean": 0.002, "stddev": 0.0, "valid_percent": 4.17}
+  assert cv["statistics"] == {"minimum": 0.3, "maximum": 0.3, "mean": 0.3, "stddev": 0.0, "valid_percent": 4.17}
+  blue = json.loads((dest / "items" / f"{BLUE}_cv.json").read_text())
+  assert blue["assets"]["cog"]["raster:bands"][1]["statistics"]["valid_percent"] == 1.67   # 40 of 2400, NaN nodata
 
 
 def test_check_collection_flags_each_planted_fault(built):

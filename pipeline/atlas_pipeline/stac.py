@@ -22,6 +22,7 @@ EXT = {
   "file":       "https://stac-extensions.github.io/file/v2.1.0/schema.json",
   "portolan":   "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
   "raster":     "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+  "projection": "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
 }
 SOURCE_URL = "https://marinebon.org/"   # producer's public page; the raw files came from T. Couto by Google Drive
 
@@ -631,12 +632,42 @@ def cce_item_id(row: dict, variable: str) -> str:
   return f"{int(row['worms_id'])}_{variable}"
 
 
-def _cce_bands(nodata) -> list[dict]:
-  nd = {} if nodata is None else {"nodata": "nan" if nodata != nodata else nodata}
-  return [
-    {"name": "density", "description": "density, animals per km2", "data_type": "float32", "unit": "animals/km2", **nd},
-    {"name": "cv", "description": "coefficient of variation of density", "data_type": "float32", "unit": "unitless", **nd},
+def _sig(v: float, digits: int = 6) -> float:
+  """a float to `digits` significant figures (a float32 pixel prints as 0.0020000000949949026 otherwise)."""
+  return float(f"{float(v):.{digits}g}")
+
+
+def band_statistics(ds, bidx: int) -> dict:
+  """the `cog` profile's band statistics {minimum, maximum, mean, stddev, valid_percent} of band `bidx` of an open
+  rasterio dataset: nodata and non-finite pixels masked, population stddev (as GDAL's ComputeStatistics), values to
+  6 significant figures, valid_percent to 2 decimals. Raises ValueError when the band has no valid pixel."""
+  import numpy as np
+  a = ds.read(bidx, masked=True).astype("float64")
+  a = np.ma.masked_invalid(a)
+  if a.count() == 0:
+    raise ValueError(f"band {bidx} has no valid pixel")
+  return {"minimum": _sig(a.min()), "maximum": _sig(a.max()), "mean": _sig(a.mean()), "stddev": _sig(a.std()),
+          "valid_percent": round(100.0 * a.count() / a.size, 2)}
+
+
+def projection_code(ds, default: str = "EPSG:4326") -> str:
+  """`proj:code` of an open rasterio dataset: its EPSG code when the raster has one, else `default` (the collection's
+  known CRS: every grid is EPSG:4326 today)."""
+  epsg = ds.crs.to_epsg() if ds.crs else None
+  return f"EPSG:{epsg}" if epsg else default
+
+
+def _cce_bands(nodata, stats: list[dict] | None = None) -> list[dict]:
+  """the two bands of a CCE COG; `nodata` None writes `nodata: null` (the profile's spelling of "none"), `stats` is
+  [band 1 statistics, band 2 statistics] from `band_statistics`."""
+  nd = None if nodata is None else ("nan" if nodata != nodata else nodata)
+  bands = [
+    {"name": "density", "description": "density, animals per km2", "data_type": "float32", "unit": "animals/km2", "nodata": nd},
+    {"name": "cv", "description": "coefficient of variation of density", "data_type": "float32", "unit": "unitless", "nodata": nd},
   ]
+  for b, st in zip(bands, stats or []):
+    b["statistics"] = st
+  return bands
 
 
 def cce_collection(rows: list[dict], bbox: list[float], base_url: str, assets: dict | None = None) -> dict:
@@ -705,15 +736,19 @@ def cce_collection(rows: list[dict], bbox: list[float], base_url: str, assets: d
 
 
 def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base_url: str,
-              nodata=None) -> dict[str, dict]:
+              nodata=None, stats: dict[int, list[dict]] | list[dict] | None = None,
+              proj_code: str | dict[int, str] = "EPSG:4326") -> dict[str, dict]:
   """2 Items per species ({worms_id}_density, {worms_id}_cv) over ONE 2-band COG each; hrefs are absolute under the
-  restricted prefix (`base_url` + cog/<file>). `bbox` and `nodata` are one value for all, or {worms_id: value} (each
-  COG's own data extent and nodata)."""
+  restricted prefix (`base_url` + cog/<file>). `bbox`, `nodata`, `stats` and `proj_code` are one value for all, or
+  {worms_id: value} (each COG's own data extent, nodata, per-band statistics and CRS; build() reads them from the file).
+  Without `stats` the bands carry no statistics and the `cog` profile check fails."""
   items = {}
   for r in rows:
     wid = int(r["worms_id"])
     box = bbox[wid] if isinstance(bbox, dict) else bbox
     nd = nodata.get(wid) if isinstance(nodata, dict) else nodata
+    st = stats.get(wid) if isinstance(stats, dict) else stats
+    crs = proj_code.get(wid, "EPSG:4326") if isinstance(proj_code, dict) else proj_code
     href = f"{base_url}cog/{r['cog']}"
     taxon = {"scientific_name": r["scientific_name"], "common_name": r["species"], "authorities": {"worms": wid},
              "group": "mammal"}
@@ -724,6 +759,7 @@ def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base
         "description": (f"{CCE_VARIABLE_LABELS[v]} of {r['species']} ({r['scientific_name']}), {CCE_SEASON_LABEL}, "
                         "California Current Ecosystem (Becker et al. 2020), on the 0.05 degree grid. Under review."),
         "datetime": None, "start_datetime": CCE_START, "end_datetime": CCE_END,
+        "proj:code": crs,
         "atlas:dims": {"species": str(wid), "variable": v},
         "atlas:season": CCE_SEASON,
         "atlas:mdl_key": r.get("mdl_key"),
@@ -753,7 +789,7 @@ def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base
       items[iid] = {
         "type": "Feature",
         "stac_version": STAC_VERSION,
-        "stac_extensions": [EXT["sdm"], EXT["raster"]],
+        "stac_extensions": [EXT["sdm"], EXT["raster"], EXT["projection"]],
         "id": iid,
         "bbox": box,
         "geometry": bbox_polygon(box),
@@ -770,7 +806,7 @@ def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base
                   "atlas:bidx": CCE_BIDX[v],
                   "atlas:rescale": cce_density_rescale(r) if v == "density" else CCE_CV_RESCALE,
                   "atlas:colormap": CCE_COLORMAP[v],
-                  "raster:bands": _cce_bands(nd)},
+                  "raster:bands": _cce_bands(nd, st)},
         },
         "collection": CCE_ID,
       }

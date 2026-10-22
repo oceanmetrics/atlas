@@ -48,11 +48,14 @@ exceeds 1 MB (`INDEX_MIN_BYTES`).
 
 - id = `sp_key`; `datetime: null`; the Item `bbox` and `geometry` are the `atlas:bbox` of the asset that plays the `data`
   role (`bbox_native` for native, `bbox_005` for 0.05).
-- asset `cog`: href `cog_url`, COG media type, `bands` = uint8, nodata 0, unit percent (STAC 1.1 core; `raster:bands` is
-  not used because raster extension v2.0.0, pinned by Portolan, dropped it), `atlas:bbox {bbox_native}`,
+- asset `cog`: href `cog_url`, COG media type, `bands` = uint8, nodata 0, unit percent, `statistics` {minimum 1,
+  maximum 100} (STAC 1.1 core; `raster:bands` is not used because raster extension v2.0.0, pinned by Portolan, dropped
+  it; the statistics are template constants, as the Items are built client-side and never written, so the `cog`
+  profile's required `minimum` and `maximum` hold for every taxon by construction and no `mean`, `stddev` or
+  `valid_percent` is given), `atlas:bbox {bbox_native}`,
   `atlas:rescale [1, 100]`, `atlas:colormap spectral_r`, `atlas:bidx 1`; asset `cog_005`: `cog_url_005`, the same
   fields with `atlas:bbox {bbox_005}`. Roles: the drawn one is `data`, the other `reference`.
-- properties: `title` = `scientific_name (common_name)`, `atlas:value_range [1, 100]`, `atlas:representation`
+- properties: `title` = `scientific_name (common_name)`, `proj:code` `EPSG:4326`, `atlas:value_range [1, 100]`, `atlas:representation`
   `native` or `005`, `sdm:taxon` {scientific_name, common_name, group = `sp_cat`, authorities {worms = `aphia_id`,
   botw = `botw_id`}, redlist_code}; omit null values.
 - values at a point: titiler `/cog/point` on the drawn asset.

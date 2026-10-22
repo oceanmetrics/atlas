@@ -189,7 +189,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   if dest.exists():
     shutil.rmtree(dest)   # a rebuild never keeps an item or COG the new models.csv no longer lists
   (dest / "cog").mkdir(parents=True)
-  boxes, nodata, info = {}, {}, {}
+  boxes, nodata, info, stats, crs = {}, {}, {}, {}, {}
   for r in rows:
     f = src / "cog" / r["cog"]
     if not f.exists():
@@ -200,6 +200,9 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
       if bad:
         raise ValueError(f"{f.name}: " + "; ".join(bad))
       nodata[r["worms_id"]] = ds.nodata
+      # per band (density, cv) from the file itself, and the CRS the raster states (EPSG:4326 when it states none)
+      stats[r["worms_id"]] = [stac.band_statistics(ds, b) for b in (1, 2)]
+      crs[r["worms_id"]] = stac.projection_code(ds)
       # on the grid's own edges, not the transform's float noise (-131.0000044 -> -131.0)
       res = GRID["res"]
       west = GRID["west"] + round((t.c - GRID["west"]) / res) * res
@@ -220,7 +223,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   if thumbnail:
     cce_thumbnail(rows, dest / "cog", bbox, dest / "thumbnail.png")
     assets["thumbnail"] = stac.thumbnail_asset("Thumbnail: Summer-Fall density of four species (0 to p98)")
-  items = stac.cce_items(rows, boxes, base, nodata)
+  items = stac.cce_items(rows, boxes, base, nodata, stats, crs)
   for iid, it in items.items():
     it["assets"]["cog"] |= info[Path(it["assets"]["cog"]["href"]).name]
     stac.write_json(dest / "items" / f"{iid}.json", it)

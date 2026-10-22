@@ -33,6 +33,25 @@ collection.json>` adds one unlisted collection to the picker (a private preview 
 - **Rasters** render through the MarineSensitivity titiler (`src/lib/raster/tiles.ts`); numbers never
   come from the tile server.
 
+## Profiles
+
+The pipeline checks the catalog it writes against the Ocean Metrics STAC layer profiles
+(JSON Schemas of `oceanmetrics/platform`, `packages/catalog`): `atlas-collection` for every Collection (plus
+`sdm-dossier` when it has `sdm:response_type`), and for every Item `atlas-item`, `sdm-dossier` and, when a `data`
+asset is a cloud-optimized GeoTIFF, `cog` (`properties["proj:code"]`; each band `data_type`, `nodata` or `null`, and
+`statistics`). `pipeline/atlas_pipeline/profiles.py` runs them inside `cli.check_staging`, so a build fails on a profile
+error (reported as `<collection>: <document id>: [<profile>] <json pointer>: <message>`); `pipeline/tests/` also
+validates every Collection and Item under `tests/fixtures/catalog/` and `tests/fixtures/registry/` (not the external
+`catalog/mst/` mirrors). The writers fill the `cog` fields from the raster itself (`stac.band_statistics`,
+`stac.projection_code`); the AquaMaps registry Items are built in the browser from `atlas:item_template`, so their
+`statistics` are the template constants {minimum 1, maximum 100} (see `pipeline/docs/aquamaps-native.md`).
+
+The schemas are read from `$OM_SCHEMAS_DIR`, else `node_modules/@oceanmetrics/catalog/schemas` (after the npm
+publish), else the sibling checkout `../platform/packages/catalog/schemas`: clone `oceanmetrics/platform` beside this
+repo, or set `OM_SCHEMAS_DIR`; without any of the three the pipeline tests and the staging check stop with an error
+naming them. The pipeline tests do not run in CI (`pages.yml` ignores `pipeline/**` and has no Python job), so
+the check runs where the pipeline runs.
+
 ## Build-time configuration (all optional)
 
 `VITE_CATALOG_BASE`, `VITE_FEEDBACK_URL`, `VITE_LOG_URL`, `VITE_GA_ID` (see `.github/workflows/pages.yml`).
