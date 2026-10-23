@@ -150,7 +150,7 @@ describe("the subtree's indicators (obisindicators' SQL, on DuckDB-WASM)", () =>
       subtreeSql({ rows: "rows3", lookup: "lk", aphiaid: CETACEA, res: 3, tableRes: 3 }),
     );
     expect(got.map((r) => h3OfCellId(BigInt(r.cell_id as bigint)))).toEqual([A, B, C]);
-    const want = { [A]: [30, 30], [B]: [10, 5], [C]: [50, 50, 20] };
+    const want: Record<string, number[]> = { [A]: [30, 30], [B]: [10, 5], [C]: [50, 50, 20] };
     for (const r of got) {
       const c = want[h3OfCellId(BigInt(r.cell_id as bigint))];
       expect(num(r.n)).toBe(c.reduce((a, b) => a + b, 0));
@@ -454,7 +454,7 @@ describe("the view's box at res 5", () => {
   it("the ranges hold the res-5 cells of the box and not a cell outside it", async () => {
     // h3-js (the map package's own dependency) places the cells; the app forms the ranges with the package's tileRanges
     const { latLngToCell } = await import("h3-js");
-    const r = boxRanges([-122.5, 36, -121.5, 37.5], 5, 9)!;
+    const r = boxRanges([-122.5, 36, -121.5, 37.5], 5, 9);
     const inR = (h: string) => {
       const c = cellIdOf(h);
       return r.some(([a, b]) => c >= a && c <= b);
@@ -464,7 +464,9 @@ describe("the view's box at res 5", () => {
     expect(inR(latLngToCell(34.0, -120.0, 5))).toBe(false); // the Channel Islands, south of it
     expect(inR(latLngToCell(36.75, 140.0, 5))).toBe(false); // off Japan
     // across the antimeridian the box wraps
-    const fiji = boxRanges([178, -19, 182, -16], 5, 7)!;
+    const fiji = boxRanges([178, -19, 182, -16], 5, 7);
+    // a wide box at a fine zoom is formed at a coarser one (never more than BOX_MAX_TILES tiles)
+    expect(boxRanges([-130, 20, -60, 50], 5, 12).length).toBeGreaterThan(0);
     expect(
       fiji.some(
         ([a, b]) =>
@@ -479,5 +481,32 @@ describe("the view's box at res 5", () => {
           cellIdOf(latLngToCell(-17.5, 178.5, 5)) <= b,
       ),
     ).toBe(true);
+  });
+});
+
+describe("the case table's aphia cases open the subtree", () => {
+  const TABLE = JSON.parse(readFileSync("tests/fixtures/obis_redirect_cases.json", "utf8")) as {
+    cases: { name: string; atlas: string }[];
+  };
+  const aphia = TABLE.cases.filter((c) => c.atlas.includes("taxon=aphia:"));
+  it("there are aphia cases, each an AphiaID the subtree asks for, at a resolution it serves", async () => {
+    const { parseSel } = await import("../../src/lib/state/codec");
+    expect(aphia.length).toBeGreaterThanOrEqual(4);
+    for (const c of aphia) {
+      const u = new URL(c.atlas);
+      const sel = parseSel({ search: u.search, hash: u.hash });
+      expect(subtreeAsk(sel.taxon)).toEqual({ kind: "aphia", id: 137092 });
+      const zoom = Number(u.searchParams.get("map")!.split(",")[2]);
+      const decade = (sel.dim?.period ?? "all").endsWith("s");
+      const p = subtreeRes({
+        res: sel.res ?? "auto",
+        zoom,
+        decade,
+        tableRes: decade ? [3, 4] : [3, 4, 5],
+      });
+      // the case's pinned resolution is what the subtree computes (the table clamps 7 to 5, 5 with a decade to 4)
+      if (sel.res !== undefined) expect(p.res).toBe(sel.res);
+      expect(p.res).toBeLessThanOrEqual(decade ? 4 : 5);
+    }
   });
 });

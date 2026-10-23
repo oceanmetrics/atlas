@@ -180,7 +180,7 @@ export function rangesSql(expr: string, ranges: readonly (readonly [bigint, bigi
 }
 
 /**
- * obisindicators' `.h3t_indicators_sql()` (R/h3t.R: the one SQL translation of `calc_indicators()` every precomputed
+ * obisindicators' `.h3t_indicators_sql()` (the R package's h3t module: the one SQL translation of `calc_indicators()` every precomputed
  * layer and the Parquet export use), ported as it is, with no keys: `src` yields `cell_id`, `species` and `ni`
  * (records of that species in that cell), one row per (cell_id, species). ES(esn) is NULL for a cell with n < esn.
  * PARITY: change it only with obisindicators' own.
@@ -306,33 +306,34 @@ export function viewBox(b: Box, margin = BOX_MARGIN, step = BOX_STEP): Box | nul
 export const boxHolds = (box: Box | null, b: Box) =>
   box === null || (b[0] >= box[0] && b[2] <= box[2] && b[1] >= box[1] && b[3] <= box[3]);
 
-/** the most tiles a box is formed from (past it the box is the world) */
+/** the most tiles a box is formed from at one zoom (past it a coarser zoom forms it) */
 export const BOX_MAX_TILES = 256;
 
 /**
  * The res-`res` cell_id ranges of a box, as the map package's worker forms a tile's (`tileRanges`): the parents at
- * res `res - 2` of the cells that touch each tile of the box at the tile zoom `z`, each the range of its children.
- * A box crossing the antimeridian (w < -180 or e > 180) wraps. null when the box needs more than BOX_MAX_TILES.
+ * res `res - 2` of the cells that touch each tile of the box at the tile zoom `z` (a coarser zoom when the box needs
+ * more than BOX_MAX_TILES tiles at `z`), each the range of its children. A box past ±180 wraps.
  */
-export function boxRanges(box: Box, res: number, z: number): [bigint, bigint][] | null {
-  const tz = Math.max(0, Math.min(14, Math.floor(z)));
-  const n = 2 ** tz;
+export function boxRanges(box: Box, res: number, z: number): [bigint, bigint][] {
   const wrapLon = (x: number) => ((((x + 180) % 360) + 360) % 360) - 180;
-  const [x0, y0] = lonLatToTile(wrapLon(box[0]), box[3], tz);
-  const [x1, y1] = lonLatToTile(wrapLon(box[2] - 1e-9), box[1], tz);
-  const xs: number[] = [];
-  if (box[2] - box[0] >= 360) for (let x = 0; x < n; x++) xs.push(x);
-  else
-    for (let x = x0; ; x = (x + 1) % n) {
-      xs.push(x);
-      if (x === x1 || xs.length > n) break;
-    }
-  if (xs.length * (y1 - y0 + 1) > BOX_MAX_TILES) return null;
-  const all: [bigint, bigint][] = [];
-  const parentRes = Math.max(0, res - 2);
-  for (const x of xs)
-    for (let y = y0; y <= y1; y++) all.push(...tileRanges(tz, x, y, res, parentRes).ranges);
-  return mergeRanges(all);
+  for (let tz = Math.max(0, Math.min(14, Math.floor(z))); ; tz--) {
+    const n = 2 ** tz;
+    const [x0, y0] = lonLatToTile(wrapLon(box[0]), box[3], tz);
+    const [x1, y1] = lonLatToTile(wrapLon(box[2] - 1e-9), box[1], tz);
+    const xs: number[] = [];
+    if (box[2] - box[0] >= 360) for (let x = 0; x < n; x++) xs.push(x);
+    else
+      for (let x = x0; ; x = (x + 1) % n) {
+        xs.push(x);
+        if (x === x1 || xs.length >= n) break;
+      }
+    if (tz > 0 && xs.length * (y1 - y0 + 1) > BOX_MAX_TILES) continue;
+    const all: [bigint, bigint][] = [];
+    const parentRes = Math.max(0, res - 2);
+    for (const x of xs)
+      for (let y = y0; y <= y1; y++) all.push(...tileRanges(tz, x, y, res, parentRes).ranges);
+    return mergeRanges(all);
+  }
 }
 
 /** a cell's id as SQL can compare it */

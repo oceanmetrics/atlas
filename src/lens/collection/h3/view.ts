@@ -275,37 +275,85 @@ export function taxonRowOf(rows: readonly TaxonRow[], param: string | undefined)
 
 /**
  * `taxon=aphia:<id>`: the head that serves it (`heads.json` `served_by`): a head layer or a rank layer is the taxon
- * row of its path, the all-taxa layer is no taxon at all (`all`). A WoRMS id that is not a head is not served by a
- * layer of the release (the in-page subtree over the species table is not built yet): `null`, with the reason.
+ * row of its path, the all-taxa layer is no taxon at all (`all`). A WoRMS id that is not a head is a subtree the page
+ * computes from the species table (`subtree: true`, `subtree.ts`).
  */
 export function headRowOf(
   heads: readonly HeadRow[],
   rows: readonly TaxonRow[],
   param: string | undefined,
-): { row: TaxonRow | null; all: boolean; head: HeadRow | null; reason: string | null } {
+): {
+  row: TaxonRow | null;
+  all: boolean;
+  head: HeadRow | null;
+  reason: string | null;
+  subtree: boolean;
+} {
   const m = /^aphia:(\d+)$/.exec(param ?? "");
-  if (!m) return { row: null, all: false, head: null, reason: null };
+  if (!m) return { row: null, all: false, head: null, reason: null, subtree: false };
   const id = Number(m[1]);
   const head = heads.find((h) => h.aphiaid === id) ?? null;
-  if (!head)
-    return {
-      row: null,
-      all: false,
-      head: null,
-      reason: `AphiaID ${id} is not one of the release's precomputed taxa (the heads above class and the rank layers); a WoRMS subtree computed in the page is not built yet.`,
-    };
+  if (!head) return { row: null, all: false, head: null, reason: null, subtree: true };
   if (head.layer === "all" || head.servedBy === "all")
-    return { row: null, all: true, head, reason: null };
+    return { row: null, all: true, head, reason: null, subtree: false };
   const row =
     rows.find(
       (r) => r.urlPath === head.layer || `taxon/rank=${r.rank}/taxon=${r.taxon}` === head.layer,
     ) ?? null;
   return row
-    ? { row, all: false, head, reason: null }
+    ? { row, all: false, head, reason: null, subtree: false }
     : {
         row: null,
         all: false,
         head,
         reason: `${head.name} is served by ${head.layer}, which this release does not list.`,
+        subtree: false,
       };
+}
+
+/** what the slot draws for a WoRMS subtree: the cells computed in the page, one resolution in one Parquet (a `blob:`
+ * url, the map package's reader opens it by Range like a release file), no stats.parquet (the legend is the computed
+ * cells' own), the decades of the species table's decade variant as its periods. */
+export function subtreeTarget(
+  spec: H3Spec,
+  collectionId: string,
+  o: {
+    href: string;
+    res: number;
+    name: string;
+    rank: string | null;
+    decades: readonly string[];
+    decadeRes: readonly number[];
+  },
+): ReleaseTarget {
+  const cols = spec.indicators.map((i) => ({
+    name: i.value,
+    type: i.value === "n" || i.value === "sp" ? "BIGINT" : "DOUBLE",
+  }));
+  const decadeSet = spec.periods.find((p) => p.grain === "decade");
+  return {
+    collection: {
+      id: collectionId,
+      "h3:resolutions": [o.res],
+      "h3:cell_column": "h3",
+      "h3:cell_type": "string",
+      "h3:layout": { template: o.href },
+      "h3:periods": [],
+      "table:columns": [{ name: "cell_id", type: "BIGINT" }, ...cols],
+    },
+    item: { layer: "subtree", key: o.name, ...(o.rank ? { rank: o.rank.toLowerCase() } : {}) },
+    kind: "subtree",
+    label: o.name,
+    periods:
+      decadeSet && o.decades.length
+        ? [
+            {
+              grain: "decade",
+              values: [...o.decades],
+              placeholder: decadeSet.placeholder,
+              resolutions: [...o.decadeRes],
+            },
+          ]
+        : [],
+  };
 }

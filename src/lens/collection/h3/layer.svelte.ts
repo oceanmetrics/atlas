@@ -108,12 +108,34 @@ import {
   type PeriodBar,
   type PeriodStatRow,
 } from "./periods";
+import {
+  BOX_RES,
+  boxHolds,
+  boxPart,
+  boxRanges,
+  ESN,
+  rangeOf,
+  readLine,
+  subtreeAsk,
+  subtreeCoverage,
+  subtreeLine,
+  subtreeRes,
+  subtreeTableOf,
+  subtreeTaxonPart,
+  taxonLine,
+  viewBox,
+  type Box,
+  type SubtreeDomain,
+} from "./subtree";
+import type { SubtreeOutcome } from "./subtreeRun";
 import { headsOf, layerRows, readTaxonRows, type LayerRow } from "./taxa";
+import { wormsByName, wormsPageUrl, wormsRecord, type FetchLike, type WormsRecord } from "./worms";
 import {
   h3ViewOf,
   headRowOf,
   itemKindOf,
   releaseTarget,
+  subtreeTarget,
   taxonParam,
   taxonRowOf,
   type H3View,
@@ -137,6 +159,33 @@ export interface H3LayerDeps {
   /** readers (tests) */
   readTaxa?: typeof readTaxonRows;
   fetchJson?: (url: string) => Promise<unknown>;
+  /** the WoRMS REST fetch (tests) */
+  wormsFetch?: FetchLike;
+  /** the subtree's runner (tests); default the lazy `subtreeRun.ts` */
+  runSubtree?: (typeof import("./subtreeRun"))["runSubtree"];
+}
+
+/** the WoRMS subtree the layer shows (`taxon=aphia:<id>` that is no head, or a `<rank>:<name>` with no layer) */
+export interface SubtreeView {
+  phase: "resolving" | "computing" | "ready" | "refused" | "empty" | "error";
+  /** the AphiaID whose subtree is computed (the accepted one of a synonym) */
+  aphiaid: number | null;
+  name: string;
+  rank: string | null;
+  record: WormsRecord | null;
+  /** "subtree of Cetacea (computed in the browser from the species table, res ≤ 5)" */
+  line: string;
+  /** the taxon's line: name, rank, status, the accepted name, records */
+  taxonLine: string | null;
+  /** the taxon's page in WoRMS */
+  wormsUrl: string | null;
+  /** what the last computation read */
+  readLine: string | null;
+  /** an over-cap refusal, an error, or why nothing is drawn */
+  message: string | null;
+  /** the resolution computed and the cap */
+  res: number | null;
+  cap: number;
 }
 
 export interface CellView {
@@ -164,6 +213,10 @@ export interface H3Layer {
   readonly taxaPhase: "idle" | "loading" | "ready" | "error";
   readonly taxon: TaxonRow | null;
   readonly taxonNote: string | null;
+  /** the WoRMS subtree, when the taxon is one */
+  readonly subtree: SubtreeView | null;
+  /** show the subtree of an AphiaID (a pick of "Search all of WoRMS") */
+  setAphia(id: number): void;
   readonly cell: CellView | null;
   readonly species: {
     phase: "idle" | "loading" | "ready" | "error";
@@ -344,36 +397,160 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
 
   // the taxon the URL names: a row of the search asset, or a head by AphiaID
   const taxonParamNow = $derived(selStore.sel.taxon);
+  // the species table a WoRMS subtree is computed from (the collection document's own fields)
+  const subtreeTable = $derived(
+    subtreeTableOf(entry?.collection as unknown as Record<string, unknown> | null),
+  );
   const resolved = $derived.by(() => {
     const p = taxonParamNow;
-    if (!p) return { row: null as TaxonRow | null, note: null as string | null };
-    if (!taxa) return { row: null, note: null };
+    const none = { row: null as TaxonRow | null, note: null as string | null, subtree: false };
+    if (!p) return none;
+    if (!taxa) return none;
     if (p.startsWith("aphia:")) {
       const h = headRowOf(heads, taxa, p);
-      return { row: h.row, note: h.reason };
+      if (h.subtree && !subtreeTable)
+        return {
+          ...none,
+          note: `AphiaID ${p.slice(6)} is not one of the release's precomputed taxa, and the release publishes no species table to compute its subtree from.`,
+        };
+      return { row: h.row, note: h.reason, subtree: h.subtree };
     }
     const row = taxonRowOf(taxa, p);
-    return { row, note: row ? null : `The release has no taxon layer ${p}.` };
+    if (row) return { ...none, row };
+    // a rank:name the release has no layer for is a WoRMS subtree
+    return subtreeTable
+      ? { ...none, subtree: true }
+      : { ...none, note: `The release has no taxon layer ${p}.` };
   });
   const waitingForTaxa = $derived(!!taxonParamNow && taxa === null && taxaPhase !== "error");
+  const ask = $derived(resolved.subtree ? subtreeAsk(taxonParamNow) : null);
+
+  // ---- the WoRMS subtree: its record (WoRMS REST), then its cells (DuckDB-WASM over the species table) ----------
+  const wormsFetch: FetchLike = deps.wormsFetch ?? ((u, i) => fetch(u, i));
+  let worms = $state.raw<{
+    key: string;
+    phase: "loading" | "ready" | "error";
+    record: WormsRecord | null;
+    error: string | null;
+  } | null>(null);
+  let viewBounds = $state.raw<Box | null>(null);
+  /** the box the res-5 cells were computed for (kept while the view stays inside it) */
+  let box = $state.raw<Box | null>(null);
+  let run = $state.raw<{
+    key: string;
+    phase: "computing" | "done" | "error";
+    outcome: SubtreeOutcome | null;
+    error: string | null;
+  } | null>(null);
+  /** the last computed cells the map draws (kept while the next computation runs) */
+  let drawn = $state.raw<{
+    key: string;
+    aphiaid: number;
+    decade: string | null;
+    href: string;
+    res: number;
+    box: Box | null;
+    cells: number;
+    domains: Record<string, SubtreeDomain | null>;
+    taxa: ReadonlySet<number>;
+    records: number;
+    sql: string;
+    readLine: string;
+  } | null>(null);
+  const oldHrefs: string[] = [];
+  const subtreeAphia = $derived.by((): number | null => {
+    if (!ask) return null;
+    const w = worms;
+    if (!w || w.key !== taxonParamNow) return null;
+    if (w.record) return w.record.acceptedId;
+    return ask.kind === "aphia" && w.phase === "error" ? ask.id : null;
+  });
+  /** the WoRMS record of the taxon the URL names now, once read */
+  const recordNow = $derived(worms && worms.key === taxonParamNow ? worms.record : null);
+  const subtreeName = $derived(
+    recordNow
+      ? recordNow.acceptedId !== recordNow.id
+        ? recordNow.acceptedName
+        : recordNow.name
+      : ask?.kind === "name"
+        ? ask.name
+        : ask
+          ? `AphiaID ${ask.id}`
+          : "",
+  );
+  const subtreeRank = $derived(recordNow ? recordNow.rank : ask?.kind === "name" ? ask.rank : null);
+  /** the decade a subtree is computed for (`dim.period=<yyy0>s` of the species table's decade variant), else null */
+  const subtreeDecade = $derived.by((): string | null => {
+    if (!ask || !subtreeTable?.decade || !spec) return null;
+    const tok = selStore.sel.dim?.[spec.viewDims.period ?? "period"];
+    if (!tok || !tok.endsWith("s")) return null;
+    const v = tok.slice(0, -1);
+    return subtreeTable.decade.decades.includes(v) ? v : null;
+  });
+  const subtreePlanNow = $derived.by(() => {
+    if (!ask || !subtreeTable) return null;
+    return subtreeRes({
+      res: selStore.sel.res ?? "auto",
+      zoom,
+      decade: subtreeDecade !== null,
+      tableRes: subtreeDecade ? subtreeTable.decade!.resolutions : subtreeTable.resolutions,
+    });
+  });
+  const subtreeKey = $derived.by((): string | null => {
+    const a = subtreeAphia;
+    const pl = subtreePlanNow;
+    if (a === null || !pl) return null;
+    const b = pl.res >= BOX_RES ? box : null;
+    if (pl.res >= BOX_RES && !b && viewBounds && viewBox(viewBounds) !== null) return null;
+    return JSON.stringify([a, pl.res, pl.tableRes, subtreeDecade, b]);
+  });
 
   const target = $derived.by((): ReleaseTarget | null => {
     if (!spec || !entry || !item || waitingForTaxa) return null;
+    if (resolved.subtree) {
+      // the cells of this taxon and period only (a new taxon draws nothing until its cells are in)
+      const d = drawn;
+      if (!d || d.aphiaid !== subtreeAphia || d.decade !== subtreeDecade) return null;
+      return subtreeTarget(spec, entry.id, {
+        href: d.href,
+        res: d.res,
+        name: subtreeName,
+        rank: subtreeRank,
+        decades: subtreeTable?.decade?.decades ?? [],
+        decadeRes: [1, 2, ...(subtreeTable?.decade?.resolutions ?? [])],
+      });
+    }
     return releaseTarget(spec, entry.id, item, resolved.row);
   });
-  const view = $derived(
-    spec && target
-      ? h3ViewOf({ dim: selStore.sel.dim, res: selStore.sel.res }, spec, target)
-      : null,
-  );
+  const view = $derived.by((): H3View | null => {
+    if (!spec || !target) return null;
+    const v = h3ViewOf({ dim: selStore.sel.dim, res: selStore.sel.res }, spec, target);
+    if (target.kind !== "subtree" || !subtreePlanNow) return v;
+    // a subtree: the ladder is the subtree's (1 to its cap), the pin clamped to it with the plan's words
+    const cap = subtreePlanNow.cap;
+    return {
+      ...v,
+      ladder: Array.from({ length: cap }, (_, i) => i + 1),
+      res: selStore.sel.res === undefined ? "auto" : Math.min(cap, Math.max(1, selStore.sel.res)),
+      notes: [
+        ...v.notes.filter((n) => !n.startsWith("A decade layer") && !n.startsWith("This layer")),
+        ...(subtreePlanNow.note ? [subtreePlanNow.note] : []),
+      ],
+    };
+  });
 
   // a pinned split resolution over a wide view draws a coarser one (obis-hex's MAX_PARENTS fallback)
   const layoutParentRes = $derived(
     (target?.collection["h3:layout"] as { parent_res?: Record<string, number> } | undefined)
       ?.parent_res ?? null,
   );
-  const pinPlan = $derived(view ? pinForView(view.res, layoutParentRes, viewKm2) : null);
-  const effRes = $derived(pinPlan?.res ?? "auto");
+  const pinPlan = $derived(
+    view && target?.kind !== "subtree" ? pinForView(view.res, layoutParentRes, viewKm2) : null,
+  );
+  // a subtree's Parquet holds one resolution: the slot draws it
+  const effRes = $derived(
+    target?.kind === "subtree" && drawn ? drawn.res : (pinPlan?.res ?? "auto"),
+  );
 
   // ---- the place filter (`?filter=places` with gazetteer places in the hash) ---------------------------------------
   const filterColl = $derived(filterCollOf(selStore.sel.filter));
@@ -441,9 +618,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       }
       const key = JSON.stringify([t.collection["h3:layout"], t.collection["h3:periods"], t.item]);
       untrack(() => {
-        const periodArg = v.periodRef
-          ? { grain: v.periodRef.grain, value: v.periodRef.value }
-          : null;
+        // a subtree's file is the period's own (computed for it): the slot has no period to pick
+        const periodArg =
+          v.periodRef && t.kind !== "subtree"
+            ? { grain: v.periodRef.grain, value: v.periodRef.value }
+            : null;
         if (key !== slotKey || !slot) {
           slotKey = key;
           statsRows = null;
@@ -455,6 +634,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
             res: untrack(() => effRes),
             title: t.label,
             opacity: H3_FILL_OPACITY,
+            // a subtree has no stats.parquet: its legend is the computed cells' own
+            ...(t.kind === "subtree" ? { statsHref: null } : {}),
             onchange: () => queueMicrotask(() => statsTick++),
           });
           s.mount(rec, null, null);
@@ -475,7 +656,10 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       untrack(() => {
         s.update({
           indicator: v.indicator,
-          period: v.periodRef ? { grain: v.periodRef.grain, value: v.periodRef.value } : null,
+          period:
+            v.periodRef && target?.kind !== "subtree"
+              ? { grain: v.periodRef.grain, value: v.periodRef.value }
+              : null,
           res: r,
         });
         statsTick++;
@@ -506,6 +690,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         try {
           const b = m.getBounds();
           viewKm2 = boxKm2(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+          viewBounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
         } catch {
           /* a map without bounds yet */
         }
@@ -518,6 +703,165 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         m.off("moveend", onMove);
         m.off("idle", onIdle);
       };
+    });
+
+    // the view's bounds for the subtree's box (before any slot exists)
+    $effect(() => {
+      const handle = deps.mapHandle();
+      if (!handle || !ask) return;
+      const m = handle.map;
+      const on = () => {
+        try {
+          const b = m.getBounds();
+          viewBounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+        } catch {
+          /* a map without bounds yet */
+        }
+      };
+      on();
+      m.on("moveend", on);
+      return () => m.off("moveend", on);
+    });
+
+    // the WoRMS record of the subtree's taxon (its name, rank, status, the accepted id of a synonym)
+    $effect(() => {
+      const a = ask;
+      const key = taxonParamNow;
+      if (!a || !key) return;
+      if (untrack(() => worms?.key) === key) return;
+      untrack(() => (worms = { key, phase: "loading", record: null, error: null }));
+      const p =
+        a.kind === "aphia"
+          ? wormsRecord(a.id, wormsFetch)
+          : wormsByName(a.rank, a.name, wormsFetch);
+      void p.then(
+        (record) => {
+          if (untrack(() => worms?.key) !== key) return;
+          worms = record
+            ? { key, phase: "ready", record, error: null }
+            : {
+                key,
+                phase: "error",
+                record: null,
+                error:
+                  a.kind === "aphia"
+                    ? `WoRMS has no record of AphiaID ${a.id}.`
+                    : `WoRMS has no ${a.rank} ${a.name}.`,
+              };
+        },
+        (e: unknown) => {
+          if (untrack(() => worms?.key) === key)
+            worms = {
+              key,
+              phase: "error",
+              record: null,
+              error: `WoRMS could not be asked: ${e instanceof Error ? e.message : String(e)}`,
+            };
+        },
+      );
+    });
+
+    // the box of a res-5 subtree: the view grown by a quarter, kept while the view stays inside it
+    $effect(() => {
+      const b = viewBounds;
+      const pl = subtreePlanNow;
+      if (!b || !pl || pl.res < BOX_RES) return;
+      const cur = untrack(() => box);
+      if (cur === null || !boxHolds(cur, b)) box = viewBox(b);
+    });
+
+    // the subtree's cells: one computation per (AphiaID, resolution, decade, box), the last one drawn meanwhile
+    $effect(() => {
+      const key = subtreeKey;
+      const tbl = subtreeTable;
+      const pl = subtreePlanNow;
+      const a = subtreeAphia;
+      if (!key || !tbl || !pl || a === null) return;
+      if (untrack(() => run?.key) === key) return;
+      const name = untrack(() => subtreeName);
+      const b = pl.res >= BOX_RES ? untrack(() => box) : null;
+      const ranges = b
+        ? boxRanges(
+            b,
+            pl.tableRes,
+            Math.max(
+              untrack(() => zoom),
+              6,
+            ),
+          )
+        : null;
+      untrack(() => (run = { key, phase: "computing", outcome: null, error: null }));
+      const runner = deps.runSubtree
+        ? Promise.resolve(deps.runSubtree)
+        : import("./subtreeRun").then((m) => m.runSubtree);
+      void runner
+        .then((go) =>
+          go({
+            table: tbl,
+            aphiaid: a,
+            name,
+            res: pl.res,
+            tableRes: pl.tableRes,
+            decade: untrack(() => subtreeDecade),
+            ranges,
+            indicators: untrack(() => spec?.indicators.map((i) => i.value) ?? []),
+            esn: untrack(() => meta?.esn ?? ESN),
+          }),
+        )
+        .then(
+          (outcome) => {
+            if (untrack(() => run?.key) !== key) {
+              if (outcome.kind === "ready") URL.revokeObjectURL(outcome.href);
+              return;
+            }
+            run = { key, phase: "done", outcome, error: null };
+            if (outcome.kind !== "ready") return;
+            const prev = untrack(() => drawn);
+            if (prev) oldHrefs.push(prev.href);
+            // the worker may still read the one before: revoke two back
+            while (oldHrefs.length > 2) URL.revokeObjectURL(oldHrefs.shift()!);
+            drawn = {
+              key,
+              aphiaid: a,
+              decade: untrack(() => subtreeDecade),
+              href: outcome.href,
+              res: pl.res,
+              box: b,
+              cells: outcome.cells,
+              domains: outcome.domains,
+              taxa: outcome.taxa,
+              records: outcome.records,
+              sql: outcome.sql,
+              readLine: readLine({
+                bytes: outcome.read.bytes,
+                files: outcome.read.files,
+                lookupBytes: outcome.read.lookupBytes,
+                cells: outcome.cells,
+                ms: outcome.read.ms,
+              }),
+            };
+          },
+          (e: unknown) => {
+            if (untrack(() => run?.key) === key)
+              run = {
+                key,
+                phase: "error",
+                outcome: null,
+                error: e instanceof Error ? e.message : String(e),
+              };
+          },
+        );
+    });
+
+    // a new taxon drops the cells of the last one
+    $effect(() => {
+      void taxonParamNow;
+      untrack(() => {
+        if (drawn && !resolved.subtree) {
+          oldHrefs.push(drawn.href);
+          drawn = null;
+        }
+      });
     });
 
     // the places codec, once the filter is on
@@ -631,7 +975,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         return;
       }
       const taxon =
-        t.kind === "taxon" ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" } : null;
+        t.kind === "taxon"
+          ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" }
+          : t.kind === "subtree"
+            ? { rank: "subtree", taxon: t.item.key ?? "" }
+            : null;
       const key = JSON.stringify([h3, taxon, v.periodRef]);
       const hit = listCache.get(key);
       if (hit) {
@@ -720,8 +1068,13 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     lk.counted = true;
     if (!cells) throw new Error("not a hexagon of the species table");
     const taxon = t.kind === "taxon" ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" } : null;
-    let rows = speciesRows(cells.summed, lookup, taxon);
+    const keep = t.kind === "subtree" ? (untrack(() => drawn)?.taxa ?? null) : null;
+    let rows = speciesRows(cells.summed, lookup, taxon, keep);
     const notes: string[] = [];
+    if (keep)
+      notes.push(
+        `The species of the subtree of ${t.label}: the taxa whose lineage in the species lookup holds it.`,
+      );
     const filteredByRank = !!taxon && ["phylum", "class", "order", "family"].includes(taxon.rank);
     if (taxon && !filteredByRank)
       notes.push(
@@ -1062,7 +1415,9 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
           "fill-color":
             domain === "view" && loadedDomain
               ? rampOn(v.indicator, loadedDomain)
-              : h3FillColor(l, v.indicator, statsRows),
+              : subtreeDomain
+                ? rampOn(v.indicator, subtreeDomain)
+                : h3FillColor(l, v.indicator, statsRows),
           "fill-opacity": H3_FILL_OPACITY,
         },
       },
@@ -1097,6 +1452,14 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     );
   });
   const periodLabel = $derived(spec && view ? (spec.periodLabels[view.period] ?? view.period) : "");
+  /** a subtree's colour domain: p02 to p98 of its computed cells (records from 1, on a log scale) */
+  const subtreeDomain = $derived.by((): [number, number] | null => {
+    const v = view;
+    if (!v || target?.kind !== "subtree" || !drawn) return null;
+    const d = rangeOf(drawn.domains[v.indicator] ?? null);
+    if (!d) return null;
+    return scaleOf(v.indicator) === "log" ? [Math.max(1, d[0]), Math.max(1, d[1])] : d;
+  });
 
   const legend = $derived.by((): CollectionLegend | null => {
     const v = view;
@@ -1104,7 +1467,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     const res = shownRes;
     if (!v || !t || res === null) return null;
     const d =
-      domain === "view" && loadedDomain ? loadedDomain : domainAt(statsRows, v.indicator, res);
+      domain === "view" && loadedDomain
+        ? loadedDomain
+        : t.kind === "subtree"
+          ? subtreeDomain
+          : domainAt(statsRows, v.indicator, res);
     const ind = spec?.indicators.find((i) => i.value === v.indicator);
     return {
       kind: "continuous",
@@ -1114,7 +1481,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         res,
         auto: v.res === "auto",
         indicator: v.indicator,
-        domain: domain === "view" && loadedDomain ? "view" : "release",
+        domain:
+          domain === "view" && loadedDomain ? "view" : t.kind === "subtree" ? "subtree" : "release",
       }),
       stops: d ? legendStops(d, v.indicator) : [],
       unit: v.indicator === "n" ? "records" : v.indicator === "sp" ? "species" : "",
@@ -1137,7 +1505,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     if (!t || !v || !s || shownRes === null) return null;
     const ind = spec?.indicators.find((i) => i.value === v.indicator);
     const pr = s.layer().parentRes?.[String(shownRes)];
-    return sentenceParts({
+    const p = sentenceParts({
       label: t.label,
       kind: t.kind,
       ...(t.item.rank ? { rank: t.item.rank } : {}),
@@ -1151,8 +1519,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
           ? withinPart([collTitle])
           : filterOn && gazPlaces.length
             ? withinPart(gazPlaces.map((p) => p.name))
-            : placePart(pr !== undefined ? { parentRes: pr } : null),
+            : t.kind === "subtree" && drawn?.box
+              ? boxPart(shownRes)
+              : placePart(pr !== undefined ? { parentRes: pr } : null),
     });
+    return t.kind === "subtree" ? { ...p, taxon: subtreeTaxonPart(subtreeName, subtreeRank) } : p;
   });
   const sentence = $derived(parts ? sentenceText(parts) : "");
   const valued = (rows: readonly Record<string, number | null>[], k: string) =>
@@ -1169,17 +1540,39 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         esn: meta?.esn ?? 50,
         ...(filterColl !== null ? { where: collTitle } : {}),
       });
+    if (target?.kind === "subtree" && drawn)
+      return subtreeCoverage({
+        indicator: v.indicator,
+        valued: drawn.domains[v.indicator]?.cells ?? 0,
+        cells: drawn.cells,
+        esn: meta?.esn ?? ESN,
+      });
     return coverageText(statsRows, v.indicator, shownRes, meta?.esn ?? 50);
   });
+  /** the subtree's own status: resolving, computing, refused, nothing, failed (null once its cells are drawn) */
+  const subtreeStatus = $derived.by((): string | null => {
+    if (!ask) return null;
+    const w = worms;
+    if (w && w.key === taxonParamNow && w.phase === "error" && ask.kind === "name") return w.error;
+    if (subtreeAphia === null) return `Asking WoRMS for ${subtreeName}…`;
+    const r = run;
+    if (r?.phase === "error") return `The subtree could not be computed: ${r.error}`;
+    if (r?.phase === "done" && r.outcome?.kind === "refused") return r.outcome.line;
+    if (r?.phase === "done" && r.outcome?.kind === "empty")
+      return `No OBIS records of ${subtreeName} in the species table${drawn?.box ? " in this view" : ""}.`;
+    if (!target) return `Computing the subtree of ${subtreeName} in the browser…`;
+    return null;
+  });
   const status = $derived(
-    statusLine({
-      error: workerError,
-      loading: !workerOk || (!!slot && statsRows === null),
-      cells: loadedNow ? loadedNow.length : null,
-      label: target?.label ?? "this layer",
-      period: view?.periodRef ? (spec?.periodLabels[view.period] ?? view.period) : null,
-      filtered: filterColl !== null ? collTitle : filterOn,
-    }),
+    subtreeStatus ??
+      statusLine({
+        error: workerError,
+        loading: !workerOk || (!!slot && statsRows === null && target?.kind !== "subtree"),
+        cells: loadedNow ? loadedNow.length : null,
+        label: target?.label ?? "this layer",
+        period: view?.periodRef ? (spec?.periodLabels[view.period] ?? view.period) : null,
+        filtered: filterColl !== null ? collTitle : filterOn,
+      }),
   );
   const filterNote = $derived(
     filterColl !== null
@@ -1274,6 +1667,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       const s = slot;
       const v = view;
       if (!s || !v || shownRes === null) return "";
+      if (target?.kind === "subtree" && drawn)
+        return `-- ${sentence}\n-- the subtree computed in the page (obisindicators' indicator SQL over the species table)\nINSTALL httpfs; LOAD httpfs;\n${drawn.sql};`;
       return reproduceSql({
         layer: s.layer(),
         res: shownRes,
@@ -1361,6 +1756,52 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     },
     get taxonNote() {
       return resolved.note;
+    },
+    get subtree(): SubtreeView | null {
+      if (!ask) return null;
+      const w = worms?.key === taxonParamNow ? worms : null;
+      const r = run;
+      const phase: SubtreeView["phase"] =
+        subtreeAphia === null
+          ? w?.phase === "error"
+            ? "error"
+            : "resolving"
+          : r?.phase === "error"
+            ? "error"
+            : r?.phase === "done"
+              ? r.outcome?.kind === "ready"
+                ? "ready"
+                : (r.outcome?.kind ?? "error")
+              : "computing";
+      const cap = subtreePlanNow?.cap ?? 5;
+      return {
+        phase,
+        aphiaid: subtreeAphia,
+        name: subtreeName,
+        rank: subtreeRank,
+        record: w?.record ?? null,
+        line: subtreeLine(subtreeName, cap),
+        taxonLine: w?.record
+          ? taxonLine(w.record, drawn && drawn.aphiaid === subtreeAphia ? drawn.records : null)
+          : null,
+        wormsUrl: subtreeAphia !== null ? wormsPageUrl(subtreeAphia) : null,
+        readLine: drawn && drawn.aphiaid === subtreeAphia ? drawn.readLine : null,
+        message: subtreeStatus ?? (w?.phase === "error" ? w.error : null),
+        res: subtreePlanNow?.res ?? null,
+        cap,
+      };
+    },
+    setAphia(id) {
+      // a WoRMS taxon filters the all-taxa Item; a decade stays (the species table has decades), a year goes
+      const k = spec?.viewDims.period ?? "period";
+      const dim = { ...(selStore.sel.dim ?? {}) };
+      if (dim[k] && !dim[k].endsWith("s")) delete dim[k];
+      selStore.set({
+        taxon: `aphia:${id}`,
+        i: deps.items().find((it) => itemKindOf(it).layer === "all")?.id ?? selStore.sel.i,
+        dim: Object.keys(dim).length ? dim : undefined,
+        cell: undefined,
+      });
     },
     get cell() {
       return cell;

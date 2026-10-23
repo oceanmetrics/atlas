@@ -13,6 +13,7 @@
   import type { SentencePart } from "./paint";
   import { SEAS } from "./placeFilter";
   import { aboutLines, citeText, H3_SHORTCUTS, IOOS_EOV_URL, sourceRows } from "./share";
+  import { createWormsSearch, hitLabel, isSynonym, SEARCH_MIN, type WormsRecord } from "./worms";
 
   interface Props {
     layer: H3Layer;
@@ -103,6 +104,29 @@
     searching = false;
   }
 
+  // ---- "Search all of WoRMS": a name prefix, 250 ms after the last key; a pick shows that AphiaID's subtree ----
+  let wormsQuery = $state("");
+  let wormsHits = $state.raw<WormsRecord[]>([]);
+  let wormsPhase = $state<"idle" | "searching" | "ready" | "error">("idle");
+  let wormsError = $state<string | null>(null);
+  const wormsSearch = createWormsSearch({
+    onresult: (r) => {
+      wormsPhase = r.phase;
+      wormsHits = r.hits;
+      wormsError = r.error;
+    },
+  });
+  $effect(() => {
+    wormsSearch.set(wormsQuery);
+  });
+  $effect(() => () => wormsSearch.cancel());
+  function pickWorms(h: WormsRecord) {
+    layer.setAphia(h.id);
+    wormsQuery = "";
+    wormsHits = [];
+  }
+  const sub = $derived(layer.subtree);
+
   // ---- period ----
   const view = $derived(layer.view);
   let grain = $state<string | null>(null);
@@ -170,7 +194,7 @@
           type="button"
           role="option"
           class="row"
-          aria-selected={!layer.taxon && layer.layerId === r.id}
+          aria-selected={!layer.taxon && !layer.subtree && layer.layerId === r.id}
           data-testid="h3-layer-row"
           data-layer={r.id}
           onclick={() => layer.setLayer(r.id)}
@@ -238,6 +262,62 @@
       </div>
     {/if}
     {#if layer.taxonNote}<p class="note" role="status">{layer.taxonNote}</p>{/if}
+    {#if sub}
+      <!-- the WoRMS subtree computed in the page (obis-hex's aphia layer) -->
+      <div class="subtree" data-testid="h3-subtree">
+        <p class="current">
+          <i>{sub.name}</i>
+          {#if sub.rank}<span class="muted">({sub.rank.toLowerCase()})</span>{/if}
+          <button type="button" class="link" onclick={() => layer.setTaxon(null)}>All taxa</button>
+        </p>
+        <p class="note" data-testid="h3-subtree-line">{sub.line}</p>
+        {#if sub.taxonLine}
+          <p class="note" data-testid="h3-taxon-line">
+            {sub.taxonLine}
+            {#if sub.wormsUrl}·
+              <a class="link-out" href={sub.wormsUrl} target="_blank" rel="noopener">in WoRMS ↗</a>
+            {/if}
+          </p>
+        {/if}
+        {#if sub.message}
+          <p class="note" role="status" data-testid="h3-subtree-message">{sub.message}</p>
+        {:else if sub.readLine}
+          <p class="note" data-testid="h3-subtree-read">{sub.readLine}</p>
+        {/if}
+      </div>
+    {/if}
+    <label class="field-label" for="h3-worms-search">Search all of WoRMS</label>
+    <input
+      id="h3-worms-search"
+      type="search"
+      class="search"
+      placeholder={`Any WoRMS name (≥ ${SEARCH_MIN} letters): its subtree, computed here`}
+      data-testid="h3-worms-search"
+      bind:value={wormsQuery}
+    />
+    {#if wormsHits.length}
+      <div class="taxa" role="listbox" aria-label="WoRMS names" data-testid="h3-worms-hits">
+        {#each wormsHits as h (h.id)}
+          <button
+            type="button"
+            role="option"
+            aria-selected={sub?.aphiaid === h.acceptedId}
+            class="row"
+            class:syn={isSynonym(h)}
+            data-testid="h3-worms-hit"
+            title={`AphiaID ${h.id}`}
+            onclick={() => pickWorms(h)}
+          >
+            <span class="name">{hitLabel(h)}</span>
+            <span class="count">{h.id}</span>
+          </button>
+        {/each}
+      </div>
+    {:else if wormsPhase === "searching"}
+      <p class="note" role="status">Searching WoRMS…</p>
+    {:else if wormsError}
+      <p class="note" role="status">{wormsError}</p>
+    {/if}
   </div>
 
   <!-- indicator -->
@@ -617,6 +697,16 @@
   }
   .close {
     align-self: flex-end;
+  }
+  .subtree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1) var(--space-2);
+    border-left: 2px solid var(--border-control);
+  }
+  .row.syn .name {
+    color: var(--text-secondary);
   }
   .period-head {
     display: flex;

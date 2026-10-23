@@ -165,10 +165,15 @@ export function legendSubtitle(o: {
   res: number;
   auto: boolean;
   indicator: string;
-  /** the loaded hexagons' p02 to p98 (`dom=view`) instead of the release's */
-  domain?: "release" | "view";
+  /** the loaded hexagons' p02 to p98 (`dom=view`) instead of the release's; a WoRMS subtree's computed hexagons */
+  domain?: "release" | "view" | "subtree";
 }): string {
-  const dom = o.domain === "view" ? "loaded hexagons p02–p98" : "release p02–p98";
+  const dom =
+    o.domain === "view"
+      ? "loaded hexagons p02–p98"
+      : o.domain === "subtree"
+        ? "subtree p02–p98"
+        : "release p02–p98";
   return `${o.period} · ${dom} · ${resNote(o.res, o.auto)}${scaleOf(o.indicator) === "log" ? " · log scale" : ""}`;
 }
 

@@ -139,11 +139,14 @@ export function speciesRows(
   summed: ReturnType<typeof sumBySpecies>,
   lookup: ReadonlyMap<number, LookupRow>,
   taxon: { rank: string; taxon: string } | null,
+  /** a WoRMS subtree's aphiaids (the lookup's lineage): only their species */
+  keep: ReadonlySet<number> | null = null,
 ): SpeciesRow[] {
   const rank =
     taxon && (FILTER_RANKS as readonly string[]).includes(taxon.rank) ? taxon.rank : null;
   const out: SpeciesRow[] = [];
   for (const [aphiaid, v] of summed) {
+    if (keep && !keep.has(aphiaid)) continue;
     const l = lookup.get(aphiaid);
     if (rank && (l?.[rank as keyof LookupRow] ?? null) !== taxon!.taxon) continue;
     out.push({

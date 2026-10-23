@@ -160,11 +160,11 @@ describe("the heads (heads.json served_by)", () => {
     expect(JSON.stringify(t.collection)).not.toContain("class=");
     expect(JSON.stringify(t.collection)).not.toContain("species/");
   });
-  it("an AphiaID that is no head says why (no h3t, no in-page subtree yet)", async () => {
+  it("an AphiaID that is no head is a subtree computed in the page (no note, no h3t)", async () => {
     const rows = await readTaxonRows(buffer("taxon_groups.parquet"));
     const r = headRowOf(heads, rows, "aphia:2688");
-    expect(r.row).toBeNull();
-    expect(r.reason).toContain("AphiaID 2688 is not one of the release's precomputed taxa");
+    expect(r).toEqual({ row: null, all: false, head: null, reason: null, subtree: true });
+    expect(headRowOf(heads, rows, "aphia:2").subtree).toBe(false);
   });
 });
 
