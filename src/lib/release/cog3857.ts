@@ -131,15 +131,21 @@ export function rowFromRecord(rec: Record<string, unknown>): Cog3857Row | null {
       return {
         data_type: types[i] ?? null,
         nodata: num(nodata[i]),
-        statistics: s ? (Object.fromEntries(
-          Object.entries(s).filter(([, v]) => v !== null).map(([k, v]) => [k, Number(v)]),
-        ) as unknown as BandStatistics) : null,
-        histogram: h ? {
-          count: Number(h.count),
-          min: Number(h.min),
-          max: Number(h.max),
-          buckets: Array.from(h.buckets as ArrayLike<number | bigint>, Number),
-        } : null,
+        statistics: s
+          ? (Object.fromEntries(
+              Object.entries(s)
+                .filter(([, v]) => v !== null)
+                .map(([k, v]) => [k, Number(v)]),
+            ) as unknown as BandStatistics)
+          : null,
+        histogram: h
+          ? {
+              count: Number(h.count),
+              min: Number(h.min),
+              max: Number(h.max),
+              buckets: Array.from(h.buckets as ArrayLike<number | bigint>, Number),
+            }
+          : null,
       };
     }),
   };
@@ -156,7 +162,12 @@ function stacNodata(v: number | null): number | string | null {
 
 /** the row as the `cog` choice `rasterChoiceOf` gives for a published Item: `draw` the 3857 copy (roles data +
  * visual, `atlas:zoom`), `values` the 4326 original, both with the same bands and the lens's hints. */
-export function choiceOfRow(row: Cog3857Row, base: string, originalUrl: string, hints: CogHints = {}): RasterChoice {
+export function choiceOfRow(
+  row: Cog3857Row,
+  base: string,
+  originalUrl: string,
+  hints: CogHints = {},
+): RasterChoice {
   const href = copyHref(row.key, base);
   if (!href) return { kind: "titiler" };
   const bands = row.bands.map((b) => ({
@@ -167,7 +178,12 @@ export function choiceOfRow(row: Cog3857Row, base: string, originalUrl: string, 
   }));
   const common = { type: COG_T, bands, ...hints } as Omit<CogAsset, "href">;
   // the original as the release names it, moved onto this build's storage host (D7: rebased at read, never rewritten)
-  const values: CogAsset = { ...common, href: onStorage(originalUrl), roles: ["data"], "proj:code": "EPSG:4326" };
+  const values: CogAsset = {
+    ...common,
+    href: onStorage(originalUrl),
+    roles: ["data"],
+    "proj:code": "EPSG:4326",
+  };
   const draw: CogAsset = {
     ...common,
     href,
@@ -175,7 +191,11 @@ export function choiceOfRow(row: Cog3857Row, base: string, originalUrl: string, 
     "proj:code": "EPSG:3857",
     ...(row.zoom ? { "atlas:zoom": row.zoom } : {}),
   };
-  return { kind: "cog", draw: { key: COPY_KEY, asset: draw }, values: { key: ORIGINAL_KEY, asset: values } };
+  return {
+    kind: "cog",
+    draw: { key: COPY_KEY, asset: draw },
+    values: { key: ORIGINAL_KEY, asset: values },
+  };
 }
 
 // ---- the reader ----
@@ -190,7 +210,10 @@ export function clearCog3857Cache(): void {
 }
 
 async function hyparquet() {
-  const [h, { compressors }] = await Promise.all([import("hyparquet"), import("hyparquet-compressors")]);
+  const [h, { compressors }] = await Promise.all([
+    import("hyparquet"),
+    import("hyparquet-compressors"),
+  ]);
   return { ...h, compressors };
 }
 
@@ -213,7 +236,10 @@ function open(source: string | ArrayBuffer): Promise<Opened> {
 }
 
 /** the side-table row of `contentHash`, or null (no table, no row, an unreadable table). */
-export function readCog3857Row(source: string | ArrayBuffer, contentHash: string): Promise<Cog3857Row | null> {
+export function readCog3857Row(
+  source: string | ArrayBuffer,
+  contentHash: string,
+): Promise<Cog3857Row | null> {
   const id = typeof source === "string" ? `${source}#${contentHash}` : null;
   const hit = id ? rows.get(id) : undefined;
   if (hit) return hit;

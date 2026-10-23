@@ -30,7 +30,11 @@ beforeEach(() => clearCog3857Cache());
 describe("names", () => {
   it("the content hash is the original's file stem, path-style or virtual-host", () => {
     expect(contentHashOf(URL_)).toBe(HASH);
-    expect(contentHashOf(`https://oceanmetrics.io-public.s3.amazonaws.com/marine-atlas/cog/usa05/${HASH}.tif`)).toBe(HASH);
+    expect(
+      contentHashOf(
+        `https://oceanmetrics.io-public.s3.amazonaws.com/marine-atlas/cog/usa05/${HASH}.tif`,
+      ),
+    ).toBe(HASH);
     expect(contentHashOf(`${URL_}?b=1`)).toBe(HASH);
     expect(contentHashOf(`${PUBLIC_DATA_BASE}native/bl/${HASH}.pmtiles`)).toBeNull();
     expect(contentHashOf("https://x.org/score_risk.tif")).toBeNull();
@@ -55,7 +59,13 @@ describe("the side table", () => {
     expect(row!.bands).toHaveLength(1);
     const b = row!.bands[0];
     expect([b.data_type, b.nodata]).toEqual(["uint8", 0]);
-    expect(b.statistics).toEqual({ minimum: 1, maximum: 100, mean: 38.7591, stddev: 31.7423, valid_percent: 1.41 });
+    expect(b.statistics).toEqual({
+      minimum: 1,
+      maximum: 100,
+      mean: 38.7591,
+      stddev: 31.7423,
+      valid_percent: 1.41,
+    });
     expect(b.histogram!.count).toBe(32);
     expect(b.histogram!.buckets).toHaveLength(32);
     expect(b.histogram!.buckets.slice(0, 4)).toEqual([5444, 2185, 1653, 1616]);
@@ -63,7 +73,12 @@ describe("the side table", () => {
 
   it("a hash it does not list, and a table that is not Parquet, give no row", async () => {
     expect(await readCog3857Row(table(), "ffffffffffffffff")).toBeNull();
-    expect(await readCog3857Row(new TextEncoder().encode("<Error>403</Error>").buffer as ArrayBuffer, HASH)).toBeNull();
+    expect(
+      await readCog3857Row(
+        new TextEncoder().encode("<Error>403</Error>").buffer as ArrayBuffer,
+        HASH,
+      ),
+    ).toBeNull();
   });
 
   it("a record without a hash or a key is no row", () => {
@@ -95,14 +110,28 @@ describe("resolveCog3857", () => {
 
   it("falls back to titiler: no side table, no row, not a store key (seeded faults)", async () => {
     const notParquet = new TextEncoder().encode("not parquet").buffer as ArrayBuffer;
-    expect(await resolveCog3857("v7", URL_, {}, { source: notParquet, sharedSource: null })).toEqual({ kind: "titiler" });
     expect(
-      await resolveCog3857("v7", `${PUBLIC_DATA_BASE}cog/usa05/ffffffffffffffff.tif`, {}, { source: table(), sharedSource: null }),
+      await resolveCog3857("v7", URL_, {}, { source: notParquet, sharedSource: null }),
     ).toEqual({ kind: "titiler" });
-    expect(await resolveCog3857("v7", "https://x.org/a.tif", {}, { source: table(), sharedSource: null })).toEqual({ kind: "titiler" });
+    expect(
+      await resolveCog3857(
+        "v7",
+        `${PUBLIC_DATA_BASE}cog/usa05/ffffffffffffffff.tif`,
+        {},
+        { source: table(), sharedSource: null },
+      ),
+    ).toEqual({ kind: "titiler" });
+    expect(
+      await resolveCog3857(
+        "v7",
+        "https://x.org/a.tif",
+        {},
+        { source: table(), sharedSource: null },
+      ),
+    ).toEqual({ kind: "titiler" });
   });
 
-  it("a NaN nodata is written as STAC's \"nan\"", () => {
+  it('a NaN nodata is written as STAC\'s "nan"', () => {
     const row = rowFromRecord({
       content_hash: HASH,
       cog_3857_key: `marine-atlas/v7/cog_3857/cog/usa05/${HASH}_3857.tif`,
@@ -113,7 +142,10 @@ describe("resolveCog3857", () => {
       histogram: [null],
     })!;
     const c = choiceOfRow(row, PUBLIC_DATA_BASE, URL_);
-    expect(c.kind === "cog" && c.draw.asset.bands![0]).toEqual({ data_type: "float32", nodata: "nan" });
+    expect(c.kind === "cog" && c.draw.asset.bands![0]).toEqual({
+      data_type: "float32",
+      nodata: "nan",
+    });
   });
 });
 
@@ -137,12 +169,26 @@ describe("the shared table first, the release table as the fallback", () => {
   });
 
   it("a pool row draws its copy under marine-atlas/cog_3857/, a pointer row its v7 key", async () => {
-    const pool = await resolveCog3857("v7b", POOL_URL, {}, { source: table(), sharedSource: sharedBytes() });
-    expect(pool.kind === "cog" && pool.draw.asset.href).toBe(`${PUBLIC_DATA_BASE}cog_3857/${POOL_HASH}_3857.tif`);
+    const pool = await resolveCog3857(
+      "v7b",
+      POOL_URL,
+      {},
+      { source: table(), sharedSource: sharedBytes() },
+    );
+    expect(pool.kind === "cog" && pool.draw.asset.href).toBe(
+      `${PUBLIC_DATA_BASE}cog_3857/${POOL_HASH}_3857.tif`,
+    );
     expect(pool.kind === "cog" && pool.draw.asset["atlas:zoom"]).toEqual([0, 7]);
     expect(pool.kind === "cog" && pool.values.asset.href).toBe(POOL_URL);
-    const ptr = await resolveCog3857("v7c", URL_, {}, { source: new ArrayBuffer(8), sharedSource: sharedBytes() });
-    expect(ptr.kind === "cog" && ptr.draw.asset.href).toBe(`${PUBLIC_DATA_BASE}v7/cog_3857/cog/usa05/${HASH}_3857.tif`);
+    const ptr = await resolveCog3857(
+      "v7c",
+      URL_,
+      {},
+      { source: new ArrayBuffer(8), sharedSource: sharedBytes() },
+    );
+    expect(ptr.kind === "cog" && ptr.draw.asset.href).toBe(
+      `${PUBLIC_DATA_BASE}v7/cog_3857/cog/usa05/${HASH}_3857.tif`,
+    );
   });
 
   it("a hash the shared table lacks, or a shared table that cannot be read, falls back to the release's", async () => {
@@ -150,14 +196,24 @@ describe("the shared table first, the release table as the fallback", () => {
     const want = `${PUBLIC_DATA_BASE}v7/cog_3857/cog/usa05/${ONLY_V7}_3857.tif`;
     const a = await resolveCog3857("v7", url, {}, { source: table(), sharedSource: sharedBytes() });
     expect(a.kind === "cog" && a.draw.asset.href).toBe(want);
-    const b = await resolveCog3857("v7", url, {}, { source: table(), sharedSource: new ArrayBuffer(8) });
+    const b = await resolveCog3857(
+      "v7",
+      url,
+      {},
+      { source: table(), sharedSource: new ArrayBuffer(8) },
+    );
     expect(b.kind === "cog" && b.draw.asset.href).toBe(want);
     // in neither: titiler (seeded fault: the pool row's hash dropped from the shared table)
     expect(
-      await resolveCog3857("v7b", `${PUBLIC_DATA_BASE}cog/global05/ffffffffffffffff.tif`, {}, {
-        source: table(),
-        sharedSource: sharedBytes(),
-      }),
+      await resolveCog3857(
+        "v7b",
+        `${PUBLIC_DATA_BASE}cog/global05/ffffffffffffffff.tif`,
+        {},
+        {
+          source: table(),
+          sharedSource: sharedBytes(),
+        },
+      ),
     ).toEqual({ kind: "titiler" });
   });
 
@@ -171,19 +227,27 @@ describe("the shared table first, the release table as the fallback", () => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
       const b = bytes[url];
       if (!b) return new Response("<Error>403</Error>", { status: 403 });
-      if (init?.method === "HEAD") return new Response(null, { status: 200, headers: { "content-length": `${b.byteLength}` } });
+      if (init?.method === "HEAD")
+        return new Response(null, {
+          status: 200,
+          headers: { "content-length": `${b.byteLength}` },
+        });
       return new Response(b.slice(0), { status: 200 });
     });
     const p = await resolveCog3857("v7b", POOL_URL);
     const q = await resolveCog3857("v7c", URL_);
     expect([p.kind, q.kind]).toEqual(["cog", "cog"]);
     expect(calls.filter((c) => c.endsWith(sharedTableUrl())).length).toBeLessThanOrEqual(2); // one HEAD, one GET
-    expect(calls.filter((c) => c.startsWith("HEAD") && c.endsWith(sharedTableUrl()))).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith("HEAD") && c.endsWith(sharedTableUrl()))).toHaveLength(
+      1,
+    );
     expect(calls.some((c) => c.includes("/v7b/") || c.includes("/v7c/"))).toBe(false);
     // a miss in the shared table reads the release's own
     const r = await resolveCog3857("v7", `${PUBLIC_DATA_BASE}cog/usa05/${ONLY_V7}.tif`);
     expect(r.kind).toBe("cog");
-    expect(calls.filter((c) => c.startsWith("HEAD") && c.endsWith(sharedTableUrl()))).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith("HEAD") && c.endsWith(sharedTableUrl()))).toHaveLength(
+      1,
+    );
     expect(calls.some((c) => c.endsWith(sideTableUrl("v7")))).toBe(true);
   });
 });
