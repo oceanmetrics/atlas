@@ -75,6 +75,8 @@ import {
   type HistogramCache,
 } from "../../lib/raster/histogram";
 import { createTitilerValueSource, type ValueSource } from "../../lib/raster/point";
+import { createCogValueSource } from "../../lib/raster/cogPoint";
+import { rasterChoiceOf } from "../../lib/raster/cog";
 import { createLatestRead, pointInBounds, wrapLon } from "../../lib/raster/pointRead";
 import { colorForValue } from "../../lib/raster/ramps";
 import { DEFAULT_HISTOGRAM_BINS, type Histogram } from "../../lib/map/density";
@@ -154,8 +156,11 @@ export interface CollectionLensDeps {
   cogExtent?: CogExtentCache;
   /** the legend histogram of a raster item (titiler `/cog/statistics`, cached); default the module cache. */
   histogram?: HistogramCache;
-  /** the value under the pointer of a raster item (titiler `/cog/point`); default stock titiler. */
+  /** the value under the pointer of a titiler-drawn raster item (`/cog/point`); default stock titiler. */
   valueSource?: ValueSource;
+  /** the value under the pointer of a browser-drawn raster item (the 4326 original over HTTP Range,
+   * `raster/cogPoint.ts`); default geotiff.js. */
+  cogValueSource?: ValueSource;
   /** where the "Auto-zoom to layer" choice is kept; default the browser's localStorage. */
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
@@ -458,6 +463,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     const cog = rasterAssetOf(item);
     if (!item || !cog || cog.rescale !== "auto") return null;
     if (Array.isArray(item.properties?.["atlas:value_range"])) return null;
+    // a browser-drawn item takes its range from its STAC band statistics, never the tile server
+    if (rasterChoiceOf(item).kind === "cog") return null;
     return `${cog.url}#${cog.bidx ?? 1}`;
   });
   let rangeToken = 0;
@@ -504,7 +511,11 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     url: string;
     bounds: [number, number, number, number] | null;
   } | null>(null);
-  const extentUrl = $derived(bboxBounds ? null : (rasterAssetOf(item)?.url ?? null));
+  // a browser-drawn item asks no tile server: without a bbox it draws unbounded (the protocol answers a tile
+  // outside the file as transparent)
+  const extentUrl = $derived(
+    bboxBounds || rasterChoiceOf(item).kind === "cog" ? null : (rasterAssetOf(item)?.url ?? null),
+  );
   $effect(() => {
     const url = extentUrl;
     if (!url) return;
@@ -523,6 +534,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     deps.histogram ?? createHistogramCache(createTitilerHistogramSource(defaultFetchJson));
   const rasterHistKey = $derived.by(() => {
     const cog = rasterAssetOf(drawItem);
+    // a browser-drawn item's histogram is its STAC asset's (mapInputs, `legendFromStac`)
+    if (rasterChoiceOf(drawItem).kind === "cog") return null;
     const dom = rasterDomainOf(drawItem, entry?.collection ?? null);
     return cog && dom ? rasterHistogramKey(cog.url, cog.bidx, dom, DEFAULT_HISTOGRAM_BINS) : null;
   });
@@ -548,7 +561,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
   );
 
   // --- the value of a raster item at the clicked position (`/cog/point`, behind `ValueSource`) -------
-  const valueSource = deps.valueSource ?? createTitilerValueSource(defaultFetchJson);
+  const titilerValues = deps.valueSource ?? createTitilerValueSource(defaultFetchJson);
+  const cogValues = deps.cogValueSource ?? createCogValueSource();
+  /** the point reader of an item: the 4326 original in the browser when the item is browser-drawn, else
+   * titiler's `/cog/point` (`rasterChoiceOf`, the same choice that picks who draws it) */
+  const valueSourceFor = (it: StacItem | null): ValueSource =>
+    rasterChoiceOf(it).kind === "cog" ? cogValues : titilerValues;
   let rasterPoint = $state.raw<{
     collection: string;
     item: string;
@@ -586,6 +604,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     // a flower collection reads ALL bands in one request (the petals are bands of this pixel); the item's
     // own value is its band of that answer
     const flower = untrack(() => hooksOf(entry?.collection).includes("atlas:flower"));
+    const valueSource = valueSourceFor(it);
     if (flower) {
       const pv = await valueSource.pointValues(req);
       if (key !== untrack(() => cogKey)) throw new Error("the layer changed while reading");

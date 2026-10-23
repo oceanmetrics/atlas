@@ -26,6 +26,7 @@ export function rasterSource(spec: RasterLayerSpec): SourceSpecification {
     tiles: [...spec.tiles],
     tileSize: spec.tileSize ?? RASTER_TILE_SIZE,
     ...(spec.bounds ? { bounds: spec.bounds } : {}),
+    ...(spec.maxzoom === undefined ? {} : { maxzoom: spec.maxzoom }),
   };
 }
 

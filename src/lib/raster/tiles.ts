@@ -7,7 +7,9 @@
 //
 // `host` is CONFIGURATION — this module's one named constant — never a literal repeated at call
 // sites (module contract). Score/metric values, cell ids and zonal statistics never flow through
-// here; only the PNG tiles this renders. See point.ts for the one sanctioned `/cog/point` exception
+// here; only the PNG tiles this renders. Since build week 2 step 3 titiler is the FALLBACK: an Item
+// with an EPSG:3857 COG asset is drawn in the browser instead (`cog.ts`), and titiler retires in
+// build week 6 once every published COG has one. See point.ts for the one sanctioned `/cog/point` exception
 // (species click values only) and ramps.ts for the color ramps `colormap_name` names.
 import { INSTANCE } from "../brand/instance";
 import { encodeUrlReserved } from "./urlEncode";
@@ -50,11 +52,24 @@ export interface RasterMaskTileParams {
   colormap: Record<string, readonly [number, number, number, number]>;
 }
 
-/** the seam a future client-side COG renderer (plan D4, spike S3, deferred) swaps in behind: every
- * caller asks a `RasterSource` for a tile URL, never `titilerTileUrl` directly, so that swap touches
- * one factory, not every call site. */
+/** the two renderers a raster Item can be drawn by, chosen per Item (`raster/cog.ts#rasterChoiceOf`):
+ * `cog`, the browser draws the Item's EPSG:3857 COG asset (`cog_3857`) through the `cog://` protocol
+ * (@oceanmetrics/map `cogSlot`; build week 2 step 3); `titiler`, the stock tile server, the fallback for
+ * an Item with no 3857 asset yet (retires in build week 6). */
+export type RasterBackend = "cog" | "titiler";
+
+/** the seam the renderers sit behind: a caller asks a `RasterSource` for a tile URL (`{z}/{x}/{y}`
+ * placeholders give MapLibre's template), never a titiler or `cog://` URL directly. The titiler source
+ * colours by `params`; the COG source (`raster/cog.ts#cogRasterSource`) is built for one Item asset and
+ * draws that asset's own band, ramp and range, so it ignores them. */
 export interface RasterSource {
-  tileUrl(z: number, x: number, y: number, params: RasterTileParams): string;
+  readonly kind: RasterBackend;
+  tileUrl(
+    z: number | string,
+    x: number | string,
+    y: number | string,
+    params: RasterTileParams,
+  ): string;
 }
 
 /**
@@ -108,6 +123,7 @@ export function createTitilerRasterSource(
   config: TitilerConfig = DEFAULT_TITILER_CONFIG,
 ): RasterSource {
   return {
+    kind: "titiler",
     tileUrl: (z, x, y, params) => titilerTileUrl(config, z, x, y, params),
   };
 }

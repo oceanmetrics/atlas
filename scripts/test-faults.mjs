@@ -597,6 +597,14 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
   },
   {
+    id: "cog-tile-url-drops-band",
+    patch: "tests/faults/cog-tile-url-drops-band.patch",
+    describe:
+      "the browser COG's tile url leaves out the band -- the eight EOV items are bands of one file, so " +
+      "MapLibre serves one band's cached tiles for another",
+    gate: ["npx", "vitest", "run", "tests/raster/cog.test.ts"],
+  },
+  {
     id: "raster-source-bounds-dropped",
     patch: "tests/faults/raster-source-bounds-dropped.patch",
     describe:

@@ -18,7 +18,8 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   collections at https://file.marinesensitivity.org/stac/). `src/lens/collection/` is the generic lens.
 - External: MST titiler `https://titiler.marinesensitivity.org` (stock `/cog`), gazetteer
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
-- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/places` (the gazetteer client; called only from
+- Platform packages (`oceanmetrics/platform`): `@oceanmetrics/map` (a `file:` link for now: setup, the COG provider),
+  and from npm `@oceanmetrics/places` (the gazetteer client; called only from
   `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
   `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
 
@@ -40,10 +41,18 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
   query string or hash, written with `replaceState`. Places use the `g1` codec in the hash; gazetteer places by
   reference use the `p.` token (`docs/gazetteer-places.md`).
 - Data origins are formed in exactly one place (`src/lib/catalog/base.ts`), absolute.
-- Numbers never come from the tile server: values come from Parquet (DuckDB-WASM or hyparquet); titiler is for
-  display, plus `/cog/point` and `/cog/statistics` behind interfaces.
-- One MapLibre style, `setStyle(diff: true)`; never `addLayer` piecemeal after load.
-- Pins: `@duckdb/duckdb-wasm` 1.32.0, `maplibre-gl` ^6.10.0, upload parsers pinned; see `package.json` `pinReasons`.
+- Numbers never come from the tile server: values come from Parquet (DuckDB-WASM or hyparquet); a raster Item with
+  a `cog_3857` asset is drawn in the browser (`@oceanmetrics/map` `cogSlot` behind the `RasterSource` seam,
+  `src/lib/raster/cog.ts`, chosen per Item by `pickCogAssets`), its legend from STAC `statistics`/`histogram`, its
+  point read from the 4326 original (`raster/cogPoint.ts`, `pointValue`). Titiler is the fallback for an Item with no
+  3857 asset yet (display, `/cog/point`, `/cog/statistics`, behind the same interfaces) and retires in build week 6.
+- One MapLibre style, `setStyle(diff: true)`; never `addLayer` piecemeal after load (a `cogSlot` is mounted on a
+  recorder and its source and layer go into the composed style; one mounted slot per COG href).
+- Pins: `@duckdb/duckdb-wasm` 1.32.0, `maplibre-gl` ^6.13.0 (the `@oceanmetrics/map` peer range), upload parsers
+  pinned; see `package.json` `pinReasons`. `@oceanmetrics/map` is `file:../platform/packages/map` until 0.2.1 is
+  published (TODO `^0.2.1`; `vite.config.ts` dedupes pmtiles and maplibre-gl, `tsconfig.json` maps maplibre-gl):
+  CI cannot install a `file:` link, so switch before pushing a deploy. `map.ts` calls `setupMapLibre` once (worker,
+  `pmtiles://`, lazy `cog://`); worker chunks are named `.mjs`.
 - Size budget 450 KB gzip static path + 150 KB workers. Lazy modules stay dynamic imports.
 - Every gate ships with a seeded fault that proves it can fail. A bug fix adds a named regression test.
 
@@ -55,10 +64,11 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
   dimension) and `atlas:metric` where `sdm:response_type` is `mixed` (multi-species products).
 - Hex grids: a collection-level `hex` asset (PMTiles, layer `hex`, id field `FID`, geometry only) and per-item
   `values` Parquet assets (`FID` + value columns, `table:columns`); H3 twins as `h3` Parquet assets with
-  `sdm:h3_resolution`. Rasters: COG assets rendered through titiler.
+  `sdm:h3_resolution`. Rasters: COG assets, drawn in the browser from their `cog_3857` asset when they have one,
+  else through titiler.
 - `atlas:flower {"dimension", "composite"}` on a Collection is the flower hook (`src/lib/catalog/flower.ts`): a raster
   click shows a flower whose petals are the sibling Items across `dimension` for the current other selections, each
-  read by its asset's `atlas:bidx` from ONE all-band `/cog/point` answer, and whose centre is the `composite` Item's
+  read by its asset's `atlas:bidx` from ONE all-band point read (the 4326 original in the browser, else `/cog/point`), and whose centre is the `composite` Item's
   band (the producer defines it as the mean of the reportable petals). Petals are coloured by the dimension value
   (`FLOWER_COLORS`, else `--cat-other`) and labelled from `cube:dimensions[dimension]["atlas:labels"]`; nodata (a
   masked pixel, the band's `raster:bands` nodata, or a value outside `atlas:value_range`) is an empty slot. Never name

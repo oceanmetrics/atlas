@@ -21,11 +21,13 @@ export interface BasemapSpec {
   attribution: string;
 }
 
-/** a titiler-backed raster: the score COG, or an overlay such as `_outside_pra` (atlas-4 §6.2). */
+/** a raster: the score COG, or an overlay such as `_outside_pra` (atlas-4 §6.2), drawn from titiler tiles or,
+ * for an item with an EPSG:3857 COG asset, from `cog://` tiles (`raster/cog.ts`). */
 export interface RasterLayerSpec {
   /** style source AND layer id (they share the id, as in `msens::add_cell_tiles`). */
   id: string;
-  /** tile URL templates carrying literal `{z}/{x}/{y}` — build them with `layers/titiler.ts`. */
+  /** tile URL templates carrying literal `{z}/{x}/{y}` — build them with `layers/titiler.ts` or
+   * `raster/cog.ts#cogRasterSource` (`template`). */
   tiles: string[];
   opacity: number;
   tileSize?: number;
@@ -38,6 +40,9 @@ export interface RasterLayerSpec {
    * header for why a grid whose longitude wraps the antimeridian (`usa05`) gets the full
    * [-180,180] range here instead of a narrower but WRONG one. */
   bounds?: [number, number, number, number];
+  /** the source's maxzoom: MapLibre overzooms above it (a browser-drawn COG's full-resolution zoom,
+   * `atlas:zoom[1]`, so the protocol is never asked for tiles finer than the file). Absent = MapLibre's 22. */
+  maxzoom?: number;
 }
 
 /**

@@ -43,6 +43,8 @@ export interface StacAsset {
   "atlas:bidx"?: number;
   /** a COG's display rescale: `[min, max]`, or `"auto"` = read it from titiler `/cog/statistics`. */
   "atlas:rescale"?: [number, number] | "auto";
+  /** the asset's own CRS (`EPSG:4326`, `EPSG:3857` for the browser-drawn copy); else the item's. */
+  "proj:code"?: string | null;
   /** a vector range (PMTiles) asset: the feature property that carries the model id (`mdl_key`) and the
    * value of it to show (`atlas:key`); the layer is `pmtiles:layers[0]`. */
   "atlas:key_property"?: string;

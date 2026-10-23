@@ -218,7 +218,8 @@ describe("the real repo: package.json must match the spike verdicts", () => {
 
   it("S2.md still pins maplibre-gl at 6.4.1+ (every 5.x is inside GHSA-jrc7-96c5-q579)", () => {
     const pins = parseVerdictPins(readFileSync(S2, "utf8"));
-    expect(pins).toContainEqual({ name: "maplibre-gl", range: "^6.10.0" });
+    // ^6.13.0 since build week 2 step 3: @oceanmetrics/map 0.2.x's peer range (S2.md's verdict line says so)
+    expect(pins).toContainEqual({ name: "maplibre-gl", range: "^6.13.0" });
   });
 
   it("S4.md still pins the three upload parsers at the exact versions it measured", () => {

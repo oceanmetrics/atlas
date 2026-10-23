@@ -30,8 +30,15 @@ collection.json>` adds one unlisted collection to the picker (a private preview 
 - **MarineSensitivity collections** are read by reference from `https://file.marinesensitivity.org/stac/`;
   the Species lens still reads one pinned MST release (`src/lib/release/mst.ts`).
 - **Gazetteer places**: `https://storage.oceanmetrics.io/gazetteer/` (`docs/gazetteer-places.md`).
-- **Rasters** render through the MarineSensitivity titiler (`src/lib/raster/tiles.ts`); numbers never
-  come from the tile server.
+- **Rasters**: an Item whose COG has an EPSG:3857 copy (`cog_3857`) is drawn in the browser by
+  `@oceanmetrics/map`'s `cogSlot` through the `cog://` protocol (`src/lib/raster/cog.ts`), with its legend from
+  the STAC band `statistics` and `histogram` and its point read (the hover and click value, the flower's
+  petals) from the 4326 original over HTTP Range (`src/lib/raster/cogPoint.ts`); no tile server is asked.
+  Today that is the published `aquamaps_eov` risk Items. Every other raster Item still renders through the
+  MarineSensitivity titiler (`src/lib/raster/tiles.ts`), the fallback until every COG has a 3857 asset
+  (it retires in build week 6), as do a place summary's statistics over a raster. Numbers never come from
+  the tile server. `@oceanmetrics/map` is a `file:../platform/packages/map` link until 0.2.1 is on npm
+  (clone `oceanmetrics/platform` beside this repo; CI cannot install it).
 
 ## Profiles
 

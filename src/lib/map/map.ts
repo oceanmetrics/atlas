@@ -5,9 +5,11 @@
 //
 //  - NAMED imports. maplibre-gl 6.x has no default export; a default import is a hard Rolldown
 //    `[MISSING_EXPORT]` build failure, not a style preference.
-//  - `maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url` + `setWorkerUrl()`. Plain `?url` emits a
-//    worker whose 514 KB shared chunk 404s — rasters still paint and VECTOR TILES SILENTLY NEVER
-//    PARSE. That is why every map spec asserts a rendered vector feature, not just pixels.
+//  - `maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url` + `setWorkerUrl()` (through
+//    @oceanmetrics/map's `setupMapLibre`, which also registers `pmtiles://` and the lazy `cog://`).
+//    Plain `?url` emits a worker whose 514 KB shared chunk 404s — rasters still paint and VECTOR
+//    TILES SILENTLY NEVER PARSE. That is why every map spec asserts a rendered vector feature, not
+//    just pixels. vite.config.ts names worker chunks `.mjs` (the package README).
 //  - `canvasContextAttributes: { preserveDrawingBuffer: true }`. The bare top-level key is silently
 //    ignored in 5.x/6.x and every out-of-process `readPixels` then reads (0,0,0,0) while the map
 //    visibly renders.
@@ -21,8 +23,8 @@
 // `selStore.set` in the shell), and NEVER for a programmatic move — MapLibre's own `eventData`
 // pass-through carries `atlasProgrammatic: true` from every `flyTo`/`jumpTo` this module makes, so
 // there is no mutable flag to get out of sync.
-import { Map as MapLibreMap, addProtocol, setWorkerUrl } from "maplibre-gl";
-import { Protocol } from "pmtiles";
+import { Map as MapLibreMap, addProtocol, importScriptInWorkers, setWorkerUrl } from "maplibre-gl";
+import { setupMapLibre } from "@oceanmetrics/map";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -48,14 +50,21 @@ function blankStyle(projection: Projection): StyleSpecification {
 let wired = false;
 
 /**
- * Process-wide, once: the worker URL and the `pmtiles://` protocol. Both are global MapLibre state,
- * so registering them per map would re-register the protocol and throw on the second map (the
- * report page builds its own).
+ * Process-wide, once: the worker URL, the `pmtiles://` protocol and the `cog://` protocol (the browser
+ * COG renderer, `lib/raster/cog.ts`; registered now, its code fetched on the first `cog://` request).
+ * All three are global MapLibre state, so registering them per map would re-register a protocol on
+ * the second map (the report page builds its own). `setupMapLibre` (@oceanmetrics/map) does the
+ * registering and is given the three named functions, never the `maplibre-gl` namespace (+11.5 kB gzip
+ * measured, the package README). With no h3 worker module it never awaits, so everything is in place
+ * when this returns.
  */
 export function wireMapLibreOnce(): void {
   if (wired) return;
-  setWorkerUrl(maplibreWorkerUrl);
-  addProtocol("pmtiles", new Protocol().tile);
+  void setupMapLibre({
+    maplibre: { addProtocol, importScriptInWorkers, setWorkerUrl },
+    workerUrl: maplibreWorkerUrl,
+    protocols: ["pmtiles", "cog"],
+  });
   wired = true;
 }
 

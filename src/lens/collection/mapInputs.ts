@@ -1,9 +1,12 @@
 // What the Collections lens hands `composeStyle` and the legend, as a PURE function of the active
 // entry, item, the collection's style document and the loaded value column (the Svelte wiring that
 // loads those lives in state.svelte.ts). A hex item (a PMTiles grid + a Parquet column) becomes a
-// `HexLayerSpec`; a cloud-optimized GeoTIFF item becomes a titiler `RasterLayerSpec`; either way the
-// legend spans the item's own `atlas:value_range` (`catalog/ramp.ts#valueDomain`), the same domain
-// the colours use, so the legend and the painted map always agree.
+// `HexLayerSpec`; a cloud-optimized GeoTIFF item becomes a `RasterLayerSpec`, drawn in the browser
+// (`cog://`, `raster/cog.ts`) when the item has an EPSG:3857 COG asset and by titiler otherwise (the
+// fallback, chosen per item by `rasterChoiceOf`); either way the legend spans the item's own
+// `atlas:value_range` (`catalog/ramp.ts#valueDomain`), the same domain the colours use, so the legend
+// and the painted map always agree. A browser-drawn item's legend is its STAC asset's (`legendFromStac`:
+// the ramp it is painted with, the published band histogram), never a tile-server read.
 import { hexAssetOf, rangeAssetOf, rasterAssetOf, valuesAssetOf } from "../../lib/catalog/assets";
 import type { CollectionEntry } from "../../lib/catalog/load";
 import { collectionRamp, rampStops, valueDomain } from "../../lib/catalog/ramp";
@@ -11,6 +14,8 @@ import type { StacCollection, StacItem } from "../../lib/catalog/types";
 import type { ValueColumn } from "../../lib/catalog/values";
 import type { HexLayerSpec } from "../../lib/map/layers/hex";
 import { titilerTileTemplate } from "../../lib/map/layers/titiler";
+import { cogRasterSource, rasterChoiceOf, stacHistogram } from "../../lib/raster/cog";
+import type { RasterBackend } from "../../lib/raster/tiles";
 import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
 import { RANGE_FILL_COLOR, RANGE_FILL_OPACITY } from "../../lib/map/layers/ranges";
@@ -51,6 +56,8 @@ export interface CollectionMapInputs {
   cogUrl: string | null;
   /** the band of that COG the map draws (`atlas:bidx`), `null` = band 1. */
   cogBidx: number | null;
+  /** who draws the raster: the browser (`cog`) or titiler; `null` for a hex or vector item. */
+  rasterBackend: RasterBackend | null;
   /** the clicked raster position (a ring, plus the cell's square when the grid is known); `null` for none. */
   highlight: HighlightSpec | null;
 }
@@ -62,6 +69,7 @@ export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
   legend: null,
   cogUrl: null,
   cogBidx: null,
+  rasterBackend: null,
   highlight: null,
 };
 
@@ -202,6 +210,7 @@ export function collectionMapInputs(args: {
       range: null,
       cogUrl: null,
       cogBidx: null,
+      rasterBackend: null,
       highlight,
       legend: {
         kind: "continuous",
@@ -210,6 +219,44 @@ export function collectionMapInputs(args: {
         stops: rampStops(colors, domain),
         unit: unitOf(item, entry),
         histogram: finite.length > 0 ? binValues(finite) : null,
+        marker: marker !== null && Number.isFinite(marker) ? marker : null,
+      },
+    };
+  }
+
+  const choice = cog ? rasterChoiceOf(item) : null;
+  if (cog && choice?.kind === "cog") {
+    // drawn in the browser: the 3857 asset through cogSlot, coloured by its `atlas:colormap` over the lens's
+    // domain (the item's value range, else the asset's rescale, else the band's STAC statistics), the legend
+    // and its histogram from STAC
+    const src = cogRasterSource(item, choice.draw.asset, {
+      domain: rasterDomainOf(item, collection),
+      opacity: COLLECTION_RASTER_OPACITY,
+      title: lt.title,
+    });
+    const lg = src.legend();
+    if (!lg.ramp) return EMPTY_COLLECTION_INPUTS;
+    return {
+      hex: null,
+      highlight,
+      cogUrl: cog.url,
+      cogBidx: cog.bidx ?? null,
+      rasterBackend: "cog",
+      range: null,
+      raster: {
+        id: COLLECTION_RASTER_ID,
+        tiles: [src.template],
+        opacity: src.opacity,
+        ...(src.maxzoom === null ? {} : { maxzoom: src.maxzoom }),
+        ...(cogBounds ? { bounds: cogBounds } : {}),
+      },
+      legend: {
+        kind: "continuous",
+        title: lt.title,
+        subtitle: lt.subtitle,
+        stops: rampStops(lg.ramp.colors, [lg.ramp.min, lg.ramp.max]),
+        unit: unitOf(item, entry),
+        histogram: stacHistogram(lg),
         marker: marker !== null && Number.isFinite(marker) ? marker : null,
       },
     };
@@ -232,6 +279,7 @@ export function collectionMapInputs(args: {
       highlight,
       cogUrl: cog.url,
       cogBidx: cog.bidx ?? null,
+      rasterBackend: "titiler",
       range: null,
       raster: {
         id: COLLECTION_RASTER_ID,
@@ -276,6 +324,7 @@ export function collectionMapInputs(args: {
       },
       cogUrl: null,
       cogBidx: null,
+      rasterBackend: null,
       highlight,
       legend: {
         kind: "presence",

@@ -91,12 +91,23 @@ function rescaleOf(v: unknown): [number, number] | "auto" | undefined {
   return undefined;
 }
 
-/** the item's cloud-optimized GeoTIFF (preferring a `data`-role asset), rendered through titiler,
- * with the band / colormap / rescale the asset names (`atlas:bidx|colormap|rescale`). */
+/** an asset's own `proj:code`, else the item's. */
+const projOf = (a: StacAsset, item: StacItem): unknown =>
+  a["proj:code"] ?? item.properties?.["proj:code"];
+
+/** the item's cloud-optimized GeoTIFF (preferring a `data`-role asset that is NOT the EPSG:3857 copy), with the
+ * band / colormap / rescale the asset names (`atlas:bidx|colormap|rescale`): the original the values are read
+ * from, the download offers and titiler draws. A browser-drawn item draws its `cog_3857` copy instead
+ * (`raster/cog.ts`). */
 export function rasterAssetOf(item: StacItem | null): RasterAsset | null {
   if (!item) return null;
   const cogs = Object.values(item.assets ?? {}).filter(isCogAsset);
-  const asset = cogs.find((a) => a.roles?.includes("data")) ?? cogs[0];
+  const data = cogs.filter((a) => a.roles?.includes("data"));
+  const asset =
+    data.find((a) => projOf(a, item) !== "EPSG:3857") ??
+    data[0] ??
+    cogs.find((a) => projOf(a, item) !== "EPSG:3857") ??
+    cogs[0];
   if (!asset) return null;
   const url = assetUrl(item, asset);
   if (!url) return null;
