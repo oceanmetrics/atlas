@@ -364,6 +364,53 @@ one session of the live release goes over 32 MB without many taxa (Teleostei res
 
 **Still open**: records in the search hits (obis-hex showed the subtree's records per hit; WoRMS's search has none, the taxon line has them once picked); res 6 and 7 (the species table stops at res 5).
 
+## obisindicators 0.12's files (2026-10-24, atlas `b64c857`)
+
+obisindicators 0.12 amended v20261012 additively (`obis:species` in the stable collection): `species_flat/res=1.parquet`
+and `res=2.parquet` (the res-3 rows summed by parent, no `h3`), `species_flat/res=3/p=<res-1 parent>.parquet` (842
+files, median 9.6 KB, 728 whole in a 64 KiB tail; `parent_template`, `parent_res {"3": 1}`), `species/lineage.parquet`
+(1.68 MB: `aphiaid, name_key, lineage`) and an `eov` column in `species/species.parquet`. What the atlas reads now:
+
+- **The Cell pane** (`cellPlan`, from the collection, no ids in `src/`): res 1 and 2 read their own file (the plan did so
+  from `flat.resolutions` before any code: the live atlas read `res=1.parquet` as soon as the collection listed it); res
+  3 and finer read the file of the res-1 parent of the hexagon's res-3 ancestor through a reader with a 64 KiB tail,
+  then the row groups by `cell_id` statistics (the path's `res=` and `p=` are not columns: a DuckDB reader passes
+  `hive_partitioning = false`); `res=3.parquet` only when the collection has no `parent_template`; a parent with no file
+  (no records under it) is an empty list, a failing one an error. Whole-resolution files open with a 128 KiB tail (the
+  footers are 68,486 B at res 1 and 117,567 B at res 2).
+- **The species readers fetch uncached** (`uncachedFetch`, `cache: "no-store"`): Chromium's HTTP cache lets one request
+  per url write at a time, so concurrent ranges of one file came back one after another (69 column-chunk ranges of the
+  lookup: 12 s, about 180 ms each; uncached: 1.1 s).
+- **The names** stay one whole read of `species/species.parquet` per page (4.5 MB now, 0.25 to 0.67 s): its column
+  chunks alone are 2.29 MB but 69 ranges, 0.6 to 1.2 s on the storage host.
+- **The WoRMS subtree** registers `species/lineage.parquet` (1.68 MB) in DuckDB-WASM for the taxa and the cells' SQL
+  (`subtreeSql` over `aphiaid, name_key, lineage` equals it over the whole lookup: `tests/obis/subtree.test.ts`); the
+  classes and records come from the lookup's `aphiaid, class, records` chunks (`classesOf`; merged across 16 KiB gaps,
+  36 requests, 0.55 MB, started beside the lineage), or from the Cell pane's whole read when the page has it.
+- **The EOV species lists** keep the species whose `eov` is the layer's key: the fish layer at `832834fffffffff`
+  (Monterey, res 3) lists 481 species and 254,837 records, the hexagon's own `sp` and `n` on the map.
+
+**Measured** (2026-10-24, headless Chromium 1243 on the Mac mini, the live site https://oceanmetrics.io/atlas/ and the
+live release, a new browser context per run, 1280 × 900, 3 runs each; the page opened with `cell=` for the pane and
+`taxon=infraorder:Cetacea&res=3&map=-150,30,4` for the subtree; bytes are response bodies of `obis-h3/` counted by
+Playwright `request.sizes()`; "ms" for a file is its first request's start to its last response's end, the pane's own
+line beside it; before = atlas `6158e57`, after = `b64c857`):
+
+| what is read                                                 | before: species table                                              | after: species table                                                                                                         | names (`species.parquet`) before → after | pane's line, ms, before → after                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Cell pane, res 1 `81283ffffffffff`                           | 337,081 B, 2 req (`res=1`, 256 KiB tail), 519 to 544 ms            | **205,981 B**, 2 req (`res=1`, 128 KiB tail), 471 to 492 ms                                                                  | 4,505,124 B, 1 req, both                 | 544 to 573 → 488 to 765                                                                       |
+| Cell pane, res 2 `822837fffffffff`                           | 395,671 B, 3 req, 660 to 869 ms                                    | **264,595 B**, 3 req, 468 to 704 ms                                                                                          | 4.5 MB, 1 req, both                      | 682 to 893 → 505 to 734                                                                       |
+| Cell pane, res 3 `832834fffffffff`                           | 328,576 B, 2 req (`res=3.parquet`, 1 of 370 groups), 475 to 734 ms | **83,064 B**, 2 req (`res=3/p=81283ffffffffff`, 3 of 13 groups), 433 to 564 ms                                               | 4.5 MB, 1 req, both                      | 501 to 761 → 460 to 585                                                                       |
+| Cell pane, res 5 `852834c7fffffff` (its res-3 parent's list) | 328,578 B, 2 req, 523 to 587 ms                                    | **83,066 B**, 2 req (the same parent file), 466 to 530 ms                                                                    | 4.5 MB, 1 req, both                      | 537 to 637 → 548 to 863                                                                       |
+| WoRMS subtree, Cetacea, res 3                                | the whole lookup, 4,505,191 B, 1 req, + `class=Mammalia` 276,734 B | **`lineage.parquet` 1,679,167 B (1 req) + the class columns 546,885 B (36 req)** = 2,226,052 B, + `class=Mammalia` 276,724 B | —                                        | compute 1,264 to 2,713 → 1,301 to 6,739 (the slow run is a page's first, its 36 ranges 1.5 s) |
+
+The species-table bytes of a pane fall 39% at res 1, 33% at res 2 and 75% at res 3 and finer, and the subtree's lookup
+read 51% (4.51 → 2.23 MB). The bar of obis-hex row 63 (0.6 MB and 0.3 s for a page's first hexagon) is met in bytes at
+every resolution (it already was for res 1 and 2 once the collection listed their files) and not in time: each read is
+two requests (a tail, then the row groups; the res-3 parent of Monterey is 135 KB, over the 64 KiB tail) at about
+0.2 s each on the storage host, so the table alone takes 0.43 to 0.70 s, and the pane waits on the names (0.25 to
+0.67 s). Under 0.3 s would need one request: a split file inside its tail (728 of 842 are) or a larger tail.
+
 ## Not built yet
 
 - The view as places (obis-hex `v=places`, waiting on Ben's word to drop). A whole collection as the place filter is
