@@ -1,0 +1,14 @@
+diff --git a/src/lib/release/cog3857.ts b/src/lib/release/cog3857.ts
+index 5aa7a19..c9b371d 100644
+--- a/src/lib/release/cog3857.ts
++++ b/src/lib/release/cog3857.ts
+@@ -316,7 +316,8 @@ export function readCog3857Row(
+         metadata: t.metadata as never,
+         compressors,
+         columns: READ_COLUMNS,
+-        usePageIndex: true, // the column index of content_hash picks the page, the offset indexes read just it
++        // SEEDED FAULT (tests/faults/side-table-no-page-index.patch): no page index, the whole row group is read
++        usePageIndex: false,
+         filter: { content_hash: { $eq: contentHash } },
+       })) as Record<string, unknown>[];
+       return recs.length ? rowFromRecord(recs[0]) : null;

@@ -33,7 +33,7 @@ collection.json>` adds one unlisted collection to the picker (a private preview 
 - **Rasters**: an Item whose COG has an EPSG:3857 copy (`cog_3857`) is drawn in the browser by
   `@oceanmetrics/map`'s `cogSlot` through the `cog://` protocol (`src/lib/raster/cog.ts`), with its legend from
   the STAC band `statistics` and `histogram` and its point read (the hover and click value, the flower's
-  petals) from the 4326 original over HTTP Range (`src/lib/raster/cogPoint.ts`); no tile server is asked.
+  petals) from the 4326 original over HTTP Range (`src/lib/raster/cogPoint.ts`); no tile server is asked. A COG's copy and numbers come from the shared side table `marine-atlas/tables/cog_3857.parquet` by `content_hash`: the first lookup of a page reads 47 KB (8 B trailer, the 17 KB footer, one page of each column by the page index; 620 KB before, `docs/release-cog-table.md`).
   Today that is the published `aquamaps_eov` risk Items. Every other raster Item still renders through the
   MarineSensitivity titiler (`src/lib/raster/tiles.ts`), the fallback until every COG has a 3857 asset
   (it retires in build week 6), as do a place summary's statistics over a raster. Numbers never come from

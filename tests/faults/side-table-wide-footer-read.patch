@@ -1,0 +1,15 @@
+diff --git a/src/lib/release/cog3857.ts b/src/lib/release/cog3857.ts
+index 5aa7a19..2008f5c 100644
+--- a/src/lib/release/cog3857.ts
++++ b/src/lib/release/cog3857.ts
+@@ -285,7 +285,9 @@ function open(source: string | RangedFile): Promise<Opened> {
+       const magic = String.fromCharCode(...new Uint8Array(trailer, 4, 4));
+       const footer = view.getUint32(0, true);
+       if (magic !== "PAR1" || footer + TRAILER > len) throw new Error("not Parquet");
+-      const body = await file.slice(len - TRAILER - footer, len - TRAILER);
++      // SEEDED FAULT (tests/faults/side-table-wide-footer-read.patch): a speculative 512 KiB tail, not the footer
++      const wide = await file.slice(Math.max(0, len - TRAILER - 524288), len - TRAILER);
++      const body = wide.slice(wide.byteLength - footer);
+       const tail = new Uint8Array(footer + TRAILER);
+       tail.set(new Uint8Array(body), 0);
+       tail.set(new Uint8Array(trailer), footer);

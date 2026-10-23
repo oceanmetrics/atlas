@@ -1053,6 +1053,23 @@ export const FAULTS = [
       "while the side table is being read",
     ],
   },
+  // --- the side table's first lookup: 47 KB, not 620 KB -------------------------------------------------
+  {
+    id: "side-table-no-page-index",
+    patch: "tests/faults/side-table-no-page-index.patch",
+    describe:
+      "the cog_3857 side-table lookup reads without the page index -- every column's whole chunk of the row " +
+      "group the hash falls in (89 KB of the 512-row layout, about 1 MB of the 8,192-row one) instead of one page",
+    gate: ["npx", "vitest", "run", "tests/release/cog3857.test.ts", "-t", "the page index"],
+  },
+  {
+    id: "side-table-wide-footer-read",
+    patch: "tests/faults/side-table-wide-footer-read.patch",
+    describe:
+      "the cog_3857 side table is opened with a speculative 512 KiB tail read instead of the 8-byte trailer " +
+      "and then exactly the footer -- the first lookup costs 512 KB before it reads a row",
+    gate: ["npx", "vitest", "run", "tests/release/cog3857.test.ts", "-t", "opens in two requests"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror
