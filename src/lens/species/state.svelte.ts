@@ -28,7 +28,12 @@ import { createTitilerHistogramSource, type HistogramSource } from "../../lib/ra
 import { layerHistogramFor } from "../../lib/map/distribution";
 import type { Histogram } from "../../lib/map/density";
 import { createTitilerBoundsSource, type BoundsSource } from "../../lib/raster/bounds";
-import { paletteStopsFromBoot, type PaletteName } from "../../lib/raster/ramps";
+import {
+  paletteStopsFromBoot,
+  paletteStopsWithFallback,
+  type PaletteName,
+} from "../../lib/raster/ramps";
+import type { ReleaseCogChoice } from "../../lib/raster/releaseCog";
 import type { SelStore } from "../../lib/state/sel.svelte";
 import type { Representation } from "../../lib/state/types";
 import type { SessionLike } from "../../lib/release/dataBase";
@@ -58,7 +63,15 @@ import {
 } from "./data/resolve";
 import { defaultSpecies, loadTaxa, type TaxaIndex } from "./data/picker";
 import { builtinFetchJson, loadTaxon, type ShardError, type TaxonCard } from "./data/shards";
-import { DEFAULT_SPECIES_COLORMAP, speciesMapInputs, type SpeciesMapInputs } from "./mapInputs";
+import {
+  activePill,
+  DEFAULT_SPECIES_COLORMAP,
+  pickAsset,
+  SPECIES_RASTER_OPACITY,
+  speciesMapInputs,
+  type SpeciesMapInputs,
+} from "./mapInputs";
+import type { Bbox, TaxonAsset } from "./data/shards";
 import { popupAnnounceText, popupContent, popupHtml, type PopupContent } from "./popup";
 
 const EMPTY_MAP_INPUTS: SpeciesMapInputs = {
@@ -92,6 +105,9 @@ export interface SpeciesLensDeps {
   /** R4-A: the legend histogram's `/cog/statistics` source; defaults to stock titiler through
    * `fetchJson`, same convention as `boundsSource`. */
   histogramSource?: HistogramSource;
+  /** build week 6 step 5: the lazy module that draws a release COG from its 3857 copy, reads its values and
+   * bounds from the 4326 original (`lib/raster/releaseCog.ts`); default the dynamic import. */
+  releaseCog?: () => Promise<typeof import("../../lib/raster/releaseCog")>;
   /** V1 fix (Opus eyes-on review, 2026-09-24): the shell's CURRENT chrome geometry (docked panel
    * on desktop; sheet detent + legend chip on the phone) — a getter, not a snapshot, so every
    * re-fit (species change, "Zoom to layer") pads for whatever is covering the map RIGHT NOW, not
@@ -168,6 +184,7 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
   const boundsSource = deps.boundsSource ?? createTitilerBoundsSource(fetchJson);
   const histogramSource = deps.histogramSource ?? createTitilerHistogramSource(fetchJson);
   const track = deps.track ?? (() => {});
+  const releaseCog = deps.releaseCog ?? (() => import("../../lib/raster/releaseCog"));
 
   let bootStarted = false;
   let loggedFirstSpecies = false;
@@ -220,10 +237,77 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
     return speciesCard(card, { ver, selectedInput: selStore.sel.in, datasets });
   });
 
+  // --- build week 6 step 5: who draws the COG on screen, resolved from the release's side table ----------
+  // the browser draws its 3857 copy when `{ver}/tables/cog_3857.parquet` has the original's content hash, titiler
+  // otherwise; one resolution per (release, COG, rescale, ramp), cached for the page. Until it answers the raster
+  // is not drawn (a titiler tile asked for a COG the browser is about to draw is the request this step retires).
+  const drawn: TaxonAsset | null = $derived.by(() => {
+    const pill = bar ? activePill(bar) : undefined;
+    if (!pill?.hasSurface) return null;
+    const a = pickAsset(pill.assets, selStore.sel.rep);
+    return a && a.type === "cog" && a.rescale ? a : null;
+  });
+  // a plain cache of promises (never read by a template; the answers go into $state)
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const cogDraws = new Map<string, Promise<ReleaseCogChoice>>();
+  function cogKeyOf(ver: string, a: TaxonAsset): string {
+    return JSON.stringify([ver, a.url, a.rescale, a.colormap ?? DEFAULT_SPECIES_COLORMAP]);
+  }
+  function resolveCogDraw(ver: string, a: TaxonAsset): Promise<ReleaseCogChoice> {
+    const key = cogKeyOf(ver, a);
+    let p = cogDraws.get(key);
+    if (!p) {
+      const colormap = (a.colormap ?? DEFAULT_SPECIES_COLORMAP) as PaletteName;
+      const stops = paletteStopsWithFallback(
+        deps.boot() as { palettes?: unknown } | null,
+        colormap,
+      );
+      p = stops
+        ? releaseCog()
+            .then((m) =>
+              m.releaseCogDraw({
+                ver,
+                cogUrl: a.url,
+                domain: a.rescale,
+                paint: { kind: "stops", stops },
+                opacity: SPECIES_RASTER_OPACITY,
+                session: deps.session?.() ?? null,
+              }),
+            )
+            .catch((): ReleaseCogChoice => ({ kind: "titiler" }))
+        : Promise.resolve<ReleaseCogChoice>({ kind: "titiler" });
+      cogDraws.set(key, p);
+    }
+    return p;
+  }
+  let cogDraw = $state<{ key: string; choice: ReleaseCogChoice } | null>(null);
+  const drawnKey: string | null = $derived.by(() => {
+    const ver = deps.ver();
+    return ver && drawn ? cogKeyOf(ver, drawn) : null;
+  });
+  $effect(() => {
+    const ver = deps.ver();
+    const a = drawn;
+    // the paint is the release's own palette stops (`boot.palettes`): wait for the boot, never cache a guess
+    if (!ver || !a || !deps.boot()) return;
+    const key = cogKeyOf(ver, a);
+    let cancelled = false;
+    void resolveCogDraw(ver, a).then((choice) => {
+      if (!cancelled) cogDraw = { key, choice };
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+  const cogChoice: ReleaseCogChoice | "pending" = $derived(
+    drawnKey && cogDraw?.key === drawnKey ? cogDraw.choice : "pending",
+  );
+
   const baseMapInputs: SpeciesMapInputs = $derived.by(() => {
     const ver = deps.ver();
     if (!bar || !ver || !card) return EMPTY_MAP_INPUTS;
     return speciesMapInputs(bar, {
+      cog: cogChoice,
       rep: selStore.sel.rep,
       boot: deps.boot() as { palettes?: unknown } | null,
       ver,
@@ -242,6 +326,11 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
     const ver = deps.ver();
     const asset = baseMapInputs.asset;
     if (!ver || !card || !asset || asset.type !== "cog" || !asset.rescale) {
+      legendHistogram = null;
+      return;
+    }
+    // drawn in the browser: the side table's histogram is in the legend already; pending: wait for the answer
+    if (cogChoice === "pending" || cogChoice.kind === "cog") {
       legendHistogram = null;
       return;
     }
@@ -265,7 +354,7 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
     if (legend?.kind !== "continuous") return baseMapInputs;
     return {
       ...baseMapInputs,
-      legend: { ...legend, histogram: legendHistogram, marker: legendMarker },
+      legend: { ...legend, histogram: legend.histogram ?? legendHistogram, marker: legendMarker },
     };
   });
 
@@ -375,7 +464,7 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
     const cogUrl = cogUrlForBoundsFallback(card, selStore.sel.in, selStore.sel.rep);
     if (!cogUrl) return;
     const token = ++cameraRefineToken;
-    const bbox = await boundsSource.cogBounds(cogUrl);
+    const bbox = await cogBoundsOf(cogUrl);
     if (token !== cameraRefineToken) return; // a later species/refit superseded this fetch
     if (!bbox) return;
     if (cameraKeyOf(selStore.sel).sp !== key.sp) return; // the species itself changed meanwhile
@@ -404,6 +493,24 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
     );
     if (!cam) return;
     applyWideRangeCamera(cam);
+  }
+
+  /** the COG's extent for the camera: read from the 4326 original's header (and pixel reads) when the side
+   * table resolves it, else titiler's `/cog/info` (and `/cog/point` probes). */
+  async function cogBoundsOf(cogUrl: string): Promise<Bbox | null> {
+    const ver = deps.ver();
+    if (ver) {
+      try {
+        const m = await releaseCog();
+        const original = await m.releaseOriginal(ver, cogUrl, {
+          session: deps.session?.() ?? null,
+        });
+        if (original) return await m.createReleaseBoundsSource().cogBounds(original);
+      } catch {
+        // the lazy module failed to load: titiler, as before
+      }
+    }
+    return boundsSource.cogBounds(cogUrl);
   }
 
   async function bootstrap(ver: string): Promise<void> {
@@ -770,12 +877,23 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
         show(popupContent({ ...base, kind: "no-value" }));
         return;
       }
-      const value = await valueSource.pointValue({
-        domain: "species",
-        lon: lngLat.lng,
-        lat: lngLat.lat,
-        cogUrl: asset.url,
-      });
+      // the value is read from the 4326 original when the browser draws the COG (`cogPoint.ts`), else `/cog/point`
+      const ver = deps.ver();
+      const choice: ReleaseCogChoice = ver ? await resolveCogDraw(ver, asset) : { kind: "titiler" };
+      const value =
+        choice.kind === "cog"
+          ? await (await releaseCog()).createReleaseValueSource().pointValue({
+              domain: "species",
+              lon: lngLat.lng,
+              lat: lngLat.lat,
+              cogUrl: choice.valuesHref,
+            })
+          : await valueSource.pointValue({
+              domain: "species",
+              lon: lngLat.lng,
+              lat: lngLat.lat,
+              cogUrl: asset.url,
+            });
       const stops = paletteStopsFromBoot(
         boot as { palettes?: unknown } | null,
         (asset.colormap ?? DEFAULT_SPECIES_COLORMAP) as PaletteName,

@@ -1,0 +1,17 @@
+diff --git a/src/lens/species/mapInputs.ts b/src/lens/species/mapInputs.ts
+index 269f233..5cd9ff8 100644
+--- a/src/lens/species/mapInputs.ts
++++ b/src/lens/species/mapInputs.ts
+@@ -161,9 +161,10 @@ export function speciesMapInputs(bar: LayerBar, opts: SpeciesMapInputsOptions):
+     const cog = opts.cog;
+     // the browser draws the 3857 copy (the source's own template and maxzoom); titiler only when unresolved
+     const raster: RasterLayerSpec | null =
+-      cog === "pending"
++      // SEEDED FAULT (tests/faults/release-cog-pending-titiler.patch): a pending COG is drawn by titiler
++      cog === "pending" && false
+         ? null
+-        : cog?.kind === "cog"
++        : cog !== "pending" && cog?.kind === "cog"
+           ? {
+               id: SPECIES_RASTER_ID,
+               tiles: [cog.source.template],

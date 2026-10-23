@@ -1,7 +1,11 @@
 // atlas-5 step 1/2: mapInputs.ts turns a LayerBar + representation into composeStyle() data — the
 // COG branch (with the asset's OWN colormap/rescale, AquaX 0-1000 vs everything else 1-100), the
 // PMTiles ranges branch, and the two render-time notices (§7.4).
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { releaseCogSources } from "../../../src/lib/raster/cog";
+import { releaseCogDraw } from "../../../src/lib/raster/releaseCog";
+import { clearCog3857Cache } from "../../../src/lib/release/cog3857";
 import { parseTaxonShard } from "../../../src/lens/species/data/shards";
 import { layerBar } from "../../../src/lens/species/data/layerBar";
 import { MERGED_IN } from "../../../src/lens/species/data/resolve";
@@ -383,5 +387,100 @@ describe("source_key parsing", () => {
     expect(key({})).toBeNull();
     expect(key({ source_key: "" })).toBeNull();
     expect(key({ source_key: 5 })).toBeNull();
+  });
+});
+
+// ---- build week 6 step 5: the species lens draws a release COG from its 3857 copy -------------------
+describe("speciesMapInputs — who draws the COG (the release's side table)", () => {
+  const table = (): ArrayBuffer => {
+    const b = readFileSync(
+      new URL("../../fixtures/release/cog_3857_lenses.parquet", import.meta.url),
+    );
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  };
+  const boot = {
+    palettes: {
+      spectral_r: [
+        "#5E4EA1",
+        "#3287BD",
+        "#66C1A5",
+        "#ABDDA4",
+        "#E5F498",
+        "#FFFFBF",
+        "#FEDF8B",
+        "#FDAD60",
+        "#F36C43",
+        "#D43E4E",
+        "#9E0041",
+      ],
+    },
+  };
+  beforeEach(() => clearCog3857Cache());
+  afterEach(() => releaseCogSources());
+
+  async function murrelet() {
+    const card = CARDS.murrelet();
+    const bar = layerBar(card, { ver: "v7", selectedInput: MERGED_IN, datasets: v7() });
+    const asset = pickAsset(activePill(bar)!.assets, "native")!;
+    const cog = await releaseCogDraw({
+      ver: "v7",
+      cogUrl: asset.url,
+      domain: asset.rescale,
+      paint: { kind: "stops", stops: boot.palettes.spectral_r },
+      opacity: SPECIES_RASTER_OPACITY,
+      table: table(),
+    });
+    return { bar, asset, cog };
+  }
+
+  it("a v7 row the side table lists: the raster is the 3857 copy's cog:// template, no titiler url", async () => {
+    const { bar, cog } = await murrelet();
+    expect(cog.kind).toBe("cog");
+    const out = speciesMapInputs(bar, { rep: "native", ver: "v7", scientificName: "x", boot, cog });
+    expect(out.raster?.id).toBe(SPECIES_RASTER_ID);
+    expect(out.raster?.tiles[0]).toMatch(
+      /^cog:\/\/.*\/v7\/cog_3857\/cog\/usa05\/7d028c7d233f11f3_3857\.tif#color:/,
+    );
+    expect(out.raster?.tiles[0]).toContain(",1,100,c/{z}/{x}/{y}"); // the shard's own rescale
+    expect(out.raster?.tiles[0]).not.toContain("/cog/tiles/");
+    expect(out.raster?.opacity).toBe(SPECIES_RASTER_OPACITY);
+    expect(out.raster?.maxzoom).toBe(5);
+  });
+
+  it("the legend keeps the release's stops and takes the side table's histogram", async () => {
+    const { bar, cog } = await murrelet();
+    const out = speciesMapInputs(bar, { rep: "native", ver: "v7", scientificName: "x", boot, cog });
+    expect(out.legend?.kind).toBe("continuous");
+    if (out.legend?.kind !== "continuous") return;
+    expect(out.legend.stops[0].value).toBe(1);
+    expect(out.legend.stops.at(-1)?.value).toBe(100);
+    expect(out.legend.histogram?.binCount).toBe(32);
+    expect([out.legend.histogram?.min, out.legend.histogram?.max]).toEqual([25, 50]);
+  });
+
+  it("pending: nothing is drawn yet (no titiler tile for a COG the browser may draw)", () => {
+    const bar = layerBar(CARDS.murrelet(), { ver: "v7", selectedInput: MERGED_IN, datasets: v7() });
+    const out = speciesMapInputs(bar, {
+      rep: "native",
+      ver: "v7",
+      scientificName: "x",
+      boot,
+      cog: "pending",
+    });
+    expect(out.raster).toBeNull();
+    expect(out.asset?.type).toBe("cog");
+  });
+
+  it("unresolved (no row): titiler draws it, as before", () => {
+    const bar = layerBar(CARDS.murrelet(), { ver: "v7", selectedInput: MERGED_IN, datasets: v7() });
+    const out = speciesMapInputs(bar, {
+      rep: "native",
+      ver: "v7",
+      scientificName: "x",
+      boot,
+      cog: { kind: "titiler" },
+    });
+    expect(out.raster?.tiles[0]).toContain("/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=");
+    expect(out.raster?.maxzoom).toBeUndefined();
   });
 });

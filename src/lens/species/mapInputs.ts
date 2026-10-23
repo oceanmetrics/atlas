@@ -19,6 +19,7 @@ import {
   type PaletteName,
 } from "../../lib/raster/ramps";
 import type { Histogram } from "../../lib/map/density";
+import type { ReleaseCogChoice } from "../../lib/raster/releaseCog";
 import type { Representation } from "../../lib/state/types";
 import { noSurfaceNotice } from "./data/card";
 import type { LayerBar, LayerPill } from "./data/layerBar";
@@ -100,6 +101,11 @@ export interface SpeciesMapInputsOptions {
   /** the card's common name, when the taxon has one — folded into `legendTitle()`'s "{common}
    * ({sci})" title form (Ben's UI-L2 ask). `null`/omitted degrades to the bare scientific name. */
   commonName?: string | null;
+  /** build week 6 step 5: who draws a COG asset, as the lens state resolved it from the release's side table
+   * (`raster/releaseCog.ts` `releaseCogDraw`): `cog`, its 3857 copy in the browser; `titiler`, the fallback;
+   * `"pending"`, not resolved yet (nothing is drawn, so no titiler tile is asked for a COG the browser will draw).
+   * Absent = titiler (a caller with no release, the tests of the titiler path). */
+  cog?: ReleaseCogChoice | "pending";
 }
 
 export interface SpeciesMapInputs {
@@ -152,13 +158,30 @@ export function speciesMapInputs(bar: LayerBar, opts: SpeciesMapInputsOptions): 
     if (!asset.rescale) return { ...EMPTY, notice: noNativeSurfaceNotice(), asset };
     const colormapName = asset.colormap ?? DEFAULT_SPECIES_COLORMAP;
     const [min, max] = asset.rescale;
-    const raster: RasterLayerSpec = {
-      id: SPECIES_RASTER_ID,
-      tiles: [
-        titilerTileTemplate({ url: asset.url, colormapName, rescaleMin: min, rescaleMax: max }),
-      ],
-      opacity: SPECIES_RASTER_OPACITY,
-    };
+    const cog = opts.cog;
+    // the browser draws the 3857 copy (the source's own template and maxzoom); titiler only when unresolved
+    const raster: RasterLayerSpec | null =
+      cog === "pending"
+        ? null
+        : cog?.kind === "cog"
+          ? {
+              id: SPECIES_RASTER_ID,
+              tiles: [cog.source.template],
+              opacity: cog.source.opacity,
+              ...(cog.source.maxzoom === null ? {} : { maxzoom: cog.source.maxzoom }),
+            }
+          : {
+              id: SPECIES_RASTER_ID,
+              tiles: [
+                titilerTileTemplate({
+                  url: asset.url,
+                  colormapName,
+                  rescaleMin: min,
+                  rescaleMax: max,
+                }),
+              ],
+              opacity: SPECIES_RASTER_OPACITY,
+            };
     const stops = paletteStopsFromBoot(opts.boot ?? null, colormapName as PaletteName);
     const lt = legendTitle({
       lens: "species",
@@ -174,6 +197,9 @@ export function speciesMapInputs(bar: LayerBar, opts: SpeciesMapInputsOptions): 
           subtitle: lt.subtitle,
           unit: "score",
           stops: legendStops(stops, min, max),
+          // the side table's histogram (from the full-resolution original) when the browser draws it; else
+          // the lens fills titiler's `/cog/statistics` in later
+          ...(cog && cog !== "pending" && cog.kind === "cog" ? { histogram: cog.histogram } : {}),
         }
       : null;
     return { raster, range: null, legend, notice: null, asset };
