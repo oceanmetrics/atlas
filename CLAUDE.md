@@ -110,6 +110,42 @@ tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
   `VITE_INSTANCE=<id>` (the brand scripts read the same variable). Never name a brand in `src/`: read `lib/brand/instance.ts`.
 - A new renderer hook: its module exports its `atlas:*` name and a `parse(collection) -> spec | null`, and
   `src/lib/catalog/hooks.ts` registers it (the one place that names hook -> module); a plain data field goes in `DATA_FIELDS`.
+- What an instance builds is `scripts/instance-modules.mjs` (the instance module table): each lens, tool, page and
+  capability (`release`, `seal`) names its modules (`eager` exports or `lazy` loaders), the source paths it `owns`, a
+  `markers` string and its `tests`. `virtual:instance-modules` gives the shell each module or `null`; Shell.svelte never
+  imports a table-owned module directly (`tests/instance-modules.test.ts`) and guards each instance-only branch with a
+  build flag (`__LENS_SCORES__`, `__LENS_COLLECTION__`, `__TOOL_REPORT__`, `__RELEASE__`, `__SEAL__`). A new lens or
+  tool: a table entry, a bridge module (`src/lens/<lens>/shell.ts`), its tests listed, and the d.ts in
+  `src/vite-env.d.ts`. `check-instance-dist.mjs` (CI, every build) proves the dist carries only its instance's modules.
+- Tests run once per instance (`vitest.config.ts`: `logic:<id>`); a module's tests run under an instance that builds it.
+  A test of an instance's own strings reads them from the instance (or a per-instance table), never a literal brand.
+  `*.mst.test.ts` are the shared modules' tests as MarineSensitivity/atlas wrote them (zones, `out`, the scores keys).
+- The two instances: `oceanmetrics` (Collections, Species; Places rail; index, catalog; 450/150 KB) and
+  `marinesensitivity` (Scores, Species; Report rail; index, report; the marine-atlas release registry with the access
+  gate; the MMA seal; 470/150 KB, raised from 0.10.93's 460 because this codebase carries maplibre-gl 6.15 (the
+  `@oceanmetrics/map` peer range, about 10 KB gzip over 0.10.93's 6.10) and the shared Place layers). Both build from
+  `.github/workflows/build-instance.yml`; MarineSensitivity/atlas calls it at a pinned tag (`docs/mst-thin-repo.md`).
+
+### The release registry (an instance with `release`; moved from MarineSensitivity/atlas, still enforced)
+
+- **Relative base**: the same `dist/` runs under `https://marinesensitivity.org/atlas/` and
+  `https://preview.marinesensitivity.org/{ver}/atlas/` (Cloudflare Access scopes by path); never an absolute `/assets/` URL.
+- **Version resolution: path beats `?ver=` beats `latest.txt`.** A malformed value is absent, never an error; the label is
+  `^v[0-9]+[a-z]?$` (`src/lib/release/version.ts`). What renders is what the access gate allows.
+- **Preview mode has exactly one door**: a same-origin `session.json` with `{"preview": true}` (`release/session.ts`), the
+  app's only same-origin fetch; a 404, a network error, malformed JSON are public. Never fail open. The public path never
+  awaits it.
+- **Fail closed**: `versions.json` rows carry `access`; a restricted release is fetched only on a preview session; no row,
+  no `access`, an unknown value are not renderable; an unreadable `versions.json` allows only `latest.txt`'s version; a
+  denied version falls through to `latest.txt` with `{ver, reason}` on `window.__early.denied` (`release/access.ts`).
+- **Registry origins are formed in one place**: `catalog/base.ts#RELEASE_REGISTRY_BASE` (the instance's
+  `release.registry`), used by `release/dataBase.ts` and written into the inline script by the build.
+- **The inline early-fetch script is a second copy, and a test proves it**: `src/lib/release/earlyFetch.inline.js` (one
+  file, written into index.html and report.html at `<!--instance:early-fetch-->`) duplicates
+  `release/{version,session,access,dataBase}.ts` because it runs before any bundle parses. `tests/release/access-cases.ts`
+  is the one case table: `access.test.ts` drives the modules, `inline-early-fetch.test.ts` runs the script the build
+  writes (both pages) in a `node:vm` sandbox. Add a case to the shared table, never to one side.
+- The restricted release prefixes and their fixtures stay out of git (the moved tests keep only public v7 fixtures).
 
 ## Conventions
 

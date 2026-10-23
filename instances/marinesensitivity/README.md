@@ -1,49 +1,51 @@
 # instances/marinesensitivity
 
 The MarineSensitivity Atlas as an instance of this codebase (vision doc 2026-10-21, "The atlas, one
-codebase with skins"). **A scaffold, not built today**: it holds the values already known from
-`MarineSensitivity/atlas` 0.10.88 and validates against `../instance.schema.json`
-(`tests/instances.test.ts`), but `VITE_INSTANCE=marinesensitivity npm run build` is not expected to
-give a working app until build week 4, **2026-11-20 to 11-26**.
+codebase with skins"). Since build week 4 (step 2) `VITE_INSTANCE=marinesensitivity npm run build` is
+the atlas of MarineSensitivity/atlas 0.10.93 (`57d53be`), whose modules moved into this repository as
+they were. It is published at https://marinesensitivity.org/atlas/ by the thin MarineSensitivity/atlas
+repo once that repo calls this one's `.github/workflows/build-instance.yml` at a pinned tag
+(`docs/mst-thin-repo.md`; until then the live site is the 0.10.93 build).
+
+## What it builds (`instance.json`, the instance module table)
+
+- **Lenses** `scores, species`, opening on Scores. The Scores lens (`src/lens/scores/`, through its
+  `shell.ts`): raster cells and Program Areas, the flower, the zones, species and composition tables,
+  search, the glossary and the welcome. No Collections lens (decision D2: the Ocean Metrics catalog is
+  not listed here this week).
+- **Rail** `layers, details, table, report`: the Report tool is the 0.10.93 Places flow
+  (`src/places/ReportPlaces.svelte`: pick mode, the Program Area picker, draw, coordinates, upload, the
+  results panel) with the report actions (`src/shell/ReportPane.svelte`).
+- **Pages** `index, report`: `report.html`, the print-first report (`src/report/`, `src/lib/report/`).
+- **Release** the marine-atlas registry (`latest.txt`, `versions.json`, `{ver}/...` under the bucket's
+  `marine-atlas/`), the preview origin `https://preview.marinesensitivity.org` with the access gate (a
+  restricted release opens only on the preview host's `session.json`), and the docs book
+  `https://marinesensitivity.org/docs/`. The build writes the inline early-fetch script into both pages.
+- **Seal** MMA (`https://marinesensitivity.org/branding/mma-seal.svg`), shown on a build with
+  `VITE_SEAL=1` (the thin repo's workflow sets it): About and the report cover.
+- **Report** title "Marine Sensitivity Report", export stem `MarineSensitivity`; feedback issues and the
+  "Code on GitHub" link go to MarineSensitivity/atlas (`repo`); figures are named `marine-atlas_...`.
+- **Budget** 470 / 150 KB gzip. 0.10.93 held 460; this codebase carries maplibre-gl 6.15 (the
+  `@oceanmetrics/map` peer range), about 10 KB gzip over 0.10.93's 6.10, and the shared Place layers.
+  Measured with `scripts/size-budget.mjs`: 0.10.93 449.7 KB, this build 465.9 KB.
 
 ## What is here
 
-- `instance.json`: name "MarineSensitivity Atlas" (a one-string wordmark), the page title and
-  description from its `index.html`, the rail `layers, details, table, report`, the default lens
-  `scores`, theme `dark`, tour `on`, the catalog base = the marine-atlas release base
-  (`src/lib/release/dataBase.ts` `PUBLIC_DATA_BASE`), the titiler host, and the feedback app key
-  `atlas`.
-- `tokens.css` (the MMA palette, `--mma-*`, with its `@contrast` block) and `tokens.json` (exported
-  by `VITE_INSTANCE=marinesensitivity node scripts/export-tokens.mjs`), `fonts.css` and `fonts/`
-  (Jost and Carlito subsets, OFL; Century Gothic and Calibri stay `local()` only), copied verbatim
-  from that repo.
+- `instance.json` (above), `tokens.css` (the MMA palette, `--mma-*`, with its `@contrast` block; the
+  shared data colours `--cat-*` including `--cat-mangrove`) and `tokens.json` (exported by
+  `VITE_INSTANCE=marinesensitivity node scripts/export-tokens.mjs`), `fonts.css` and `fonts/` (Jost and
+  Carlito subsets, OFL; Century Gothic and Calibri stay `local()` only), copied verbatim from that repo.
 - `mark.svg`: the wave-in-hexagon mark (`WaveHexMark.svelte`) with its CSS classes written as
   presentation attributes reading the same custom properties.
-- `assets/`: the favicon and the two motifs.
-- Schema 1.1 fields: `lenses` `scores, species` (the 0.10.93 lenses; no Collections lens in week 4, decision
-  D2), `pages` `index, report`, `release` (the marine-atlas registry, the preview origin
-  `https://preview.marinesensitivity.org`, `access: "gate"`), `seal` (MMA, the published
-  `https://marinesensitivity.org/branding/mma-seal.svg`, which was `VITE_SEAL_URL`'s default) and `budget`
-  460 / 150 KB (its 0.10.93 budgets). The schema knows them; this build reads only `budget` until step 2.
+- `assets/`: the favicon and the two motifs. Only public brand assets live in this folder; the
+  restricted release prefixes and their numbers stay out of git.
 
-## What arrives in build week 4 (2026-11-20 to 11-26)
+## Not here (and why)
 
-- **The Scores lens** (`Lens = "scores" | "species"` in the MST repo): this build's `Lens` union is
-  `"collection" | "species"`, so `defaults.lens: "scores"` falls back to `collection` until the lens
-  lands as a member of the union.
-- **The Report export** (the `report` tool): not in this build's `ToolName` union, so the rail drops it
-  until then.
-- **The seal**: the MMA seal behind the build flags `VITE_SEAL` / `VITE_AGENCY` (and
-  `VITE_SEAL_URL`), `src/lib/ui/sealVisibility.ts` in the MST repo. Those lines left this repo's
-  `.env.example` on 2026-10-22; they come back as this instance's settings.
-- **The gallery** (the MST mockup gallery and its `navy`/`paper` theme names).
-- **`atlas:uncertainty`**, the first MST renderer hook; `src/lib/catalog/hooks.ts#unknownHooks`
-  reports it until it is registered. The MST kinds (`src/lib/catalog/mst/kinds.ts`) become a declared
-  hook then too.
-- The release-to-catalog bridge: the catalog base here is a release registry (`latest.txt`,
-  `{ver}/manifest.json`), not a STAC `catalog.json`.
-- An og card (`og.image`): none today, so no `og:image` tags are written.
-- Strings that have no counterpart in the MST app yet and are placeholders until then: `credit`,
-  `cite`, `about`, the group label `MarineSensitivity`, and the token set (the MST palette predates
-  tokens this build reads, such as `--om-mark-spark` and the `--cat-*` set; the contrast gate and the
-  token parity are checked when the instance is first built).
+- **The gallery** (`gallery.html`, the mockup sections and their Playwright baselines): dev-only in
+  0.10.93 too, never published; it stays in MarineSensitivity/atlas's archive.
+- **The 0.10.93 Playwright specs** (scores, report, places, keyboard walk, the release gate) and their
+  e2e-gated seeded faults: the unit tests and the vitest-gated faults moved; the browser specs are a
+  follow-up (their fixtures route the bucket hermetically and need the MST e2e harness).
+- **An og card** (`og.image`): none, so no `og:image` tags are written.
+- **`atlas:uncertainty`** and the SEFSC republication (the rest of build week 4's scope).

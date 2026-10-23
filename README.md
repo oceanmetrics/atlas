@@ -70,29 +70,62 @@ host), `tokens.css` with its `@contrast` block (and the exported `tokens.json`),
 closed) is the contract; `tests/instances.test.ts` validates every instance and the build refuses an
 invalid one.
 
-Schema 1.1 (build week 4, step 1) adds `lenses` (the lenses the instance builds; `defaults.lens` must be
-one of them), `tools` widened to `report`, `pages` (the HTML entries it publishes: `index`, `catalog`,
-`report`; always `index`), `release` (`registry` base, required when present, `preview` origin,
-`access: "gate"`) for an instance that reads a release registry, `seal` (`agency`, `src`) and `budget`
-(`static_kb`, `worker_kb`, the defaults of `npm run size-budget` for the selected instance). The build
-reads `budget` today; `lenses`, `pages`, `release` and `seal` choose modules from build week 4 step 2
-(2026-11-20 to 11-26, the MarineSensitivity move). Fixtures that pass and fail are in
+Schema 1.1 (build week 4) adds `lenses` (the lenses the instance builds; `defaults.lens` must be one of
+them), `tools` widened to `report`, `pages` (the HTML entries it publishes: `index`, `catalog`, `report`;
+always `index`), `release` (`registry` base, required when present, `preview` origin, `access: "gate"`,
+`docs` book root) for an instance that reads a release registry, `seal` (`agency`, `src`), `budget`
+(`static_kb`, `worker_kb`, the defaults of `npm run size-budget` for the selected instance), and the
+strings the moved MarineSensitivity modules used to hard-code: `repo` (where feedback issues go and the
+Docs/changelog links point), `download.prefix` (the figure file names), `report` (`title`, `stem`;
+required when `pages` names `report`) and `about.credits`. Fixtures that pass and fail are in
 `tests/fixtures/instance/{valid,invalid}/`, with the expected error per invalid file in `invalid.json`.
 
 - `VITE_INSTANCE=<id>` picks the folder (default `oceanmetrics`; `.env` or the environment). Vite
   aliases `@instance` to it; `src/lib/brand/instance.ts` is the only reader of `instance.json` in
-  `src/`, and `shell.css`/`catalog.css` import `@instance/tokens.css`.
-- `index.html` and `catalog.html` carry `%instance.*%` text placeholders and `instance:*` comment
-  blocks, filled by the `atlas-instance` plugin in `vite.config.ts` (`scripts/instance.mjs`,
-  `renderInstanceHtml`). The same plugin serves `assets/` beside the page (a dev middleware; `emitFile`
-  at build) while `public/` keeps the files every instance shares (`public/mst/`).
+  `src/`, and `shell.css`/`catalog.css`/`report.css` import `@instance/tokens.css` (and the shell
+  `@instance/fonts.css`, empty for an instance on system fonts).
+- `index.html`, `catalog.html` and `report.html` carry `%instance.*%` text placeholders and
+  `instance:*` comment blocks, filled by the `atlas-instance` plugin in `vite.config.ts`
+  (`scripts/instance.mjs`, `renderInstanceHtml`): the og tags, the skeleton's mark, wordmark, lens
+  switch and (with a release) version chip, the font preloads, and, for an instance with a release
+  registry, the inline early-fetch script (`src/lib/release/earlyFetch.inline.js`, one copy for both
+  pages). The same plugin serves `assets/` beside the page (a dev middleware; `emitFile` at build)
+  while `public/` keeps the files every instance shares (`public/mst/`).
 - The brand scripts (`contrast`, `check:hex-literals`, `check:inlined-tokens`, `export-tokens`,
   `render-og`) read `VITE_INSTANCE` too: `VITE_INSTANCE=marinesensitivity npm run contrast`.
-- `Lens`, `ToolName` and `CatalogGroup` stay compile-time unions: an instance chooses among their
-  members (its `defaults.lens`, `tools`, `catalog.groups`), it cannot add one.
-- `oceanmetrics` is the live atlas. `marinesensitivity` is a scaffold with the values known from
-  MarineSensitivity/atlas; its Scores lens, Report export, seal and gallery arrive in build week 4
-  (2026-11-20 to 11-26), see `instances/marinesensitivity/README.md`.
+
+### What an instance builds (the instance module table)
+
+`scripts/instance-modules.mjs` is the one table of which module implements each lens, tool, page and
+capability (`release`, `seal`); `vite.config.ts` and `vitest.config.ts` serve it to the app as
+`virtual:instance-modules`. For the selected instance each export is the module (eager: the
+Collections lens' reactive core and place summaries, which must exist before a panel mounts), a loader
+(lazy: the Collections lens' components, the Scores lens, the Report tool, the release registry) or
+`null`, so a module the instance does not name is never bundled. Shell.svelte imports instance-only
+code only from there (`tests/instance-modules.test.ts`), and guards each instance-only template branch
+with a build-time flag (`__LENS_SCORES__`, `__LENS_COLLECTION__`, `__TOOL_REPORT__`, `__RELEASE__`,
+`__SEAL__`, the same `define`), so the minifier drops it from a build without it.
+
+| instance            | lenses               | rail                           | pages          | release, seal                    | budget (KB gzip) |
+| ------------------- | -------------------- | ------------------------------ | -------------- | -------------------------------- | ---------------- |
+| `oceanmetrics`      | Collections, Species | Layers, Details, Table, Places | index, catalog | none                             | 450 / 150        |
+| `marinesensitivity` | Scores, Species      | Layers, Details, Table, Report | index, report  | marine-atlas registry, gate; MMA | 470 / 150        |
+
+- `scripts/check-instance-dist.mjs` (every CI build) checks a dist carries exactly its instance's
+  pages, no chunk from a source an unselected entry owns, and each selected entry's marker string but
+  no unselected one's: the oceanmetrics dist has no Scores lens, Report or release registry code, the
+  marinesensitivity dist no Collections lens.
+- `npm test` runs the logic tests once per instance (`logic:oceanmetrics`, `logic:marinesensitivity`):
+  a module's tests run under an instance that builds it (the table's `tests`), and a test of one
+  instance's strings reads them from the instance.
+- `.github/workflows/build-instance.yml` is the ONE build (a reusable `workflow_call`: `instance`,
+  `ref`, the `VITE_*` values; the dist as an artifact; `deploy: true` publishes it to the caller's
+  `gh-pages`). This repository's `pages.yml` calls it for both instances and deploys oceanmetrics;
+  MarineSensitivity/atlas becomes a thin repo calling it at a pinned tag (`docs/mst-thin-repo.md`).
+- `oceanmetrics` is https://oceanmetrics.io/atlas/. `marinesensitivity` is the MarineSensitivity
+  Atlas (https://marinesensitivity.org/atlas/ once its thin repo publishes it): the 0.10.93 Scores
+  lens, Report tool and page, release registry with the access gate, version picker and the MMA seal,
+  moved in build week 4 (see `instances/marinesensitivity/README.md`).
 
 ## The OBIS layer's URL grammar (obis-hex links)
 
@@ -112,13 +145,16 @@ one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa
 
 ## Build-time configuration (all optional)
 
-`VITE_INSTANCE` (above), `VITE_CATALOG_BASE`, `VITE_FEEDBACK_URL`, `VITE_LOG_URL`, `VITE_GA_ID` (see
-`.github/workflows/pages.yml`).
+`VITE_INSTANCE` (above), `VITE_CATALOG_BASE`, `VITE_FEEDBACK_URL`, `VITE_LOG_URL`, `VITE_GA_ID`, and for
+an instance with a release and a seal `VITE_PREVIEW_ATLAS_ROUTE` (`1` once the preview host serves
+`/{ver}/atlas/`) and `VITE_SEAL` (`1` shows the instance's seal; anything else, none). They are the inputs of
+`.github/workflows/build-instance.yml`, which each caller fills from its own repository variables.
 Analytics are off unless `VITE_GA_ID` / `VITE_LOG_URL` are set.
 
 ## Docs
 
 `docs/` is partly inherited from upstream (MarineSensitivity/atlas). Each inherited page opens with a
-"Status in OceanMetrics Atlas" note saying what no longer applies (scores, Program Areas, the Report, the
-release registry); `gazetteer-places.md` and `mst-by-reference.md` are the current notes for places and for
+"Status in OceanMetrics Atlas" note saying what does not apply to the oceanmetrics instance (scores,
+Program Areas, the Report, the release registry: since build week 4 those are the marinesensitivity
+instance's); `mst-thin-repo.md` is the draft of the thin MarineSensitivity/atlas repo and its steps; `gazetteer-places.md` and `mst-by-reference.md` are the current notes for places and for
 the MarineSensitivity collections. No page is entirely about a removed feature, so none was deleted.
