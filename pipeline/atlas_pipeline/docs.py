@@ -31,10 +31,10 @@ Likely, 0.8-1.0 Very likely; lower values are considered less likely and were ig
 def credits_block(restricted: bool = False) -> str:
   contacts = "\n".join(
     f"  - {c['name']}, {c['roles'][0]}, {c['organization']} ({c['emails'][0]['value']})" for c in stac.CONTACTS)
-  lic = (f"{stac.LICENSE_PLACEHOLDER} (PLACEHOLDER, pending confirmation from Neil Hammerschlag; do not rely on it "
-         "until confirmed)")
+  lic = f"{stac.LICENSE} (the public indicator layers; confirmed by Neil Hammerschlag 2026-10-23)"
   if restricted:
-    lic += ". These per-species surfaces are RESTRICTED until Neil Hammerschlag gives permission to publish."
+    lic += (". These per-species surfaces are RESTRICTED: only the species list of a cell is public, never the maps "
+            "or a download (Neil Hammerschlag, 2026-10-23).")
   return f"""\
 ## Credits
 
@@ -44,6 +44,7 @@ def credits_block(restricted: bool = False) -> str:
 - Contacts:
 {contacts}
 - Funders: {', '.join(stac.FUNDERS)}
+- Acknowledgement: {stac.ACKNOWLEDGEMENT}
 - Processed and hosted by OceanMetrics (https://oceanmetrics.io)."""
 
 
@@ -132,7 +133,7 @@ How to read this collection programmatically.
 4. H3: `hex_h3.parquet` maps FID to H3 res 7 cells (`FID`, `h3`, `weight`, `overlap_km2`; weights sum to 1 per FID).
    `values_h3.parquet` (key `h3`) holds the same numeric columns aggregated by area-weighted mean.
    `sdm:h3_resolution` is 7.
-5. Credits (citation, license, contacts, funders) are on the collection; the license is a placeholder.
+5. Credits (citation, license, contacts, funders, `atlas:acknowledgement`) are on the collection.
 6. Species list (public): `cell_species.parquet` (`FID`, `season`, `aphia_id`, `prob`, `class`; Likely and Very likely
    rows only, {counts.get('n_cell_species', 0):,} rows) joins `species.parquet` (`aphia_id`, `scientific_name`,
    `abbreviation`, `iucn_code`, `redlisted`, `group1`, `group2`, `common_name`) on `aphia_id`. For an item's list filter
@@ -154,7 +155,7 @@ def species_readme(counts: dict) -> str:
 # MBON BioTrack per-species occupancy (RESTRICTED)
 
 Per-species probability of occurrence and probability class for 66 species ({counts['n_hex']:,} cells, summer and
-winter). **Gated pending Neil Hammerschlag's OK**: this collection is not linked from the public `catalog.json`
+winter). **Restricted (Neil Hammerschlag, 2026-10-23: the species list only)**: this collection is not linked from the public `catalog.json`
 and is staged under an unlisted prefix. Do not share the link or redistribute.
 
 {credits_block(restricted=True)}

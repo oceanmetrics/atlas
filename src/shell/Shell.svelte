@@ -19,6 +19,7 @@
     panelHeaderTitle,
     TOOL_BODY,
     toolTakesFullStage,
+    toolOnCellClick,
     type PanelContext,
     type ToolName,
   } from "./tools";
@@ -699,6 +700,11 @@
         isOwned: () => placesMap.interactionOwned,
         chromePadding: () => currentChromePadding(),
         insideFids: (): ReadonlySet<number> | null => summaries?.insideFids ?? null,
+        // a cell click shows its Details (the species list, the sibling metrics, the Cell pane)
+        onCellClick: () => {
+          const next = toolOnCellClick(activeTool);
+          if (next !== activeTool || panelGeom.collapsed) selectTool(next);
+        },
       })
     : null;
   // WP4: one row per place for the CURRENT item (Places pane, Table tool) + the inside-places set

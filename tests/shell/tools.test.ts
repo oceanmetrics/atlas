@@ -13,6 +13,7 @@ import {
   TOOL_ICON,
   TOOL_LABEL,
   TOOL_ORDER,
+  toolOnCellClick,
   toolTakesFullStage,
   type PanelContext,
 } from "../../src/shell/tools";
@@ -65,6 +66,20 @@ describe("Details uses one icon in both lenses", () => {
 describe("toolTakesFullStage: only Table takes the whole stage", () => {
   it("table yes; layers, details and places no", () => {
     expect(TOOL_ORDER.filter(toolTakesFullStage)).toEqual(["table"]);
+  });
+});
+
+describe("toolOnCellClick: a cell click opens Details (Neil, 2026-10-23)", () => {
+  it("regression: a click from Layers shows the species list, not only the popup's count", () => {
+    expect(toolOnCellClick("layers")).toBe("details");
+  });
+  it("Table and Details go to (or stay on) Details", () => {
+    expect(toolOnCellClick("table")).toBe("details");
+    expect(toolOnCellClick("details")).toBe("details");
+  });
+  it("the Places flow keeps its tool", () => {
+    expect(toolOnCellClick("places")).toBe("places");
+    expect(toolOnCellClick("report")).toBe("report");
   });
 });
 

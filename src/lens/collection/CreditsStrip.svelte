@@ -26,6 +26,7 @@
       !!credits.license ||
       people.length > 0 ||
       credits.funders.length > 0 ||
+      !!credits.acknowledgement ||
       !!credits.methodsUrl,
   );
 </script>
@@ -80,6 +81,12 @@
       <div class="row">
         <dt>Funders</dt>
         <dd>{credits.funders.join(", ")}</dd>
+      </div>
+    {/if}
+    {#if credits.acknowledgement}
+      <div class="row">
+        <dt>Data</dt>
+        <dd data-testid="credits-acknowledgement">{credits.acknowledgement}</dd>
       </div>
     {/if}
     {#if credits.methodsUrl}

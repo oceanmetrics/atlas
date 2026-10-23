@@ -26,9 +26,10 @@ EXT = {
 }
 SOURCE_URL = "https://marinebon.org/"   # producer's public page; the raw files came from T. Couto by Google Drive
 
-# ---- credits (citation and contacts from T. Couto 2026-10-16; license and funders pending Neil Hammerschlag) ----
+# ---- credits (citation and contacts from T. Couto 2026-10-16; license, funders and acknowledgement from Neil
+# Hammerschlag 2026-10-23) ----
 
-LICENSE_PLACEHOLDER = "CC-BY-4.0"
+LICENSE = "CC-BY-4.0"
 CITATION = ("Couto, T. B. A., Zulian, V., D'Antonio, B., ... & Hammerschlag, N. (under review). Unlocking the "
             "potential of acoustic telemetry to scale up marine biodiversity assessment. Frontiers in Ecology and "
             "the Environment.")
@@ -45,7 +46,9 @@ CITATION_FULL = (
   "Streich, M. K., Stunz, G. W., TinHan, T. C., van Zinnicq Bergmann, M., Wells, R. J. D., Whoriskey, F. G., "
   "Wunder, C., Young, J., & Hammerschlag, N. (under review). Unlocking the potential of acoustic telemetry to "
   "scale up marine biodiversity assessment. Frontiers in Ecology and the Environment.")
-FUNDERS = ["NOAA IOOS MBON"]
+FUNDERS = ["NOAA IOOS MBON", "SECOORA", "NASA", "NOAA"]
+ACKNOWLEDGEMENT = ("This work was made possible through the data sharing via the ACT, FACT, iTAG and OTN "
+                   "telemetry networks.")
 VERSION = "2025.05"
 OBS_START, OBS_END = "2000-01-01T00:00:00Z", "2023-12-31T23:59:59Z"
 
@@ -158,11 +161,12 @@ def indicator_table_columns(values_columns: list[str], dtypes: dict[str, str]) -
 
 def _credits() -> dict:
   return {
-    "license": LICENSE_PLACEHOLDER,
+    "license": LICENSE,
     "sci:citation": CITATION,
     "contacts": CONTACTS,
     "providers": PROVIDERS,
     "atlas:funders": FUNDERS,
+    "atlas:acknowledgement": ACKNOWLEDGEMENT,
   }
 
 
@@ -210,13 +214,14 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
       f"{n_hex:,} 10-km hexagonal cells. Derived from integrated spatial occupancy models of acoustic "
       "telemetry (A-BioTrack) and OBIS records for 66 species (Couto, Hammerschlag et al.). Methods and "
       "field dictionary: README.md."),
-    "license": LICENSE_PLACEHOLDER,
+    "license": LICENSE,
     "version": VERSION,
     "deprecated": False,
     "sci:citation": CITATION,
     "contacts": CONTACTS,
     "providers": PROVIDERS,
     "atlas:funders": FUNDERS,
+    "atlas:acknowledgement": ACKNOWLEDGEMENT,
     "atlas:status": "prototype",
     "extent": {
       "spatial": {"bbox": [bbox]},
@@ -293,7 +298,7 @@ def indicators_collection(bbox: list[float], values_columns: list[str], dtypes: 
       PREVIEW_LINK,
       {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
-       "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},
+       "title": "CC-BY-4.0"},
     ],
   }
 
@@ -418,14 +423,16 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
     "description": (
       "Per-species probability of occurrence and probability class (Unlikely / Likely 0.6-0.8 / Very likely "
       f"0.8-1.0) for 66 species in {n_hex:,} 10-km hexagonal cells, summer and winter. RESTRICTED: shared by "
-      "unlisted link only, pending permission from Neil Hammerschlag; do not redistribute."),
-    "license": LICENSE_PLACEHOLDER,
+      "unlisted link only (Neil Hammerschlag, 2026-10-23: the species list only, no public maps or downloads); do not "
+      "redistribute."),
+    "license": LICENSE,
     "version": VERSION,
     "deprecated": False,
     "sci:citation": CITATION,
     "contacts": CONTACTS,
     "providers": PROVIDERS,
     "atlas:funders": FUNDERS,
+    "atlas:acknowledgement": ACKNOWLEDGEMENT,
     "atlas:status": "prototype",
     "atlas:access": "restricted",
     "extent": {"spatial": {"bbox": [bbox]}, "temporal": {"interval": [[OBS_START, OBS_END]]}},
@@ -453,7 +460,7 @@ def species_collection(bbox: list[float], taxa_rows: list[dict], n_hex: int, cel
       PREVIEW_LINK,
       {"rel": "via", "href": SOURCE_URL, "type": "text/html", "title": "MBON BioTrack (producer)"},
       {"rel": "license", "href": "https://creativecommons.org/licenses/by/4.0/", "type": "text/html",
-       "title": "CC-BY-4.0 (placeholder, pending confirmation from the data owners)"},
+       "title": "CC-BY-4.0"},
     ],
   }
 
