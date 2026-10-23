@@ -229,7 +229,7 @@ subtree", `tests/obis/view.test.ts` "an AphiaID that is no head is a subtree com
 
 1. WoRMS's record (`AphiaRecordByAphiaID/<id>`): name, authority, rank, status; a synonym's subtree is its accepted
    AphiaID's, and the taxon line says so.
-2. The lookup (`species/species.parquet`, 4,086,019 B, whole, once per page; `Engine.load`): the taxa
+2. The lookup (`species/species.parquet`, 4,086,019 B, whole, once per page: the shared read of `lookup.ts`, registered in the engine from a copy, `Engine.loadBytes`): the taxa
    `list_contains(lineage, <id>)` and the classes they fall in (a NULL class is `_none`, `obis:species.null_class`).
 3. The class files at the table resolution: `species/res=<r>/class=<c>/data_0.parquet` (a class with a space is
    `%2520` in the url, as the store holds it), or `species_decade/res=<r>/decade=<d>/class=<c>/` for a decade
@@ -239,7 +239,8 @@ subtree", `tests/obis/view.test.ts` "an AphiaID that is no head is a subtree com
    (2 files), over the 25.0 MB the page reads at once: pin res 4 (12.00 MB) or coarser."). No single-class subtree
    of v20261012 is over it (the largest class file is Teleostei's res 5, 13.8 MB), so on the live release the line
    is a guard; a taxon spanning classes is a head.
-4. The files, whole (`Engine.load`, kept registered: a zoom back or a pan reads nothing again), then obisindicators'
+4. The files, whole (`Engine.load`, kept registered: a zoom back or a pan reads nothing again; past 32 MB loaded the
+   oldest files the current taxon and resolution do not use are dropped, "Eviction" below), then obisindicators'
    own SQL ported as it is (`.h3t_indicators_sql()` over `obis_h3_species_subtree_sql()`'s source: the rows joined to
    the lookup, `n` summed per (cell, `name_key`), so richness counts names; Shannon and Simpson over the shares; ES(50)
    `1 - exp(lgamma(N-n_i+1) + lgamma(N-50+1) - lgamma(N-n_i-50+1) - lgamma(N+1))`, 1 for a species that leaves fewer
@@ -302,8 +303,7 @@ from the lookup's read to the blob url):
 
 In one page (warm: the lookup and the files kept), Cetacea res 3 → 4 read 0.72 MB in 0.66 s, 4 → 5 1.85 MB in 0.69 s,
 and back to 3 or 4 nothing, 36 and 58 ms (the SQL alone). A subtree's tiles are one small file (Cetacea res 1: 1
-request, 20.6 KB). The first subtree of a page pays the lookup (3.9 MB; the Cell pane reads the same file's name
-columns, 1.97 MB, separately).
+request, 20.6 KB). The first reader of a page pays the lookup (4.09 MB, the whole file, once: the subtree's lineage filter and the Cell pane's names are read from the same bytes, below).
 
 **Sizes**: the static path is unchanged (434.6 to 434.7 KB of 450: the Details title follows the taxon); the H3 layer's
 chunk 7.5 to 13.0 KB gzip (the subtree's rules, the WoRMS client, the wiring), its controls 5.3 to 6.3 KB, the runner
@@ -320,11 +320,45 @@ the tiles the worker built from the blob). Seeded faults `obis-subtree-es-small-
 block), `obis_worms_search_1280_light` ("Delphin": accepted names first, synonyms with their accepted AphiaID),
 `obis_worms_cell_390_dark` (phone, 832834fffffffff: ES(50) 5.86, 22 species, 63,741 records, the subtree's species).
 
-**Still open**: the lookup is read whole (4.1 MB) beside the Cell pane's read of its names (1.97 MB), so a page that
-does both reads the file twice (a release that splits the lookup's lineage into its own small file, or the pane reading
-the names from the engine's copy, would save it); the class files stay registered in DuckDB-WASM's memory for the page
-(Teleostei res 3 to 5 is 27 MB; no eviction yet); records in the search hits (obis-hex showed the subtree's records per
-hit; WoRMS's search has none, the taxon line has them once picked); res 6 and 7 (the species table stops at res 5).
+**The lookup, read once per page** (2026-10-23, `src/lens/collection/h3/lookup.ts`). The subtree read the lookup whole (4.09 MB) and
+the Cell pane read its name columns again by range requests (1.97 MB in 7 requests); now one lazy loader fetches the
+file once and hands the same bytes to both: the subtree registers a copy in DuckDB-WASM (`Engine.loadBytes`; the
+database takes the array over, so it gets a copy), the pane parses its names and ranks from the buffer (`readLookup(spec, buffer)`).
+Whoever asks first fetches, whoever asks second (or at the same moment) gets the same promise; a failed read is
+forgotten. The read lines say "once per page" on the reader that made the read only. Measured in headless Chromium
+1243 against the live release (the built app under `vite preview`, a fresh context, the catalog routed to link the
+obis-h3 collection, 1280 x 900; `species/species.parquet` requests counted with Playwright's `request.sizes()`),
+Cetacea at res 3 (`map=-150,30,4`) and then a click on a hexagon to open the Cell pane:
+
+| flow                                        | requests for `species.parquet` | bytes     |
+| ------------------------------------------- | ------------------------------ | --------- |
+| Cetacea subtree, then the Cell pane, before | 8 (1 whole, 7 ranges)          | 6,105,418 |
+| Cetacea subtree, then the Cell pane, after  | 1                              | 4,086,019 |
+| Cell pane alone (`cell=`), before           | 7 (ranges)                     | 2,019,399 |
+| Cell pane alone (`cell=`), after            | 1                              | 4,086,019 |
+
+The page that does both saves 2,019,399 B and 7 requests; the page that only opens a Cell pane now reads 2.07 MB
+more (the whole file, not its name columns): the price of one read for both, chosen so a subtree after a pane does not read the
+file again either (a release that splits the lineage into its own small file would take it back). The pane's line no
+longer says "plus the names, 1,972 KB" after a subtree (the subtree's line carries the lookup's bytes); alone it says 3,990 KB.
+Test: `tests/obis/subtreeCache.test.ts` ("the lookup is read once per page": a subtree then the pane's names, the pane then a subtree, both at
+once, a failed read retried; a stubbed fetch counts the GETs). Seeded fault `obis-lookup-read-twice`.
+
+**Eviction** (`src/lens/collection/h3/subtreeCache.ts`). The class files stay registered in DuckDB-WASM after a computation
+(a zoom back reads nothing). Past a cap of 32 MB of loaded class files (their byte sizes as the store recorded them; the
+lookup is not counted), the tables of the files not used by the current taxon and resolution are dropped
+(`Engine.drop`, the store's registration and the database's file), least recently used first, never a file a
+computation in flight holds (each run holds its files from its first byte to its last query, so a second run's
+trim cannot take what the first is reading). One taxon's files are at most 25 MB (the page's own cap), under the 32.
+The read line says what is held: "Read 0.26 MB of the species table (1 file) and the lookup (3.90 MB, once per page);
+15,617 hexagons in 1,483 ms. 0.26 MB of species tables loaded; older ones are dropped past 32 MB." (a drop adds
+"Dropped 2 older files (14 MB)."). Dropped files are freed in the engine; the WASM heap itself does not shrink, it is
+reused. Test: `tests/obis/subtreeCache.test.ts` (a stub engine with three files and a small cap: the oldest goes, the current stays; use order, not
+registration order; a held file stays; a current set over the cap alone is kept; the runner dropping
+across three taxa and a zoom back reading nothing). Seeded fault `obis-subtree-drops-held`. Not exercised live: no
+one session of the live release goes over 32 MB without many taxa (Teleostei res 3 to 5 is 27 MB).
+
+**Still open**: records in the search hits (obis-hex showed the subtree's records per hit; WoRMS's search has none, the taxon line has them once picked); res 6 and 7 (the species table stops at res 5).
 
 ## Not built yet
 

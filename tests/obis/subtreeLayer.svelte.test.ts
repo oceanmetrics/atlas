@@ -72,6 +72,10 @@ const READY: SubtreeOutcome = {
     files: 1,
     lookupBytes: 4086019,
     requests: 3,
+    loadedBytes: 276067,
+    capBytes: 32 * 1024 * 1024,
+    droppedFiles: 0,
+    droppedBytes: 0,
     ms: 1487,
   },
   taxa: new Set([137092]),
@@ -169,6 +173,9 @@ describe("taxon=aphia:<id> that is no head opens the subtree (the case table's a
       message: null,
     });
     expect(layer.subtree?.readLine).toContain("Read 0.26 MB of the species table (1 file)");
+    expect(layer.subtree?.readLine).toContain(
+      "0.26 MB of species tables loaded; older ones are dropped past 32 MB.",
+    );
     expect(layer.coverage).toBe("459 of 714 hexagons of the subtree have ≥ 50 records");
     expect(layer.legend?.subtitle).toContain("subtree p02–p98");
     expect(layer.legend?.stops[0].value).toBe(1);
@@ -237,7 +244,18 @@ describe("taxon=aphia:<id> that is no head opens the subtree (the case table's a
       kind: "refused",
       line,
       bytes: 30 * 1024 * 1024,
-      read: { bytes: 0, filesBytes: 0, files: 2, lookupBytes: 0, requests: 2, ms: 10 },
+      read: {
+        bytes: 0,
+        filesBytes: 0,
+        files: 2,
+        lookupBytes: 0,
+        requests: 2,
+        loadedBytes: 0,
+        capBytes: 0,
+        droppedFiles: 0,
+        droppedBytes: 0,
+        ms: 10,
+      },
     }));
     await settle();
     expect(layer.target).toBeNull();

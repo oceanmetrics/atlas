@@ -982,6 +982,22 @@ export const FAULTS = [
       "recorded under two AphiaIDs is two species, and the Animalia cell no longer equals the head",
     gate: ["npx", "vitest", "run", "tests/obis/subtree.test.ts", "-t", "two aphiaids"],
   },
+  {
+    id: "obis-lookup-read-twice",
+    patch: "tests/faults/obis-lookup-read-twice.patch",
+    describe:
+      "the shared species lookup is not kept: the Cell pane's names after a subtree (or before) fetch the 4 MB " +
+      "file again, two requests for one page",
+    gate: ["npx", "vitest", "run", "tests/obis/subtreeCache.test.ts", "-t", "read once per page"],
+  },
+  {
+    id: "obis-subtree-drops-held",
+    patch: "tests/faults/obis-subtree-drops-held.patch",
+    describe:
+      "the class-file cache drops the least recently used file whether or not a computation holds it -- the " +
+      "taxon and resolution on screen (or a run in flight) lose the table they are reading past the cap",
+    gate: ["npx", "vitest", "run", "tests/obis/subtreeCache.test.ts", "-t", "class files kept"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror

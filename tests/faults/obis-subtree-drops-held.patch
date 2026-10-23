@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/subtreeCache.ts b/src/lens/collection/h3/subtreeCache.ts
+index e1241b7..0afef99 100644
+--- a/src/lens/collection/h3/subtreeCache.ts
++++ b/src/lens/collection/h3/subtreeCache.ts
+@@ -73,7 +73,7 @@ export class ClassFileCache {
+     while (loaded > this.#cap) {
+       let victim: string | null = null;
+       for (const [n, t] of this.#used)
+-        if (!this.#held.has(n) && (victim === null || t < this.#used.get(victim)!)) victim = n;
++        if ((victim === null || t < this.#used.get(victim)!)) victim = n;
+       if (victim === null) break;
+       const bytes = this.#engine.store?.get(victim)?.bytes ?? 0;
+       await this.#engine.drop(victim);

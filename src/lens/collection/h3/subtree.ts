@@ -386,13 +386,36 @@ export function readLine(o: {
   ms: number;
   /** the files' sizes, read now or before */
   filesBytes?: number;
+  /** the class files loaded in the engine, the cap past which the oldest are dropped, what this read dropped */
+  loadedBytes?: number;
+  capBytes?: number;
+  droppedFiles?: number;
+  droppedBytes?: number;
 }): string {
   const look = o.lookupBytes > 0 ? ` and the lookup (${mb(o.lookupBytes)}, once per page)` : "";
   const tail = `${o.cells.toLocaleString("en-US")} hexagons in ${Math.round(o.ms).toLocaleString("en-US")} ms.`;
   const files = o.files === 1 ? "file" : `${o.files} files`;
+  const kept = loadedWords(o);
   if (o.bytes === 0 && o.lookupBytes === 0 && (o.filesBytes ?? 0) > 0)
-    return `Nothing read: the species table's ${files} (${mb(o.filesBytes!)}) kept from before; ${tail}`;
-  return `Read ${mb(o.bytes)} of the species table (${o.files} file${o.files === 1 ? "" : "s"})${look}; ${tail}`;
+    return `Nothing read: the species table's ${files} (${mb(o.filesBytes!)}) kept from before; ${tail}${kept}`;
+  return `Read ${mb(o.bytes)} of the species table (${o.files} file${o.files === 1 ? "" : "s"})${look}; ${tail}${kept}`;
+}
+
+/** how much of the species table the page holds: "27 MB of species tables loaded; older ones are dropped past 32 MB."
+ * (whole megabytes from 10, as the sentence reads; "dropped 2 older files (14 MB)" when this read dropped some) */
+export function loadedWords(o: {
+  loadedBytes?: number;
+  capBytes?: number;
+  droppedFiles?: number;
+  droppedBytes?: number;
+}): string {
+  if (!o.loadedBytes || !o.capBytes) return "";
+  const m = (b: number) => (b < 10 * 1024 * 1024 ? mb(b) : `${Math.round(b / 1024 / 1024)} MB`);
+  const dropped =
+    o.droppedFiles && o.droppedFiles > 0
+      ? ` Dropped ${o.droppedFiles} older file${o.droppedFiles === 1 ? "" : "s"} (${m(o.droppedBytes ?? 0)}).`
+      : "";
+  return ` ${m(o.loadedBytes)} of species tables loaded; older ones are dropped past ${m(o.capBytes)}.${dropped}`;
 }
 
 /** the taxon's line (obis-hex `.taxon-line`): name and authority, rank, status, the accepted name of a synonym, the

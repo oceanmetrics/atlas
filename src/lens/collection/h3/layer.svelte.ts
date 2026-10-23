@@ -12,8 +12,6 @@
 import {
   H3_LAYER,
   ReleaseReader,
-  newReadStats,
-  type ReadStats,
   cellIdOf,
   cellIdRes,
   h3ReleaseSlot,
@@ -52,6 +50,7 @@ import {
   type CellSpeciesList,
   type LookupRow,
 } from "./cellSpecies";
+import { loadLookup } from "./lookup";
 import {
   coverageText,
   domainAt,
@@ -352,8 +351,7 @@ const pageReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024 });
 const speciesReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024, tail: SPECIES_TAIL });
 let lookupPromise: {
   href: string;
-  p: Promise<Map<number, LookupRow>>;
-  stats: ReadStats;
+  p: Promise<{ rows: Map<number, LookupRow>; fetched: number }>;
   counted: boolean;
 } | null = null;
 
@@ -842,6 +840,10 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
                 filesBytes: outcome.read.filesBytes,
                 files: outcome.read.files,
                 lookupBytes: outcome.read.lookupBytes,
+                loadedBytes: outcome.read.loadedBytes,
+                capBytes: outcome.read.capBytes,
+                droppedFiles: outcome.read.droppedFiles,
+                droppedBytes: outcome.read.droppedBytes,
                 cells: outcome.cells,
                 ms: outcome.read.ms,
               }),
@@ -1072,15 +1074,20 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
   ): Promise<CellSpeciesList> {
     const t0 = performance.now();
     if (!lookupPromise || lookupPromise.href !== sp.speciesTable!.lookup!.href) {
-      const stats = newReadStats();
-      const p = readLookup(sp, undefined, stats);
-      lookupPromise = { href: sp.speciesTable!.lookup!.href, p, stats, counted: false };
+      // the whole file, once per page, shared with the subtree (`lookup.ts`): the names are parsed from its bytes
+      const href = sp.speciesTable!.lookup!.href;
+      const p = loadLookup(href).then(async (got) => ({
+        rows: await readLookup(sp, got.buffer),
+        fetched: got.fetched,
+      }));
+      lookupPromise = { href, p, counted: false };
       p.catch(() => (lookupPromise = null));
     }
     const lk = lookupPromise;
-    const [cells, lookup] = await Promise.all([readCellRows(sp, h3, speciesReader), lk.p]);
-    // the names are read once per page: the hexagon that waited for them reports their bytes
-    const lookupBytes = lk.counted ? 0 : lk.stats.bytes;
+    const [cells, got] = await Promise.all([readCellRows(sp, h3, speciesReader), lk.p]);
+    const lookup = got.rows;
+    // the file is read once per page: the hexagon that waited for it reports its bytes (none when the subtree read it)
+    const lookupBytes = lk.counted ? 0 : got.fetched;
     lk.counted = true;
     if (!cells) throw new Error("not a hexagon of the species table");
     const taxon = t.kind === "taxon" ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" } : null;

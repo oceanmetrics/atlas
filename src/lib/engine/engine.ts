@@ -237,6 +237,43 @@ export class Engine {
   }
 
   /**
+   * {@link load} for bytes the caller already holds (a file two readers share, fetched once by neither of them
+   * through the engine): registered under `name` and `digest` in the store, a no-op when already there. The bytes
+   * are handed to the database, which takes them over (a transfer detaches the array): pass a copy to keep yours.
+   */
+  loadBytes(name: string, digest: string, bytes: Uint8Array): Promise<void> {
+    return this.#enqueue(async () => {
+      await this.boot();
+      const store = this.#store!;
+      if (store.has(name, digest)) return store.touch(name);
+      const endMark = this.#startMark("engine:loadBytes", { name });
+      try {
+        await store.register(name, digest, bytes);
+        endMark({ ok: true, bytes: bytes.byteLength });
+      } catch (err) {
+        endMark({ ok: false, error: String(err) });
+        throw err instanceof EngineUnavailableError ? err : new EngineUnavailableError(err);
+      }
+    });
+  }
+
+  /** Drop a table registered by {@link load} or {@link loadBytes} (the store's registration and the database's
+   * file, freeing its bytes), after the operations queued before it. A no-op for a name not registered. */
+  drop(name: string): Promise<void> {
+    return this.#enqueue(async () => {
+      if (!this.#store) return;
+      const endMark = this.#startMark("engine:drop", { name });
+      try {
+        await this.#store.drop(name);
+        endMark({ ok: true });
+      } catch (err) {
+        endMark({ ok: false, error: String(err) });
+        throw err instanceof EngineUnavailableError ? err : new EngineUnavailableError(err);
+      }
+    });
+  }
+
+  /**
    * Register a whole file's raw bytes as a duckdb-wasm virtual file, addressable by `name` in SQL
    * — the "buffer-register + query" hook `lib/geo/upload/engineRuntime.ts` wraps into a
    * `GeoPackageRuntime` (Q2, 0.10.52: `UploadPanel.svelte` used to hardcode `runtime: null`, so
