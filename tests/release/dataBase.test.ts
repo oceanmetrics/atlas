@@ -12,12 +12,11 @@ import {
 // when present". These pin the literal bucket URL and the validation `session.data` has to pass.
 
 describe("PUBLIC_DATA_BASE", () => {
-  it("is the literal registry prefix, path-style, with the marine-atlas/ prefix and a trailing /", () => {
+  it("is the literal registry prefix on the storage host, with the marine-atlas/ prefix and a trailing /", () => {
     // not "looks absolute": the bare …/{ver}/… path without marine-atlas/ answers 403, and a
     // relative base is the F1 bug (under /v9/atlas/ it produced /v9/atlas/v9/manifest.json).
-    expect(PUBLIC_DATA_BASE).toBe(
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
-    );
+    // the storage host since catalog 0.6.0 (path-style S3 before the cutover of 2026-10-23)
+    expect(PUBLIC_DATA_BASE).toBe("https://storage.oceanmetrics.io/marine-atlas/");
   });
 
   it("composes the registry files", () => {

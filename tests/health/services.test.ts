@@ -20,10 +20,8 @@ describe("tilerServiceDef", () => {
 describe("dataServiceDef", () => {
   it("probes the release's own app/boot.json, under the public bucket base", () => {
     const def = dataServiceDef("v9");
-    expect(def.url).toBe(
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/app/boot.json",
-    );
-    expect(def.hostLabel).toBe("s3.us-east-1.amazonaws.com");
+    expect(def.url).toBe("https://storage.oceanmetrics.io/marine-atlas/v9/app/boot.json");
+    expect(def.hostLabel).toBe("storage.oceanmetrics.io");
     expect(def.id).toBe("data");
   });
 
@@ -44,7 +42,7 @@ describe("dataServiceDef", () => {
 
   it("falls back to the public bucket when no base is given", () => {
     expect(dataServiceDef("v9").url).toBe(
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/app/boot.json",
+      "https://storage.oceanmetrics.io/marine-atlas/v9/app/boot.json",
     );
   });
 });

@@ -59,7 +59,10 @@ describe("the side table", () => {
     const row = await readCog3857Row(table(), HASH);
     expect(row).not.toBeNull();
     expect(row!.key).toBe(`marine-atlas/v7/cog_3857/cog/usa05/${HASH}_3857.tif`);
-    expect(row!.url).toBe(URL_);
+    // the original as the release table names it (path-style S3; rebased at use through onStorage, D7)
+    expect(row!.url).toBe(
+      `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/cog/usa05/${HASH}.tif`,
+    );
     expect(row!.zoom).toEqual([1, 5]);
     expect(row!.bands).toHaveLength(1);
     const b = row!.bands[0];

@@ -77,9 +77,7 @@ describe("loadTaxon / loadAlias", () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.sci).toBe("Dermochelys coriacea");
-    expect(log.urls).toEqual([
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/app/taxon/f9.json",
-    ]);
+    expect(log.urls).toEqual(["https://storage.oceanmetrics.io/marine-atlas/v9/app/taxon/f9.json"]);
   });
 
   it("caches the shard: a second taxon in the same shard costs no second fetch", async () => {

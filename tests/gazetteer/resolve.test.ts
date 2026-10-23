@@ -167,9 +167,10 @@ describe("loadPickLayers (layers.json)", () => {
   it("re-bases the published storage.oceanmetrics.io PMTiles URL onto the data base", async () => {
     const layers = await loadPickLayers(client);
     const leases = layers!.find((l) => l.slug === "fx_leases")!;
-    // the manifest says https://storage.oceanmetrics.io/gazetteer/...; the Range-safe base is used
+    // the manifest says https://storage.oceanmetrics.io/gazetteer/...; the data base is the storage host itself
+    // since catalog 0.6.0 (path-style S3 before the cutover of 2026-10-23)
     expect(leases.pmtiles).toBe(
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/fx_leases/places.pmtiles",
+      "https://storage.oceanmetrics.io/gazetteer/fx_leases/places.pmtiles",
     );
   });
 

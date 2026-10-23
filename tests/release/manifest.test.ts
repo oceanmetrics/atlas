@@ -98,9 +98,7 @@ describe("manifest() (consumes window.__early when present)", () => {
       },
     });
     expect(m?.ver).toBe("v9");
-    expect(requested).toEqual([
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/manifest.json",
-    ]);
+    expect(requested).toEqual(["https://storage.oceanmetrics.io/marine-atlas/v9/manifest.json"]);
   });
 
   it("resolves to null, never a throw, when early.manifest rejects", async () => {

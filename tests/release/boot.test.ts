@@ -37,9 +37,7 @@ describe("boot() (consumes window.__early when present)", () => {
       },
     });
     expect(b).toEqual({ grid: {} });
-    expect(requested).toEqual([
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/app/boot.json",
-    ]);
+    expect(requested).toEqual(["https://storage.oceanmetrics.io/marine-atlas/v9/app/boot.json"]);
   });
 
   it("resolves to null when app/boot.json 404s (it does not exist until atlas-1)", async () => {

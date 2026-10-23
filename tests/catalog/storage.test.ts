@@ -1,7 +1,8 @@
 // The storage rule in the app (src/lib/catalog/storage.ts over @oceanmetrics/catalog/storage): the release tables
 // the Species lens reads name COGs on the S3 host; each is moved onto the build's storage host at read (decision D7:
 // rebased at read, never rewritten), every other host untouched. The build's host is chosen by VITE_OM_STORAGE, so
-// the cases run under the default (path-style S3) and under the storage host, a fresh module each.
+// the cases run under the default (the storage host since catalog 0.6.0) and under path-style S3 (the rollback), a
+// fresh module each.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const S3 = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public";
@@ -27,12 +28,19 @@ async function load(setting?: string) {
 }
 
 describe("onStorage: a url on a storage host moves onto the build's storage host", () => {
-  it("default build: the storage host and the virtual-hosted S3 form read path-style S3", async () => {
+  it("default build: both S3 forms read the storage host (catalog 0.6.0, the cutover of 2026-10-23)", async () => {
     const { STORAGE, onStorage } = await load();
+    expect(STORAGE).toBe(STORAGE_HOST);
+    expect(onStorage(`${S3}/${KEY}`)).toBe(`${STORAGE_HOST}/${KEY}`);
+    expect(onStorage(`${S3_VIRTUAL}/${KEY}`)).toBe(`${STORAGE_HOST}/${KEY}`);
+    expect(onStorage(`${STORAGE_HOST}/${KEY}`)).toBe(`${STORAGE_HOST}/${KEY}`);
+  });
+
+  it("VITE_OM_STORAGE=s3 (the rollback): the storage host and the virtual-hosted form read path-style S3", async () => {
+    const { STORAGE, onStorage } = await load("s3");
     expect(STORAGE).toBe(S3);
     expect(onStorage(`${STORAGE_HOST}/${KEY}`)).toBe(`${S3}/${KEY}`);
     expect(onStorage(`${S3_VIRTUAL}/${KEY}`)).toBe(`${S3}/${KEY}`);
-    expect(onStorage(`${S3}/${KEY}`)).toBe(`${S3}/${KEY}`);
   });
 
   it("VITE_OM_STORAGE=storage: a path-style S3 url reads storage.oceanmetrics.io, path and query kept", async () => {

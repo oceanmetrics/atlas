@@ -20,6 +20,9 @@ import type { CollectionEntry } from "../../../src/lib/catalog/load";
 import { LEATHERBACK_RECORD, UNMATCHED_RECORD, nativeCollection } from "./support";
 
 const S3 = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
+// the registry names path-style S3; rows read through onStorage land on the build's host (the storage host since
+// catalog 0.6.0, the cutover of 2026-10-23)
+const ON = (u: string) => u.replace(S3, "https://storage.oceanmetrics.io/marine-atlas/");
 const COPY_RECORD = {
   ...LEATHERBACK_RECORD,
   cog_url: `${S3}native/am/40ff91f6bd61a934.tif`,
@@ -79,8 +82,8 @@ const inputs = (it: ReturnType<typeof item>) =>
 
 describe("registry rows read the copy columns", () => {
   it("a row with the columns carries both copies; a row without them (or a v1 registry) has null", () => {
-    expect(copyRow.cog3857Url).toBe(COPY_RECORD.cog_3857_url);
-    expect(copyRow.cog3857Url005).toBe(COPY_RECORD.cog_3857_url_005);
+    expect(copyRow.cog3857Url).toBe(ON(COPY_RECORD.cog_3857_url));
+    expect(copyRow.cog3857Url005).toBe(ON(COPY_RECORD.cog_3857_url_005));
     expect(plainRow.cog3857Url).toBeNull();
     expect(plainRow.cog3857Url005).toBeNull();
     const v1 = rowsFromRecords([LEATHERBACK_RECORD]).get(LEATHERBACK_RECORD.sp_key)!;
@@ -93,7 +96,7 @@ describe("the Item of a row with a copy", () => {
     const it = item(copyRow, undefined, { native: SIDE_NATIVE });
     expect(Object.keys(it.assets)).toEqual(["cog", "cog_3857", "cog_005", "cog_3857_005"]);
     expect(it.assets.cog_3857).toMatchObject({
-      href: COPY_RECORD.cog_3857_url,
+      href: ON(COPY_RECORD.cog_3857_url),
       roles: ["data", "visual"],
       "proj:code": "EPSG:3857",
       "atlas:zoom": [0, 2],
@@ -101,7 +104,7 @@ describe("the Item of a row with a copy", () => {
     });
     expect(it.assets.cog.roles).toEqual(["data"]);
     expect(it.assets.cog_3857_005.roles).toEqual(["reference"]);
-    expect(rasterAssetOf(it)!.url).toBe(COPY_RECORD.cog_url);
+    expect(rasterAssetOf(it)!.url).toBe(ON(COPY_RECORD.cog_url));
   });
   it("band statistics and histogram come from the side table row (band 1), the template keeps nodata and unit", () => {
     const band = (
@@ -121,8 +124,8 @@ describe("the Item of a row with a copy", () => {
     expect(it.assets[COPY_ASSET["005"]].roles).toEqual(["data", "visual"]);
     expect(it.assets[COPY_ASSET.native].roles).toEqual(["reference"]);
     const c = rasterChoiceOf(it);
-    expect(c.kind === "cog" && c.draw.asset.href).toBe(COPY_RECORD.cog_3857_url_005);
-    expect(c.kind === "cog" && c.values.asset.href).toBe(COPY_RECORD.cog_url_005);
+    expect(c.kind === "cog" && c.draw.asset.href).toBe(ON(COPY_RECORD.cog_3857_url_005));
+    expect(c.kind === "cog" && c.values.asset.href).toBe(ON(COPY_RECORD.cog_url_005));
   });
   it("a row without the column lists no copy and keeps its titiler choice", () => {
     const it = item(plainRow);
@@ -140,10 +143,10 @@ describe("the registry lens draws a copy through cog:// and a plain row through 
   it("copy row: a cog:// tile template of the 3857 copy, the legend histogram from the side table, no titiler", () => {
     const out = inputs(item(copyRow, undefined, { native: SIDE_NATIVE }));
     expect(out.rasterBackend).toBe("cog");
-    expect(out.raster!.tiles[0].startsWith(`cog://${COPY_RECORD.cog_3857_url}`)).toBe(true);
+    expect(out.raster!.tiles[0].startsWith(`cog://${ON(COPY_RECORD.cog_3857_url)}`)).toBe(true);
     expect(out.raster!.tiles[0]).not.toContain("/cog/tiles/");
     expect(out.raster!.maxzoom).toBe(2);
-    expect(out.cogUrl).toBe(COPY_RECORD.cog_url); // the point read goes to the 4326 original
+    expect(out.cogUrl).toBe(ON(COPY_RECORD.cog_url)); // the point read goes to the 4326 original
     expect(out.legend?.histogram).toMatchObject({ binCount: 32, counts: HIST, min: 1, max: 100 });
     expect(out.legend?.unit).toBe("percent");
   });
@@ -174,7 +177,7 @@ describe("the About tally counts the registry lens's rasters", () => {
     const a = inputs(item(copyRow, undefined, { native: SIDE_NATIVE })).raster;
     const b = inputs(item(plainRow)).raster;
     expect(rasterOriginOf(a)).toMatchObject({ origin: "browser" });
-    expect(rasterOriginOf(a)!.key.startsWith(COPY_RECORD.cog_3857_url)).toBe(true);
+    expect(rasterOriginOf(a)!.key.startsWith(ON(COPY_RECORD.cog_3857_url))).toBe(true);
     expect(rasterOriginOf(b)?.origin).toBe("titiler");
     let seen = tallyRasters({}, [a]);
     seen = tallyRasters(seen, [b]);

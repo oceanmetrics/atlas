@@ -130,15 +130,14 @@ describe("where a place's membership is", () => {
     listLayers: async () => layers as never,
     creditsFor: async () => "",
   });
-  it("credits and citation for a collection; the membership url on the data base (the storage host's 302 has no CORS)", async () => {
+  it("credits and citation for a collection; the membership url on the data base (the storage host since catalog 0.6.0)", async () => {
     expect(await placeMembership("NMS:CINMS", stub(null))).toEqual({
       id: "NMS:CINMS",
       slug: "places",
       title: "Places",
       citation: "NOAA ONMS …",
       license: "CC-PDDC",
-      membership:
-        "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/places/h3/membership.json",
+      membership: "https://storage.oceanmetrics.io/gazetteer/places/h3/membership.json",
     });
   });
   it("a line collection has no membership; an unreachable gazetteer is no membership, never a throw", async () => {
@@ -338,8 +337,7 @@ describe("a whole collection's hexagons", () => {
       title: "NOAA National Marine Sanctuaries",
       citation: "NOAA ONMS …",
       license: "CC-PDDC",
-      membership:
-        "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/noaa_sanctuaries/h3/membership.json",
+      membership: "https://storage.oceanmetrics.io/gazetteer/noaa_sanctuaries/h3/membership.json",
     });
     expect((await collectionMembership("mr_eez", stub())).membership).toBeNull();
     expect((await collectionMembership("calcofi_lines", stub())).membership).toBeNull();

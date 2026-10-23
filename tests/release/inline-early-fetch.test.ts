@@ -448,9 +448,13 @@ describe("%release.registry% is filled through the storage rule", () => {
     expect(dataBaseOf({ VITE_OM_STORAGE: "storage" }, S3_REGISTRY)).toBe(STORAGE_REGISTRY);
   });
 
-  it("the default build writes path-style S3, whichever storage host the instance names", () => {
-    expect(dataBaseOf({}, S3_REGISTRY)).toBe(S3_REGISTRY);
-    expect(dataBaseOf({}, STORAGE_REGISTRY)).toBe(S3_REGISTRY);
+  it("the default build writes the storage host (catalog 0.6.0), whichever storage host the instance names", () => {
+    expect(dataBaseOf({}, S3_REGISTRY)).toBe(STORAGE_REGISTRY);
+    expect(dataBaseOf({}, STORAGE_REGISTRY)).toBe(STORAGE_REGISTRY);
+  });
+
+  it("VITE_OM_STORAGE=s3 (the rollback) writes path-style S3", () => {
+    expect(dataBaseOf({ VITE_OM_STORAGE: "s3" }, STORAGE_REGISTRY)).toBe(S3_REGISTRY);
   });
 
   it("REGRESSION: a registry on another host is written as it is, on either storage setting", () => {

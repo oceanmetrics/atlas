@@ -7,9 +7,9 @@ import {
   validateCatalogBase,
 } from "../../src/lib/catalog/base";
 
-describe("CATALOG_BASE: the path-style S3 default", () => {
-  it("is the public bucket's atlas/ prefix, read path-style (the storage host 302s without CORS)", () => {
-    expect(CATALOG_BASE).toBe("https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/");
+describe("CATALOG_BASE: the storage host default", () => {
+  it("is the public bucket's atlas/ prefix on storage.oceanmetrics.io (catalog 0.6.0; path-style S3 before the cutover of 2026-10-23)", () => {
+    expect(CATALOG_BASE).toBe("https://storage.oceanmetrics.io/atlas/");
   });
 });
 

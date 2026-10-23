@@ -31,9 +31,7 @@ describe("loadTaxa", () => {
     if (!res.ok) return;
     expect(res.value.ver).toBe("v9");
     expect(res.value.rows).toHaveLength(13);
-    expect(log.urls).toEqual([
-      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/v9/app/taxa.json",
-    ]);
+    expect(log.urls).toEqual(["https://storage.oceanmetrics.io/marine-atlas/v9/app/taxa.json"]);
   });
 
   it("a malformed index is a typed schema error", async () => {

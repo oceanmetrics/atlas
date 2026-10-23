@@ -47,11 +47,18 @@ const fromCanonical = {
   url: `${GAZETTEER_ROOT}gebco_undersea/collection.json`,
 };
 
-describe("collectionJsonUrls: the canonical host first, the path-style bucket URL after it", () => {
-  it("both, in that order; one when a staging base makes them the same", () => {
+// a build whose data base is another host (VITE_OM_STORAGE=s3, the rollback): path-style S3
+const S3_GAZETTEER = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/";
+
+describe("collectionJsonUrls: the canonical host first, the data base after it when it differs", () => {
+  it("one by default (the data base is the storage host since catalog 0.6.0); both, in that order, on another data base", () => {
+    expect(GAZETTEER_BUCKET_BASE).toBe(GAZETTEER_ROOT);
     expect(collectionJsonUrls("gebco_undersea")).toEqual([
       `${GAZETTEER_ROOT}gebco_undersea/collection.json`,
-      `${GAZETTEER_BUCKET_BASE}gebco_undersea/collection.json`,
+    ]);
+    expect(collectionJsonUrls("gebco_undersea", S3_GAZETTEER)).toEqual([
+      `${GAZETTEER_ROOT}gebco_undersea/collection.json`,
+      `${S3_GAZETTEER}gebco_undersea/collection.json`,
     ]);
     expect(collectionJsonUrls("x", GAZETTEER_ROOT)).toEqual([`${GAZETTEER_ROOT}x/collection.json`]);
   });
@@ -205,7 +212,7 @@ describe("loadLayerCollection: fall back from the canonical host to the bucket U
   beforeEach(() => clearLayerCollectionCache());
   const okJson = (j: unknown) => new Response(JSON.stringify(j), { status: 200 });
   const canonical = `${GAZETTEER_ROOT}gebco_undersea/collection.json`;
-  const bucket = `${GAZETTEER_BUCKET_BASE}gebco_undersea/collection.json`;
+  const bucket = `${S3_GAZETTEER}gebco_undersea/collection.json`;
 
   it("the canonical URL answering is used, and cached per slug", async () => {
     const urls: string[] = [];
@@ -218,14 +225,14 @@ describe("loadLayerCollection: fall back from the canonical host to the bucket U
     await loadLayerCollection("gebco_undersea", f);
     expect(urls).toEqual([canonical]);
   });
-  it("a canonical host that fails (302 without CORS: a network error) falls back to the bucket URL", async () => {
+  it("a canonical host that fails (a network error) falls back to a data base on another host", async () => {
     const urls: string[] = [];
     const f = (async (u: RequestInfo | URL) => {
       urls.push(String(u));
       if (String(u) === canonical) throw new TypeError("Failed to fetch");
       return okJson(GEBCO);
     }) as typeof fetch;
-    const got = await loadLayerCollection("gebco_undersea", f);
+    const got = await loadLayerCollection("gebco_undersea", f, S3_GAZETTEER);
     expect(got?.url).toBe(bucket);
     expect(urls).toEqual([canonical, bucket]);
   });
@@ -235,9 +242,9 @@ describe("loadLayerCollection: fall back from the canonical host to the bucket U
       calls++;
       return new Response("nope", { status: 404 });
     }) as typeof fetch;
-    expect(await loadLayerCollection("gebco_undersea", f)).toBeNull();
+    expect(await loadLayerCollection("gebco_undersea", f, S3_GAZETTEER)).toBeNull();
     expect(calls).toBe(2);
-    expect(await loadLayerCollection("gebco_undersea", f)).toBeNull();
+    expect(await loadLayerCollection("gebco_undersea", f, S3_GAZETTEER)).toBeNull();
     expect(calls).toBe(4);
     const notStac = (async () => okJson({ hello: 1 })) as typeof fetch;
     expect(await loadLayerCollection("other", notStac)).toBeNull();
