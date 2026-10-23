@@ -100,7 +100,7 @@ describe("the species of a hexagon", () => {
       const got = (await readCellRows(S, h3, reader(), split))!;
       expect(got.plan.split).toEqual({ parentRes: 1, parent: flatParentOf(h3, 1) });
       expect(got.plan.url).toBe(`${REL}species_flat/res=3/p=${flatParentOf(h3, 1)}.parquet`);
-      // the split file is under the 64 KiB tail: one request, the whole file, its row groups served from it
+      // the split file is under the 256 KiB tail: one request, the whole file, its row groups served from it
       expect(stats.requests).toBe(1);
       expect(got.requests).toBe(1);
       expect(got.groupsRead).toBeGreaterThanOrEqual(1);
@@ -153,13 +153,119 @@ describe("the species of a hexagon", () => {
     const r = new ReleaseReader({ fetch: failing, tail: SPLIT_TAIL });
     await expect(readCellRows(S, "836a8afffffffff", reader(), r)).rejects.toThrow("503");
   });
+  it("a split file up to 256 KiB is one request (the whole file), a larger one is the tail then its row groups, the rows the same", async () => {
+    expect(SPLIT_TAIL).toBe(256 * 1024);
+    const BIG = "832a98fffffffff"; // under 812abffffffffff (294,507 B, over SPLIT_TAIL); its rows are at the file's start, outside the tail
+    const bigBytes = buffer("species_flat/res=3/p=812abffffffffff.parquet").byteLength;
+    expect(bigBytes).toBeGreaterThan(SPLIT_TAIL);
+    const read = async (h3: string, tail: number) => {
+      const stats = { requests: 0, bytes: 0 };
+      const r = new ReleaseReader({ fetch: localFetch(stats), tail });
+      const got = (await readCellRows(S, h3, reader(), r))!;
+      return { got, stats };
+    };
+    const sorted = (g: { summed: Map<number, unknown> }) => [...g.summed.entries()].sort();
+    // a small file (a few KB, over the old 64 KiB tail's reach in the live release by 114 files): one request, all of it
+    for (const h3 of ["836a8afffffffff", "835accfffffffff"]) {
+      const file = buffer(`species_flat/res=3/p=${flatParentOf(h3, 1)}.parquet`).byteLength;
+      const { got, stats } = await read(h3, SPLIT_TAIL);
+      expect(file).toBeLessThan(SPLIT_TAIL);
+      expect(stats.requests).toBe(1);
+      expect(got.requests).toBe(1);
+      expect(stats.bytes).toBe(file);
+      // the same rows when the file is read by a tail too short for it (footer, then row groups)
+      const split = await read(h3, 2_048);
+      expect(split.stats.requests).toBeGreaterThan(1);
+      expect(sorted(split.got)).toEqual(sorted(got));
+    }
+    // a file over 256 KiB: two requests at least (the tail, its footer in it, then the row groups outside the tail),
+    //
+    const big = await read(BIG, SPLIT_TAIL);
+    expect(big.got.plan.url).toBe(`${REL}species_flat/res=3/p=812abffffffffff.parquet`);
+    expect(big.stats.requests).toBeGreaterThanOrEqual(2);
+    expect(big.got.groupsRead).toBeGreaterThan(0);
+    expect(big.got.groupsSkipped).toBeGreaterThan(0);
+    expect(big.got.summed.size).toBe(6000);
+    // the rows are the same however much of the file the first request took (a 64 KiB tail, the whole file at once)
+    for (const tail of [65_536, bigBytes]) {
+      const other = await read(BIG, tail);
+      expect(sorted(other.got)).toEqual(sorted(big.got));
+    }
+    expect((await read(BIG, bigBytes)).stats.requests).toBe(1);
+  });
+  it("the first request of a split file is a suffix range of SPLIT_TAIL bytes, one per file and kept for its next hexagon", async () => {
+    const seen: (string | null)[] = [];
+    const spy = ((input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(new Headers(init?.headers).get("range"));
+      return localFetch()(input, init);
+    }) as typeof fetch;
+    const r = new ReleaseReader({ fetch: spy, tail: SPLIT_TAIL });
+    await readCellRows(S, "836a8afffffffff", reader(), r);
+    expect(seen).toEqual([`bytes=-${SPLIT_TAIL}`]);
+    // the same hexagon again: the footer and its groups are kept, nothing is asked
+    const again = (await readCellRows(S, "836a8afffffffff", reader(), r))!;
+    expect(seen).toHaveLength(1);
+    expect(again.requests).toBe(0);
+  });
+  it("fault cases of the one-request read: a server that ignores Range sends the whole file (200), a 206 without Content-Range is an error, a 416 or 5xx is an error, a missing file is empty", async () => {
+    const url = (h3: string) => `p=${flatParentOf(h3, 1)}`;
+    const h3 = "836a8afffffffff";
+    const reference = (await readCellRows(
+      S,
+      h3,
+      reader(),
+      new ReleaseReader({ fetch: localFetch(), tail: SPLIT_TAIL }),
+    ))!;
+    const ref = [...reference.summed.entries()].sort();
+    const withFetch = (f: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) =>
+      readCellRows(
+        S,
+        h3,
+        reader(),
+        new ReleaseReader({ fetch: f as typeof fetch, tail: SPLIT_TAIL }),
+      );
+    // Range ignored: 200 with the whole body
+    const ignores = (await withFetch(async (input, init) => {
+      const r = await localFetch()(input, init);
+      return r.status === 206
+        ? new Response(
+            await r.arrayBuffer().then(() => buffer(`species_flat/res=3/${url(h3)}.parquet`)),
+            { status: 200 },
+          )
+        : r;
+    }))!;
+    expect([...ignores.summed.entries()].sort()).toEqual(ref);
+    // a 206 whose Content-Range the CORS does not expose
+    await expect(
+      withFetch(async (input, init) => {
+        const r = await localFetch()(input, init);
+        return new Response(await r.arrayBuffer(), { status: 206 });
+      }),
+    ).rejects.toThrow("Content-Range");
+    // 416 (a range the server cannot satisfy) and 503
+    for (const status of [416, 503])
+      await expect(withFetch(async () => new Response("", { status }))).rejects.toThrow(
+        String(status),
+      );
+    // the network failing is an error, never an empty list
+    await expect(
+      withFetch(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    ).rejects.toThrow("Failed to fetch");
+    // 403 and 404 are a parent with no file: an empty list
+    for (const status of [403, 404]) {
+      const none = (await withFetch(async () => new Response("", { status })))!;
+      expect(none.summed.size).toBe(0);
+    }
+  });
   it("the pane's read: the table's requests and bytes of this call, the footer kept for the next hexagon", async () => {
     // one reader per page with the 128 KiB tail (SPECIES_TAIL): the first hexagon opens the table, the second
     // reads row groups only (or nothing, when its groups are in the cache)
     const stats = { requests: 0, bytes: 0 };
     const r = new ReleaseReader({ fetch: localFetch(stats), tail: SPECIES_TAIL });
     expect(SPECIES_TAIL).toBe(131_072);
-    expect(SPLIT_TAIL).toBe(65_536);
+    expect(SPLIT_TAIL).toBe(262_144);
     const a = (await readCellRows(S, "826a8ffffffffff", r))!;
     expect(a.requests).toBe(stats.requests);
     expect(a.bytes).toBe(stats.bytes);

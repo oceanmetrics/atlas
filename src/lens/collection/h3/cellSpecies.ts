@@ -5,7 +5,7 @@
 //   - a hexagon at a flat resolution reads its own rows (one cell id): res 1 and 2 their own file
 //     (`species_flat/res={res}.parquet`, obisindicators 0.12: the res-3 rows summed by parent), res 3 the file of its
 //     res-1 parent (`parent_template` `species_flat/res=3/p={parent}.parquet`, `parent_res` `{"3": 1}`: 842 files,
-//     728 of them whole in the 64 KiB tail), and the whole `res=3.parquet` only when the collection has no split;
+//     828 of them whole in the 256 KiB tail, one request), and the whole `res=3.parquet` only when the collection has no split;
 //   - a coarser hexagon (res 0, or res 1 and 2 of a 0.11 release that has res 3 only) reads its children at the
 //     next flat resolution, one contiguous cell-id range (`childRange`), summed by species: the records add up and
 //     the species are the union, so the list is the hexagon's own, exactly;
@@ -522,13 +522,18 @@ export async function readLookup(
 /** the suffix a resolution's whole flat file is opened with: its footer in one request (the live 0.12 files'
  * footers are 68,486 B at res 1 and 117,567 B at res 2; a 0.11 `res=3.parquet`'s 245,010 B costs one more) */
 export const SPECIES_TAIL = 131_072;
-/** the suffix a split file is opened with (`res=3/p=<parent>.parquet`, median 9.6 KB): 728 of the 842 come whole in
- * it, the others' footers are in it, then the row groups of the hexagon by their `cell_id` statistics */
-export const SPLIT_TAIL = 65_536;
+/** the suffix a split file is opened with, and so the size up to which a split file is read in ONE request
+ * (`res=3/p=<parent>.parquet`, 256 KiB): the first request asks for the file's last 256 KiB, which is the whole file
+ * when the file is no larger (828 of the 842 live files, the median 9.6 KB, Monterey's parent 135 KB; two requests of
+ * about 0.2 s each became one), and its response's Content-Range gives the size of a larger one (the largest is 626 KB),
+ * whose footer is in the tail and whose row groups of the hexagon are then read by range. The size is not known before
+ * the first request (the pane does not load the release's `files.parquet`, 842 rows of paths for the Reproduce
+ * snippet), so there is no earlier decision to take. */
+export const SPLIT_TAIL = 262_144;
 
 /** the summed flat rows of a hexagon (`speciesForCell`: only the row groups of its range; the reader keeps the
  * file's footer between hexagons), with the requests and bytes of this read. A split file is read by `split` (a
- * reader with the 64 KiB tail), a whole resolution's file by `reader`. */
+ * reader with the 256 KiB tail), a whole resolution's file by `reader`. */
 export async function readCellRows(
   spec: H3Spec,
   h3: string,

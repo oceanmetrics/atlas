@@ -149,6 +149,30 @@ jobs:
       # the same way it has to exist before the real app's first read_parquet().
       - run: npm run duckdb:fetch-ext && npm run e2e:engine
 
+  e2e-obis:
+    name: e2e (OBIS layer, hermetic over the fixture release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: ./.github/actions/playwright
+        with:
+          browsers: chromium
+
+      # e2e/obis.spec.ts: 12 tests over tests/fixtures/obis_h3/ (the storage host routed onto it); the config's
+      # webServer builds and previews the app. 15.7 s locally, build included.
+      - run: npx playwright test --project=chromium e2e/obis.spec.ts
+
   e2e-opfs:
     name: e2e (OPFS store tier, fallback matrix)
     runs-on: ubuntu-latest

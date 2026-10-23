@@ -1,7 +1,8 @@
 // The OBIS layer in the built app (build week 4, step 5, second pass; obis-hex's parity rows 32, 41, 56, 76, 92, 95,
 // 97, 98, 119). HERMETIC: the catalog links the obis-h3 collection, served with every release file from the trimmed
 // fixture release `tests/fixtures/obis_h3/` (Range answered as S3 does); the basemap, glyphs and gazetteer are the
-// shared fixtures. Chromium only (WebGL). Run: `npx playwright test --project=chromium e2e/obis.spec.ts`.
+// shared fixtures; the storage host is routed onto the same fixtures (`routeStorageToBucket`). Chromium only (WebGL); CI job
+// `e2e-obis`. Run: `npx playwright test --project=chromium e2e/obis.spec.ts`.
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page, type Route } from "@playwright/test";
@@ -16,6 +17,23 @@ const OBIS = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/
 const REL = `${OBIS}v20261012/`;
 const FIX = fileURLToPath(new URL("../tests/fixtures/obis_h3/", import.meta.url));
 const STAGING = "https://staging.example.org/atlas/";
+const STORAGE_ORIGIN = "https://storage.oceanmetrics.io";
+const S3_BUCKET = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public";
+
+/** the app reads `https://storage.oceanmetrics.io/` since catalog 0.6.0 (the default storage host); the routes of this
+ * spec and of `hermetic.ts` answer the path-style S3 urls the fixtures were written with. This handler moves a storage
+ * url onto the same key of the bucket and hands it on (`route.fallback`) to the routes that match THAT url, so the
+ * obis-h3 release is answered from `tests/fixtures/obis_h3/` and the catalog, the gazetteer and the tiles from the
+ * shared fixtures. Register it last (the newest route runs first); nothing reaches the live site. */
+async function routeStorageToBucket(page: Page) {
+  await page.route(
+    (url) => url.origin === STORAGE_ORIGIN,
+    safeRoute((route) => {
+      const u = new URL(route.request().url());
+      return route.fallback({ url: `${S3_BUCKET}${u.pathname}${u.search}` });
+    }),
+  );
+}
 
 /** a release file of the fixture tree, or 404 (a file the trimmed release does not carry is no cells) */
 function serveRelease(route: Route, rel: string, rewrite?: (json: string) => string) {
@@ -65,6 +83,7 @@ async function boot(
     }),
   );
   await setup?.(page);
+  await routeStorageToBucket(page);
   await page.goto(path);
   await waitForHydration(page);
   await page.waitForFunction(
@@ -242,6 +261,7 @@ test("catalog override: a staging catalog's release opens (a dry run), nothing r
       return route.fulfill({ status: 404, body: "" });
     }),
   );
+  await routeStorageToBucket(page);
   await page.goto(
     `/?catalog=${encodeURIComponent(STAGING)}&c=obis_h3&i=all&res=2&map=-120,30,2.5&tour=off`,
   );

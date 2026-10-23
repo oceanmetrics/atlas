@@ -351,7 +351,7 @@ export const H3_FILL_OPACITY = 0.85;
 /** the main thread's reader (the Cell pane's values and species): files opened once, row groups cached */
 const pageReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024 });
 /** the species tables' own readers, one per page: a resolution's whole file (res 1, 2: its footer in one 128 KiB
- * tail) and the split files of res 3 (`p=<res-1 parent>`: a 64 KiB tail, most of them whole in it); each file's footer
+ * tail) and the split files of res 3 (`p=<res-1 parent>`: a 256 KiB tail, 828 of 842 whole in it, one request); each file's footer
  * is kept for every hexagon after the first, and `speciesForCell` reads the row groups of the hexagon's range only. */
 const speciesReader = new ReleaseReader({
   maxBytes: 32 * 1024 * 1024,

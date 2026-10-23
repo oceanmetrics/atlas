@@ -40,7 +40,7 @@ uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only 
 
 ## CI notes
 
-- The Playwright jobs of `pages.yml` (e2e-engine, e2e-opfs, analytics-privacy) install their browsers through the composite action
+- The Playwright jobs of `pages.yml` (e2e-engine, e2e-opfs, e2e-obis, analytics-privacy) install their browsers through the composite action
   `.github/actions/playwright`: `actions/cache` on `~/.cache/ms-playwright`, keyed on the OS, the browser list and the
   `@playwright/test` version in `package-lock.json`; a miss runs `playwright install --with-deps`, a hit only `install-deps` (the system
   libraries are not cached). Each job stops after 20 minutes. A new e2e job uses the action and sets `timeout-minutes`.
