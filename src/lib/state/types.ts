@@ -94,6 +94,19 @@ export interface Sel {
   /** the active item id within that collection (`?i=`); `undefined` = its default item. The item's
    * own `atlas:dims` say which value each dimension selector shows (`catalog/dims.ts`). */
   i?: string;
+  /** an h3 collection's view dimensions (`dim.<key>=<value>`, e.g. `dim.indicator=es&dim.period=1990s`): the
+   * `cube:dimensions` of the collection that no Item carries in `atlas:dims` (the indicator is a column of every
+   * file, the period a path inside each Item), so they are not an Item selector. `undefined` = each one's default
+   * (never written). Keys are `[a-z][a-z0-9_]*`, values short tokens (`parseSel`). */
+  dim?: Readonly<Record<string, string>>;
+  /** `res=`: an h3 layer's resolution pinned (1..15), `undefined` = `auto` by zoom (written only when pinned;
+   * `res=auto` parses to `undefined`). */
+  res?: number;
+  /** `taxon=<rank>:<name>` or `aphia:<id>`: an h3 collection's taxon layer, filtering the `all` Item (split on the
+   * FIRST colon: the rank never holds one, the name may). */
+  taxon?: string;
+  /** `cell=<h3>`: the selected hexagon of an h3 layer (15 lowercase hex digits), its Cell pane open. */
+  cell?: string;
   /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
   catalog?: string;
   /** WP11: `?collection=<https url of a collection.json>`: one extra, unlisted collection loaded into the
@@ -142,11 +155,17 @@ export const QUERY_KEYS = [
   "zl",
   "c",
   "i",
+  "res",
+  "taxon",
+  "cell",
   "catalog",
   "collection",
   "ov",
   "filter",
 ] as const;
+
+/** query keys written under a prefix (`dim.<key>`, `Sel.dim`): not in {@link QUERY_KEYS}, whose list is exact. */
+export const QUERY_KEY_PREFIXES = ["dim."] as const;
 
 /** hash keys: places and the report title only — a fragment is never sent to a server or a
  * referrer, which is exactly why these two (and only these two) live there (plan `state/` header). */
@@ -278,6 +297,10 @@ export const DEFAULT_SEL: Sel = {
   tour: instanceDefault(INSTANCE.defaults.tour, ["on", "off"] as const, "on"),
   c: undefined,
   i: undefined,
+  dim: undefined,
+  res: undefined,
+  taxon: undefined,
+  cell: undefined,
   catalog: undefined,
   collection: undefined,
   ov: undefined,

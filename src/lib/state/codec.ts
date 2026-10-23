@@ -141,6 +141,44 @@ function formatMapView(m: MapView): string {
     : `${base},${m.bearing ?? 0},${m.pitch ?? 0}`;
 }
 
+// --- the h3 view keys (build week 4: the OBIS layer's grammar, tests/fixtures/obis_redirect_cases.json) ---------
+
+const DIM_KEY_RE = /^[a-z][a-z0-9_]{0,31}$/;
+const DIM_VALUE_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/** `dim.<key>=<value>` pairs; a malformed key or value is ignored. `undefined` when none. */
+function parseDims(params: URLSearchParams): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  for (const [k, raw] of params) {
+    if (!k.startsWith("dim.")) continue;
+    const key = k.slice(4);
+    const v = raw.trim();
+    if (DIM_KEY_RE.test(key) && DIM_VALUE_RE.test(v)) out[key] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** `res=`: 1..15 pinned; `auto`, absent or anything else is `undefined` (auto). */
+function parseRes(v: string | null): number | undefined {
+  if (v === null || !/^\d{1,2}$/.test(v.trim())) return undefined;
+  const n = Number(v.trim());
+  return n >= 1 && n <= 15 ? n : undefined;
+}
+
+const TAXON_RE = /^(aphia:[1-9]\d{0,9}|(?!aphia:)[a-z]{2,20}:[^\s:][^\n]{0,119})$/;
+
+/** `taxon=<rank>:<name>` (a name may hold a colon or spaces) or `aphia:<id>`; else `undefined`. */
+function parseTaxon(v: string | null): string | undefined {
+  const t = cleanString(v);
+  return t !== undefined && TAXON_RE.test(t) ? t : undefined;
+}
+
+/** `cell=<h3>`: 15 hex digits, lowercased; else `undefined`. */
+function parseCell(v: string | null): string | undefined {
+  const t = cleanString(v)?.toLowerCase();
+  return t !== undefined && /^[0-9a-f]{15}$/.test(t) ? t : undefined;
+}
+
 // --- parseSel ------------------------------------------------------------------------------------
 
 function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
@@ -181,6 +219,10 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     zl: parseZoomToLayer(params.get("zl")),
     c,
     i: cleanString(params.get("i")),
+    dim: parseDims(params),
+    res: parseRes(params.get("res")),
+    taxon: parseTaxon(params.get("taxon")),
+    cell: parseCell(params.get("cell")),
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     collection: validateCollectionUrl(params.get("collection")) ?? undefined,
     ov: parseOv(params.get("ov")),
@@ -255,6 +297,13 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.zl === false) params.set("zl", "0");
   if (sel.c) params.set("c", sel.c);
   if (sel.i) params.set("i", sel.i);
+  for (const [k, v] of Object.entries(sel.dim ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (DIM_KEY_RE.test(k) && DIM_VALUE_RE.test(v)) params.set(`dim.${k}`, v);
+  }
+  if (sel.res !== undefined && parseRes(String(sel.res)) !== undefined)
+    params.set("res", String(sel.res));
+  if (sel.taxon && parseTaxon(sel.taxon)) params.set("taxon", sel.taxon);
+  if (sel.cell && parseCell(sel.cell)) params.set("cell", sel.cell);
   if (sel.catalog) params.set("catalog", sel.catalog);
   if (sel.collection) params.set("collection", sel.collection);
   const ovToken = formatOv(sel.ov);
