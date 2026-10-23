@@ -9,6 +9,12 @@
 // for the subset of draft 2020-12 the schema uses (no ajv dependency).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import {
+  resolveStorageHost,
+  rewriteStorageUrls,
+  STORAGE_ENV,
+  STORAGE_HOSTS,
+} from "@oceanmetrics/catalog/storage";
 
 export const DEFAULT_INSTANCE = "oceanmetrics";
 export const INSTANCES_DIR = "instances";
@@ -254,17 +260,33 @@ export const LENS_LABEL = { collection: "Collections", scores: "Scores", species
 export const EARLY_FETCH_FILE = "src/lib/release/earlyFetch.inline.js";
 
 /**
- * The inline early-fetch `<script>` for an instance with a release registry (`release`), or `""`:
- * the source file without its leading comment block, `%release.registry%` filled from the instance.
- * Pure over the file text (`readEarlyFetch` reads it).
+ * `url` moved onto the build's storage host when it names any storage host; any other url unchanged. The
+ * node twin of src/lib/catalog/storage.ts#onStorage, one rule (`@oceanmetrics/catalog/storage`): the host is
+ * `VITE_OM_STORAGE` (the build-time half of the app's own setting; `data-om-storage` on <html> is a run-time
+ * setting this build-time text cannot see), else the package's default.
  */
-export function earlyFetchScript(instance, sourceText) {
+export function onBuildStorage(url, env = process.env) {
+  const to = resolveStorageHost(env[STORAGE_ENV.vite]);
+  return rewriteStorageUrls(url, { from: Object.values(STORAGE_HOSTS), to });
+}
+
+/**
+ * The inline early-fetch `<script>` for an instance with a release registry (`release`), or `""`:
+ * the source file without its leading comment block, `%release.registry%` filled from the instance
+ * (through the storage rule: a registry on a storage host is written on the build's storage host, so
+ * the script reads the same origin as `RELEASE_REGISTRY_BASE`). Pure over the file text and `env`
+ * (`readEarlyFetch` reads the file).
+ */
+export function earlyFetchScript(instance, sourceText, env = process.env) {
   if (!instance.release) return "";
   const body = sourceText.replace(/^(?:\/\/[^\n]*\n)+/, "").trim();
   if (!body.includes("%release.registry%")) {
     throw new Error("earlyFetchScript: the script has no %release.registry% placeholder");
   }
-  const filled = body.replace(/%release\.registry%/g, instance.release.registry);
+  const filled = body.replace(
+    /%release\.registry%/g,
+    onBuildStorage(instance.release.registry, env),
+  );
   return `<script>\n${filled}\n    </script>`;
 }
 
@@ -286,9 +308,9 @@ export function instanceFontFiles(id = instanceId(), root = ".") {
 
 /** what `renderInstanceHtml` writes beyond the instance.json strings: the early-fetch script and the
  * font preloads, read from files (`instanceHtmlExtras` reads them for vite.config.ts and the tests). */
-export function instanceHtmlExtras(instance, root = ".") {
+export function instanceHtmlExtras(instance, root = ".", env = process.env) {
   return {
-    earlyFetch: earlyFetchScript(instance, readEarlyFetch(root)),
+    earlyFetch: earlyFetchScript(instance, readEarlyFetch(root), env),
     fonts: instanceFontFiles(instance.id, root),
   };
 }

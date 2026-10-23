@@ -4,6 +4,7 @@
 // DYNAMIC import (scripts/size-budget-core.mjs keeps it out of the static graph), exactly like
 // `../values.ts`; everything else here is a pure conversion a test can feed a handful of rows.
 import type { Loaded } from "../load";
+import { onStorage } from "../storage";
 
 export interface RegistryRow {
   /** the taxon's key in the registry (the Item id; `?sp=`). */
@@ -42,6 +43,15 @@ function text(v: unknown): string | null {
   return s ? s : null;
 }
 
+/** a release table's `cog_url` (or `cog_url_005`) as the app reads it: a url on any storage host (S3 path-style or
+ * virtual-hosted, storage.oceanmetrics.io, the workers.dev preview) moved onto the build's storage host
+ * (`onStorage`, decision D7: the MST release tables are rebased at read, never rewritten); a titiler, Marine
+ * Regions or other url unchanged; `null` when empty. */
+export function cogHref(v: unknown): string | null {
+  const s = text(v);
+  return s === null ? null : onStorage(s);
+}
+
 /** a `bbox` list column -> `[w, s, e, n]`, or `null` unless it is four finite numbers with west < east
  * and south < north (a wrong box is worse than none: the lens then asks the tile server for the
  * footprint instead). */
@@ -59,7 +69,7 @@ export function rowFromRecord(
   keyColumn = "sp_key",
 ): RegistryRow | null {
   const key = text(rec[keyColumn]);
-  const cogUrl = text(rec.cog_url);
+  const cogUrl = cogHref(rec.cog_url);
   if (!key || !cogUrl) return null;
   return {
     key,
@@ -70,7 +80,7 @@ export function rowFromRecord(
     botwId: num(rec.botw_id),
     redlistCode: text(rec.redlist_code),
     cogUrl,
-    cogUrl005: text(rec.cog_url_005),
+    cogUrl005: cogHref(rec.cog_url_005),
     bboxNative: bboxOfRow(rec.bbox_native),
     bbox005: bboxOfRow(rec.bbox_005),
     mdlKey: text(rec.mdl_key),

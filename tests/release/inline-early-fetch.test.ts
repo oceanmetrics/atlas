@@ -10,8 +10,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 import {
+  earlyFetchScript,
   instanceHtmlExtras,
   loadInstance,
+  readEarlyFetch,
   readMark,
   renderInstanceHtml,
 } from "../../scripts/instance.mjs";
@@ -429,5 +431,31 @@ describe("the inline early-fetch script prefers session.ver in preview mode (can
       },
     });
     await expect(early.version).resolves.toBe("v7");
+  });
+});
+
+// the build's storage rule reaches the inline script: `%release.registry%` is filled through the same rule as
+// RELEASE_REGISTRY_BASE (src/lib/release; decision D7), the node twin of onStorage (scripts/instance.mjs)
+describe("%release.registry% is filled through the storage rule", () => {
+  const S3_REGISTRY = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
+  const STORAGE_REGISTRY = "https://storage.oceanmetrics.io/marine-atlas/";
+  const source = readEarlyFetch(ROOT);
+  const instanceWith = (registry: string) => ({ ...INSTANCE_JSON, release: { registry } });
+  const dataBaseOf = (env: Record<string, string>, registry: string) =>
+    extractInlineDataBase(earlyFetchScript(instanceWith(registry), source, env));
+
+  it("an S3 registry reads the chosen store: VITE_OM_STORAGE=storage writes storage.oceanmetrics.io", () => {
+    expect(dataBaseOf({ VITE_OM_STORAGE: "storage" }, S3_REGISTRY)).toBe(STORAGE_REGISTRY);
+  });
+
+  it("the default build writes path-style S3, whichever storage host the instance names", () => {
+    expect(dataBaseOf({}, S3_REGISTRY)).toBe(S3_REGISTRY);
+    expect(dataBaseOf({}, STORAGE_REGISTRY)).toBe(S3_REGISTRY);
+  });
+
+  it("REGRESSION: a registry on another host is written as it is, on either storage setting", () => {
+    const other = "https://registry.example.test/marine-atlas/";
+    expect(dataBaseOf({ VITE_OM_STORAGE: "storage" }, other)).toBe(other);
+    expect(dataBaseOf({}, other)).toBe(other);
   });
 });

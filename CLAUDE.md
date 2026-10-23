@@ -20,8 +20,8 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
 - Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.3.2: the MapLibre setup, the COG
   provider, the h3 release slot and `speciesForCell`), `@oceanmetrics/places` (the gazetteer client; called only from
-  `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
-  `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
+  `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (^0.5.1: the
+  `storage` subpath, the one rule for the storage host, `src/lib/catalog/storage.ts`; the `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
 
 ## Commands
 
@@ -47,7 +47,7 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
 - Relative base (`base: "./"`); never an absolute `/assets/` URL. URL is the view: every view state lives in the
   query string or hash, written with `replaceState`. Places use the `g1` codec in the hash; gazetteer places by
   reference use the `p.` token (`docs/gazetteer-places.md`).
-- Data origins are formed in exactly one place (`src/lib/catalog/base.ts`), absolute.
+- Data origins are formed in exactly one place (`src/lib/catalog/base.ts`), absolute, on the storage host chosen once in `src/lib/catalog/storage.ts` (`onStorage()` moves any storage-host url read from a release table onto it; other hosts pass through).
 - Numbers never come from the tile server: values come from Parquet (DuckDB-WASM or hyparquet); a raster Item with
   a `cog_3857` asset is drawn in the browser (`@oceanmetrics/map` `cogSlot` behind the `RasterSource` seam,
   `src/lib/raster/cog.ts`, chosen per Item by `pickCogAssets`), its legend from STAC `statistics`/`histogram`, its
@@ -107,7 +107,7 @@ published COG Item has two data assets, the 4326 original and `cog_3857` (its EP
 `histogram` come from the full-resolution 4326 original (`cog.band_summary`, never the copy or an overview); overviews
 are nearest or mode, never averaging (`pipeline/atlas_pipeline/cog.py`, `pipeline/README.md`; `build.py cog-assets` for
 Items written elsewhere).
-`jsonschema` is a main dependency; `@oceanmetrics/catalog` is a devDependency, so `npm ci` provides the schemas. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
+`jsonschema` is a main dependency; `@oceanmetrics/catalog` is a dependency (the app imports its `storage` subpath), so `npm ci` provides the schemas. The external `tests/fixtures/catalog/mst/` mirrors are not under the profiles. Pipeline
 tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
 
 ## Instances and hooks

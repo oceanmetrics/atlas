@@ -3,11 +3,10 @@
 // Parquet values file, the PMTiles hex grid -- is resolved from the base returned here; nothing else
 // concatenates an origin by hand.
 //
-// The default is the public bucket read PATH-STYLE
-// (`https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/`) because the friendly host
-// `https://storage.oceanmetrics.io/atlas/` currently 302s to S3 without CORS headers, which a
-// browser `fetch`/range read cannot follow (om TODO 2026-10-08). Swap the constant once the storage
-// host answers CORS.
+// The storage host is chosen ONCE, in ./storage.ts (`@oceanmetrics/catalog/storage`): `data-om-storage`
+// on <html> > `VITE_OM_STORAGE` > the package's DEFAULT_STORAGE_HOST (path-style S3 until the DNS
+// cutover of storage.oceanmetrics.io flips it). The instance's bases (instance.json) and every href a
+// release names on a storage host are moved onto it by `onStorage()`; any other host passes through.
 //
 // Two overrides, both validated (https only, no credentials, no query/fragment, normalised to end in
 // `/`) so a bad value can never redirect the app's data reads somewhere unintended:
@@ -22,21 +21,21 @@
 // falls through to the next), never thrown on.
 
 import { INSTANCE } from "../brand/instance";
+import { onStorage, store } from "./storage";
 
-/** the instance's default catalog base (`catalog.base` in instances/<id>/instance.json). */
-export const CATALOG_BASE = INSTANCE.catalog.base;
+/** the instance's default catalog base (`catalog.base` in instances/<id>/instance.json), on STORAGE. */
+export const CATALOG_BASE = onStorage(INSTANCE.catalog.base);
 
 /** the MarineSensitivity release registry the Species lens reads its pinned release from on an
- * instance without a registry of its own (path-style S3: the bare `…/{ver}/…` path without the
- * `marine-atlas/` prefix answers 403). */
-const MST_RELEASE_REGISTRY =
-  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
+ * instance without a registry of its own (the bare `…/{ver}/…` path without the `marine-atlas/`
+ * prefix answers 403). */
+const MST_RELEASE_REGISTRY = store("marine-atlas/");
 
 /** the release registry base (`latest.txt`, `versions.json`, `{ver}/...`): the instance's
  * `release.registry`, else the MarineSensitivity registry the pinned Species release lives in
  * (`release/mst.ts`). `release/dataBase.ts` forms every release URL from it; the inline early-fetch
  * script is written with the same value (scripts/instance.mjs). */
-export const RELEASE_REGISTRY_BASE = INSTANCE.release?.registry ?? MST_RELEASE_REGISTRY;
+export const RELEASE_REGISTRY_BASE = onStorage(INSTANCE.release?.registry ?? MST_RELEASE_REGISTRY);
 
 /**
  * Validate a candidate catalog base. Strict, because the value arrives as data (a query string):

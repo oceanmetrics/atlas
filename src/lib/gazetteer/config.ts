@@ -13,13 +13,13 @@
 // `VITE_GAZETTEER_BASE` (a staging copy of the tree); the trailing slash is optional.
 
 import { INSTANCE } from "../brand/instance";
+import { store } from "../catalog/storage";
 
 /** the canonical, published root of the gazetteer (what a person is told and cited). */
 export const GAZETTEER_ROOT = "https://storage.oceanmetrics.io/gazetteer/";
 
-/** the same tree on the bucket: the origin whose CORS answers `Range` preflights. */
-export const GAZETTEER_BUCKET_BASE =
-  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/";
+/** the same tree on this build's storage host (catalog/storage.ts). */
+export const GAZETTEER_BUCKET_BASE = store("gazetteer/");
 
 const withSlash = (s: string): string => (s.endsWith("/") ? s : `${s}/`);
 

@@ -11,6 +11,7 @@
 // A manifest is columnar to stay small: `dims` names the selectors in order, and each `models` row is
 // `[...one value per dim, cogUrl, bidx]`.
 import type { CubeDimension, StacAsset, StacItem } from "../types";
+import { onStorage } from "../storage";
 import { COG_MEDIA_TYPE } from "./taxon";
 
 export interface ManifestDim {
@@ -126,7 +127,9 @@ export function manifestItems(m: MstManifest): StacItem[] {
   const varIdx = m.dims.findIndex((d) => d.key === "variable");
   return m.models.map((row) => {
     const values = row.slice(0, n).map(String);
-    const url = String(row[n]);
+    // a url on a storage host (gm's S3 cogs) is read from the build's storage host; titiler-era and
+    // file.marinesensitivity.org urls pass through
+    const url = onStorage(String(row[n]));
     const bidx = Number(row[n + 1]);
     const dims = Object.fromEntries(m.dims.map((d, i) => [d.key, values[i]]));
     const taxonKey = values[taxonIdx];

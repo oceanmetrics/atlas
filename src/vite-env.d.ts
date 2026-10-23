@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  /** the storage host (@oceanmetrics/catalog/storage): storage | s3 | preview | an https url; default the package's */
+  readonly VITE_OM_STORAGE?: string;
+}
+
 /** injected by `vite.config.ts`'s `define` — `package.json`'s `version`, as a string literal
  * inlined at build time (see that file's comment on why NOT a runtime `import` of package.json). */
 declare const __APP_VERSION__: string;

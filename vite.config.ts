@@ -39,11 +39,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-function instancePlugin(id: string): Plugin {
+function instancePlugin(id: string, env: Record<string, string | undefined>): Plugin {
   const instance = loadInstance(id, ROOT);
   const mark = readMark(instance, ROOT);
   // the inline early-fetch script (an instance with a release) and the font preloads
-  const extras = instanceHtmlExtras(instance, ROOT);
+  const extras = instanceHtmlExtras(instance, ROOT, env);
   const assetsDir = join(ROOT, instanceAssetsDir(id));
   return {
     name: "atlas-instance",
@@ -103,7 +103,8 @@ function resolveAppSha(): string {
 export default defineConfig(({ mode }) => {
   // `.env` files count too (loadEnv), then the process environment; scripts/*.mjs read the same
   // variable from the process environment only.
-  const id = instanceId({ ...loadEnv(mode, ROOT, "VITE_"), ...process.env });
+  const env = { ...loadEnv(mode, ROOT, "VITE_"), ...process.env };
+  const id = instanceId(env);
   return {
     base: "./",
     resolve: {
@@ -142,7 +143,7 @@ export default defineConfig(({ mode }) => {
     appType: "mpa",
     // `virtual:instance-modules` (scripts/instance-modules.mjs): the lens, tool and capability modules
     // this instance builds, and `null` for every other one, so the bundler never emits those
-    plugins: [svelte(), instancePlugin(id), instanceModulesPlugin(id, ROOT)],
+    plugins: [svelte(), instancePlugin(id, env), instanceModulesPlugin(id, ROOT)],
     optimizeDeps: {
       // @duckdb/duckdb-wasm ships its own worker + wasm and the optimizer breaks it (same story that made
       // CalCOFI Explorer exclude it, atlas-refs/"calcofi explore review.md" §1). Pinned at exactly 1.32.0
