@@ -214,3 +214,63 @@ describe("the Cell pane's fallback", () => {
     );
   });
 });
+
+describe("the footer's tile costs (parity row 80; @oceanmetrics/map 0.3.3 stats())", () => {
+  it("the line: requests, KB of 1,000 bytes, the tiles' ms, row groups skipped; nothing before a tile", async () => {
+    const { tilesLine } = await import("../../src/lens/collection/h3/share");
+    expect(tilesLine(null)).toBeNull();
+    expect(tilesLine({ tiles: 0, requests: 0, bytes: 0, ms: 0, rowGroupsSkipped: 0 })).toBeNull();
+    expect(
+      tilesLine({ tiles: 9, requests: 12, bytes: 162_964, ms: 1234.4, rowGroupsSkipped: 23 }),
+    ).toBe("12 requests, 163.0 KB in 1,234 ms, 23 row groups skipped");
+    expect(tilesLine({ tiles: 1, requests: 1, bytes: 1500, ms: 5, rowGroupsSkipped: 1 })).toBe(
+      "1 request, 1.5 KB in 5 ms, 1 row group skipped",
+    );
+  });
+  it("the footer carries it before the app", async () => {
+    const { footerText } = await import("../../src/lens/collection/h3/share");
+    expect(
+      footerText({
+        meta: null,
+        res: "res 3 (auto)",
+        app: "Atlas",
+        tiles: "2 requests, 1.0 KB in 3 ms, 0 row groups skipped",
+      }),
+    ).toBe("res 3 (auto) · 2 requests, 1.0 KB in 3 ms, 0 row groups skipped · Atlas");
+  });
+  it("feedTileStats: the counts now, then at most one write per frame from a stubbed onStats, none after it stops", async () => {
+    const { feedTileStats } = await import("../../src/lens/collection/h3/share");
+    let counts = { tiles: 0, requests: 0, bytes: 0, ms: 0, rowGroupsSkipped: 0 };
+    const listeners: ((s: typeof counts) => void)[] = [];
+    const slot = {
+      stats: () => counts,
+      onStats: (cb: (s: typeof counts) => void) => {
+        listeners.push(cb);
+        return () => listeners.splice(listeners.indexOf(cb), 1);
+      },
+    };
+    const frames: (() => void)[] = [];
+    const writes: (typeof counts)[] = [];
+    const stop = feedTileStats(
+      slot,
+      (s) => writes.push({ ...s }),
+      (cb) => frames.push(cb),
+    );
+    expect(writes).toEqual([counts]);
+    // three tiles in one frame: one write, with the last counts
+    for (let i = 1; i <= 3; i++) {
+      counts = { tiles: i, requests: i, bytes: 1000 * i, ms: 10 * i, rowGroupsSkipped: i };
+      listeners.forEach((l) => l(counts));
+    }
+    expect(frames).toHaveLength(1);
+    frames.shift()!();
+    expect(writes).toHaveLength(2);
+    expect(writes[1].tiles).toBe(3);
+    counts = { ...counts, tiles: 4 };
+    listeners.forEach((l) => l(counts));
+    stop();
+    expect(listeners).toHaveLength(0);
+    frames.shift()!();
+    expect(writes).toHaveLength(2);
+  });
+});

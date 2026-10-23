@@ -97,17 +97,71 @@ export function citeText(o: {
 /** the layer's footer line (obis-hex `footerReleaseText`): "OBIS 2026-10-11 · WoRMS 2026-10-01 · release v20261012 ·
  * res 3 (auto) · OceanMetrics Atlas 0.5.0", each date left out until release.json has loaded. The tiles' bytes are
  * read in MapLibre's worker, which the map package does not report to the page yet. */
-export function footerText(o: { meta: ReleaseMeta | null; res: string; app: string }): string {
+export function footerText(o: {
+  meta: ReleaseMeta | null;
+  res: string;
+  app: string;
+  /** what the tiles cost (`tilesLine`), when counted */
+  tiles?: string | null;
+}): string {
   const m = o.meta;
   return [
     m?.snapshot ? `OBIS ${m.snapshot}` : "",
     m?.worms ? `WoRMS ${m.worms}` : "",
     m?.release ? `release ${m.release}` : "",
     o.res,
+    o.tiles ?? "",
     o.app,
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+// ---- what the tiles cost (obis-hex's footer bytes, parity row 80; @oceanmetrics/map 0.3.3 `stats()`) ----------------
+
+/** the slot's counts the line reads (`H3ReleaseStats`, structurally) */
+export interface TileCounts {
+  tiles: number;
+  requests: number;
+  bytes: number;
+  ms: number;
+  rowGroupsSkipped: number;
+}
+
+/** "12 requests, 345.6 KB in 789 ms, 23 row groups skipped" (the package README's recipe: KB of 1,000 bytes, the ms the
+ * sum of the tiles' own reads); null before the first tile is counted */
+export function tilesLine(s: TileCounts | null): string | null {
+  if (!s || s.tiles === 0) return null;
+  const n = (x: number) => Math.round(x).toLocaleString("en-US");
+  return `${n(s.requests)} request${s.requests === 1 ? "" : "s"}, ${(s.bytes / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB in ${n(s.ms)} ms, ${n(s.rowGroupsSkipped)} row group${s.rowGroupsSkipped === 1 ? "" : "s"} skipped`;
+}
+
+/**
+ * The footer's feed of the slot's tile costs: `write(slot.stats())` now, then after the tiles counted by `onStats`, at
+ * most once per animation frame (a view loads tens of tiles; the README asks for one DOM write per frame). Returns
+ * the function that stops.
+ */
+export function feedTileStats<S>(
+  slot: { stats(): S; onStats(cb: (s: S) => void): () => void },
+  write: (s: S) => void,
+  frame: (cb: () => void) => unknown = (cb) =>
+    typeof requestAnimationFrame === "function" ? requestAnimationFrame(cb) : setTimeout(cb, 16),
+): () => void {
+  let pending = false;
+  let stopped = false;
+  write(slot.stats());
+  const off = slot.onStats(() => {
+    if (pending || stopped) return;
+    pending = true;
+    frame(() => {
+      pending = false;
+      if (!stopped) write(slot.stats());
+    });
+  });
+  return () => {
+    stopped = true;
+    off();
+  };
 }
 
 // ---- Reproduce ---------------------------------------------------------------------------------------------------

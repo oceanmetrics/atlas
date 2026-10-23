@@ -78,7 +78,10 @@ import {
   boxKm2,
   boxOfRings,
   cellFileUrls,
+  feedTileStats,
   footerText,
+  tilesLine,
+  type TileCounts,
   h3ShortcutFor,
   obisChecklistUrl,
   pinForView,
@@ -379,6 +382,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
   );
   let species = $state.raw<H3Layer["species"]>({ phase: "idle", list: null, error: null });
   let meta = $state.raw<ReleaseMeta | null>(null);
+  /** what the slot's tiles cost since it was mounted (the map package's `stats()`, fed once per frame) */
+  let tileStats = $state.raw<TileCounts | null>(null);
   /** the hexagons in the map's loaded tiles at the drawn resolution (read on idle), their five values */
   let loaded = $state.raw<{
     key: string;
@@ -907,6 +912,16 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       };
       document.addEventListener("keydown", onKey);
       return () => document.removeEventListener("keydown", onKey);
+    });
+
+    // what the tiles cost: the footer's line, from the slot's counts (one write per frame while a view loads)
+    $effect(() => {
+      const s = slot;
+      if (!s) {
+        untrack(() => (tileStats = null));
+        return;
+      }
+      return feedTileStats(s, (st) => (tileStats = { ...st }));
     });
 
     // the legend rows the slot read (every resolution and variable of the layer and period)
@@ -1660,6 +1675,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         : footerText({
             meta,
             res: resNote(shownRes, view.res === "auto"),
+            tiles: tilesLine(tileStats),
             app: appName,
           });
     },
