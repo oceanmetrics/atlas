@@ -411,6 +411,36 @@ two requests (a tail, then the row groups; the res-3 parent of Monterey is 135 K
 0.2 s each on the storage host, so the table alone takes 0.43 to 0.70 s, and the pane waits on the names (0.25 to
 0.67 s). Under 0.3 s would need one request: a split file inside its tail (728 of 842 are) or a larger tail.
 
+**A split file in one request** (2026-10-24, atlas `094c4ea`, `SPLIT_TAIL` 256 KiB; the first request of a split file asks
+for its last 256 KiB, which is the whole file when the file is no larger: 828 of the 842 files, the median 9.6 KB; the
+size of a larger one comes in the first response's Content-Range, then its row groups by range). Monterey's parent
+`species_flat/res=3/p=81283ffffffffff.parquet` is 198,841 B in `files.parquet` (not 135 KB), so it is one request of
+199.6 KB where it was two of 83 KB. The pane does not load `files.parquet` (it would be a request of its own before the
+first byte of the table), so the size is not known before the first request. Measured as above, on the laptop (headless
+Chromium 1243, macOS; the "before" runs are of the same hour and are the build of `ce10db2` served by
+`vite preview` against the live release; the Mac mini was not reachable from this session, so these are not the
+mini's numbers of the table above), the live site https://oceanmetrics.io/atlas/ after the Pages deploy, a new context per
+run, 3 runs each; "table" is the species-table files' first request start to last response end, "pane" the line the
+Cell pane prints (the table and the names, read together):
+
+| Cell pane at                         | before (`ce10db2`): table ms (runs), median; requests, bytes | after (`094c4ea`): table ms (runs), median; requests, bytes | pane's line, ms (runs), median: before → after |
+| ------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------------- |
+| res 1 `81283ffffffffff`              | 577 / 713 / 505, **577**; 2 req, 206,011 B                   | 501 / 607 / 517, **517**; 2 req, 206,000 B                  | 967 / 1029 / 1092, 1029 → 871 / 986 / 676, 871 |
+| res 2 `822837fffffffff`              | 497 / 531 / 558, **531**; 3 req, 264,631 B                   | 520 / 598 / 710, **598**; 3 req, 264,641 B                  | 923 / 658 / 650, 658 → 670 / 847 / 1029, 847   |
+| res 3 `832834fffffffff`              | 605 / 648 / 619, **619**; 2 req, 83,085 B                    | 180 / 189 / 197, **189**; 1 req, 199,561 B                  | 1119 / 1085 / 798, 1085 → 604 / 616 / 604, 604 |
+| res 5 `852834c7fffffff` (its parent) | 426 / 523 / 559, **523**; 2 req, 83,095 B                    | 242 / 207 / 195, **207**; 1 req, 199,565 B                  | 1236 / 707 / 652, 707 → 725 / 628 / 623, 628   |
+
+The split read is one request of about 0.19 s (a 3.3x cut at res 3, 2.5x at res 5) and 200 KB for Monterey's parent (the
+whole file; the table's bytes are 0.2 MB at every resolution, under the bar's 0.6 MB). **The time bar of row 63 (0.3 s for
+the species table, median of 3) is met at res 3 and finer and not at res 1 and 2**: their whole-resolution files (9.0
+and 14.6 MB, footers of 68 and 118 KB) keep the 128 KiB tail and are still a tail, then the row groups (res 2: two
+groups of 218, three requests), 0.52 to 0.60 s. The pane's own line stays at 0.6 s or more at every resolution because it
+waits for the names (`species.parquet`, 4.5 MB: 0.25 to 0.40 s to arrive, then its columns are parsed). A way to the
+other two, not built or measured: a res-1 or res-2 hexagon's rows are the sums of its res-3 children's, which lie in
+its res-1 parent's split file (`p=<parent>`, one request for 828 of 842 parents), so the pane could read that file and
+sum the children's rows itself, as it does for a `children` scope, instead of the whole-resolution file's footer and
+row groups.
+
 ## Not built yet
 
 - The view as places (obis-hex `v=places`, waiting on Ben's word to drop). A whole collection as the place filter is
