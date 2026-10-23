@@ -13,6 +13,12 @@ import {
   releaseCogSources,
   stacHistogram,
 } from "../../src/lib/raster/cog";
+import {
+  classColorFunction,
+  paintFor,
+  paintHash,
+  stopsColorFunction,
+} from "../../src/lib/raster/paint";
 import { DEFAULT_TITILER_HOST } from "../../src/lib/raster/tiles";
 import { FIXTURE_BASE, fakeFetch } from "../catalog/support";
 
@@ -205,5 +211,88 @@ describe("collectionMapInputs on a browser-drawn item", () => {
     });
     expect(out.rasterBackend).toBe("titiler");
     expect(out.raster?.tiles[0].startsWith(DEFAULT_TITILER_HOST)).toBe(true);
+  });
+});
+
+// ---- build week 6 step 5: the app's own colours (`CogPaint`) ----------------------------------------
+describe("the paint: the app's palette stops and a mask's exact table", () => {
+  const px = (fn: ReturnType<typeof stopsColorFunction>, v: number, meta?: { noData?: number }) => {
+    const c = new Uint8ClampedArray(4);
+    fn([v], c, meta);
+    return [...c];
+  };
+
+  it("stops are spread over [min, max] and clamped at both ends, as titiler spreads a colormap over rescale", () => {
+    const fn = stopsColorFunction({ stops: ["#000000", "#ffffff"], min: 0, max: 100, nodata: 0 });
+    expect(px(fn, 50)).toEqual([128, 128, 128, 255]);
+    expect(px(fn, 100)).toEqual([255, 255, 255, 255]);
+    expect(px(fn, 500)).toEqual([255, 255, 255, 255]);
+    expect(px(fn, -5)).toEqual([0, 0, 0, 255]);
+  });
+
+  it("nodata (the band's, the file's, NaN) is transparent", () => {
+    const fn = stopsColorFunction({ stops: ["#000000", "#ffffff"], min: 0, max: 100, nodata: 0 });
+    expect(px(fn, 0)[3]).toBe(0);
+    expect(px(fn, NaN)[3]).toBe(0);
+    expect(px(fn, 7, { noData: 7 })[3]).toBe(0);
+    const f32 = stopsColorFunction({
+      stops: ["#000000", "#ffffff"],
+      min: 0,
+      max: 1,
+      nodata: -9999.5,
+    });
+    expect(px(f32, Math.fround(-9999.5))[3]).toBe(0);
+  });
+
+  it("a class table paints its values only: 1 -> the mask grey, 0 and nodata transparent", () => {
+    const fn = classColorFunction({ classes: { 1: [34, 34, 34, 255] }, nodata: -9999 });
+    expect(px(fn, 1)).toEqual([34, 34, 34, 255]);
+    expect(px(fn, 0)[3]).toBe(0);
+    expect(px(fn, 2)[3]).toBe(0);
+    expect(px(fn, -9999)[3]).toBe(0);
+  });
+
+  it("the hash carries the paint, so two palettes of one file are two sets of tiles", () => {
+    expect(paintHash({ kind: "stops", stops: ["#AA0000", "#00bb00"] }, [1, 100])).toBe(
+      'color:["#aa0000","#00bb00"],1,100,c',
+    );
+    expect(paintHash({ kind: "classes", classes: { 1: [34, 34, 34, 255] } }, [1, 1])).toBe(
+      'color:["#222222"],1,1,c',
+    );
+  });
+
+  it("a painted source draws the paint's hash; a palette the package's ramps lack (cividis) is no longer viridis", () => {
+    const it3857 = with3857(item("fish_risk"));
+    const draw = rasterChoiceOf(it3857);
+    if (draw.kind !== "cog") throw new Error("fixture");
+    const cividis = ["#00204d", "#ffea46"];
+    const viridis = ["#440154", "#fde725"];
+    const a = cogRasterSource(it3857, draw.draw.asset, {
+      domain: [0, 88],
+      paint: paintFor({ kind: "stops", stops: cividis }, draw.draw.asset, [0, 88]),
+    });
+    expect(a.template).toContain('#color:["#00204d","#ffea46"],0,88,c/{z}/{x}/{y}');
+    const b = cogRasterSource(it3857, draw.draw.asset, {
+      domain: [0, 88],
+      paint: paintFor({ kind: "stops", stops: viridis }, draw.draw.asset, [0, 88]),
+    });
+    expect(b.template).not.toBe(a.template);
+  });
+});
+
+describe("paintFor: a mask's range and nodata come from its band", () => {
+  it("no domain: the band's statistics ([1, 1] for a mask), its STAC nodata transparent", () => {
+    const asset = {
+      href: "x_3857.tif",
+      "proj:code": "EPSG:3857",
+      bands: [{ nodata: -9999, statistics: { minimum: 1, maximum: 1 } }],
+    };
+    const p = paintFor({ kind: "classes", classes: { 1: [34, 34, 34, 255] } }, asset, null);
+    expect(p.hash).toBe('color:["#222222"],1,1,c');
+    const c = new Uint8ClampedArray(4);
+    p.colorFunction([-9999], c);
+    expect(c[3]).toBe(0);
+    p.colorFunction([1], c);
+    expect([...c]).toEqual([34, 34, 34, 255]);
   });
 });

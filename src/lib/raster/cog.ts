@@ -19,6 +19,7 @@
 import {
   cogHref,
   cogSlot,
+  loadCogProtocol,
   pickCogAssets,
   type CogAsset,
   type CogItemLike,
@@ -102,6 +103,17 @@ function recorder(): { map: MapLibreMap; recorded: () => Recorded } {
 
 // ---- the source -------------------------------------------------------------------------------------
 
+/** a source's own colours (see `CogRasterOptions.paint`). */
+export interface CogPainted {
+  key: string;
+  hash: string;
+  colorFunction: (
+    pixel: ArrayLike<number>,
+    color: Uint8ClampedArray,
+    metadata?: { noData?: number },
+  ) => void;
+}
+
 export interface CogRasterOptions {
   /** the colour domain (`atlas:rescale` for the slot): the lens's own (the Item's `atlas:value_range`, else the
    * asset's rescale); absent = the asset's `atlas:rescale`, else its band statistics. */
@@ -110,6 +122,10 @@ export interface CogRasterOptions {
   opacity?: number;
   /** the legend title. */
   title?: string;
+  /** the app's own colours instead of the asset's `atlas:colormap`: the url's `#color:` hash and the protocol's
+   * colour function, built by `raster/paint.ts` (`paintFor`, a lazy module's, so the colour code stays off the
+   * static path); `key` tells two paints apart. */
+  paint?: CogPainted;
 }
 
 export interface CogRasterSource extends RasterSource {
@@ -162,6 +178,7 @@ export function cogRasterSource(
     drawn["atlas:colormap"] ?? null,
     opts.opacity ?? null,
     opts.title ?? null,
+    opts.paint?.key ?? null,
   ]);
   const hit = live.get(href);
   if (hit && hit.key === key) return hit.source;
@@ -170,7 +187,14 @@ export function cogRasterSource(
   if (hit) hit.source.slot.unmount(rec.map);
   slot.mount(rec.map, null, null);
   const { source, layer } = rec.recorded();
-  const base = source.url!;
+  let base = source.url!;
+  if (opts.paint) {
+    // the slot queued its own colour function (the named ramp) on the protocol's load; this one is queued on the
+    // same promise after it, so it is the one the protocol keeps for this href
+    const fn = opts.paint.colorFunction;
+    void loadCogProtocol().then((p) => p.setColorFunction(href, fn));
+    base = `cog://${href}#${opts.paint.hash}`;
+  }
   const opacity = layer.paint?.["raster-opacity"];
   const tileUrl = (z: number | string, x: number | string, y: number | string) =>
     `${base}/${z}/${x}/${y}`;

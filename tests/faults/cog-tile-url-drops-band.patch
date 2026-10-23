@@ -1,14 +1,15 @@
 diff --git a/src/lib/raster/cog.ts b/src/lib/raster/cog.ts
+index 4b2a439..2b2d153 100644
 --- a/src/lib/raster/cog.ts
 +++ b/src/lib/raster/cog.ts
-@@ -170,7 +170,9 @@
+@@ -277,7 +277,9 @@ export function cogRasterSource(
    if (hit) hit.source.slot.unmount(rec.map);
    slot.mount(rec.map, null, null);
    const { source, layer } = rec.recorded();
--  const base = source.url!;
+-  let base = source.url!;
 +  // SEEDED FAULT (tests/faults/cog-tile-url-drops-band.patch): the band key of the package's url is dropped, so
 +  // MapLibre serves one EOV's cached tiles for another band of the same file.
-+  const base = source.url!.replace(/\?b=\d+/, "");
-   const opacity = layer.paint?.["raster-opacity"];
-   const tileUrl = (z: number | string, x: number | string, y: number | string) =>
-     `${base}/${z}/${x}/${y}`;
++  let base = source.url!.replace(/\?b=\d+/, "");
+   if (opts.paint) {
+     // the slot queued its own colour function (the named ramp) on the protocol's load; this one is queued on the
+     // same promise after it, so it is the one the protocol keeps for this href

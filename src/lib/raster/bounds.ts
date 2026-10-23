@@ -216,6 +216,15 @@ export async function narrowLongitude(
   cogUrl: string,
   bbox: Bbox,
 ): Promise<Bbox | null> {
+  return narrowLongitudeWith((lon, lat) => hasDataAt(fetchJson, config, cogUrl, lon, lat), bbox);
+}
+
+/** whether the COG holds a real value at [lon, lat]: titiler's `/cog/point` above, or (build week 6 step 5) a
+ * pixel read of the 4326 original in the browser (`releaseCog.ts`). */
+export type DataProbe = (lon: number, lat: number) => Promise<boolean>;
+
+/** {@link narrowLongitude}'s rule over any probe: the same candidates, concurrency and arcs, whoever answers. */
+export async function narrowLongitudeWith(probe: DataProbe, bbox: Bbox): Promise<Bbox | null> {
   const [xmin, ymin, xmax, ymax] = bbox;
   if (xmax - xmin < GLOBE_SPAN_DEG) return bbox; // not degenerate — nothing to narrow
   const midLat = (ymin + ymax) / 2;
@@ -227,7 +236,7 @@ export async function narrowLongitude(
   // math (which only cares about the SET of hits, not their order) sees byte-identical input to
   // the old sequential version for the same real data.
   const flags = await mapWithConcurrency(CANDIDATE_LONS, PROBE_CONCURRENCY, (lon) =>
-    hasDataAt(fetchJson, config, cogUrl, lon, midLat),
+    probe(lon, midLat),
   );
   const hits = CANDIDATE_LONS.filter((_, i) => flags[i]);
   if (hits.length === 0) return null;
@@ -264,6 +273,41 @@ export function createTitilerBoundsSource(
       const bbox: Bbox = [xmin, ymin, xmax, ymax];
       if (!bboxSpansGlobe(bbox, GLOBE_SPAN_DEG)) return bbox;
       return narrowLongitude(fetchJson, config, cogUrl, bbox);
+    },
+  };
+}
+
+/** a COG's own extent and a probe of its values, read without a tile server (build week 6 step 5: the 4326
+ * original's GeoTIFF header and a pixel read, `releaseCog.ts`). */
+export interface FileBoundsReader {
+  /** the file's `[xmin, ymin, xmax, ymax]` in its own CRS (EPSG:4326 for a release original); null when unreadable. */
+  bounds(href: string): Promise<Bbox | null>;
+  /** the first band's value at [lon, lat] (null or NaN = no data, a throw = no data). */
+  value(href: string, lon: number, lat: number): Promise<number | null>;
+}
+
+/** {@link createTitilerBoundsSource}'s answer read from the file itself: the header's extent where `/cog/info`
+ * gave it, narrowed by the same rule when it spans the globe, each probe a pixel read where `/cog/point` was.
+ * `cogBounds` takes the href of the 4326 original. Never a throw. */
+export function createFileBoundsSource(read: FileBoundsReader): BoundsSource {
+  return {
+    async cogBounds(href: string): Promise<Bbox | null> {
+      let raw: Bbox | null;
+      try {
+        raw = await read.bounds(href);
+      } catch {
+        return null;
+      }
+      if (!raw || !raw.every((v) => Number.isFinite(v))) return null;
+      if (!bboxSpansGlobe(raw, GLOBE_SPAN_DEG)) return raw;
+      return narrowLongitudeWith(async (lon, lat) => {
+        try {
+          const v = await read.value(href, lon, lat);
+          return typeof v === "number" && Number.isFinite(v);
+        } catch {
+          return false;
+        }
+      }, raw);
     },
   };
 }
