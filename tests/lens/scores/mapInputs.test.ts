@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { OUTSIDE_PRA_CLASSES } from "../../../src/lens/scores/raster";
+import { OUTSIDE_PRA_COLORMAP } from "../../../src/lib/map/layers/titiler";
+import { OUTSIDE_PRA_RGBA } from "../../../src/lib/map/colors";
+import { OVERLAY_RASTER_OPACITY, SCORE_RASTER_OPACITY } from "../../../src/lib/map/layers/raster";
+import { releaseCogSources } from "../../../src/lib/raster/cog";
+import { releaseCogDraw } from "../../../src/lib/raster/releaseCog";
+import { clearCog3857Cache } from "../../../src/lib/release/cog3857";
+import { PUBLIC_DATA_BASE } from "../../../src/lib/release/dataBase";
 import { formatScoresLegendValue, scoresMapInputs } from "../../../src/lens/scores/mapInputs";
 import { defaultLayerKey } from "../../../src/lens/scores/boot";
 import { BOOT_V7, MANIFEST_OVERLAYS_V7 } from "./fixtures";
@@ -300,5 +309,96 @@ describe("scoresMapInputs -- legend histogram + marker (R4-A)", () => {
     if (out.legend?.kind !== "raster") throw new Error("raster");
     expect(out.legend.histogram).toBeNull();
     expect(out.legend.marker).toBeNull();
+  });
+});
+
+// ---- build week 6 step 5: the score COG and the mask drawn from their 3857 copies -------------------
+describe("scoresMapInputs — who draws the score raster and the mask (the release's side table)", () => {
+  const table = (): ArrayBuffer => {
+    const b = readFileSync(
+      new URL("../../fixtures/release/cog_3857_lenses.parquet", import.meta.url),
+    );
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  };
+  const base = `${PUBLIC_DATA_BASE}cog/usa05/`;
+  beforeEach(() => clearCog3857Cache());
+  afterEach(() => releaseCogSources());
+  const state = (over: Partial<Parameters<typeof scoresMapInputs>[0]> = {}) =>
+    scoresMapInputs({
+      boot: BOOT_V7,
+      overlays: MANIFEST_OVERLAYS_V7,
+      unit: "cell",
+      lyr: defaultLayerKey(BOOT_V7),
+      palette: "spectral_r",
+      showOutsidePra: true,
+      selection: null,
+      ...over,
+    });
+  const score = () =>
+    releaseCogDraw({
+      ver: "v7",
+      cogUrl: `${base}6671c14ba25ba9fa.tif`,
+      domain: [0, 93],
+      paint: { kind: "stops", stops: ["#5e4ea1", "#9e0041"] },
+      opacity: SCORE_RASTER_OPACITY,
+      table: table(),
+    });
+  const mask = () =>
+    releaseCogDraw({
+      ver: "v7",
+      cogUrl: `${base}4fbd1ad662c7fbd9.tif`,
+      domain: null,
+      paint: { kind: "classes", classes: OUTSIDE_PRA_CLASSES },
+      opacity: OVERLAY_RASTER_OPACITY,
+      table: table(),
+    });
+
+  it("a score COG the table lists: the raster is its 3857 copy (cog://), the grid bounds kept, maxzoom the copy's", async () => {
+    const out = state({ rasterDraw: await score() });
+    expect(out.raster?.id).toBe("r_lyr");
+    expect(out.raster?.tiles[0]).toMatch(
+      /^cog:\/\/.*\/v7\/cog_3857\/cog\/usa05\/6671c14ba25ba9fa_3857\.tif#color:/,
+    );
+    expect(out.raster?.opacity).toBe(SCORE_RASTER_OPACITY);
+    expect(out.raster?.maxzoom).toBe(5);
+    expect(out.raster?.bounds).toEqual(state().raster?.bounds); // the release grid's extent, as titiler's had
+  });
+
+  it("the legend takes the side table's histogram (and never titiler's while the browser draws)", async () => {
+    const out = state({
+      rasterDraw: await score(),
+      rasterHistogram: { binCount: 2, counts: [1, 1], min: 0, max: 1 },
+    });
+    expect(out.legend?.kind === "raster" && out.legend.histogram?.binCount).toBe(32);
+  });
+
+  it("pending: no score raster and no mask yet; unresolved: titiler", () => {
+    const pending = state({ rasterDraw: "pending", maskDraw: "pending" });
+    expect(pending.raster).toBeNull();
+    expect(pending.overlays).toEqual([]);
+    const titiler = state({ rasterDraw: { kind: "titiler" }, maskDraw: { kind: "titiler" } });
+    expect(titiler.raster?.tiles[0]).toContain("/cog/tiles/WebMercatorQuad/");
+    expect(titiler.overlays[0].tiles[0]).toContain("&colormap=");
+  });
+
+  it("the outside-Program-Area mask is the mask COG's own 3857 copy, painted with titiler's explicit table", async () => {
+    const out = state({ maskDraw: await mask() });
+    expect(out.overlays).toHaveLength(1);
+    const o = out.overlays[0];
+    expect(o.id).toBe("outside_pra_lyr");
+    expect(o.tiles[0]).toMatch(
+      /^cog:\/\/.*\/v7\/cog_3857\/cog\/usa05\/4fbd1ad662c7fbd9_3857\.tif#color:\["#222222"\],1,1,c/,
+    );
+    expect(o.opacity).toBe(OVERLAY_RASTER_OPACITY);
+    expect(o.visible).toBe(true);
+    // switched off, the layer is hidden whoever draws it
+    expect(state({ maskDraw: await mask(), showOutsidePra: false }).overlays[0].visible).toBe(
+      false,
+    );
+  });
+
+  it("the browser's mask table is titiler's colormap: the same value, the same colour", () => {
+    expect(OUTSIDE_PRA_CLASSES).toEqual({ 1: OUTSIDE_PRA_RGBA });
+    expect(Object.keys(OUTSIDE_PRA_COLORMAP)).toEqual(["1"]);
   });
 });

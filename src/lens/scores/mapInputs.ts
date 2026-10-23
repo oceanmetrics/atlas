@@ -18,6 +18,7 @@ import { zoneChoropleth, zoneLegendStops, zoneValuesFor } from "./zoneFill";
 import type { LegendStop, PaletteName } from "../../lib/raster/ramps";
 import type { Histogram } from "../../lib/map/density";
 import { valueListDistribution } from "../../lib/map/distribution";
+import type { ReleaseCogChoice } from "../../lib/raster/releaseCog";
 
 /**
  * The scores lens' floating legend (atlas-4 defect fix: the scores lens had NO floating legend at
@@ -77,6 +78,12 @@ export interface ScoresMapState {
   /** R4-A: the last clicked element's value, for the legend's marker line (the cell's value comes
    * from Parquet, a Program area's from the boot bundle). `null`/absent -> no marker. */
   marker?: number | null;
+  /** build week 6 step 5: who draws the score COG (`raster/releaseCog.ts` `releaseCogDraw`, resolved by the
+   * lens from the release's side table): `cog`, its 3857 copy in the browser, with the side table's histogram
+   * in the legend; `titiler`, the fallback; `"pending"`, not resolved yet (nothing drawn). Absent = titiler. */
+  rasterDraw?: ReleaseCogChoice | "pending";
+  /** the same for the `_outside_pra` mask overlay's COG. */
+  maskDraw?: ReleaseCogChoice | "pending";
   /** a cell ring (lon/lat centre + half-cell size) or a zone key to outline, or null. */
   selection:
     | { kind: "cell"; lon: number; lat: number; halfW: number; halfH: number }
@@ -181,10 +188,30 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
   } catch {
     bounds = undefined;
   }
-  const raster = isCellBranch ? withBounds(scoreRasterSpec(layer, state.palette), bounds) : null;
-  const overlay = isCellBranch
-    ? withBounds(outsidePraOverlaySpec(state.overlays, state.showOutsidePra), bounds)
-    : null;
+  const rd = state.rasterDraw;
+  const md = state.maskDraw;
+  const raster =
+    isCellBranch && rd !== "pending"
+      ? withBounds(
+          rd?.kind === "cog"
+            ? scoreRasterSpec(layer, state.palette, rd.source)
+            : scoreRasterSpec(layer, state.palette),
+          bounds,
+        )
+      : null;
+  const overlay =
+    isCellBranch && md !== "pending"
+      ? withBounds(
+          outsidePraOverlaySpec(
+            state.overlays,
+            state.showOutsidePra,
+            md?.kind === "cog" ? md.source : null,
+          ),
+          bounds,
+        )
+      : null;
+  const histogram =
+    rd && rd !== "pending" && rd.kind === "cog" ? rd.histogram : state.rasterHistogram;
 
   const selection: SelectionSpec | null =
     state.selection?.kind === "cell" ? cellRingSelection(state.selection) : null;
@@ -225,7 +252,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
               kind: "raster",
               title,
               stops: rl.stops,
-              histogram: state.rasterHistogram ?? null,
+              histogram: histogram ?? null,
               marker: state.marker ?? null,
             };
       })()

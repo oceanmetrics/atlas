@@ -1,0 +1,14 @@
+diff --git a/src/lens/scores/raster.ts b/src/lens/scores/raster.ts
+index 1ae27e3..8b70caf 100644
+--- a/src/lens/scores/raster.ts
++++ b/src/lens/scores/raster.ts
+@@ -80,7 +80,8 @@ export function outsidePraOverlaySpec(
+ ): RasterLayerSpec | null {
+   const cog = outsidePraCog(overlays);
+   if (!cog) return null;
+-  if (source) {
++  if (source && false) {
++    // SEEDED FAULT (tests/faults/outside-pra-mask-titiler.patch): the mask stays on titiler's colormap
+     // build week 6 step 5: the mask's own 3857 copy, painted in the browser with the same explicit table
+     // titiler's colormap template used (`OUTSIDE_PRA_CLASSES`: 1 -> the mask grey, every other value clear)
+     return {

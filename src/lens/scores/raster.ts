@@ -6,6 +6,7 @@
 import { signif3 } from "../../lib/geo/round";
 import { titilerMaskTileTemplate, OUTSIDE_PRA_COLORMAP } from "../../lib/map/layers/titiler";
 import { createTitilerRasterSource, type RasterSource } from "../../lib/raster/tiles";
+import type { CogRasterSource } from "../../lib/raster/cog";
 import { SCORE_RASTER_OPACITY, OVERLAY_RASTER_OPACITY } from "../../lib/map/layers/raster";
 import {
   legendStops,
@@ -19,9 +20,10 @@ import { fullSubregion, type BootLayerRow } from "./boot";
 export const SCORE_RASTER_ID = "r_lyr";
 export const OUTSIDE_PRA_OVERLAY_ID = "outside_pra_lyr";
 
-/** the score rasters' default renderer behind the `RasterSource` seam (`lib/raster/tiles.ts`): the
- * stock titiler, until the release's score COGs carry EPSG:3857 copies and a `cogRasterSource`
- * (`lib/raster/cog.ts`) can draw them in the browser (build week 6, when titiler retires). */
+/** the score rasters' fallback renderer behind the `RasterSource` seam (`lib/raster/tiles.ts`): the
+ * stock titiler, for a score COG the release's side table has no EPSG:3857 copy of. Since build week 6
+ * step 5 the lens resolves each score COG first (`lib/raster/releaseCog.ts` `releaseCogDraw`) and hands
+ * a resolved COG's `cogRasterSource` (`lib/raster/cog.ts`) in as `source`, so the browser draws it. */
 const SCORE_RASTER_SOURCE: RasterSource = createTitilerRasterSource();
 
 /**
@@ -47,7 +49,14 @@ export function scoreRasterSpec(
       rescaleMax: full.rescale[1],
     }),
   ];
-  return { id: SCORE_RASTER_ID, tiles, opacity: SCORE_RASTER_OPACITY };
+  // a browser source is built for its asset (the palette's stops over the rescale) and knows the copy's own
+  // full-resolution zoom: MapLibre overzooms above it rather than asking for tiles finer than the file
+  const maxzoom = isCogSource(source) && source.maxzoom !== null ? { maxzoom: source.maxzoom } : {};
+  return { id: SCORE_RASTER_ID, tiles, opacity: SCORE_RASTER_OPACITY, ...maxzoom };
+}
+
+function isCogSource(s: RasterSource): s is CogRasterSource {
+  return s.kind === "cog" && "maxzoom" in s;
 }
 
 /** one row of `manifest.overlays` (parity doc §6.2 step 5 / §6.3). */
@@ -67,14 +76,41 @@ export interface ManifestOverlayRow {
 export function outsidePraOverlaySpec(
   overlays: readonly ManifestOverlayRow[] | null | undefined,
   visible: boolean,
+  source?: CogRasterSource | null,
 ): RasterLayerSpec | null {
+  const cog = outsidePraCog(overlays);
+  if (!cog) return null;
+  if (source) {
+    // build week 6 step 5: the mask's own 3857 copy, painted in the browser with the same explicit table
+    // titiler's colormap template used (`OUTSIDE_PRA_CLASSES`: 1 -> the mask grey, every other value clear)
+    return {
+      id: OUTSIDE_PRA_OVERLAY_ID,
+      tiles: [source.template],
+      opacity: OVERLAY_RASTER_OPACITY,
+      visible,
+      ...(source.maxzoom === null ? {} : { maxzoom: source.maxzoom }),
+    };
+  }
+  const tiles = [titilerMaskTileTemplate({ url: cog, colormap: OUTSIDE_PRA_COLORMAP })];
+  return { id: OUTSIDE_PRA_OVERLAY_ID, tiles, opacity: OVERLAY_RASTER_OPACITY, visible };
+}
+
+/** the `_outside_pra` overlay's `FULL` COG, or null when the release publishes none. */
+export function outsidePraCog(
+  overlays: readonly ManifestOverlayRow[] | null | undefined,
+): string | null {
   const row = (overlays ?? []).find(
     (o) => o.overlay_key === "_outside_pra" && o.subregion_key === "FULL",
   );
-  if (!row || typeof row.cog !== "string") return null;
-  const tiles = [titilerMaskTileTemplate({ url: row.cog, colormap: OUTSIDE_PRA_COLORMAP })];
-  return { id: OUTSIDE_PRA_OVERLAY_ID, tiles, opacity: OVERLAY_RASTER_OPACITY, visible };
+  return row && typeof row.cog === "string" ? row.cog : null;
 }
+
+/** titiler's explicit mask colormap (`OUTSIDE_PRA_COLORMAP`, `{"1": [34,34,34,255]}`) as the browser paint's
+ * value -> colour table: the same value, the same colour, every other value transparent (titiler leaves a value
+ * its explicit colormap does not list transparent). */
+export const OUTSIDE_PRA_CLASSES: Readonly<
+  Record<number, readonly [number, number, number, number]>
+> = Object.fromEntries(Object.entries(OUTSIDE_PRA_COLORMAP).map(([k, c]) => [Number(k), c]));
 
 export interface RasterLegend {
   stops: LegendStop[];

@@ -39,6 +39,7 @@
 // `showOutsidePra` is the one exception, ephemeral chrome same as `Panel.svelte`'s own geometry,
 // so it lives here as plain `$state` rather than round-tripping through `sel`).
 import type { Popup } from "maplibre-gl";
+import { untrack } from "svelte";
 import type { SelStore } from "../../lib/state/sel.svelte";
 import type { MapHandle } from "../../lib/map/map";
 import type { ChromePadding } from "../../lib/map/camera";
@@ -55,7 +56,10 @@ import {
   type ScoresSelection,
 } from "./selection";
 import { scoresMapInputs, type ScoresMapInputs, type ScoresMapState } from "./mapInputs";
-import type { ManifestOverlayRow } from "./raster";
+import { OUTSIDE_PRA_CLASSES, outsidePraCog, type ManifestOverlayRow } from "./raster";
+import type { ReleaseCogChoice, ReleaseCogRequest } from "../../lib/raster/releaseCog";
+import { OVERLAY_RASTER_OPACITY, SCORE_RASTER_OPACITY } from "../../lib/map/layers/raster";
+import type { SessionLike } from "../../lib/release/dataBase";
 import {
   fullSubregion,
   layerByKey,
@@ -114,6 +118,11 @@ export interface ScoresLensDeps {
   /** R4-A: the legend histogram's `/cog/statistics` source; defaults to stock titiler over `fetch`.
    * Injectable so a test never touches the network. */
   histogramSource?: HistogramSource;
+  /** build week 6 step 5: the lazy module that draws a release COG from its 3857 copy
+   * (`lib/raster/releaseCog.ts`); default the dynamic import. */
+  releaseCog?: () => Promise<typeof import("../../lib/raster/releaseCog")>;
+  /** a preview session (a restricted release's data prefix), for the side table's url. */
+  session?: () => SessionLike | null;
 }
 
 export interface ScoresLens {
@@ -281,6 +290,12 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
         rasterHistogram = null;
         return;
       }
+      // drawn in the browser: the legend takes the side table's histogram (`mapInputs.ts`); pending: wait for
+      // the answer before asking titiler's `/cog/statistics`
+      if (rasterDraw === "pending" || rasterDraw?.kind === "cog") {
+        rasterHistogram = null;
+        return;
+      }
       let cancelled = false;
       rasterHistogram = null; // never show the previous layer's shape while this one loads
       void layerHistogramFor(histogramSource, {
@@ -298,8 +313,89 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
     });
   });
 
+  // --- build week 6 step 5: the score COG and the mask COG drawn from their 3857 copies -------------------
+  // each resolved once per (release, COG, paint) from the release's side table; until it answers the layer is not
+  // drawn (no titiler tile is asked for a COG the browser is about to draw), and a COG the table does not have
+  // stays on titiler.
+  const releaseCog = deps.releaseCog ?? (() => import("../../lib/raster/releaseCog"));
+  // a plain cache of promises (never read by a template; the answers go into $state)
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const draws = new Map<string, Promise<ReleaseCogChoice>>();
+  let resolved = $state<Record<string, ReleaseCogChoice>>({});
+  function drawKey(req: Omit<ReleaseCogRequest, "session">): string {
+    return JSON.stringify([req.ver, req.cogUrl, req.domain, req.paint]);
+  }
+  function requestDraw(req: Omit<ReleaseCogRequest, "session">): string {
+    const key = drawKey(req);
+    if (!draws.has(key)) {
+      const p = releaseCog()
+        .then((m) => m.releaseCogDraw({ ...req, session: deps.session?.() ?? null }))
+        .catch((): ReleaseCogChoice => ({ kind: "titiler" }));
+      draws.set(key, p);
+      void p.then((choice) => {
+        resolved = { ...resolved, [key]: choice };
+      });
+    }
+    return key;
+  }
+  const scoreDrawKey: string | null = $derived.by(() => {
+    const ver = deps.ver();
+    const boot = deps.boot();
+    if (!ver || !boot || !lyr || unit !== "cell") return null;
+    const layer = layerByKey(boot, lyr);
+    const full = layer ? fullSubregion(layer) : null;
+    const stops = paletteStopsWithFallback(
+      boot as { palettes?: unknown } | null,
+      deps.selStore.sel.pal,
+    );
+    if (!full?.cog || !full.rescale || !stops) return null;
+    return drawKey({
+      ver,
+      cogUrl: full.cog,
+      domain: [full.rescale[0], full.rescale[1]],
+      paint: { kind: "stops", stops: [...stops] },
+      opacity: SCORE_RASTER_OPACITY,
+    });
+  });
+  const maskDrawKey: string | null = $derived.by(() => {
+    const ver = deps.ver();
+    const cog = outsidePraCog(manifestOverlays);
+    if (!ver || !cog || unit !== "cell" || !showOutsidePra) return null;
+    return drawKey({
+      ver,
+      cogUrl: cog,
+      domain: null,
+      paint: { kind: "classes", classes: OUTSIDE_PRA_CLASSES },
+      opacity: OVERLAY_RASTER_OPACITY,
+    });
+  });
+  $effect.root(() => {
+    $effect(() => {
+      for (const key of [scoreDrawKey, maskDrawKey]) {
+        if (!key) continue;
+        const [ver, cogUrl, domain, paint] = JSON.parse(key) as [
+          string,
+          string,
+          ReleaseCogRequest["domain"],
+          ReleaseCogRequest["paint"],
+        ];
+        const opacity = paint.kind === "classes" ? OVERLAY_RASTER_OPACITY : SCORE_RASTER_OPACITY;
+        untrack(() => requestDraw({ ver, cogUrl, domain, paint, opacity }));
+      }
+    });
+  });
+  const rasterDraw: ReleaseCogChoice | "pending" | undefined = $derived(
+    scoreDrawKey ? (resolved[scoreDrawKey] ?? "pending") : undefined,
+  );
+  // the mask switched off draws nothing either way; it resolves when it is first switched on
+  const maskDraw: ReleaseCogChoice | "pending" | undefined = $derived(
+    maskDrawKey ? (resolved[maskDrawKey] ?? "pending") : undefined,
+  );
+
   const mapExtra: ScoresMapInputs = $derived.by(() =>
     scoresMapInputs({
+      rasterDraw,
+      maskDraw,
       rasterHistogram,
       marker,
       boot: deps.boot(),
