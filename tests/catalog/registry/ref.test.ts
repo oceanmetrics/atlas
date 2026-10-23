@@ -11,7 +11,7 @@ describe("registryRefOf: a collection with atlas:taxa_registry is a taxon collec
   it("reads the registry and index assets, resolved against the collection", () => {
     const ref = registryRefOf(nativeCollection())!;
     expect(ref.collectionId).toBe("aquamaps_native");
-    expect(ref.registryUrl).toMatch(/\/atlas\/aquamaps_native\/registry\.parquet$/);
+    expect(ref.registryUrl).toMatch(/\/atlas\/aquamaps_native\/registry\/v2\/registry\.parquet$/);
     expect(ref.indexUrl).toMatch(/\/atlas\/aquamaps_native\/registry_index\.json$/);
     expect(ref).toMatchObject({
       keyColumn: "sp_key",

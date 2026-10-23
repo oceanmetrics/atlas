@@ -10,11 +10,11 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
   "id": "aquamaps_native",
-  "updated": "2026-10-14T20:39:20Z",
-  "title": "AquaMaps habitat suitability (native 0.5° and global 0.05°)",
+  "updated": "2026-10-23T12:39:00Z",
+  "title": "AquaMaps habitat suitability (native 0.5\u00b0 and global 0.05\u00b0)",
   "description": "AquaMaps relative environmental suitability (1-100 percent) for 18,697 aquatic species in two representations, both from MarineSensitivity release v8: the original global 0.5 degree grid (native) and the global 0.05 degree downscale (not the USA-clipped surface of release v7). The COGs are referenced, not copied; one registry row per species lets an app build a per-taxon Item with both COGs without 18,697 Item files. Non-commercial use only (CC BY-NC 3.0). Methods and registry columns: README.md.",
   "license": "CC-BY-NC-3.0",
-  "version": "2019.10",
+  "version": "2019.10.1",
   "deprecated": false,
   "sci:citation": "Kaschner, K., Kesner-Reyes, K., Garilao, C., Segschneider, J., Rius-Barile, J., Rees, T., Froese, R. (2019). AquaMaps: Predicted range maps for aquatic species. World wide web electronic publication, www.aquamaps.org, Version 10/2019.",
   "providers": [
@@ -141,6 +141,52 @@
         "atlas:rescale": [1, 100],
         "atlas:colormap": "spectral_r",
         "atlas:bidx": 1
+      },
+      "cog_3857": {
+        "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+        "bands": [
+          {
+            "name": "suitability",
+            "data_type": "uint8",
+            "nodata": 0,
+            "unit": "percent",
+            "statistics": {
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "atlas:bbox": "{bbox_native}",
+        "atlas:rescale": [1, 100],
+        "atlas:colormap": "spectral_r",
+        "atlas:bidx": 1,
+        "href": "{cog_3857_url}",
+        "roles": ["data", "visual"],
+        "proj:code": "EPSG:3857",
+        "title": "AquaMaps native 0.5 degree habitat suitability (percent): EPSG:3857 copy, drawn in the browser; omit when null"
+      },
+      "cog_3857_005": {
+        "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+        "bands": [
+          {
+            "name": "suitability",
+            "data_type": "uint8",
+            "nodata": 0,
+            "unit": "percent",
+            "statistics": {
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "atlas:bbox": "{bbox_005}",
+        "atlas:rescale": [1, 100],
+        "atlas:colormap": "spectral_r",
+        "atlas:bidx": 1,
+        "href": "{cog_3857_url_005}",
+        "roles": ["reference"],
+        "proj:code": "EPSG:3857",
+        "title": "AquaMaps habitat suitability downscaled to 0.05 degree, global (MarineSensitivity v8): EPSG:3857 copy, drawn in the browser; omit when null"
       }
     },
     "point_value": "titiler /cog/point on the drawn asset (value 1-100; 0 or no data = outside the model's range)"
@@ -170,10 +216,10 @@
   },
   "assets": {
     "registry": {
-      "href": "./registry.parquet",
+      "href": "./registry/v2/registry.parquet",
       "type": "application/vnd.apache.parquet",
       "roles": ["metadata"],
-      "title": "Taxa registry: one row per AquaMaps model with both a native 0.5 degree and a global 0.05 degree COG (names, ids, COG urls, bboxes)",
+      "title": "Taxa registry: one row per AquaMaps model with both a native 0.5 degree and a global 0.05 degree COG (names, ids, COG urls and their EPSG:3857 copies, bboxes)",
       "atlas:key_column": "sp_key",
       "table:row_count": 18697,
       "table:columns": [
@@ -256,10 +302,20 @@
           "name": "sp_key_v7",
           "type": "string",
           "description": "the v7 registry key (v7 model.taxa, ds_key am_0.05) of the same species, to map an old `?sp=` link; null when v7 had no model of it"
+        },
+        {
+          "name": "cog_3857_url",
+          "type": "string",
+          "description": "EPSG:3857 copy of `cog_url` (what the browser draws; `cog_url` stays the original the numbers are read from); null when the shared pool has no copy"
+        },
+        {
+          "name": "cog_3857_url_005",
+          "type": "string",
+          "description": "EPSG:3857 copy of `cog_url_005`; null when the shared pool has no copy"
         }
       ],
-      "file:size": 1255977,
-      "file:checksum": "12202197139564bda08e75f91da459360964fbc3eadd125f774880b493b149639d71"
+      "file:size": 1644795,
+      "file:checksum": "12203910e6ca9632f5eb5673c4a60086fea7f3a5546dd62fb030150da404c2420630"
     },
     "registry_index": {
       "href": "./registry_index.json",
