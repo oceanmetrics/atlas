@@ -191,7 +191,7 @@ export interface H3Layer {
   /** the About modal's section of the layer */
   readonly about: { title: string; lines: string[] } | null;
   /** what the map PNG is stamped with */
-  readonly stamp: { title: string; description: string | null; ver: string | null } | null;
+  readonly stamp: ReturnType<typeof pngStamp> | null;
   ensureTaxa(): void;
   setDomain(d: "release" | "view"): void;
   setLayer(id: string): void;
@@ -1226,6 +1226,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
             legendTitle: legend.title,
             sentence,
             release: meta?.release ?? spec?.release ?? null,
+            format: (v: number) => formatIndicator(view?.indicator ?? "es", v),
           })
         : null;
     },

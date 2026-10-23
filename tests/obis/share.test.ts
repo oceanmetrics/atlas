@@ -178,6 +178,13 @@ describe("PNG", () => {
     expect(
       mapFigureName("collection", s.title, s.ver!, "png", () => new Date("2026-10-23T12:00:00Z")),
     ).toBe(`${DOWNLOAD_PREFIX}_collection_seabirds-class-aves-es-50_v20261012_20261023.png`);
+    const f = pngStamp({
+      legendTitle: "t",
+      sentence: "s",
+      release: null,
+      format: (v) => v.toFixed(2),
+    });
+    expect(f.formatValue?.(27.01180712915645)).toBe("27.01");
     expect(pngStamp({ legendTitle: "t", sentence: "", release: "not a release" })).toEqual({
       title: "t",
       description: null,

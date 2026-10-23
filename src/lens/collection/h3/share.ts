@@ -415,14 +415,22 @@ export function pinForView(
  * "<atlas> · v20261012 · <the view's link>" and the file is named `<prefix>_collection_<title>_v20261012_<date>.png`
  * (`mapFigureName`). The resolution, period and place are in the link and the sentence.
  */
-export function pngStamp(o: { legendTitle: string; sentence: string; release: string | null }): {
+export function pngStamp(o: {
+  legendTitle: string;
+  sentence: string;
+  release: string | null;
+  /** the indicator's number format for the colour scale's ends (`formatIndicator`) */
+  format?: (v: number) => string;
+}): {
   title: string;
   description: string | null;
   ver: string | null;
+  formatValue?: (v: number) => string;
 } {
   return {
     title: o.legendTitle,
     description: o.sentence || null,
     ver: o.release && /^v[0-9]+[a-z]?$/.test(o.release) ? o.release : null,
+    ...(o.format ? { formatValue: o.format } : {}),
   };
 }

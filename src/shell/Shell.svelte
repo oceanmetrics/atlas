@@ -2013,6 +2013,7 @@
       {mapHandle}
       title={downloadTitle}
       description={h3Stamp ? h3Stamp.description : downloadDescription}
+      formatValue={h3Stamp?.formatValue}
       unit={downloadUnit}
       metricOrMdlKey={downloadMetricOrMdlKey}
       cogUrl={downloadCogUrl}
