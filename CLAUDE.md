@@ -35,6 +35,7 @@ uv run pipeline/build.py build --collection swfsc_cce_becker2020b   # restricted
 pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collection alone, dry run unless --really
 uv run pipeline/build.py aquamaps-registry <registry/v2/registry.parquet>   # stage aquamaps_native/collection.json at that registry version
 pipeline/publish.sh --only aquamaps_native [--really]              # that collection.json alone (additive: no registry rewrite, no --delete)
+uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only catalog [--really]   # the root catalog.json alone (additive, no-cache)
 ```
 
 ## CI notes
