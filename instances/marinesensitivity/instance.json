@@ -30,12 +30,21 @@
       { "id": "unlisted", "label": "Unlisted (shared by link)" }
     ]
   },
+  "lenses": ["scores", "species"],
   "defaults": { "lens": "scores", "theme": "dark", "tour": "on" },
   "tools": ["layers", "details", "table", "report"],
+  "pages": ["index", "report"],
   "feedback": { "app": "atlas" },
   "places": {
     "site": "https://oceanmetrics.io/places/",
     "attribution": "NOAA Office of National Marine Sanctuaries; Marine Regions (VLIZ); ProtectedSeas. Processed by Ocean Metrics."
   },
-  "titiler": { "host": "https://titiler-v8.marinesensitivity.org" }
+  "titiler": { "host": "https://titiler-v8.marinesensitivity.org" },
+  "release": {
+    "registry": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
+    "preview": "https://preview.marinesensitivity.org",
+    "access": "gate"
+  },
+  "seal": { "agency": "MMA", "src": "https://marinesensitivity.org/branding/mma-seal.svg" },
+  "budget": { "static_kb": 460, "worker_kb": 150 }
 }

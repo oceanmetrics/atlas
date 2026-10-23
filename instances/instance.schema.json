@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oceanmetrics.io/atlas/instances/instance.schema.json",
-  "title": "Atlas instance",
-  "description": "One instance of the atlas codebase (instances/<id>/instance.json): the brand, the default catalog and lens, and the tool list. VITE_INSTANCE=<id> selects it at build time. Every key here is read by the code (src/lib/brand/instance.ts, scripts/instance.mjs); nothing else is allowed.",
+  "title": "Atlas instance 1.1",
+  "description": "One instance of the atlas codebase (instances/<id>/instance.json): the brand, the default catalog and lens, the lenses, tools and pages it builds, its release registry and seal when it has them, and its size budget. VITE_INSTANCE=<id> selects it at build time. Every key here is read by the code (src/lib/brand/instance.ts, scripts/instance.mjs, scripts/size-budget.mjs); nothing else is allowed. 1.1 (build week 4, step 1) adds lenses, pages, release, seal and budget and widens tools to report; lenses, pages, release and seal choose modules from build week 4 step 2 (2026-11-20 to 11-26: the MarineSensitivity move), until then the build reads budget and checks the rest.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,13 +19,45 @@
     "cite",
     "about",
     "catalog",
+    "lenses",
     "defaults",
     "tools",
+    "pages",
     "feedback",
     "places",
-    "titiler"
+    "titiler",
+    "budget"
+  ],
+  "allOf": [
+    {
+      "description": "defaults.lens is one of lenses (one rule per lens; tests/instances.test.ts checks every lens has its rule)",
+      "if": { "required": ["defaults"], "properties": { "defaults": { "required": ["lens"], "properties": { "lens": { "const": "collection" } } } } },
+      "then": { "properties": { "lenses": { "contains": { "const": "collection" } } } }
+    },
+    {
+      "description": "defaults.lens is one of lenses",
+      "if": { "required": ["defaults"], "properties": { "defaults": { "required": ["lens"], "properties": { "lens": { "const": "species" } } } } },
+      "then": { "properties": { "lenses": { "contains": { "const": "species" } } } }
+    },
+    {
+      "description": "defaults.lens is one of lenses",
+      "if": { "required": ["defaults"], "properties": { "defaults": { "required": ["lens"], "properties": { "lens": { "const": "scores" } } } } },
+      "then": { "properties": { "lenses": { "contains": { "const": "scores" } } } }
+    }
   ],
   "$defs": {
+    "lens": {
+      "description": "a lens any instance builds: the union the Lens type becomes in build week 4 step 2 (collection and species here, scores from MarineSensitivity/atlas)",
+      "enum": ["collection", "species", "scores"]
+    },
+    "tool": {
+      "description": "a rail tool any instance builds: the union the ToolName type becomes in build week 4 step 2 (report from MarineSensitivity/atlas)",
+      "enum": ["layers", "details", "table", "places", "report"]
+    },
+    "page": {
+      "description": "an HTML entry an instance may publish (<page>.html at the repo root); the gallery stays dev-only and is never one",
+      "enum": ["index", "catalog", "report"]
+    },
     "text": { "type": "string", "minLength": 1 },
     "https": { "type": "string", "pattern": "^https://[^\\s]+$" },
     "assetFile": {
@@ -156,25 +188,40 @@
         }
       }
     },
+    "lenses": {
+      "description": "the lenses this instance builds, in the order the lens switch shows them; defaults.lens is one of them",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/lens" }
+    },
     "defaults": {
       "type": "object",
       "additionalProperties": false,
       "required": ["lens", "theme", "tour"],
       "properties": {
         "lens": {
-          "description": "a member of the Lens union (src/lib/state/types.ts)",
-          "$ref": "#/$defs/token"
+          "description": "the lens the app opens on, one of lenses (the allOf rule); a lens this build's Lens union lacks falls back to collection (src/lib/state/types.ts)",
+          "$ref": "#/$defs/lens"
         },
         "theme": { "enum": ["dark", "light", "auto"] },
         "tour": { "enum": ["on", "off"] }
       }
     },
     "tools": {
-      "description": "the rail, in order; members of the ToolName union (src/shell/tools.ts)",
+      "description": "the rail, in order; the rail keeps the members of this build's ToolName union (src/shell/tools.ts) and drops the rest (report until build week 4 step 2)",
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/token" }
+      "items": { "$ref": "#/$defs/tool" }
+    },
+    "pages": {
+      "description": "the HTML entries this instance publishes; always index (the map)",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/page" },
+      "contains": { "const": "index" }
     },
     "feedback": {
       "type": "object",
@@ -212,6 +259,62 @@
           "description": "the titiler origin, no trailing slash",
           "type": "string",
           "pattern": "^https://[^\\s/]+$"
+        }
+      }
+    },
+    "release": {
+      "description": "the release registry this instance reads (latest.txt, versions.json, {ver}/manifest.json), present only for an instance that has one",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry"],
+      "properties": {
+        "registry": {
+          "description": "the registry base, with a trailing slash",
+          "type": "string",
+          "pattern": "^https://[^\\s]+/$"
+        },
+        "preview": {
+          "description": "the preview origin restricted versions open on ({preview}/{ver}/atlas/), no trailing slash",
+          "type": "string",
+          "pattern": "^https://[^\\s/]+$"
+        },
+        "access": {
+          "description": "gate: a restricted version opens only through the preview host's access check (fail closed)",
+          "enum": ["gate"]
+        }
+      }
+    },
+    "seal": {
+      "description": "the agency seal (About, report cover, footer), present only for an instance that may show it",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agency", "src"],
+      "properties": {
+        "agency": {
+          "description": "the agency code the seal belongs to; an unknown code shows no seal (fail closed)",
+          "enum": ["MMA", "BOEM"]
+        },
+        "src": {
+          "description": "the seal image, an https URL or a file under assets/",
+          "oneOf": [{ "$ref": "#/$defs/https" }, { "$ref": "#/$defs/relativeUrl" }]
+        }
+      }
+    },
+    "budget": {
+      "description": "the gzip size budgets scripts/size-budget.mjs holds this instance's build to, in KB",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["static_kb", "worker_kb"],
+      "properties": {
+        "static_kb": {
+          "description": "the static path of index.html (everything loaded before the first interaction)",
+          "type": "integer",
+          "minimum": 1
+        },
+        "worker_kb": {
+          "description": "the runtime workers referenced from the static path",
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

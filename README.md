@@ -70,6 +70,15 @@ host), `tokens.css` with its `@contrast` block (and the exported `tokens.json`),
 closed) is the contract; `tests/instances.test.ts` validates every instance and the build refuses an
 invalid one.
 
+Schema 1.1 (build week 4, step 1) adds `lenses` (the lenses the instance builds; `defaults.lens` must be
+one of them), `tools` widened to `report`, `pages` (the HTML entries it publishes: `index`, `catalog`,
+`report`; always `index`), `release` (`registry` base, required when present, `preview` origin,
+`access: "gate"`) for an instance that reads a release registry, `seal` (`agency`, `src`) and `budget`
+(`static_kb`, `worker_kb`, the defaults of `npm run size-budget` for the selected instance). The build
+reads `budget` today; `lenses`, `pages`, `release` and `seal` choose modules from build week 4 step 2
+(2026-11-20 to 11-26, the MarineSensitivity move). Fixtures that pass and fail are in
+`tests/fixtures/instance/{valid,invalid}/`, with the expected error per invalid file in `invalid.json`.
+
 - `VITE_INSTANCE=<id>` picks the folder (default `oceanmetrics`; `.env` or the environment). Vite
   aliases `@instance` to it; `src/lib/brand/instance.ts` is the only reader of `instance.json` in
   `src/`, and `shell.css`/`catalog.css` import `@instance/tokens.css`.

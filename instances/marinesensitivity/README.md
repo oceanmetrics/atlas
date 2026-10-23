@@ -20,6 +20,11 @@ give a working app until build week 4, **2026-11-20 to 11-26**.
 - `mark.svg`: the wave-in-hexagon mark (`WaveHexMark.svelte`) with its CSS classes written as
   presentation attributes reading the same custom properties.
 - `assets/`: the favicon and the two motifs.
+- Schema 1.1 fields: `lenses` `scores, species` (the 0.10.93 lenses; no Collections lens in week 4, decision
+  D2), `pages` `index, report`, `release` (the marine-atlas registry, the preview origin
+  `https://preview.marinesensitivity.org`, `access: "gate"`), `seal` (MMA, the published
+  `https://marinesensitivity.org/branding/mma-seal.svg`, which was `VITE_SEAL_URL`'s default) and `budget`
+  460 / 150 KB (its 0.10.93 budgets). The schema knows them; this build reads only `budget` until step 2.
 
 ## What arrives in build week 4 (2026-11-20 to 11-26)
 

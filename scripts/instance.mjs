@@ -61,10 +61,12 @@ function typeOk(type, v) {
 
 /**
  * Validate `value` against `schema` (refs resolve against `root`, default `schema`). Supports
- * `$ref` (local `#/$defs/...`), `type`, `enum`, `pattern`, `minLength`, `required`, `properties`,
- * `additionalProperties: false`, `dependentRequired`, `items` (a schema or `false`), `prefixItems`,
- * `minItems`, `uniqueItems` and `oneOf`; an unknown keyword throws, so the schema cannot grow a rule
- * this validator silently ignores. Returns a list of `<path>: <problem>` strings, empty when valid.
+ * `$ref` (local `#/$defs/...`), `type`, `enum`, `const`, `pattern`, `minLength`, `minimum`, `required`,
+ * `properties`, `additionalProperties: false`, `dependentRequired`, `items` (a schema or `false`),
+ * `prefixItems`, `minItems`, `uniqueItems`, `contains`, `oneOf`, `allOf` and `if`/`then` (1.1: the
+ * defaults.lens-in-lenses rule); an unknown keyword (`else` among them) throws, so the schema cannot
+ * grow a rule this validator silently ignores. Returns a list of `<path>: <problem>` strings, empty
+ * when valid.
  */
 export function validateInstance(value, schema, root = schema, path = "$") {
   const KNOWN = new Set([
@@ -87,6 +89,12 @@ export function validateInstance(value, schema, root = schema, path = "$") {
     "minItems",
     "uniqueItems",
     "oneOf",
+    "allOf",
+    "if",
+    "then",
+    "const",
+    "contains",
+    "minimum",
   ]);
   for (const k of Object.keys(schema)) {
     if (!KNOWN.has(k)) throw new Error(`validateInstance: unsupported schema keyword "${k}"`);
@@ -106,7 +114,17 @@ export function validateInstance(value, schema, root = schema, path = "$") {
       errs.push(`${path}: matches ${passing.length} of oneOf, not exactly 1`);
     return errs;
   }
-  if (schema.type && !typeOk(schema.type, value)) return [`${path}: not a ${schema.type}`];
+  for (const sub of schema.allOf ?? []) errs.push(...validateInstance(value, sub, root, path));
+  if (schema.if && validateInstance(value, schema.if, root, path).length === 0 && schema.then) {
+    errs.push(...validateInstance(value, schema.then, root, path));
+  }
+  if (schema.type && !typeOk(schema.type, value)) return [...errs, `${path}: not a ${schema.type}`];
+  if ("const" in schema && JSON.stringify(value) !== JSON.stringify(schema.const)) {
+    errs.push(`${path}: ${JSON.stringify(value)} is not ${JSON.stringify(schema.const)}`);
+  }
+  if (schema.minimum !== undefined && typeof value === "number" && value < schema.minimum) {
+    errs.push(`${path}: less than ${schema.minimum}`);
+  }
   if (schema.enum && !schema.enum.includes(value)) {
     errs.push(`${path}: ${JSON.stringify(value)} not one of ${JSON.stringify(schema.enum)}`);
   }
@@ -138,6 +156,13 @@ export function validateInstance(value, schema, root = schema, path = "$") {
     }
     if (schema.uniqueItems && new Set(value.map((v) => JSON.stringify(v))).size !== value.length) {
       errs.push(`${path}: items are not unique`);
+    }
+    if (
+      schema.contains &&
+      !value.some((v, i) => validateInstance(v, schema.contains, root, `${path}[${i}]`).length === 0)
+    ) {
+      const want = "const" in schema.contains ? JSON.stringify(schema.contains.const) : "an item matching contains";
+      errs.push(`${path}: has no ${want}`);
     }
     const prefix = schema.prefixItems ?? [];
     value.forEach((v, i) => {

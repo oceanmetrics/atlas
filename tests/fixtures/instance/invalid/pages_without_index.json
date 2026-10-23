@@ -1,0 +1,95 @@
+{
+  "id": "example-registry",
+  "name": "Example Registry Atlas",
+  "wordmark": "Example Registry Atlas",
+  "title": "Scores · Example Registry Atlas",
+  "description": "Scores, species, places and reports for U.S. marine areas.",
+  "og": {
+    "siteName": "MarineSensitivity Atlas",
+    "siteUrl": "https://marinesensitivity.org/atlas/"
+  },
+  "favicon": "favicon.svg",
+  "mark": "mark.svg",
+  "supporters": [],
+  "credit": "Example Registry Atlas",
+  "cite": "MarineSensitivity Atlas (2026), marinesensitivity.org/atlas",
+  "about": {
+    "description": "MarineSensitivity Atlas: one static web app for scores, species, places and reports over U.S. marine areas.",
+    "links": [
+      {
+        "label": "OceanMetrics gazetteer (places)",
+        "href": "https://oceanmetrics.io/places/"
+      },
+      {
+        "label": "Code on GitHub",
+        "href": "https://github.com/MarineSensitivity/atlas"
+      }
+    ]
+  },
+  "catalog": {
+    "base": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
+    "groups": [
+      {
+        "id": "oceanmetrics",
+        "label": "MarineSensitivity"
+      },
+      {
+        "id": "mst-v7",
+        "label": "MarineSensitivity v7"
+      },
+      {
+        "id": "mst-v8",
+        "label": "MarineSensitivity v8"
+      },
+      {
+        "id": "external",
+        "label": "Other"
+      },
+      {
+        "id": "unlisted",
+        "label": "Unlisted (shared by link)"
+      }
+    ]
+  },
+  "lenses": [
+    "scores",
+    "species"
+  ],
+  "defaults": {
+    "lens": "scores",
+    "theme": "dark",
+    "tour": "on"
+  },
+  "tools": [
+    "layers",
+    "details",
+    "table",
+    "report"
+  ],
+  "pages": [
+    "report"
+  ],
+  "feedback": {
+    "app": "atlas"
+  },
+  "places": {
+    "site": "https://oceanmetrics.io/places/",
+    "attribution": "NOAA Office of National Marine Sanctuaries; Marine Regions (VLIZ); ProtectedSeas. Processed by Ocean Metrics."
+  },
+  "titiler": {
+    "host": "https://titiler-v8.marinesensitivity.org"
+  },
+  "release": {
+    "registry": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
+    "preview": "https://preview.marinesensitivity.org",
+    "access": "gate"
+  },
+  "seal": {
+    "agency": "MMA",
+    "src": "https://marinesensitivity.org/branding/mma-seal.svg"
+  },
+  "budget": {
+    "static_kb": 460,
+    "worker_kb": 150
+  }
+}

@@ -19,6 +19,7 @@
 //     a `?worker&url` worker padded past RUNTIME_WORKER_BUDGET_BYTES (atlas-0 review fix F3).
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { loadInstance } from "./instance.mjs";
 import {
   evaluateBudget,
   CRITICAL_BUDGET_BYTES,
@@ -26,12 +27,19 @@ import {
   FORBIDDEN_LAZY_MARKERS,
 } from "./size-budget-core.mjs";
 
+// the defaults are the selected instance's `budget` (instances/<id>/instance.json, VITE_INSTANCE; schema 1.1);
+// the core constants are the oceanmetrics instance's, which tests/instances.test.ts keeps equal to them
+const INSTANCE_BUDGET = loadInstance().budget ?? {
+  static_kb: CRITICAL_BUDGET_BYTES / 1024,
+  worker_kb: RUNTIME_WORKER_BUDGET_BYTES / 1024,
+};
+
 function parseArgs(argv) {
   const args = {
     dist: "dist",
     entry: "index.html",
-    budgetKb: CRITICAL_BUDGET_BYTES / 1024,
-    workerBudgetKb: RUNTIME_WORKER_BUDGET_BYTES / 1024,
+    budgetKb: INSTANCE_BUDGET.static_kb,
+    workerBudgetKb: INSTANCE_BUDGET.worker_kb,
     allowMarkers: [],
   };
   for (let i = 0; i < argv.length; i++) {

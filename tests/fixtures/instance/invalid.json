@@ -1,0 +1,8 @@
+{
+  "lens_outside_lenses.json": "$.lenses: has no \"collection\"",
+  "release_without_registry.json": "$.release: missing \"registry\"",
+  "tool_unknown.json": "$.tools[3]: \"reports\" not one of",
+  "pages_without_index.json": "$.pages: has no \"index\"",
+  "seal_without_src.json": "$.seal: missing \"src\"",
+  "budget_without_worker_kb.json": "$.budget: missing \"worker_kb\""
+}

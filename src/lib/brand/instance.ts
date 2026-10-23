@@ -38,11 +38,21 @@ export interface Instance {
   cite: string;
   about: { description: string; links: readonly BrandLink[] };
   catalog: { base: string; groups: readonly { id: string; label: string }[] };
+  /** the lenses this instance builds (1.1); `defaults.lens` is one of them. */
+  lenses: readonly string[];
   defaults: { lens: string; theme: string; tour: string };
   tools: readonly string[];
+  /** the HTML entries this instance publishes (1.1), always `index`. */
+  pages: readonly string[];
   feedback: { app: string };
   places: { site: string; attribution: string };
   titiler: { host: string };
+  /** the release registry, only for an instance that reads one (1.1; read from build week 4 step 2). */
+  release?: { registry: string; preview?: string; access?: "gate" };
+  /** the agency seal, only for an instance that may show it (1.1; read from build week 4 step 2). */
+  seal?: { agency: string; src: string };
+  /** the gzip budgets scripts/size-budget.mjs holds the build to, in KB (1.1). */
+  budget: { static_kb: number; worker_kb: number };
 }
 
 // `unknown` first: the JSON module types `wordmark` as string[], not the tuple; the schema is what
