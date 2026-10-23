@@ -1,8 +1,8 @@
 diff --git a/src/lens/collection/h3/lookup.ts b/src/lens/collection/h3/lookup.ts
-index 2ed3ed8..7646e58 100644
+index 55f7ee8..abacad3 100644
 --- a/src/lens/collection/h3/lookup.ts
 +++ b/src/lens/collection/h3/lookup.ts
-@@ -30,7 +30,6 @@ export function loadLookup(href: string, f: typeof fetch = fetch): Promise<Share
+@@ -39,7 +39,6 @@ export function loadLookup(href: string, f: typeof fetch = fetch): Promise<Share
    const mine = !p;
    if (!p) {
      p = fetchWhole(href, f);

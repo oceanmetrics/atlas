@@ -43,6 +43,8 @@ import {
   readCellRows,
   readLookup,
   SPECIES_TAIL,
+  SPLIT_TAIL,
+  uncachedFetch,
   speciesRows,
   totalsNote,
   totalsOf,
@@ -348,9 +350,19 @@ export const H3_FILL_OPACITY = 0.85;
 
 /** the main thread's reader (the Cell pane's values and species): files opened once, row groups cached */
 const pageReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024 });
-/** the species table's own reader, one per page: its 245 KB footer is read once (a 256 KiB tail, one request) and
- * kept for every hexagon after the first; `speciesForCell` reads the row groups of the hexagon's range only. */
-const speciesReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024, tail: SPECIES_TAIL });
+/** the species tables' own readers, one per page: a resolution's whole file (res 1, 2: its footer in one 128 KiB
+ * tail) and the split files of res 3 (`p=<res-1 parent>`: a 64 KiB tail, most of them whole in it); each file's footer
+ * is kept for every hexagon after the first, and `speciesForCell` reads the row groups of the hexagon's range only. */
+const speciesReader = new ReleaseReader({
+  maxBytes: 32 * 1024 * 1024,
+  tail: SPECIES_TAIL,
+  fetch: uncachedFetch,
+});
+const splitReader = new ReleaseReader({
+  maxBytes: 16 * 1024 * 1024,
+  tail: SPLIT_TAIL,
+  fetch: uncachedFetch,
+});
 let lookupPromise: {
   href: string;
   p: Promise<{ rows: Map<number, LookupRow>; fetched: number }>;
@@ -1076,7 +1088,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
   ): Promise<CellSpeciesList> {
     const t0 = performance.now();
     if (!lookupPromise || lookupPromise.href !== sp.speciesTable!.lookup!.href) {
-      // the whole file, once per page, shared with the subtree (`lookup.ts`): the names are parsed from its bytes
+      // the whole file, once per page (`lookup.ts`): the names, ranks and EOV are parsed from its bytes (a subtree
+      // after this takes its class columns from the same bytes)
       const href = sp.speciesTable!.lookup!.href;
       const p = loadLookup(href).then(async (got) => ({
         rows: await readLookup(sp, got.buffer),
@@ -1086,15 +1099,20 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       p.catch(() => (lookupPromise = null));
     }
     const lk = lookupPromise;
-    const [cells, got] = await Promise.all([readCellRows(sp, h3, speciesReader), lk.p]);
+    const [cells, got] = await Promise.all([
+      readCellRows(sp, h3, speciesReader, splitReader),
+      lk.p,
+    ]);
     const lookup = got.rows;
-    // the file is read once per page: the hexagon that waited for it reports its bytes (none when the subtree read it)
+    // the names are read once per page: the hexagon that waited for them reports their bytes
     const lookupBytes = lk.counted ? 0 : got.fetched;
     lk.counted = true;
     if (!cells) throw new Error("not a hexagon of the species table");
     const taxon = t.kind === "taxon" ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" } : null;
     const keep = t.kind === "subtree" ? (untrack(() => drawn)?.taxa ?? null) : null;
-    let rows = speciesRows(cells.summed, lookup, taxon, keep);
+    // an EOV layer keeps the species the lookup's `eov` column gives it (obisindicators 0.12)
+    const eov = t.kind === "eov" && sp.speciesEov ? (t.item.key ?? null) : null;
+    let rows = speciesRows(cells.summed, lookup, taxon, keep, eov);
     const notes: string[] = [];
     if (keep)
       notes.push(
@@ -1106,7 +1124,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         `The species of every taxon: ${t.label} is not a rank column of the species lookup (phylum, class, order, family).`,
       );
     if (t.kind === "eov")
-      notes.push("The species of every taxon: the release's species table does not mark the EOVs.");
+      notes.push(
+        eov
+          ? `The species of ${t.label}: the taxa the lookup's EOV column gives it.`
+          : "The species of every taxon: the release's species table does not mark the EOVs.",
+      );
     if (cells.plan.scope === "parent")
       notes.push(
         `The species of the res-${cells.plan.tableRes} hexagon around this one: the release keeps one species table per hexagon at res ${cells.plan.tableRes}.`,
@@ -1120,7 +1142,10 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     const totals = totalsOf(rows);
     const own = untrack(() => cellValues?.values) ?? null;
     const tn =
-      cells.plan.scope === "parent" || v.periodRef || (taxon && !filteredByRank) || t.kind === "eov"
+      cells.plan.scope === "parent" ||
+      v.periodRef ||
+      (taxon && !filteredByRank) ||
+      (t.kind === "eov" && !eov)
         ? null
         : totalsNote(totals, { n: own?.n ?? null, sp: own?.sp ?? null }, false);
     if (tn) notes.push(tn);

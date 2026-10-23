@@ -85,10 +85,32 @@ describe("the h3 hook", () => {
     expect(s.speciesTable?.resolutions).toEqual([3, 4, 5]);
     expect(s.speciesTable?.lookup?.href).toBe(`${REL}species/species.parquet`);
     expect(s.speciesTable?.lookup?.rankColumns.family).toBe("family");
+    // obisindicators 0.12: a flat file per resolution 1 to 3, res 3 split by its res-1 parent; the lineage alone; the
+    // lookup's EOV column
     expect(s.speciesFlat).toEqual({
       hrefTemplate: `${REL}species_flat/res={res}.parquet`,
-      resolutions: [3],
+      resolutions: [1, 2, 3],
+      parentTemplate: `${REL}species_flat/res={res}/p={parent}.parquet`,
+      parentRes: { "3": 1 },
     });
+    expect(s.speciesLineage).toEqual({
+      href: `${REL}species/lineage.parquet`,
+      key: "aphiaid",
+      column: "lineage",
+    });
+    expect(s.speciesEov?.column).toBe("eov");
+    // a parent template without {parent}, or without parent_res, is no split
+    const c = coll() as unknown as Record<string, Record<string, Record<string, unknown>>>;
+    delete c["obis:species"].flat.parent_res;
+    expect(parseH3(c as never)!.speciesFlat).toEqual({
+      hrefTemplate: `${REL}species_flat/res={res}.parquet`,
+      resolutions: [1, 2, 3],
+    });
+    const d = coll() as unknown as Record<string, Record<string, Record<string, unknown>>>;
+    delete d["obis:species"].lineage;
+    delete d["obis:species"].eov;
+    expect(parseH3(d as never)!.speciesLineage).toBeNull();
+    expect(parseH3(d as never)!.speciesEov).toBeNull();
   });
   it("the release's metadata and manifest by asset key; sci:citation when the collection publishes one", () => {
     const s = parseH3(coll())!;

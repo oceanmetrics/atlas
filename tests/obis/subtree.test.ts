@@ -9,6 +9,7 @@ import { cellIdOf, h3OfCellId, parentId } from "@oceanmetrics/map";
 import {
   boxHolds,
   boxRanges,
+  classesOf,
   classFileUrl,
   domainsOf,
   hiveSegment,
@@ -253,6 +254,37 @@ describe("the subtree's indicators (obisindicators' SQL, on DuckDB-WASM)", () =>
     expect(q(subtreeClassesSql("lk", 424242))).toEqual([]);
   });
 
+  it("0.12: the lineage file alone (aphiaid, name_key, lineage) gives the same taxa and cells as the whole lookup", () => {
+    q(`CREATE OR REPLACE TABLE lin AS SELECT aphiaid, name_key, lineage FROM lk ORDER BY aphiaid`);
+    const ids = (t: string) =>
+      q(subtreeTaxaSql(t, CETACEA))
+        .map((r) => num(r.aphiaid))
+        .sort();
+    expect(ids("lin")).toEqual(ids("lk"));
+    for (const res of [3, 2])
+      expect(
+        q(subtreeSql({ rows: "rows3", lookup: "lin", aphiaid: CETACEA, res, tableRes: 3 })),
+      ).toEqual(q(subtreeSql({ rows: "rows3", lookup: "lk", aphiaid: CETACEA, res, tableRes: 3 })));
+  });
+
+  it("0.12: the classes from the lookup's aphiaid, class, records columns equal the SQL's over the lookup", () => {
+    const cols = q("SELECT aphiaid, class, records FROM lk");
+    for (const aphia of [CETACEA, 11676, 2, 424242]) {
+      const taxa = new Set(q(subtreeTaxaSql("lk", aphia)).map((r) => num(r.aphiaid)));
+      expect(classesOf(taxa, cols)).toEqual(
+        q(subtreeClassesSql("lk", aphia)).map((r) => ({
+          class: r.class,
+          taxa: num(r.taxa),
+          records: num(r.records),
+        })),
+      );
+    }
+    // a NULL class is the null partition; a taxon of no row is no class
+    expect(classesOf(new Set([104]), cols)).toEqual([{ class: "_none", taxa: 1, records: 25 }]);
+    expect(classesOf(new Set([104]), cols, "aphiaid", "__null")[0].class).toBe("__null");
+    expect(classesOf(new Set(), cols)).toEqual([]);
+  });
+
   it("the summary: p02 to p98 per indicator (quantile_cont), the cells with a value", () => {
     q(
       `CREATE OR REPLACE TABLE cells AS ${subtreeSql({ rows: "rows3", lookup: "lk", aphiaid: CETACEA, res: 3, tableRes: 3 })}`,
@@ -316,6 +348,8 @@ describe("the files", () => {
     expect(T.template).toBe(`${REL}species/res={res}/class={class}/data_0.parquet`);
     expect(T.resolutions).toEqual([3, 4, 5]);
     expect(T.lookup).toBe(`${REL}species/species.parquet`);
+    expect(T.lineage).toBe(`${REL}species/lineage.parquet`);
+    expect(T.key).toBe("aphiaid");
     expect(T.nullClass).toBe("_none");
     expect(T.decade?.resolutions).toEqual([3, 4]);
     expect(T.decade?.decades).toContain("1990");
@@ -422,7 +456,7 @@ describe("the cap and the words", () => {
     expect(
       readLine({ bytes: 508_716, files: 2, lookupBytes: 4_086_019, cells: 4567, ms: 1234.4 }),
     ).toBe(
-      "Read 0.49 MB of the species table (2 files) and the lookup (3.90 MB, once per page); 4,567 hexagons in 1,234 ms.",
+      "Read 0.49 MB of the species table (2 files) and the lineage and classes (3.90 MB, once per page); 4,567 hexagons in 1,234 ms.",
     );
     expect(
       readLine({ bytes: 0, filesBytes: 276_067, files: 1, lookupBytes: 0, cells: 15617, ms: 36 }),

@@ -558,6 +558,11 @@
         "name": "records",
         "type": "BIGINT",
         "description": "number of occurrence records of this aphiaid"
+      },
+      {
+        "name": "eov",
+        "type": "VARCHAR",
+        "description": "the EOV whose layer counts this aphiaid; NULL when no EOV layer counts it"
       }
     ],
     "decade": {
@@ -567,9 +572,45 @@
     },
     "flat": {
       "href_template": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20261012/species_flat/res={res}.parquet",
-      "resolutions": [3],
+      "resolutions": [1, 2, 3],
       "sorted_by": ["cell_id", "aphiaid"],
-      "row_group_rows": 10000
+      "row_group_rows": 10000,
+      "columns": {
+        "cell": "cell_id",
+        "species": "aphiaid",
+        "count": "n",
+        "name_key": "name_key",
+        "year_min": "year_min",
+        "year_max": "year_max"
+      },
+      "parent_template": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20261012/species_flat/res={res}/p={parent}.parquet",
+      "parent_res": {
+        "3": 1
+      },
+      "split_row_group_rows": 4,
+      "file_columns": {
+        "1": ["cell_id", "name_key", "aphiaid", "n", "year_min", "year_max"],
+        "2": ["cell_id", "name_key", "aphiaid", "n", "year_min", "year_max"],
+        "3": ["h3", "cell_id", "name_key", "aphiaid", "n", "year_min", "year_max"],
+        "parent": ["cell_id", "name_key", "aphiaid", "n", "year_min", "year_max"]
+      }
+    },
+    "lineage": {
+      "href": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20261012/species/lineage.parquet",
+      "key": "aphiaid",
+      "lineage_column": "lineage",
+      "columns": ["aphiaid", "name_key", "lineage"],
+      "sorted_by": ["aphiaid"],
+      "row_group_rows": 32
+    },
+    "eov": {
+      "column": "eov",
+      "rule": "the EOV whose layer counts this aphiaid (the fixture's rule is synthetic: Teleostei fish, Aves seabirds, Cetacea marineMammals)",
+      "n": {
+        "fish": 27,
+        "marineMammals": 37,
+        "seabirds": 5
+      }
     }
   },
   "obis:release_base": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20261012/"

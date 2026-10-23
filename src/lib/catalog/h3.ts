@@ -17,8 +17,10 @@
 //   - the assets by role: `legend` (stats.parquet), `search` (taxon_groups.parquet), the species lookup
 //     (`h3:species_table.lookup.href`), the heads (`h3:heads`);
 //   - `h3:species_table` (the species x cell x count table: resolutions, columns, lookup) and the producer's
-//     flat cell-sorted copy for one cell's list (`obis:species.flat`, obisindicators 0.11), and the per-kind
-//     parent split (`obis:layers.<kind>.parent_res`: the taxon layers split by res-0 parent, not res 2).
+//     flat cell-sorted copy for one cell's list (`obis:species.flat`, obisindicators 0.11; 0.12: one file per
+//     resolution 1 to 3, res 3 split by res-1 parent), the lineage alone and the lookup's EOV column
+//     (`obis:species.lineage`, `.eov`, 0.12), and the per-kind parent split (`obis:layers.<kind>.parent_res`: the
+//     taxon layers split by res-0 parent, not res 2).
 import type { StacCollection } from "./types";
 
 export const H3_HOOK = "h3" as const;
@@ -60,6 +62,15 @@ export interface H3SpeciesTable {
   } | null;
 }
 
+export interface H3SpeciesFlat {
+  hrefTemplate: string;
+  resolutions: number[];
+  /** `.../species_flat/res={res}/p={parent}.parquet`, absolute */
+  parentTemplate?: string;
+  /** the split resolutions and their parents' resolution (`{"3": 1}`) */
+  parentRes?: Record<string, number>;
+}
+
 export interface H3Spec {
   resolutions: number[];
   layout: {
@@ -84,8 +95,13 @@ export interface H3Spec {
   /** heads.json and the layer kind the heads are served under (`h3:heads`). */
   heads: { href: string; layer: string } | null;
   speciesTable: H3SpeciesTable | null;
-  /** one file per resolution sorted by cell id, for one cell's species (`{res}` in the template). */
-  speciesFlat: { hrefTemplate: string; resolutions: number[] } | null;
+  /** one file per resolution sorted by cell id, for one cell's species (`{res}` in the template); obisindicators 0.12
+   * splits a resolution by a coarser parent (`parent_template` with `{res}` and `{parent}`, `parent_res` `{"3": 1}`). */
+  speciesFlat: H3SpeciesFlat | null;
+  /** the lineage alone (`obis:species.lineage`: `aphiaid, name_key, lineage`, sorted by aphiaid), obisindicators 0.12 */
+  speciesLineage: { href: string; key: string; column: string } | null;
+  /** the lookup's EOV column (`obis:species.eov`: the EOV whose layer counts the aphiaid) and its taxa per EOV */
+  speciesEov: { column: string; counts: Record<string, number> } | null;
   /** the parent split per layer kind (`all`, `eov`, `taxon`) when the producer states it. */
   parentResByKind: Record<string, Record<string, number>>;
   /** the release id (`obis:release`), for file names and the cite line. */
@@ -307,19 +323,48 @@ export function parseH3(collection: StacCollection | null | undefined): H3Spec |
     taxonGroups: assetByRole(c, "search"),
     heads,
     speciesTable,
-    speciesFlat:
-      flat && str(flat.href_template)
-        ? {
-            hrefTemplate: absolute(c, str(flat.href_template))!,
-            resolutions: ints(flat.resolutions),
-          }
-        : null,
+    speciesFlat: flat ? speciesFlatOf(c, flat) : null,
+    speciesLineage: sp ? speciesLineageOf(c, sp.lineage) : null,
+    speciesEov: sp ? speciesEovOf(sp.eov) : null,
     parentResByKind,
     release: str(c["obis:release"]),
     releaseMeta: assetByKey(c, "release") ?? relatedReleaseJson(c),
     files: assetByKey(c, "files"),
     citation: str(c["sci:citation"]),
   };
+}
+
+function speciesFlatOf(
+  c: Record<string, unknown>,
+  flat: Record<string, unknown>,
+): H3SpeciesFlat | null {
+  const hrefTemplate = absolute(c, str(flat.href_template));
+  if (!hrefTemplate) return null;
+  const parentTemplate = absolute(c, str(flat.parent_template));
+  const parentRes = resMap(flat.parent_res);
+  return {
+    hrefTemplate,
+    resolutions: ints(flat.resolutions),
+    ...(parentTemplate && parentTemplate.includes("{parent}") && parentRes
+      ? { parentTemplate, parentRes }
+      : {}),
+  };
+}
+
+function speciesLineageOf(c: Record<string, unknown>, v: unknown): H3Spec["speciesLineage"] {
+  if (!isRecord(v)) return null;
+  const href = absolute(c, str(v.href));
+  return href
+    ? { href, key: str(v.key) ?? "aphiaid", column: str(v.lineage_column) ?? "lineage" }
+    : null;
+}
+
+function speciesEovOf(v: unknown): H3Spec["speciesEov"] {
+  if (!isRecord(v) || !str(v.column)) return null;
+  const counts: Record<string, number> = {};
+  if (isRecord(v.n))
+    for (const [k, n] of Object.entries(v.n)) if (Number.isInteger(n)) counts[k] = n as number;
+  return { column: str(v.column)!, counts };
 }
 
 function assetByKey(c: Record<string, unknown>, key: string): string | null {

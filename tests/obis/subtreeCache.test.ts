@@ -1,10 +1,12 @@
-// The class files the WoRMS subtree keeps in DuckDB-WASM (src/lens/collection/h3/subtreeCache.ts) and the one read of
-// the species lookup its two readers share (lookup.ts). The cache on a stub engine (a store of byte sizes, a `drop`
-// that records); the runner (`runSubtree`) on the same stub with a stubbed fetch, so the lookup's fetches are counted
-// where the page counts them.
+// The class files the WoRMS subtree keeps in DuckDB-WASM (src/lens/collection/h3/subtreeCache.ts) and the reads of
+// the species lookup made once per page (lookup.ts): the lineage file whole (obisindicators 0.12's
+// `species/lineage.parquet`), the lookup's class columns and the Cell pane's names by range reads, never the whole
+// 4.5 MB lookup. The cache on a stub engine (a store of byte sizes, a `drop` that records); the runner (`runSubtree`)
+// on the same stub with the fixture release behind a counting fetch, so the reads are counted where the page counts
+// them.
 import { beforeEach, describe, expect, it } from "vitest";
 import { readLookup } from "../../src/lens/collection/h3/cellSpecies";
-import { forgetLookups, loadLookup } from "../../src/lens/collection/h3/lookup";
+import { forgetLookups, loadColumns, loadLookup } from "../../src/lens/collection/h3/lookup";
 import { classFileUrl, loadedWords, subtreeTableOf } from "../../src/lens/collection/h3/subtree";
 import { ClassFileCache, LOADED_CAP_BYTES } from "../../src/lens/collection/h3/subtreeCache";
 import {
@@ -12,7 +14,7 @@ import {
   type SubtreeEngine,
   type SubtreeRequest,
 } from "../../src/lens/collection/h3/subtreeRun";
-import { buffer, collection, spec } from "./support";
+import { buffer, collection, localFetch, spec } from "./support";
 
 const MB = 1024 * 1024;
 
@@ -115,11 +117,15 @@ describe("the class files kept in the engine", () => {
 
 const T = subtreeTableOf(collection())!;
 const LOOKUP_URL = T.lookup;
-const lookupBytes = buffer("species/species.parquet");
+const LINEAGE_URL = T.lineage!;
+const lookupFile = buffer("species/species.parquet");
+const lineageFile = buffer("species/lineage.parquet");
 
-/** a fetch that serves the lookup and answers HEAD for the class files by a size table; counts the lookup's GETs */
+/** the fixture release behind a fetch (Range honoured), HEAD answered for the class files by a size table; counts the
+ * GETs of the lineage and the lookup, whole (no Range) and ranged, and their bytes */
 function stubFetch(fileSizes: Record<string, number>) {
-  const log = { lookupGets: 0, heads: 0 };
+  const log = { lineageGets: 0, lookupWhole: 0, lookupRanged: 0, lookupBytes: 0, heads: 0 };
+  const local = localFetch();
   const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "HEAD") {
@@ -129,24 +135,34 @@ function stubFetch(fileSizes: Record<string, number>) {
         ? new Response(null, { status: 404 })
         : new Response(null, { status: 200, headers: { "content-length": String(n) } });
     }
+    const ranged = new Headers(init?.headers).has("range");
+    const r = await local(input, init);
+    if (url === LINEAGE_URL) log.lineageGets++;
     if (url === LOOKUP_URL) {
-      log.lookupGets++;
-      return new Response(lookupBytes.slice(0));
+      if (ranged) log.lookupRanged++;
+      else log.lookupWhole++;
+      log.lookupBytes += Number(r.headers.get("content-length") ?? 0);
     }
-    return new Response("", { status: 404 });
+    return r;
   }) as typeof fetch;
   return { f, log };
 }
 
-/** the engine the runner uses, answering the queries it asks by their first words */
-function stubEngine(classOf: (aphiaid: number) => string, fileSizes: Record<string, number>) {
+/** the engine the runner uses: the taxa query answered by a table (the AphiaID asked -> its taxa), the class files
+ * by their sizes, the cells query by a count */
+function stubEngine(taxaOf: (aphiaid: number) => number[], fileSizes: Record<string, number>) {
   const store = new Map<string, { bytes: number }>();
-  const calls = { loadBytes: [] as number[], load: [] as string[], drop: [] as string[] };
+  const calls = {
+    loadBytes: [] as { name: string; bytes: number }[],
+    load: [] as string[],
+    drop: [] as string[],
+    sql: [] as string[],
+  };
   const engine: SubtreeEngine = {
     store: { get: (n: string) => store.get(n), has: (n: string) => store.has(n) } as never,
     loadBytes: async (name, _digest, bytes) => {
       if (store.has(name)) return;
-      calls.loadBytes.push(bytes.byteLength);
+      calls.loadBytes.push({ name, bytes: bytes.byteLength });
       store.set(name, { bytes: bytes.byteLength });
     },
     load: async (name, url) => {
@@ -159,14 +175,11 @@ function stubEngine(classOf: (aphiaid: number) => string, fileSizes: Record<stri
       store.delete(name);
     },
     exec: (async (sql: string) => {
-      const aphia = Number(/list_contains\(l\.lineage, (\d+)\)/.exec(sql)?.[1] ?? NaN);
+      calls.sql.push(sql);
       if (sql.startsWith("CREATE TABLE") || sql.startsWith("DROP")) return [];
       if (sql.includes("count(*)::INTEGER AS cells")) return [{ cells: 3 }];
-      // the classes query, then the taxa query (both name the aphiaid; the taxa one selects `aphiaid` alone)
-      const id = Number(/(\d+)\)/.exec(sql.slice(sql.lastIndexOf("list_contains")))?.[1]);
-      return sql.includes("class") && sql.includes("GROUP BY")
-        ? [{ class: classOf(id || aphia), taxa: 1, records: 10 }]
-        : [{ aphiaid: id || aphia }];
+      const id = Number(/list_contains\(lineage, (\d+)\)/.exec(sql)?.[1]);
+      return taxaOf(id).map((aphiaid) => ({ aphiaid }));
     }) as never,
     exportParquet: async () => new Uint8Array(8),
   };
@@ -185,64 +198,150 @@ const req = (aphiaid: number): SubtreeRequest => ({
   esn: 50,
 });
 const fileOf = (cls: string) => classFileUrl(T, 3, cls);
+// the fixture's taxa: Cetacea's Mammalia, a fish, a bird
+const CETACEA = [137087, 137088, 137089];
+const TAXA: Record<number, number[]> = { 2688: CETACEA, 1: [126291], 2: [137087], 3: [137142] };
+const taxaOf = (id: number) => TAXA[id] ?? [];
 
 beforeEach(forgetLookups);
 
 describe("the lookup is read once per page", () => {
-  it("a subtree and then the Cell pane's names cause one fetch of the lookup", async () => {
-    const { f, log } = stubFetch({ [fileOf("Mammalia")]: 276_067 });
-    const { engine, calls } = stubEngine(() => "Mammalia", { [fileOf("Mammalia")]: 276_067 });
+  it("a subtree reads the lineage file whole and the lookup's class columns by range, never the whole lookup", async () => {
+    const sizes = { [fileOf("Mammalia")]: 276_067 };
+    const { f, log } = stubFetch(sizes);
+    const { engine, calls } = stubEngine(taxaOf, sizes);
     const out = await runSubtree(req(2688), f, { engine });
     expect(out.kind).toBe("ready");
-    expect(out.read.lookupBytes).toBe(lookupBytes.byteLength);
-    // the pane: the same loader, then its names out of the same bytes
-    const got = await loadLookup(LOOKUP_URL, f);
-    const names = await readLookup(spec(), got.buffer);
-    expect(names.size).toBeGreaterThan(0);
-    expect(got.fetched).toBe(0);
-    expect(log.lookupGets).toBe(1);
-    // the engine was given a copy: its registration did not detach the bytes the pane parsed
-    expect(calls.loadBytes).toEqual([lookupBytes.byteLength]);
-    expect(got.buffer.byteLength).toBe(lookupBytes.byteLength);
+    if (out.kind !== "ready") return;
+    expect(log.lineageGets).toBe(1);
+    expect(log.lookupWhole).toBe(0);
+    expect(log.lookupRanged).toBeGreaterThanOrEqual(1);
+    // the lineage registered in the engine from a copy, its own bytes
+    expect(calls.loadBytes).toEqual([
+      { name: expect.stringContaining("lineage_parquet"), bytes: lineageFile.byteLength },
+    ]);
+    // the taxa from the lineage file, the classes and records from the lookup's columns
+    expect(
+      calls.sql.some((x) => x.includes("lineage_parquet") && x.includes("list_contains")),
+    ).toBe(true);
+    expect(out.classes).toEqual(["Mammalia"]);
+    expect([...out.taxa].sort()).toEqual(CETACEA);
+    expect(out.records).toBeGreaterThan(0);
+    // what the read line counts: the lineage and the class columns, under the whole lookup
+    expect(out.read.lookupBytes).toBe(lineageFile.byteLength + log.lookupBytes);
+    // (the fixture lookup is 9 KB, inside the first 64 KiB suffix read; the live one's class columns are 0.45 of 4.5 MB)
+    expect(log.lookupBytes).toBeLessThanOrEqual(lookupFile.byteLength);
+    // Reproduce reads the lineage file, not the lookup
+    expect(out.sql).toContain("species/lineage.parquet");
+    expect(out.sql).not.toContain("species/species.parquet");
   });
-  it("the Cell pane first, then a subtree: still one fetch, and the subtree reports no lookup bytes", async () => {
-    const { f, log } = stubFetch({ [fileOf("Mammalia")]: 276_067 });
-    const { engine } = stubEngine(() => "Mammalia", { [fileOf("Mammalia")]: 276_067 });
-    const got = await loadLookup(LOOKUP_URL, f);
-    expect(got.fetched).toBe(lookupBytes.byteLength);
-    const out = await runSubtree(req(2688), f, { engine });
-    expect(out.kind).toBe("ready");
-    expect(out.read.lookupBytes).toBe(0);
-    expect(log.lookupGets).toBe(1);
+  it("a second subtree on the page reads neither the lineage nor the class columns again", async () => {
+    const sizes = { [fileOf("Mammalia")]: 276_067, [fileOf("Teleostei")]: 1_000 };
+    const { f, log } = stubFetch(sizes);
+    const { engine, calls } = stubEngine(taxaOf, sizes);
+    await runSubtree(req(2688), f, { engine });
+    const ranged = log.lookupRanged;
+    const b = await runSubtree(req(1), f, { engine });
+    expect(b.kind).toBe("ready");
+    expect(b.read.lookupBytes).toBe(0);
+    expect(log.lineageGets).toBe(1);
+    expect(log.lookupRanged).toBe(ranged);
+    expect(calls.loadBytes).toHaveLength(1);
   });
   it("two readers asking at once share the one request", async () => {
-    const { f, log } = stubFetch({ [fileOf("Mammalia")]: 276_067 });
-    const { engine } = stubEngine(() => "Mammalia", { [fileOf("Mammalia")]: 276_067 });
-    const [a, b] = await Promise.all([
+    const sizes = { [fileOf("Mammalia")]: 276_067, [fileOf("Teleostei")]: 1_000 };
+    const { f, log } = stubFetch(sizes);
+    const { engine } = stubEngine(taxaOf, sizes);
+    const [a, b, c] = await Promise.all([
       runSubtree(req(2688), f, { engine }),
-      loadLookup(LOOKUP_URL, f),
+      runSubtree(req(1), f, { engine }),
+      loadLookup(LINEAGE_URL, f),
     ]);
     expect(a.kind).toBe("ready");
-    expect(b.bytes).toBe(lookupBytes.byteLength);
-    expect(log.lookupGets).toBe(1);
+    expect(b.kind).toBe("ready");
+    expect(c.bytes).toBe(lineageFile.byteLength);
+    expect(log.lineageGets).toBe(1);
+  });
+  it("the Cell pane's names: the whole lookup, one read per page, with the EOV column", async () => {
+    const { f, log } = stubFetch({});
+    const a = await loadLookup(LOOKUP_URL, f);
+    const b = await loadLookup(LOOKUP_URL, f);
+    expect(a.fetched).toBe(lookupFile.byteLength);
+    expect(b.fetched).toBe(0);
+    expect(log.lookupWhole).toBe(1);
+    const names = await readLookup(spec(), b.buffer);
+    expect(names.size).toBe(91);
+    expect(names.get(126291)).toMatchObject({ species: "Derichthys serpentinus", eov: "fish" });
+  });
+  it("the Cell pane first, then a subtree: its class columns come out of the pane's bytes, no range read", async () => {
+    const sizes = { [fileOf("Mammalia")]: 276_067 };
+    const { f, log } = stubFetch(sizes);
+    const { engine } = stubEngine(taxaOf, sizes);
+    await loadLookup(LOOKUP_URL, f);
+    const out = await runSubtree(req(2688), f, { engine });
+    expect(out.kind).toBe("ready");
+    expect(log.lookupWhole).toBe(1);
+    expect(log.lookupRanged).toBe(0);
+    expect(log.lineageGets).toBe(1);
+    expect(out.read.lookupBytes).toBe(lineageFile.byteLength);
+    if (out.kind === "ready") expect(out.classes).toEqual(["Mammalia"]);
+  });
+  it("the class columns by range: their chunks merged across small gaps, asked once per page", async () => {
+    const { f, log } = stubFetch({});
+    const cols = ["aphiaid", "class", "records"];
+    const a = await loadColumns(LOOKUP_URL, cols, f);
+    const b = await loadColumns(LOOKUP_URL, [...cols].reverse(), f);
+    expect(a.fetched).toBeGreaterThan(0);
+    expect(b.fetched).toBe(0);
+    expect(b.requests).toBe(0);
+    expect(log.lookupWhole).toBe(0);
+    expect(b.rows).toHaveLength(91);
+    expect(Object.keys(b.rows[0]).sort()).toEqual(["aphiaid", "class", "records"]);
+  });
+  it("a release with no lineage file: the whole lookup holds the lineage, read once", async () => {
+    const c = collection() as unknown as Record<string, Record<string, unknown>>;
+    delete c["obis:species"].lineage;
+    const T11 = subtreeTableOf(c)!;
+    expect(T11.lineage).toBeNull();
+    const sizes = { [fileOf("Mammalia")]: 276_067 };
+    const { f, log } = stubFetch(sizes);
+    const { engine, calls } = stubEngine(taxaOf, sizes);
+    const out = await runSubtree({ ...req(2688), table: T11 }, f, { engine });
+    expect(out.kind).toBe("ready");
+    expect(log.lineageGets).toBe(0);
+    expect(log.lookupWhole).toBe(1);
+    expect(log.lookupRanged).toBe(0);
+    expect(calls.loadBytes[0].bytes).toBe(lookupFile.byteLength);
+    // the one whole read is counted once
+    expect(out.read.lookupBytes).toBe(lookupFile.byteLength);
   });
   it("a failed read is forgotten: the next ask fetches again", async () => {
     let n = 0;
     const f = (async () =>
       ++n === 1
         ? new Response("", { status: 503 })
-        : new Response(lookupBytes.slice(0))) as typeof fetch;
-    await expect(loadLookup(LOOKUP_URL, f)).rejects.toThrow("HTTP 503");
-    expect((await loadLookup(LOOKUP_URL, f)).fetched).toBe(lookupBytes.byteLength);
+        : new Response(lineageFile.slice(0))) as typeof fetch;
+    await expect(loadLookup(LINEAGE_URL, f)).rejects.toThrow("HTTP 503");
+    expect((await loadLookup(LINEAGE_URL, f)).fetched).toBe(lineageFile.byteLength);
     expect(n).toBe(2);
+    let m = 0;
+    const local = localFetch();
+    const g = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      ++m === 1 ? new Response("", { status: 503 }) : local(input, init)) as typeof fetch;
+    await expect(loadColumns(LOOKUP_URL, ["aphiaid"], g)).rejects.toThrow("503");
+    expect((await loadColumns(LOOKUP_URL, ["aphiaid"], g)).rows).toHaveLength(91);
   });
 });
 
 describe("the runner drops the older class files past the cap", () => {
   it("three taxa in three classes with a small cap: the oldest goes, the current stays, the line says so", async () => {
-    const sizes = { [fileOf("A")]: 6 * MB, [fileOf("B")]: 6 * MB, [fileOf("C")]: 6 * MB };
+    const sizes = {
+      [fileOf("Teleostei")]: 6 * MB,
+      [fileOf("Mammalia")]: 6 * MB,
+      [fileOf("Aves")]: 6 * MB,
+    };
     const { f } = stubFetch(sizes);
-    const { engine, calls } = stubEngine((id) => ({ 1: "A", 2: "B", 3: "C" })[id] ?? "A", sizes);
+    const { engine, calls } = stubEngine(taxaOf, sizes);
     const run = (id: number) => runSubtree(req(id), f, { engine, cap: 13 * MB });
     const a = await run(1);
     const b = await run(2);
@@ -253,12 +352,12 @@ describe("the runner drops the older class files past the cap", () => {
     expect(c.read.droppedBytes).toBe(6 * MB);
     expect(c.read.loadedBytes).toBe(12 * MB);
     expect(calls.drop).toHaveLength(1);
-    expect(calls.drop[0]).toContain("class_A_"); // the file of class A, the oldest
+    expect(calls.drop[0]).toContain("class_Teleostei_"); // the file of the first taxon's class, the oldest
     // a zoom back to taxon 3 reads and drops nothing
     const again = await run(3);
     expect(again.read.droppedFiles).toBe(0);
     expect(again.read.bytes).toBe(0);
-    expect(calls.load).toEqual([fileOf("A"), fileOf("B"), fileOf("C")]);
+    expect(calls.load).toEqual([fileOf("Teleostei"), fileOf("Mammalia"), fileOf("Aves")]);
     expect(c.read.capBytes).toBe(13 * MB);
   });
 });

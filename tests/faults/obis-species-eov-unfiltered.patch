@@ -1,0 +1,12 @@
+diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
+index 90804a5..470c2d0 100644
+--- a/src/lens/collection/h3/cellSpecies.ts
++++ b/src/lens/collection/h3/cellSpecies.ts
+@@ -197,7 +197,6 @@ export function speciesRows(
+     if (keep && !keep.has(aphiaid)) continue;
+     const l = lookup.get(aphiaid);
+     if (rank && (l?.[rank as keyof LookupRow] ?? null) !== taxon!.taxon) continue;
+-    if (eov !== null && (l?.eov ?? null) !== eov) continue;
+     out.push({
+       aphiaid,
+       nameKey: v.nameKey,

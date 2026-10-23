@@ -986,9 +986,61 @@ export const FAULTS = [
     id: "obis-lookup-read-twice",
     patch: "tests/faults/obis-lookup-read-twice.patch",
     describe:
-      "the shared species lookup is not kept: the Cell pane's names after a subtree (or before) fetch the 4 MB " +
-      "file again, two requests for one page",
+      "a whole file of the lookup is not kept: a second subtree on the page fetches the 1.7 MB lineage again (and " +
+      "the Cell pane's names the 4.5 MB lookup), two requests for one page",
     gate: ["npx", "vitest", "run", "tests/obis/subtreeCache.test.ts", "-t", "read once per page"],
+  },
+  {
+    id: "obis-subtree-whole-lookup",
+    patch: "tests/faults/obis-subtree-whole-lookup.patch",
+    describe:
+      "the subtree reads its lineage from the whole 4.5 MB lookup again, not obisindicators 0.12's 1.7 MB " +
+      "`species/lineage.parquet`",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/obis/subtreeCache.test.ts",
+      "-t",
+      "never the whole lookup",
+    ],
+  },
+  {
+    id: "obis-species-split-keyed-by-cell-res",
+    patch: "tests/faults/obis-species-split-keyed-by-cell-res.patch",
+    describe:
+      "the Cell pane looks the split up by the hexagon's resolution, not the table's -- a res-5 hexagon reads the " +
+      "whole 24 MB `species_flat/res=3.parquet` (a 245 KB footer) instead of its res-1 parent's file",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/obis/cellSpecies.test.ts",
+      "-t",
+      "which file for which hexagon",
+    ],
+  },
+  {
+    id: "obis-species-missing-split-is-error",
+    patch: "tests/faults/obis-species-missing-split-is-error.patch",
+    describe:
+      "a split file the release does not have (a res-1 parent with no records) is read as a missing table -- the " +
+      "Cell pane shows an error instead of an empty list",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/obis/cellSpecies.test.ts",
+      "-t",
+      "a split file the release does not have",
+    ],
+  },
+  {
+    id: "obis-species-eov-unfiltered",
+    patch: "tests/faults/obis-species-eov-unfiltered.patch",
+    describe:
+      "an EOV layer's species list ignores the lookup's `eov` column again -- the fish layer lists every taxon",
+    gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "EOV species lists"],
   },
   {
     id: "obis-subtree-drops-held",

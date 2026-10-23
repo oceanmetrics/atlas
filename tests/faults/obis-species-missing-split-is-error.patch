@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
+index 90804a5..a8923c8 100644
+--- a/src/lens/collection/h3/cellSpecies.ts
++++ b/src/lens/collection/h3/cellSpecies.ts
+@@ -561,7 +561,7 @@ export async function readCellRows(
+   });
+   // a split file the release does not have holds no records (no file is written for a parent with none): an empty
+   // list; a whole resolution's file that is missing is not a table of this hexagon
+-  if (!got && plan.split)
++  if (!got && plan.split && false)
+     return {
+       plan,
+       summed: new Map(),

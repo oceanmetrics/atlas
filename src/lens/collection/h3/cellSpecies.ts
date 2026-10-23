@@ -1,28 +1,38 @@
 // The Cell pane's species list (build week 4, step 5; obis-hex `cell/species.ts` without h3t): the species behind
-// a hexagon's records, read from the release's own species table, never a service. The flat copy of the table
-// (`species_flat/res=3.parquet`: `cell_id, name_key, aphiaid, n, year_min, year_max`, sorted by cell id in small
-// row groups) holds every species of every res-3 cell, so:
-//   - a res-3 hexagon reads its own rows (one cell id);
-//   - a coarser hexagon (res 1, 2) reads its res-3 children, one contiguous cell-id range (`childRange`), summed
-//     by species: the records add up and the species are the union, so the list is the hexagon's own, exactly
-//     (81197ffffffffff, res 1: 16,499,270 records of 8,963 species, as the map's `n` and `sp`);
-//   - a finer hexagon (res 4 to 7) has no flat copy: the list is its res-3 parent's, and says so.
-// The names and ranks come from the lookup (`species/species.parquet`), read once per page (only the columns the
-// list shows). A taxon layer of rank phylum, class, order or family filters the list by that rank column; the EOVs
-// and the heads above class are not a column of the lookup, so their list is every taxon's, and says so. Pure
-// functions plus the readers; Node-tested (tests/obis/cellSpecies.test.ts, on a synthetic table).
+// a hexagon's records, read from the release's own species table, never a service. The flat copies of the table
+// (`species_flat/`: `cell_id, name_key, aphiaid, n, year_min, year_max`, sorted by cell id in small row groups)
+// hold every species of every cell of their resolution, so (`cellPlan`, from the collection's `obis:species.flat`):
+//   - a hexagon at a flat resolution reads its own rows (one cell id): res 1 and 2 their own file
+//     (`species_flat/res={res}.parquet`, obisindicators 0.12: the res-3 rows summed by parent), res 3 the file of its
+//     res-1 parent (`parent_template` `species_flat/res=3/p={parent}.parquet`, `parent_res` `{"3": 1}`: 842 files,
+//     728 of them whole in the 64 KiB tail), and the whole `res=3.parquet` only when the collection has no split;
+//   - a coarser hexagon (res 0, or res 1 and 2 of a 0.11 release that has res 3 only) reads its children at the
+//     next flat resolution, one contiguous cell-id range (`childRange`), summed by species: the records add up and
+//     the species are the union, so the list is the hexagon's own, exactly;
+//   - a finer hexagon (res 4 to 7) has no flat copy: the list is its res-3 parent's (in that parent's res-1 file),
+//     and says so.
+// The split files are read as files, never as a hive dataset: `res=3/p=<parent>` are path segments, not columns (a
+// DuckDB reader of them passes `hive_partitioning = false`). The names and ranks come from the lookup
+// (`species/species.parquet`), read whole once per page (`lookup.ts`: one request beats its column chunks' many). A
+// taxon layer of
+// rank phylum, class, order or family filters the list by that rank column, an EOV layer by the lookup's `eov`
+// column (`obis:species.eov`, 0.12); the heads above class are not a column of the lookup, so their list is every
+// taxon's, and says so. Pure functions plus the readers; Node-tested (tests/obis/cellSpecies.test.ts, on a synthetic
+// table).
 import {
   COMPRESSORS,
   cellIdOf,
   cellIdRes,
   childRange,
+  h3OfCellId,
   openRangeFile,
   parentId,
   speciesForCell,
   type ReadStats,
   type ReleaseReader,
 } from "@oceanmetrics/map";
-import type { H3Spec } from "../../../lib/catalog/h3";
+import type { AsyncBuffer } from "hyparquet";
+import type { H3SpeciesFlat, H3Spec } from "../../../lib/catalog/h3";
 
 export interface SpeciesRow {
   aphiaid: number;
@@ -67,26 +77,60 @@ export const CACHE_MAX = 32;
 export const wormsUrl = (aphiaid: number) =>
   `https://www.marinespecies.org/aphia.php?p=taxdetails&id=${aphiaid}`;
 
-/** which rows of the flat table a hexagon reads: its own id, its children's range, or its parent's id. */
-export function cellPlan(
-  h3: string,
-  flatRes: readonly number[],
-): {
+/** what a hexagon reads of the flat tables: the file (its resolution's own, or its res-1 parent's at a split
+ * resolution), and the rows (its own id, its children's range, or its parent's id). */
+export interface CellPlan {
   res: number;
   tableRes: number;
   scope: CellSpeciesList["scope"];
   range: [bigint, bigint];
-} | null {
+  /** the file read */
+  url: string;
+  /** the parent the file is split by (its id at `parentRes`, hex), null for a whole resolution's file */
+  split: { parentRes: number; parent: string } | null;
+}
+
+/** the parent at `parentRes` of an H3 cell, as the split files name it (`p=8129bffffffffff`) */
+export const flatParentOf = (h3: string, parentRes: number): string =>
+  h3OfCellId(parentId(cellIdOf(h3), parentRes));
+
+/** which file and which rows of the flat tables a hexagon reads (see the head of this file). A bare list of
+ * resolutions is a release with no split. */
+export function cellPlan(h3: string, flat: H3SpeciesFlat | readonly number[]): CellPlan | null {
+  const f: H3SpeciesFlat = Array.isArray(flat)
+    ? { hrefTemplate: "", resolutions: [...flat] }
+    : (flat as H3SpeciesFlat);
+  const flatRes = f.resolutions;
   if (!/^[0-9a-f]{15}$/.test(h3) || flatRes.length === 0) return null;
   const id = cellIdOf(h3);
   const res = cellIdRes(id);
-  if (flatRes.includes(res)) return { res, tableRes: res, scope: "cell", range: [id, id] };
-  const finer = flatRes.filter((r) => r > res).sort((a, b) => a - b)[0];
-  if (finer !== undefined)
-    return { res, tableRes: finer, scope: "children", range: childRange(id, finer) };
-  const coarser = flatRes.filter((r) => r < res).sort((a, b) => b - a)[0];
-  const p = parentId(id, coarser);
-  return { res, tableRes: coarser, scope: "parent", range: [p, p] };
+  let plan: Omit<CellPlan, "url" | "split">;
+  if (flatRes.includes(res)) plan = { res, tableRes: res, scope: "cell", range: [id, id] };
+  else {
+    const finer = flatRes.filter((r) => r > res).sort((a, b) => a - b)[0];
+    if (finer !== undefined)
+      plan = { res, tableRes: finer, scope: "children", range: childRange(id, finer) };
+    else {
+      const coarser = flatRes.filter((r) => r < res).sort((a, b) => b - a)[0];
+      const p = parentId(id, coarser);
+      plan = { res, tableRes: coarser, scope: "parent", range: [p, p] };
+    }
+  }
+  const whole = f.hrefTemplate.replaceAll("{res}", String(plan.tableRes));
+  const parentRes = f.parentRes?.[String(plan.tableRes)];
+  // a split file holds the rows of one parent: the hexagon's own parent, unless the hexagon is coarser than the
+  // parent (its children lie in several files), which reads the whole resolution's file
+  if (f.parentTemplate && parentRes !== undefined && parentRes <= res) {
+    const parent = flatParentOf(h3, parentRes);
+    return {
+      ...plan,
+      url: f.parentTemplate
+        .replaceAll("{res}", String(plan.tableRes))
+        .replaceAll("{parent}", parent),
+      split: { parentRes, parent },
+    };
+  }
+  return { ...plan, url: whole, split: null };
 }
 
 /** the flat rows summed by species: records add, the first year is the least, the last the greatest. */
@@ -128,19 +172,23 @@ export interface LookupRow {
   class: string | null;
   order: string | null;
   family: string | null;
+  /** the EOV whose layer counts this aphiaid (`obis:species.eov`), null when none or when the lookup has no column */
+  eov?: string | null;
 }
 
 /** the rank columns a taxon layer filters by (the lookup's `rank_columns`) */
 export const FILTER_RANKS = ["phylum", "class", "order", "family"] as const;
 
 /** the list's rows: the summed species joined to the lookup, most records first; a taxon layer of a rank the
- * lookup has keeps its own species. */
+ * lookup has keeps its own species, an EOV layer the species the lookup's `eov` column gives that EOV. */
 export function speciesRows(
   summed: ReturnType<typeof sumBySpecies>,
   lookup: ReadonlyMap<number, LookupRow>,
   taxon: { rank: string; taxon: string } | null,
   /** a WoRMS subtree's aphiaids (the lookup's lineage): only their species */
   keep: ReadonlySet<number> | null = null,
+  /** an EOV layer's key (`fish`): only the species whose `eov` is it */
+  eov: string | null = null,
 ): SpeciesRow[] {
   const rank =
     taxon && (FILTER_RANKS as readonly string[]).includes(taxon.rank) ? taxon.rank : null;
@@ -149,6 +197,7 @@ export function speciesRows(
     if (keep && !keep.has(aphiaid)) continue;
     const l = lookup.get(aphiaid);
     if (rank && (l?.[rank as keyof LookupRow] ?? null) !== taxon!.taxon) continue;
+    if (eov !== null && (l?.eov ?? null) !== eov) continue;
     out.push({
       aphiaid,
       nameKey: v.nameKey,
@@ -331,29 +380,32 @@ export function speciesCsvName(o: {
 
 // ---- readers ------------------------------------------------------------------------------------------------
 
-/** the lookup's rows by AphiaID, only the columns the list shows (read once; a failed read is retried later). */
-export async function readLookup(
-  spec: H3Spec,
-  source?: string | ArrayBuffer,
-  stats?: ReadStats,
-): Promise<Map<number, LookupRow>> {
+/** the lookup's columns the list shows: the key, the name, the four ranks and, when the release has it, `eov` */
+export function lookupColumnsOf(spec: H3Spec): string[] {
   const lk = spec.speciesTable?.lookup;
-  const src = source ?? lk?.href;
-  if (!lk || !src) return new Map();
-  const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
-  const compressors = COMPRESSORS;
-  const file = typeof src === "string" ? await openRangeFile(src, { stats }) : src;
-  if (!file) throw new Error(`${String(src)}: not found`);
-  const metadata = await parquetMetadataAsync(file, { initialFetchSize: 65_536 });
+  if (!lk) return [];
   const col = (rank: string) => lk.rankColumns[rank] ?? rank;
-  const columns = [lk.key, lk.nameColumn, col("phylum"), col("class"), col("order"), col("family")];
-  const rows = (await parquetReadObjects({
-    file,
-    columns,
-    compressors,
-    metadata,
-  })) as Record<string, unknown>[];
+  return [
+    lk.key,
+    lk.nameColumn,
+    col("phylum"),
+    col("class"),
+    col("order"),
+    col("family"),
+    ...(spec.speciesEov ? [spec.speciesEov.column] : []),
+  ];
+}
+
+/** the lookup's rows by AphiaID from its column objects (as `parquetReadObjects` gives them) */
+export function lookupRowsOf(
+  spec: H3Spec,
+  rows: readonly Record<string, unknown>[],
+): Map<number, LookupRow> {
+  const lk = spec.speciesTable?.lookup;
   const out = new Map<number, LookupRow>();
+  if (!lk) return out;
+  const col = (rank: string) => lk.rankColumns[rank] ?? rank;
+  const eov = spec.speciesEov?.column ?? null;
   const s = (v: unknown) => (v === null || v === undefined || v === "" ? null : String(v));
   for (const r of rows)
     out.set(Number(r[lk.key]), {
@@ -362,22 +414,128 @@ export async function readLookup(
       class: s(r[col("class")]),
       order: s(r[col("order")]),
       family: s(r[col("family")]),
+      ...(eov ? { eov: s(r[eov]) } : {}),
     });
   return out;
 }
 
-/** the suffix the species table is opened with: the live `species_flat/res=3.parquet` footer is 245 KB, so a 64 KiB
- * tail costs a second request for it; 256 KiB reads it in one (the map package's README, "The species of a cell"). */
-export const SPECIES_TAIL = 262_144;
+/** a fetch that bypasses the browser's HTTP cache: Chromium's cache lets one request per url write its entry at a
+ * time, so the column chunks of one file, asked at once, would come back one after another (69 ranges of the live
+ * lookup took 12 s, about 180 ms each, measured 2026-10-24); uncached they come back together */
+export const uncachedFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
+
+/** the gap of unasked bytes below which two column chunks are fetched as one range: the lookup's small chunks (`eov`,
+ * the next row group's `aphiaid`) merge, its 60 KB `lineage` chunks are skipped (the subtree's class columns of the
+ * live lookup: 36 requests, 0.55 MB; a 64 KiB gap took the lineage in: 25 requests, 1.13 MB, slower) */
+export const COLUMN_GAP = 16_384;
+
+/** the byte ranges `[start, end)` of some columns' chunks in every row group, merged where they lie within `gap`
+ * bytes of each other */
+export function columnRanges(
+  metadata: {
+    row_groups: {
+      columns: {
+        meta_data?: {
+          path_in_schema: string[];
+          data_page_offset: bigint;
+          dictionary_page_offset?: bigint;
+          total_compressed_size: bigint;
+        };
+      }[];
+    }[];
+  },
+  columns: readonly string[],
+  gap = COLUMN_GAP,
+): [number, number][] {
+  const want = new Set(columns);
+  const raw: [number, number][] = [];
+  for (const g of metadata.row_groups)
+    for (const c of g.columns) {
+      const m = c.meta_data;
+      if (!m || !want.has(m.path_in_schema[0])) continue;
+      const dict = m.dictionary_page_offset !== undefined ? Number(m.dictionary_page_offset) : NaN;
+      const start =
+        dict > 0 ? Math.min(dict, Number(m.data_page_offset)) : Number(m.data_page_offset);
+      raw.push([start, start + Number(m.total_compressed_size)]);
+    }
+  raw.sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [];
+  for (const r of raw) {
+    const last = out[out.length - 1];
+    if (last && r[0] <= last[1] + gap) last[1] = Math.max(last[1], r[1]);
+    else out.push([r[0], r[1]]);
+  }
+  return out;
+}
+
+/** a file whose `ranges` are fetched at once (in parallel); a slice inside one is served from it, any other is read */
+function prefetched(file: AsyncBuffer, ranges: readonly [number, number][]): AsyncBuffer {
+  const got = ranges.map(([a, b]) => Promise.resolve(file.slice(a, b)));
+  return {
+    byteLength: file.byteLength,
+    slice(start: number, end = file.byteLength) {
+      const k = ranges.findIndex(([a, b]) => a <= start && end <= b);
+      if (k < 0) return file.slice(start, end);
+      const a = ranges[k][0];
+      return got[k].then((buf) => buf.slice(start - a, end - a));
+    },
+  };
+}
+
+/** some columns of a Parquet file (a url, by range reads: only those columns' chunks, merged across small gaps and
+ * asked at once; or the file's bytes), the columns the file does not have left out */
+export async function readColumns(
+  source: string | ArrayBuffer,
+  columns: readonly string[],
+  stats?: ReadStats,
+  f: typeof fetch = uncachedFetch,
+): Promise<Record<string, unknown>[]> {
+  const { parquetMetadataAsync, parquetReadObjects, parquetSchema } = await import("hyparquet");
+  const opened =
+    typeof source === "string" ? await openRangeFile(source, { stats, fetch: f }) : source;
+  if (!opened) throw new Error(`${String(source)}: not found`);
+  const metadata = await parquetMetadataAsync(opened, { initialFetchSize: 65_536 });
+  const have = new Set(parquetSchema(metadata).children.map((c) => c.element.name));
+  const cols = [...new Set(columns)].filter((c) => have.has(c));
+  const file =
+    typeof source === "string" ? prefetched(opened, columnRanges(metadata, cols)) : opened;
+  return (await parquetReadObjects({
+    file,
+    columns: cols,
+    compressors: COMPRESSORS,
+    metadata,
+  })) as Record<string, unknown>[];
+}
+
+/** the lookup's rows by AphiaID, only the columns the list shows (`lookupColumnsOf`). */
+export async function readLookup(
+  spec: H3Spec,
+  source?: string | ArrayBuffer,
+  stats?: ReadStats,
+): Promise<Map<number, LookupRow>> {
+  const src = source ?? spec.speciesTable?.lookup?.href;
+  if (!spec.speciesTable?.lookup || !src) return new Map();
+  return lookupRowsOf(spec, await readColumns(src, lookupColumnsOf(spec), stats));
+}
+
+/** the suffix a resolution's whole flat file is opened with: its footer in one request (the live 0.12 files'
+ * footers are 68,486 B at res 1 and 117,567 B at res 2; a 0.11 `res=3.parquet`'s 245,010 B costs one more) */
+export const SPECIES_TAIL = 131_072;
+/** the suffix a split file is opened with (`res=3/p=<parent>.parquet`, median 9.6 KB): 728 of the 842 come whole in
+ * it, the others' footers are in it, then the row groups of the hexagon by their `cell_id` statistics */
+export const SPLIT_TAIL = 65_536;
 
 /** the summed flat rows of a hexagon (`speciesForCell`: only the row groups of its range; the reader keeps the
- * table's footer between hexagons), with the requests and bytes of this read. */
+ * file's footer between hexagons), with the requests and bytes of this read. A split file is read by `split` (a
+ * reader with the 64 KiB tail), a whole resolution's file by `reader`. */
 export async function readCellRows(
   spec: H3Spec,
   h3: string,
   reader: ReleaseReader,
+  split: ReleaseReader = reader,
 ): Promise<{
-  plan: NonNullable<ReturnType<typeof cellPlan>>;
+  plan: CellPlan;
   summed: ReturnType<typeof sumBySpecies>;
   requests: number;
   bytes: number;
@@ -385,21 +543,33 @@ export async function readCellRows(
   groupsSkipped: number;
 } | null> {
   const flat = spec.speciesFlat;
-  const plan = flat ? cellPlan(h3, flat.resolutions) : null;
+  const plan = flat ? cellPlan(h3, flat) : null;
   if (!flat || !plan) return null;
   const cols = spec.speciesTable?.columns;
-  const url = flat.hrefTemplate.replace("{res}", String(plan.tableRes));
   const colAphia = cols?.species ?? "aphiaid";
   const colN = cols?.count ?? "n";
   const want = [colAphia, colN, cols?.nameKey, cols?.yearMin, cols?.yearMax].filter(
     (c): c is string => !!c,
   );
-  const got = await speciesForCell(url, h3, {
+  const r = plan.split ? split : reader;
+  const before = { requests: r.stats.requests, bytes: r.stats.bytes };
+  const got = await speciesForCell(plan.url, h3, {
     res: plan.tableRes,
     id: cols?.cell ?? "cell_id",
     columns: want,
-    reader,
+    reader: r,
   });
+  // a split file the release does not have holds no records (no file is written for a parent with none): an empty
+  // list; a whole resolution's file that is missing is not a table of this hexagon
+  if (!got && plan.split)
+    return {
+      plan,
+      summed: new Map(),
+      requests: r.stats.requests - before.requests,
+      bytes: r.stats.bytes - before.bytes,
+      groupsRead: 0,
+      groupsSkipped: 0,
+    };
   if (!got) return null;
   const col = (name: string | undefined) =>
     name ? got.rows.map((r) => (typeof r[name] === "number" ? (r[name] as number) : NaN)) : [];

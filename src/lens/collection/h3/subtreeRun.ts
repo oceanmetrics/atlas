@@ -5,19 +5,22 @@
 // the whole file works as well). A LAZY module: the layer imports it the first time a subtree is asked, so neither
 // the engine nor this file is in the layer's own chunk.
 //
-//   1. the lookup (`species/species.parquet`), whole, once per page: the shared read of `lookup.ts` (the Cell pane
-//      parses its names from the same bytes), registered in the engine from a copy
-//   2. the classes of the taxa whose lineage holds the AphiaID, and their files at the table resolution
+//   1. the lineage (`species/lineage.parquet`, 1.68 MB, obisindicators 0.12; a release without it: the whole lookup),
+//      whole, once per page (`lookup.ts`), registered in the engine from a copy
+//   2. the taxa whose lineage holds the AphiaID; their classes and records from the lookup's `aphiaid, class,
+//      records` columns (out of the whole lookup when the page holds it, else range reads of those columns, once per
+//      page: `loadColumns`), and the classes' files at the table resolution
 //   3. the files' sizes (HEAD, Content-Length) summed against the cap before a byte of them is read
 //   4. the files, whole (kept registered: a zoom or a pan reads nothing again; past 32 MB loaded the oldest files the
 //      current taxon and resolution do not use are dropped, `subtreeCache.ts`), the SQL, COPY to Parquet, a blob url
 import { Engine } from "../../../lib/engine/engine";
-import { loadLookup } from "./lookup";
+import { readColumns } from "./cellSpecies";
+import { hasLookup, loadColumns, loadLookup } from "./lookup";
 import { ClassFileCache, LOADED_CAP_BYTES } from "./subtreeCache";
 import {
+  classesOf,
   classFileUrl,
   domainsOf,
-  subtreeClassesSql,
   subtreePlan,
   subtreeSql,
   subtreeSummarySql,
@@ -48,7 +51,7 @@ export interface SubtreeRead {
   /** the files' sizes, fetched or not */
   filesBytes: number;
   files: number;
-  /** the lookup's bytes when this computation fetched it (once per page), else 0 */
+  /** the lineage's and the lookup's class columns' bytes this computation fetched (once per page), else 0 */
   lookupBytes: number;
   /** HEAD and GET requests made */
   requests: number;
@@ -94,12 +97,10 @@ export type SubtreeOutcome =
 
 let engine: Engine | null = null;
 const getEngine = () => (engine ??= new Engine({}));
-const LOOKUP = "subtree_lookup.parquet";
-
 interface State {
   cache: ClassFileCache;
-  /** the lookup registered in the engine (once per engine) */
-  lookup: Promise<void> | null;
+  /** the lineage registered in the engine, by url (once per engine) */
+  lineage: Map<string, Promise<void>>;
   /** the lookup's fetch has been reported by a computation */
   runs: number;
   sizes: Map<string, Promise<number | null>>;
@@ -113,7 +114,7 @@ const stateOf = (e: SubtreeEngine, cap: number): State => {
       e,
       (st = {
         cache: new ClassFileCache(e, cap),
-        lookup: null,
+        lineage: new Map(),
         runs: 0,
         sizes: new Map(),
         taxa: new Map(),
@@ -175,34 +176,55 @@ export async function runSubtree(
   };
   const done = () => ((read.loadedBytes = cache.loadedBytes()), (read.ms = now() - t0), read);
 
-  // 1. the lookup, once per page: the bytes the Cell pane shares (a read counts when this computation made it),
-  // registered in the engine from a copy (the database takes the array over)
-  const lk = await loadLookup(req.table.lookup, f);
-  if (lk.fetched > 0) {
-    read.requests++;
-    read.lookupBytes = lk.fetched;
-  }
-  await (st.lookup ??= e
-    .loadBytes(LOOKUP, req.table.lookup, new Uint8Array(lk.buffer.slice(0)))
-    .catch((err: unknown) => {
-      st.lookup = null;
-      throw err;
-    }));
-  const lookupRef = `read_parquet(${sq(LOOKUP)})`;
+  // the class columns, started now beside the lineage (neither waits on the other): out of the whole lookup when the
+  // page holds it (the Cell pane's read, or a release with no lineage file), else by range reads of those columns
+  const want = [req.table.key, "class", "records"];
+  const colsP = st.taxa.has(req.aphiaid)
+    ? null
+    : hasLookup(req.table.lookup) || !req.table.lineage
+      ? loadLookup(req.table.lookup, f).then(async (w) => ({
+          rows: await readColumns(w.buffer, want),
+          fetched: w.fetched,
+          requests: w.fetched > 0 ? 1 : 0,
+        }))
+      : loadColumns(req.table.lookup, want, f === fetch ? undefined : f);
+  colsP?.catch(() => {});
 
-  // 2. the taxa and their classes (once per AphiaID)
+  // 1. the lineage, once per page (a read counts when this computation made it), registered in the engine from a copy
+  // (the database takes the array over); a release with no lineage file: the whole lookup, which holds it
+  const lineageUrl = req.table.lineage ?? req.table.lookup;
+  const lin = await loadLookup(lineageUrl, f);
+  if (lin.fetched > 0) {
+    read.requests++;
+    read.lookupBytes += lin.fetched;
+  }
+  const lineageName = `subtree_lineage_${fileName(lineageUrl)}`;
+  let reg = st.lineage.get(lineageUrl);
+  if (!reg) {
+    reg = e.loadBytes(lineageName, lineageUrl, new Uint8Array(lin.buffer.slice(0)));
+    st.lineage.set(lineageUrl, reg);
+    reg.catch(() => st.lineage.delete(lineageUrl));
+  }
+  await reg;
+  const lineageRef = `read_parquet(${sq(lineageName)})`;
+
+  // 2. the taxa (the lineage), their classes and records (the lookup's columns, once per page), once per AphiaID
   let tp = st.taxa.get(req.aphiaid);
   if (!tp) {
     tp = (async () => {
-      const classes = (
-        await e.exec<{ class: string; taxa: number; records: number }>(
-          subtreeClassesSql(lookupRef, req.aphiaid, req.table.nullClass),
-        )
-      ).map((r) => ({ class: String(r.class), records: Number(r.records) }));
       const ids = await e.exec<{ aphiaid: bigint | number }>(
-        subtreeTaxaSql(lookupRef, req.aphiaid),
+        subtreeTaxaSql(lineageRef, req.aphiaid),
       );
-      return { taxa: new Set(ids.map((r) => Number(r.aphiaid))), classes };
+      const taxa = new Set(ids.map((r) => Number(r.aphiaid)));
+      const cols = await (colsP ??
+        loadColumns(req.table.lookup, want, f === fetch ? undefined : f));
+      read.requests += cols.requests;
+      read.lookupBytes += cols.fetched;
+      const classes = classesOf(taxa, cols.rows, req.table.key, req.table.nullClass).map((c) => ({
+        class: c.class,
+        records: c.records,
+      }));
+      return { taxa, classes };
     })();
     tp.catch(() => st.taxa.delete(req.aphiaid));
     st.taxa.set(req.aphiaid, tp);
@@ -280,7 +302,7 @@ export async function runSubtree(
       ranges: req.ranges,
       esn: req.esn,
     };
-    const sql = subtreeSql({ rows: rowsOf(names.map(sq)), lookup: lookupRef, ...opts });
+    const sql = subtreeSql({ rows: rowsOf(names.map(sq)), lookup: lineageRef, ...opts });
     // a table of its own per run: two runs in flight (a zoom, then another) interleave on the engine's one chain
     const tbl = `subtree_cells_${++st.runs}`;
     try {
@@ -314,7 +336,7 @@ export async function runSubtree(
     classes: classes.map((c) => c.class),
     sql: subtreeSql({
       rows: rowsOf(present.map((x) => sq(x.url))),
-      lookup: `read_parquet(${sq(req.table.lookup)})`,
+      lookup: `read_parquet(${sq(lineageUrl)})`,
       ...opts,
     }),
   };

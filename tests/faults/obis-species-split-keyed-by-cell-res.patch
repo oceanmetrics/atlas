@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
+index 90804a5..62af75c 100644
+--- a/src/lens/collection/h3/cellSpecies.ts
++++ b/src/lens/collection/h3/cellSpecies.ts
+@@ -117,7 +117,7 @@ export function cellPlan(h3: string, flat: H3SpeciesFlat | readonly number[]): C
+     }
+   }
+   const whole = f.hrefTemplate.replaceAll("{res}", String(plan.tableRes));
+-  const parentRes = f.parentRes?.[String(plan.tableRes)];
++  const parentRes = f.parentRes?.[String(plan.res)];
+   // a split file holds the rows of one parent: the hexagon's own parent, unless the hexagon is coarser than the
+   // parent (its children lie in several files), which reads the whole resolution's file
+   if (f.parentTemplate && parentRes !== undefined && parentRes <= res) {

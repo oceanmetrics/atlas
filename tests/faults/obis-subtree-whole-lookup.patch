@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/subtreeRun.ts b/src/lens/collection/h3/subtreeRun.ts
+index 1ae2a2c..c9bc37d 100644
+--- a/src/lens/collection/h3/subtreeRun.ts
++++ b/src/lens/collection/h3/subtreeRun.ts
+@@ -192,7 +192,7 @@ export async function runSubtree(
+ 
+   // 1. the lineage, once per page (a read counts when this computation made it), registered in the engine from a copy
+   // (the database takes the array over); a release with no lineage file: the whole lookup, which holds it
+-  const lineageUrl = req.table.lineage ?? req.table.lookup;
++  const lineageUrl = req.table.lookup;
+   const lin = await loadLookup(lineageUrl, f);
+   if (lin.fetched > 0) {
+     read.requests++;

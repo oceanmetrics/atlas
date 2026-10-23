@@ -3,9 +3,11 @@
 // on a server. Pure rules (Node-tested by tests/obis/subtree.test.ts against DuckDB-WASM's own engine); the runner
 // (`subtreeRun.ts`, lazy) feeds them to the atlas's DuckDB-WASM and hands the cells to the map package's worker.
 //
-//   the taxa      the species lookup's `lineage` (self first, then the ancestors): `list_contains(lineage, <id>)`
-//   the files     `species/res=<r>/class=<c>/data_0.parquet` for the classes those taxa fall in (a NULL class is
-//                 `_none`); a decade reads `species_decade/res=<r>/decade=<d>/class=<c>/` (res 3 and 4)
+//   the taxa      the lineage (self first, then the ancestors): `list_contains(lineage, <id>)`, over
+//                 `species/lineage.parquet` (obisindicators 0.12: `aphiaid, name_key, lineage`), else the lookup's
+//   the files     `species/res=<r>/class=<c>/data_0.parquet` for the classes those taxa fall in (the lookup's
+//                 `class`, a NULL class is `_none`); a decade reads `species_decade/res=<r>/decade=<d>/class=<c>/`
+//                 (res 3 and 4)
 //   the cells     per cell: n, sp (distinct name_key), shannon, simpson, ES(50), obisindicators' own SQL
 //                 (`.h3t_indicators_sql()` over `obis_h3_species_subtree_sql()`'s source), ported as it is
 //   the cap       res 5 at most (the species table's finest; 4 with a decade), the view's box at res 5, res 1
@@ -35,8 +37,13 @@ export interface SubtreeTable {
   /** `.../species/res={res}/class={class}/data_0.parquet` */
   template: string;
   resolutions: number[];
-  /** the species lookup (aphiaid, name_key, class, lineage, records) */
+  /** the species lookup (aphiaid, name_key, class, records, and lineage before 0.12) */
   lookup: string;
+  /** the lookup's key (`aphiaid`) */
+  key: string;
+  /** the lineage alone (`species/lineage.parquet`: aphiaid, name_key, lineage), null when the release has none (the
+   * lookup then holds it) */
+  lineage: string | null;
   /** the partition value of a NULL class */
   nullClass: string;
   /** the per-decade table, when the release has one */
@@ -59,14 +66,17 @@ export function subtreeTableOf(c: Record<string, unknown> | null | undefined): S
   const lookup = lk ? str(lk.href) : null;
   if (!template || !template.includes("{class}") || !template.includes("{res}") || !lookup)
     return null;
-  if (!str(lk?.lineage_column)) return null;
   const sp = isRecord(c?.["obis:species"]) ? (c!["obis:species"] as Record<string, unknown>) : {};
+  const lin = isRecord(sp.lineage) ? sp.lineage : null;
+  if (!str(lk?.lineage_column) && !str(lin?.href)) return null;
   const d = isRecord(sp.decade) ? sp.decade : null;
   const dt = d ? str(d.href_template) : null;
   return {
     template,
     resolutions: ints(t.resolutions),
     lookup,
+    key: str(lk?.key) ?? "aphiaid",
+    lineage: lin ? (str(lin.href) ?? null) : null,
     nullClass: str(sp.null_class) ?? "_none",
     decade:
       d && dt && dt.includes("{decade}")
@@ -166,6 +176,29 @@ export function subtreeClassesSql(lookup: string, aphiaid: number, nullClass = "
 FROM ${lookup}
 WHERE list_contains(lineage, ${Math.trunc(aphiaid)})
 GROUP BY 1 ORDER BY 1`;
+}
+
+/** the classes the subtree's taxa fall in, from the lookup's `aphiaid, class, records` columns (what
+ * `subtreeClassesSql` says over a lookup that holds the lineage; obisindicators 0.12's lineage file has no class) */
+export function classesOf(
+  taxa: ReadonlySet<number>,
+  rows: readonly Record<string, unknown>[],
+  key = "aphiaid",
+  nullClass = "_none",
+): { class: string; taxa: number; records: number }[] {
+  const by = new Map<string, { taxa: number; records: number }>();
+  for (const r of rows) {
+    if (!taxa.has(Number(r[key]))) continue;
+    const c =
+      r.class === null || r.class === undefined || r.class === "" ? nullClass : String(r.class);
+    const h = by.get(c) ?? { taxa: 0, records: 0 };
+    h.taxa++;
+    h.records += Number(r.records ?? 0) || 0;
+    by.set(c, h);
+  }
+  return [...by.keys()]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((c) => ({ class: c, ...by.get(c)! }));
 }
 
 /** the subtree's own aphiaids (the Cell pane keeps their species) */
@@ -375,7 +408,8 @@ export function subtreePlan(o: {
 export const subtreeLine = (name: string, cap = SUBTREE_MAX_RES) =>
   `subtree of ${name} (computed in the browser from the species table, res ≤ ${cap})`;
 
-/** what a computation read: "Read 0.49 MB of the species table (2 files) and the lookup (3.90 MB, once per page);
+/** what a computation read: "Read 0.49 MB of the species table (2 files) and the lineage and classes (2.03 MB, once
+ * per page);
  * 4,567 hexagons in 1,234 ms." Files read before are kept: "Nothing read: the species table's file (0.26 MB) is kept
  * from before; ..." */
 export function readLine(o: {
@@ -392,7 +426,8 @@ export function readLine(o: {
   droppedFiles?: number;
   droppedBytes?: number;
 }): string {
-  const look = o.lookupBytes > 0 ? ` and the lookup (${mb(o.lookupBytes)}, once per page)` : "";
+  const look =
+    o.lookupBytes > 0 ? ` and the lineage and classes (${mb(o.lookupBytes)}, once per page)` : "";
   const tail = `${o.cells.toLocaleString("en-US")} hexagons in ${Math.round(o.ms).toLocaleString("en-US")} ms.`;
   const files = o.files === 1 ? "file" : `${o.files} files`;
   const kept = loadedWords(o);

@@ -1,13 +1,13 @@
 diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
-index 13272d0..e510100 100644
+index 90804a5..5fa56c6 100644
 --- a/src/lens/collection/h3/cellSpecies.ts
 +++ b/src/lens/collection/h3/cellSpecies.ts
-@@ -392,7 +392,7 @@ export async function readCellRows(
-     (c): c is string => !!c,
-   );
-   const got = await speciesForCell(url, h3, {
+@@ -554,7 +554,7 @@ export async function readCellRows(
+   const r = plan.split ? split : reader;
+   const before = { requests: r.stats.requests, bytes: r.stats.bytes };
+   const got = await speciesForCell(plan.url, h3, {
 -    res: plan.tableRes,
 +    res: plan.res,
      id: cols?.cell ?? "cell_id",
      columns: want,
-     reader,
+     reader: r,
