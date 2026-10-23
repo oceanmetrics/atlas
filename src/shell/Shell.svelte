@@ -12,7 +12,7 @@
   // there is exactly one source for every geometry value the CLS gate depends on. The real
   // src/lib/ui/* components below (Rail, Panel, Sheet, Segmented, Announcer) bring their own scoped
   // styles and are used only by import.
-  import { onMount, tick, type Component } from "svelte";
+  import { onMount, tick, untrack, type Component } from "svelte";
   import "./shell.css";
   import {
     buildRailItems,
@@ -73,6 +73,7 @@
   } from "../lib/state/types";
   import { createMap, type MapHandle } from "../lib/map/map";
   import { composeStyle, BASEMAP_LAYER_PREFIX } from "../lib/map/style";
+  import { tallyCounts, tallyRasters, type RasterOrigin } from "../lib/raster/drawTally";
   // R3 (round-2 plan §5 U4): the layer stack — resolved here (the SAME resolved object both
   // `composeStyleInput` and each lens's `LayersPanel` mount read, per this task's own instructions
   // to keep Shell.svelte's edits to exactly "the panel mount and the composeStyle input").
@@ -1520,6 +1521,16 @@
     mapHandle?.applyStyle(composeStyle(composeStyleInput));
   });
 
+  // build week 6 step 5: every raster the style has drawn this visit, by who drew it (the browser's `cog://` or
+  // titiler), for the About dialog's "N of M rasters drawn from the browser" (lib/raster/drawTally.ts)
+  let rastersSeen = $state<Readonly<Record<string, RasterOrigin>>>({});
+  $effect(() => {
+    const specs = [composeStyleInput.raster, ...composeStyleInput.overlays];
+    const prev = untrack(() => rastersSeen);
+    const next = tallyRasters(prev, specs);
+    if (next !== prev) rastersSeen = next;
+  });
+
   // the Help menu's Docs link and the About modal's "What changed": with a release, that release's own
   // Atlas chapter and release notes in the docs book (public, or on the preview host for a restricted
   // one; the book root while the release is unknown, `lib/release/docsUrl.ts`); otherwise the
@@ -2181,6 +2192,7 @@
     layerAbout={__LENS_COLLECTION__ && sel.lens === "collection"
       ? (collectionLens?.h3?.about ?? null)
       : null}
+    rasterTally={tallyCounts(rastersSeen)}
   />
   <!-- U2a (round 2): sun/moon, CalCOFI's convention (src/App.tsx's `.cc-theme-toggle`) -- the
        icon shown is the DESTINATION theme (a sun while dark invites switching to light, a moon

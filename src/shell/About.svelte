@@ -18,6 +18,7 @@
   } from "../lib/brand/instance";
   import { agencyDisplayName, SEAL_MIN_PX, shouldShowSeal } from "../lib/ui/sealVisibility";
   import { appLine, releaseLine, type AboutRelease } from "./aboutRelease";
+  import { tallyLine, type RasterTally } from "../lib/raster/drawTally";
 
   interface Props {
     open: boolean;
@@ -33,6 +34,8 @@
     sealFlag?: string;
     /** the shown layer's own About (an h3 layer: what it maps, its release, its credit) */
     layerAbout?: { title: string; lines: string[] } | null;
+    /** the rasters this visit has drawn, and how many of them the browser drew (the rest titiler) */
+    rasterTally?: RasterTally | null;
   }
   let {
     open,
@@ -43,6 +46,7 @@
     release = null,
     sealFlag = import.meta.env.VITE_SEAL,
     layerAbout = null,
+    rasterTally = null,
   }: Props = $props();
 
   // the agency seal (instance.json `seal`): only on a build with VITE_SEAL=1 whose agency resolves
@@ -94,6 +98,10 @@
     {/if}
     <dt>App</dt>
     <dd data-testid="about-app">{appLine(__APP_SOURCE__, appVersion, INSTANCE.id)}</dd>
+    {#if rasterTally && rasterTally.total > 0}
+      <dt>Rasters</dt>
+      <dd data-testid="about-rasters">{tallyLine(rasterTally)}</dd>
+    {/if}
   </dl>
   {#if release?.restricted}
     <p class="restricted-note">

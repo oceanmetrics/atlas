@@ -16,6 +16,7 @@
   import { nextRovingIndex } from "../lib/ui/roving";
   import { uid } from "../lib/ui/uid";
   import type { AboutRelease } from "./aboutRelease";
+  import type { RasterTally } from "../lib/raster/drawTally";
 
   interface Props {
     /** an instance with a release registry: the resolved release (About's "Release" row and the
@@ -53,6 +54,8 @@
     onOpenDownload: () => void;
     /** the shown layer's own About (an h3 layer's release and credit), passed to the About modal */
     layerAbout?: { title: string; lines: string[] } | null;
+    /** the rasters drawn this visit, how many from the browser (About's "N of M rasters drawn from the browser") */
+    rasterTally?: RasterTally | null;
   }
 
   let {
@@ -68,6 +71,7 @@
     onToggleTheme,
     onOpenDownload,
     layerAbout = null,
+    rasterTally = null,
   }: Props = $props();
 
   // --- About popover-dialog -----------------------------------------------------------------
@@ -295,6 +299,7 @@
     {changelogHref}
     {release}
     {layerAbout}
+    {rasterTally}
   />
 {/if}
 

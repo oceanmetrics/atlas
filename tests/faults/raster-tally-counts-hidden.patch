@@ -1,0 +1,14 @@
+diff --git a/src/lib/raster/drawTally.ts b/src/lib/raster/drawTally.ts
+index f71eba1..a98f8b0 100644
+--- a/src/lib/raster/drawTally.ts
++++ b/src/lib/raster/drawTally.ts
+@@ -12,7 +12,8 @@ export type RasterOrigin = "browser" | "titiler";
+ export function rasterOriginOf(
+   spec: Pick<RasterLayerSpec, "tiles" | "visible"> | null | undefined,
+ ): { key: string; origin: RasterOrigin } | null {
+-  if (!spec || spec.visible === false) return null;
++  // SEEDED FAULT (tests/faults/raster-tally-counts-hidden.patch): a hidden layer is counted
++  if (!spec) return null;
+   const t = spec.tiles[0];
+   if (typeof t !== "string") return null;
+   if (t.startsWith("cog://")) {
