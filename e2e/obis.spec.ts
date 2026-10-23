@@ -418,8 +418,8 @@ test("the WoRMS subtree: search, pick, computed in the page (DuckDB-WASM over th
     page,
     "/?c=obis_h3&i=all&dim.indicator=sp&res=3&map=-121,35.5,5&tour=off",
     requests,
-    (p) =>
-      p.route(
+    async (p) => {
+      await p.route(
         (url) => url.href.startsWith("https://www.marinespecies.org/rest/"),
         safeRoute((route) => {
           const u = route.request().url();
@@ -430,7 +430,8 @@ test("the WoRMS subtree: search, pick, computed in the page (DuckDB-WASM over th
             return route.fulfill({ status: 200, json: record });
           return route.fulfill({ status: 204, body: "" });
         }),
-      ),
+      );
+    },
   );
   await page.getByTestId("h3-worms-search").fill("Cetac");
   await page.getByTestId("h3-worms-hit").first().click();

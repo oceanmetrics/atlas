@@ -1,1 +1,32 @@
-[{"AphiaID":2688,"url":"https:\/\/www.marinespecies.org\/aphia.php?p=taxdetails&id=2688","scientificname":"Cetacea","authority":"Brisson, 1762","status":"accepted","unacceptreason":null,"taxonRankID":120,"rank":"Infraorder","valid_AphiaID":2688,"valid_name":"Cetacea","valid_authority":"Brisson, 1762","parentNameUsageID":370545,"originalNameUsageID":null,"kingdom":"Animalia","phylum":"Chordata","class":"Mammalia","order":"Cetartiodactyla","family":null,"genus":null,"citation":"WoRMS (2026). Cetacea. Accessed at: https:\/\/www.marinespecies.org\/aphia.php?p=taxdetails&id=2688 on 2026-10-23","lsid":"urn:lsid:marinespecies.org:taxname:2688","isMarine":1,"isBrackish":1,"isFreshwater":1,"isTerrestrial":null,"isExtinct":0,"match_type":"exact","modified":"2008-11-24T16:47:17.783Z"}]
+[
+  {
+    "AphiaID": 2688,
+    "url": "https:\/\/www.marinespecies.org\/aphia.php?p=taxdetails&id=2688",
+    "scientificname": "Cetacea",
+    "authority": "Brisson, 1762",
+    "status": "accepted",
+    "unacceptreason": null,
+    "taxonRankID": 120,
+    "rank": "Infraorder",
+    "valid_AphiaID": 2688,
+    "valid_name": "Cetacea",
+    "valid_authority": "Brisson, 1762",
+    "parentNameUsageID": 370545,
+    "originalNameUsageID": null,
+    "kingdom": "Animalia",
+    "phylum": "Chordata",
+    "class": "Mammalia",
+    "order": "Cetartiodactyla",
+    "family": null,
+    "genus": null,
+    "citation": "WoRMS (2026). Cetacea. Accessed at: https:\/\/www.marinespecies.org\/aphia.php?p=taxdetails&id=2688 on 2026-10-23",
+    "lsid": "urn:lsid:marinespecies.org:taxname:2688",
+    "isMarine": 1,
+    "isBrackish": 1,
+    "isFreshwater": 1,
+    "isTerrestrial": null,
+    "isExtinct": 0,
+    "match_type": "exact",
+    "modified": "2008-11-24T16:47:17.783Z"
+  }
+]
