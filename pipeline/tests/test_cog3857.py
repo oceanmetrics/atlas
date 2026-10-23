@@ -216,6 +216,8 @@ def test_the_side_table_is_sorted_by_content_hash_in_small_row_groups_with_stati
   st = [md.row_group(i).column(0).statistics for i in range(3)]
   assert [(s.min, s.max) for s in st] == [(f"{0:016x}", f"{511:016x}"), (f"{512:016x}", f"{1023:016x}"),
                                           (f"{1024:016x}", f"{1099:016x}")]
+  # statistics on content_hash only (a small footer: the reader's first tail read pulls all of it)
+  assert all(md.row_group(g).column(c).statistics is None for g in range(3) for c in range(1, md.num_columns))
 
 
 # ---- the hash ----

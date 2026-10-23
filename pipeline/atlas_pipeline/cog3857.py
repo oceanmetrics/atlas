@@ -298,8 +298,10 @@ def write_table(rows: dict[str, dict] | list[dict], path: Path) -> Path:
   path.parent.mkdir(parents=True, exist_ok=True)
   tmp = path.with_name(path.name + ".part")
   # small row groups, sorted by content_hash: a reader asking for one hash (hyparquet's `filter`) skips the
-  # others by their min/max statistics and reads about 1/70 of the v7 table
-  pq.write_table(t, tmp, compression="zstd", row_group_size=512, write_statistics=True)
+  # others by their min/max statistics and reads about 1/70 of the v7 table. Statistics on content_hash ONLY: the
+  # other columns' made the footer 366 KB on the shared table (240 KB on v7's), all pulled by a reader's first tail
+  # read; without them it is 227 KB (the 24 leaf columns' chunk metadata over 112 groups is the rest)
+  pq.write_table(t, tmp, compression="zstd", row_group_size=512, write_statistics=["content_hash"])
   tmp.replace(path)
   return path
 
