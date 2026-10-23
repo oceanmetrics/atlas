@@ -1,0 +1,66 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "stac_extensions": ["https://oceanmetrics.io/schemas/h3/v1.1.0/schema.json"],
+  "id": "all",
+  "collection": "obis_h3",
+  "bbox": [-180, -90, 180, 90],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-180, -90],
+        [180, -90],
+        [180, 90],
+        [-180, 90],
+        [-180, -90]
+      ]
+    ]
+  },
+  "properties": {
+    "title": "All taxa",
+    "datetime": null,
+    "start_datetime": "1103-01-01T00:00:00Z",
+    "end_datetime": "2026-10-11T00:00:00Z",
+    "atlas:dims": {
+      "layer": "all"
+    },
+    "atlas:metric": "es"
+  },
+  "links": [
+    {
+      "rel": "collection",
+      "href": "../collection.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "parent",
+      "href": "../collection.json",
+      "type": "application/json"
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "../all/",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "title": "All taxa over all years",
+      "h3:template": "res={res}/data_0.parquet",
+      "h3:parent_template": "res={res}/p={parent}/data_0.parquet"
+    },
+    "decade": {
+      "href": "../decade/all/",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "title": "All taxa per decade",
+      "h3:template": "decade={decade}/res={res}/data_0.parquet"
+    },
+    "year": {
+      "href": "../year/all/",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "title": "All taxa per year",
+      "h3:template": "year={year}/res={res}/data_0.parquet"
+    }
+  }
+}
