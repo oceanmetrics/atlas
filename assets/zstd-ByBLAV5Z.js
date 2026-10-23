@@ -1,0 +1,1 @@
+import{t as e}from"./basedecoder-BGstwtqt.js";import{t}from"./zstddec-stream.modern-DV1m79pz.js";var n=new t,r=class extends e{decodeBlock(e){return n.decode(new Uint8Array(e)).buffer}};export{r as default,n as zstd};
