@@ -1077,7 +1077,7 @@ export const FAULTS = [
     id: "obis-species-res2-parent-unfiltered",
     patch: "tests/faults/obis-species-res2-parent-unfiltered.patch",
     describe:
-      "a res-2 hexagon keeps every row of its res-1 parent's split file, not the rows whose res-2 ancestor it is -- " +
+      "a res-2 (or res-3) hexagon reads the rows of its res-1 parent (the file's every row) instead of the rows whose ancestor it is -- " +
       "its list holds its siblings' species and records",
     gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "larger than the tail"],
   },
