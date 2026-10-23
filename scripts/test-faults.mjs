@@ -912,6 +912,16 @@ export const FAULTS = [
       "(KEY)' label) instead of zoneDisplayName(zoneStatsFor(...))",
     gate: ["npx", "vitest", "run", "tests/places/zoneDownload.test.ts"],
   },
+  {
+    id: "pages-feedback-url-dropped",
+    patch: "tests/faults/pages-feedback-url-dropped.patch",
+    describe:
+      "build-instance.yml's `vite build` step (the ONE build, which the thin MarineSensitivity " +
+      "repo calls) loses its `VITE_FEEDBACK_URL` line -- the published build never picks up the " +
+      "Apps Script endpoint no matter what the repository variable says, and 'Send feedback' can " +
+      "never actually send",
+    gate: ["npx", "vitest", "run", "tests/release/pagesEnvVars.wiring.test.ts"],
+  },
   // --- build week 4: the instance module table and the release capability ----------------------
   {
     id: "instance-dist-unselected-marker-ignored",

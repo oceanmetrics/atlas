@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/build-instance.yml b/.github/workflows/build-instance.yml
+index 5041969..f6549e7 100644
+--- a/.github/workflows/build-instance.yml
++++ b/.github/workflows/build-instance.yml
+@@ -120,7 +120,6 @@ jobs:
+ 
+       - run: npx vite build
+         env:
+-          VITE_FEEDBACK_URL: ${{ inputs.VITE_FEEDBACK_URL }}
+           VITE_LOG_URL: ${{ inputs.VITE_LOG_URL }}
+           VITE_GA_ID: ${{ inputs.VITE_GA_ID }}
+           VITE_CATALOG_BASE: ${{ inputs.VITE_CATALOG_BASE }}

@@ -1,9 +1,11 @@
 name: Pages
 
-# Checks run on every push (any branch) and every pull request; only a push to `main` goes on to
-# publish `dist/` -- as the SAME artifact the checks job just built, never a second `vite build` --
-# to this repository's `gh-pages` branch (branch-based Pages: Settings -> Pages -> "Deploy from a
-# branch" -> gh-pages), served at https://oceanmetrics.io/atlas/.
+# Checks run on every push (any branch) and every pull request, then every instance is built by the ONE
+# reusable workflow (build-instance.yml, the same one MarineSensitivity/atlas calls at a pinned tag);
+# only a push to `main` goes on to publish the oceanmetrics `dist/` -- the SAME artifact that build
+# job made, never a second `vite build` -- to this repository's `gh-pages` branch (branch-based
+# Pages: Settings -> Pages -> "Deploy from a branch" -> gh-pages), served at
+# https://oceanmetrics.io/atlas/.
 on:
   push:
     # the feedback Apps Script (scripts/feedback/Code.gs) commits each report's screenshot to
@@ -24,13 +26,14 @@ concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
 
-# least privilege by default; the publish job below is the only place this is escalated.
+# least privilege by default; the build matrix (for its oceanmetrics deploy) is the only place this is
+# escalated.
 permissions:
   contents: read
 
 jobs:
   checks:
-    name: build & checks
+    name: checks (types, svelte-check, unit tests for every instance, lint, format)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,60 +60,48 @@ jobs:
 
       - run: npm run format:check
 
-      # mirrors DuckDB-WASM's parquet extension (both platforms) into public/duckdb-ext/ BEFORE the
-      # build, so Vite's publicDir copies it into dist/ -- without this step a published site has no
-      # same-origin mirror and the first read_parquet() crashes with an uncatchable WASM error the
-      # moment extensions.duckdb.org is unreachable (docs/spikes/S3.md). Each downloaded file is
-      # verified against the pinned sha256/bytes in scripts/duckdb-extensions.manifest.json; a
-      # mismatch fails this step, not silently continues.
-      - run: node scripts/fetch-duckdb-extensions.mjs
-
-      # Build-time configuration, all optional and all repository VARIABLES (Settings -> Secrets and
-      # variables -> Actions -> Variables), never secrets: the endpoint URLs ship in the public bundle
-      # either way. Unset resolves to an empty string, which each reader treats as "off":
-      #   VITE_FEEDBACK_URL  the Apps Script `/exec` URL for "Send feedback" (src/lib/feedback/endpoint.ts)
-      #   VITE_LOG_URL       the Sheet-log beacon URL (src/lib/analytics/logUrl.ts)
-      #   VITE_GA_ID         the GA4 measurement id (src/lib/analytics/gaId.ts); no id ships in the repo
-      #   VITE_CATALOG_BASE  override of the catalog origin (src/lib/catalog/base.ts); default is the
-      #                      public bucket's atlas/ prefix
-      - run: npx vite build
-        env:
-          VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}
-          VITE_LOG_URL: ${{ vars.VITE_LOG_URL }}
-          VITE_GA_ID: ${{ vars.VITE_GA_ID }}
-          VITE_CATALOG_BASE: ${{ vars.VITE_CATALOG_BASE }}
-
-      # fails on a >450 KB gzip static critical path, a >150 KB gzip runtime worker referenced from
-      # it (e.g. maplibre-gl's, S2.md), or a lazy-only chunk (duckdb*/terra-draw*/shp*/hyparquet)
-      # reachable by static import or by a runtime worker.
-      - run: node scripts/size-budget.mjs
-
-      # the line above proves size-budget.mjs is green against a real build; these two prove it can
-      # actually go RED -- against dist alone, not a unit test's synthetic manifest, so a real Vite
-      # manifest-shape drift that made the checker walk nothing would be caught here even if every
-      # vitest case stayed green. `!` inverts the exit code: each of these STEPS fails if its fixture
-      # ever stops being red.
+      # the size-budget checker's own red fixtures: they prove size-budget.mjs can actually go RED
+      # against a real Vite manifest, not only a unit test's synthetic one, so a manifest-shape drift
+      # that made the checker walk nothing would be caught here even if every vitest case stayed
+      # green. `!` inverts the exit code: each of these STEPS fails if its fixture ever stops being
+      # red. (The instance builds themselves, their budgets and the dist checks run in `build`.)
       - run: npm run build:fixture:size-budget && ! node scripts/size-budget.mjs --dist tests/fixtures/size-budget-static-duckdb/dist
 
       - run: npm run build:fixture:size-budget-worker && ! node scripts/size-budget.mjs --dist tests/fixtures/size-budget-worker/dist
 
-      # base: "./" must produce relative asset URLs only, so the same dist/ runs under any mount path.
-      - run: node scripts/check-relative-assets.mjs dist
-
-      # re-verifies dist/duckdb-ext/ against the same pinned manifest, against what actually ended up
-      # on disk after the build (not just what was downloaded).
-      - run: node scripts/check-duckdb-ext.mjs dist
-
-      # index.html's inlined critical CSS copies its token VALUES from instances/<id>/tokens.css via a
-      # real build step (an `@import` chain Vite's CSS pipeline resolves), never by hand -- this
-      # re-parses the built dist/index.html and proves every token still matches.
-      - run: node scripts/check-inlined-tokens.mjs dist
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
-          retention-days: 7
+  # every instance (instances/<id>/) built by the ONE reusable workflow MarineSensitivity/atlas calls
+  # too (build-instance.yml): the build, its instance's size budget, the dist checks and the
+  # instance module check. oceanmetrics is published from `main` (deploy: the SAME artifact this job
+  # built, to this repository's gh-pages, served at https://oceanmetrics.io/atlas/);
+  # marinesensitivity is built and checked only: https://marinesensitivity.org/atlas/ is published by
+  # MarineSensitivity/atlas at its own pin (docs/mst-thin-repo.md). Unit tests run once, for every
+  # instance, in `checks` (vitest.config.ts has one project per instance), so the builds skip them.
+  build:
+    needs: [checks]
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [oceanmetrics, marinesensitivity]
+    permissions:
+      contents: write # the oceanmetrics leg deploys from main; the called workflow escalates only its deploy job
+    uses: ./.github/workflows/build-instance.yml
+    with:
+      instance: ${{ matrix.instance }}
+      unit-tests: false
+      deploy: ${{ matrix.instance == 'oceanmetrics' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      # Build-time configuration, all optional and all repository VARIABLES (Settings -> Secrets and
+      # variables -> Actions -> Variables), never secrets: the endpoint URLs ship in the public bundle
+      # either way. They are this repository's (OceanMetrics Atlas): the marinesensitivity leg gets
+      # none of them, and the seal on (its production build carries it, as the thin repo's does).
+      #   VITE_FEEDBACK_URL  the Apps Script `/exec` URL for "Send feedback" (src/lib/feedback/endpoint.ts)
+      #   VITE_LOG_URL       the Sheet-log beacon URL (src/lib/analytics/logUrl.ts)
+      #   VITE_GA_ID         the GA4 measurement id (src/lib/analytics/gaId.ts); no id ships in the repo
+      #   VITE_CATALOG_BASE  override of the catalog origin (src/lib/catalog/base.ts)
+      VITE_FEEDBACK_URL: ${{ matrix.instance == 'oceanmetrics' && vars.VITE_FEEDBACK_URL || '' }}
+      VITE_LOG_URL: ${{ matrix.instance == 'oceanmetrics' && vars.VITE_LOG_URL || '' }}
+      VITE_GA_ID: ${{ matrix.instance == 'oceanmetrics' && vars.VITE_GA_ID || '' }}
+      VITE_CATALOG_BASE: ${{ matrix.instance == 'oceanmetrics' && vars.VITE_CATALOG_BASE || '' }}
+      VITE_SEAL: ${{ matrix.instance == 'marinesensitivity' && '1' || '' }}
 
   test-faults:
     name: test:faults (seeded-fault suite)
@@ -196,27 +187,3 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       - run: npm run e2e:analytics-privacy
-
-  publish:
-    name: publish dist/ to gh-pages
-    # Pages publishes as soon as the fast build-and-checks job is green; the fault and browser
-    # suites still run on every push and still turn the run red, but they do not hold the site.
-    needs: [checks]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # only this job needs to push; the default above stays read-only
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-
-      - name: publish to gh-pages (this repository's own Pages branch)
-        # pinned to a full commit SHA, not a tag: this step runs with contents:write.
-        # peaceiris/actions-gh-pages v4.1.0; first-party actions/* above may stay on major tags.
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          publish_branch: gh-pages

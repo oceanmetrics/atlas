@@ -1,0 +1,181 @@
+name: Build an instance
+
+# The ONE build of the atlas, for any instance (instances/<id>/, VITE_INSTANCE=<id>): check out
+# oceanmetrics/atlas at `ref`, build it for `instance` with the caller's VITE_* values, hold the dist to
+# that instance's size budget (its instance.json `budget`) and the dist checks, and hand the dist back
+# as an artifact. With `deploy: true` it then publishes THAT artifact, never a second build, to the
+# CALLER's own `gh-pages` branch with the caller's own GITHUB_TOKEN (so no cross-org secret exists).
+#
+# Callers:
+#   - oceanmetrics/atlas .github/workflows/pages.yml: both instances in a matrix, oceanmetrics deployed
+#     from `main` to https://oceanmetrics.io/atlas/, marinesensitivity built and checked only;
+#   - MarineSensitivity/atlas .github/workflows/pages.yml (the thin repo, docs/mst-thin-repo.md):
+#       uses: oceanmetrics/atlas/.github/workflows/build-instance.yml@v0.5.0
+#       with: { instance: marinesensitivity, ref: v0.5.0, deploy: true, VITE_SEAL: "1", ... }
+#     so https://marinesensitivity.org/atlas/ moves only when that repo moves its pin.
+#
+# The calling job must grant `permissions: contents: write` when it passes `deploy: true` (a called
+# workflow can never hold more than its caller grants); everything else needs `contents: read`.
+on:
+  workflow_call:
+    inputs:
+      instance:
+        description: "the instance to build (a folder under instances/: oceanmetrics, marinesensitivity)"
+        type: string
+        required: true
+      ref:
+        description: "the oceanmetrics/atlas ref to build (a tag such as v0.5.0); empty = the caller's own commit, right only when the caller IS oceanmetrics/atlas"
+        type: string
+        default: ""
+      repository:
+        description: "the repository holding the atlas code"
+        type: string
+        default: oceanmetrics/atlas
+      deploy:
+        description: "publish the built dist to the caller's gh-pages branch"
+        type: boolean
+        default: false
+      publish-branch:
+        description: "the caller's branch-based Pages branch"
+        type: string
+        default: gh-pages
+      unit-tests:
+        description: "run the instance's vitest project (logic:<instance>) before building; oceanmetrics/atlas's own pages.yml runs the whole suite in its checks job instead"
+        type: boolean
+        default: true
+      # build-time configuration, all optional, all public (they ship in the bundle either way): the
+      # caller passes its own repository VARIABLES. Unset is an empty string, which each reader
+      # treats as "off".
+      VITE_FEEDBACK_URL:
+        description: "the Apps Script /exec URL for Send feedback (src/lib/feedback/endpoint.ts)"
+        type: string
+        default: ""
+      VITE_LOG_URL:
+        description: "the Sheet-log beacon URL (src/lib/analytics/logUrl.ts)"
+        type: string
+        default: ""
+      VITE_GA_ID:
+        description: "the GA4 measurement id (src/lib/analytics/gaId.ts); no id ships in the repo"
+        type: string
+        default: ""
+      VITE_CATALOG_BASE:
+        description: "an override of the catalog origin (src/lib/catalog/base.ts)"
+        type: string
+        default: ""
+      VITE_PREVIEW_ATLAS_ROUTE:
+        description: "1 once the preview host serves /{ver}/atlas/ (src/lib/release/previewLink.ts)"
+        type: string
+        default: ""
+      VITE_SEAL:
+        description: "1 to show the instance's agency seal (src/lib/ui/sealVisibility.ts, fail closed); only an instance with a `seal` block has one"
+        type: string
+        default: ""
+    outputs:
+      artifact:
+        description: "the name of the uploaded dist/ artifact (dist-<instance>)"
+        value: ${{ jobs.build.outputs.artifact }}
+      sha:
+        description: "the oceanmetrics/atlas commit that was built"
+        value: ${{ jobs.build.outputs.sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ inputs.instance }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      artifact: dist-${{ inputs.instance }}
+      sha: ${{ steps.sha.outputs.sha }}
+    env:
+      VITE_INSTANCE: ${{ inputs.instance }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # the instance's own unit tests: every logic test, with the modules this instance builds
+      # (vitest.config.ts, one project per instance)
+      - if: inputs.unit-tests
+        run: npx vitest run --project "logic:${{ inputs.instance }}"
+
+      # mirrors DuckDB-WASM's parquet extension into public/duckdb-ext/ BEFORE the build, so Vite's
+      # publicDir copies it into dist/ (docs/spikes/S3.md); each file is verified against the pinned
+      # sha256/bytes in scripts/duckdb-extensions.manifest.json, a mismatch fails this step.
+      - run: node scripts/fetch-duckdb-extensions.mjs
+
+      - run: npx vite build
+        env:
+          VITE_FEEDBACK_URL: ${{ inputs.VITE_FEEDBACK_URL }}
+          VITE_LOG_URL: ${{ inputs.VITE_LOG_URL }}
+          VITE_GA_ID: ${{ inputs.VITE_GA_ID }}
+          VITE_CATALOG_BASE: ${{ inputs.VITE_CATALOG_BASE }}
+          VITE_PREVIEW_ATLAS_ROUTE: ${{ inputs.VITE_PREVIEW_ATLAS_ROUTE }}
+          VITE_SEAL: ${{ inputs.VITE_SEAL }}
+
+      # the instance's budget (instance.json `budget`: oceanmetrics 450/150, marinesensitivity
+      # 470/150 KB gzip): the static path "before first interaction", the runtime worker, and no
+      # lazy-only chunk reachable by a static import
+      - run: node scripts/size-budget.mjs
+
+      # base: "./" must produce relative asset URLs only, so the same dist/ runs under any mount path
+      # (/atlas/ on Pages, /{ver}/atlas/ on the preview host)
+      - run: node scripts/check-relative-assets.mjs dist
+
+      # re-verifies dist/duckdb-ext/ against the same pinned manifest, after the build
+      - run: node scripts/check-duckdb-ext.mjs dist
+
+      # index.html's inlined critical CSS copies its token VALUES from the instance's tokens.css
+      - run: node scripts/check-inlined-tokens.mjs dist
+
+      # a published dist never carries a session.json: on the preview host that file is served by
+      # the host, and on Pages its absence is what keeps a restricted release closed
+      - run: node scripts/check-dist-session.mjs dist
+
+      # the dist carries the modules this instance builds and none it does not (the instance module
+      # table, scripts/instance-modules.mjs)
+      - run: node scripts/check-instance-dist.mjs dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ inputs.instance }}
+          path: dist
+          retention-days: 7
+
+  deploy:
+    name: publish dist-${{ inputs.instance }} to ${{ inputs.publish-branch }}
+    if: inputs.deploy
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # only this job pushes; the caller must grant it
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ inputs.instance }}
+          path: dist
+
+      - name: publish to the caller's own Pages branch
+        # pinned to a full commit SHA, not a tag: this step runs with contents:write.
+        # peaceiris/actions-gh-pages v4.1.0; first-party actions/* above may stay on major tags.
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: ${{ inputs.publish-branch }}
+          # the built oceanmetrics/atlas commit and instance, in the gh-pages commit message
+          full_commit_message: "deploy ${{ inputs.repository }}@${{ needs.build.outputs.sha }} (${{ inputs.ref || 'HEAD' }}) instance ${{ inputs.instance }}"
