@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
+index eafe0f6..b1cb9cb 100644
+--- a/src/lens/collection/h3/cellSpecies.ts
++++ b/src/lens/collection/h3/cellSpecies.ts
+@@ -529,7 +529,7 @@ export const SPECIES_TAIL = 131_072;
+  * whose footer is in the tail and whose row groups of the hexagon are then read by range. The size is not known before
+  * the first request (the pane does not load the release's `files.parquet`, 842 rows of paths for the Reproduce
+  * snippet), so there is no earlier decision to take. */
+-export const SPLIT_TAIL = 262_144;
++export const SPLIT_TAIL = 65_536;
+ 
+ /** the summed flat rows of a hexagon (`speciesForCell`: only the row groups of its range; the reader keeps the
+  * file's footer between hexagons), with the requests and bytes of this read. A split file is read by `split` (a

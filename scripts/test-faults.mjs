@@ -1050,6 +1050,14 @@ export const FAULTS = [
       "taxon and resolution on screen (or a run in flight) lose the table they are reading past the cap",
     gate: ["npx", "vitest", "run", "tests/obis/subtreeCache.test.ts", "-t", "class files kept"],
   },
+  {
+    id: "obis-split-tail-small",
+    patch: "tests/faults/obis-split-tail-small.patch",
+    describe:
+      "the split species files are opened with the 64 KiB tail again -- a file between 64 KiB and 256 KiB (Monterey's " +
+      "parent is 135 KB) is a tail then its row groups, two requests of about 0.2 s, not one",
+    gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "256 KiB"],
+  },
   // --- build week 6 step 5: the species and Scores lenses draw release COGs from their 3857 copies ------
   {
     id: "release-cog-pending-titiler",
