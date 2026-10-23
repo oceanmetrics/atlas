@@ -94,6 +94,18 @@ reads `budget` today; `lenses`, `pages`, `release` and `seal` choose modules fro
   MarineSensitivity/atlas; its Scores lens, Report export, seal and gallery arrive in build week 4
   (2026-11-20 to 11-26), see `instances/marinesensitivity/README.md`.
 
+## The OBIS layer's URL grammar (obis-hex links)
+
+An obis-hex link maps to the atlas query string
+`?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=lon,lat,zoom[&taxon=<rank>:<name>|aphia:<id>]&proj=<globe|mercator>`,
+with an outlined place as the `p.` token in the hash, or to the Place page when a place is outlined and no layer
+view is chosen (build week 4, step 1). The case table is **`tests/fixtures/obis_redirect_cases.json`**: every
+obis-hex key and query switch with its target or the reason it is dropped, and the cases (obis-hex URL, expected
+URL, `exact`, `dropped`). **Both repos' tests read it**: `tests/state/obisHex.test.ts` here drives
+`obisHexToAtlas(url)` (`src/lib/state/obisHex.ts`) and checks that the atlas's own `parseSel` and place codec read
+what it writes; obis-hex copies the table into its `tests/redirect.test.ts` for `redirectFor` (step 5). Change the
+table here first, then copy it.
+
 Collections declare their renderers in STAC through `atlas:*` hooks; `src/lib/catalog/hooks.ts` is the
 one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`) to its module.
 `unknownHooks` lists a collection's `atlas:*` keys that are neither a registered hook nor a data field.

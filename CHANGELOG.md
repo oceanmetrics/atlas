@@ -3,6 +3,7 @@
 ## 0.5.0 (unreleased, build week 4)
 
 - **Instance schema 1.1** (`instances/instance.schema.json`, step 1 "contracts first"): `lenses` (the lenses an instance builds; `defaults.lens` must be one of them), `tools` may name `report`, `pages` (the HTML entries it publishes, always `index`), `release` (`registry` required when present, `preview`, `access: "gate"`), `seal` (`agency`, `src`) and `budget` (`static_kb`, `worker_kb`). Both instances carry them (oceanmetrics: collection and species, index and catalog, 450 / 150 KB; marinesensitivity: scores and species, index and report, the marine-atlas registry with the preview gate, the MMA seal, 460 / 150 KB). `npm run size-budget` takes its default budgets from the selected instance; the other new fields choose modules from step 2. The hand validator learned `const`, `contains`, `minimum`, `allOf` and `if`/`then`. Fixtures in `tests/fixtures/instance/` (2 valid, 6 invalid with their expected errors). No change in the app.
+- **The OBIS layer's URL grammar**: `tests/fixtures/obis_redirect_cases.json` (32 cases and every obis-hex key or switch, carried or dropped with its reason) and `obisHexToAtlas(url)` (`src/lib/state/obisHex.ts`, not imported by the app yet), the table obis-hex's redirect copies.
 
 ## 0.4.3
 

@@ -1,0 +1,458 @@
+{
+  "about": "obis-hex URL -> the atlas URL of the same OBIS layer (build week 4, step 1). One table drives both sides: oceanmetrics/atlas tests/state/obisHex.test.ts (obisHexToAtlas) reads it here, and obis-hex copies it into tests/redirect.test.ts for its redirectFor. Each case: the obis-hex URL, the expected URL, whether the target shows what the old link showed (exact), and the obis-hex keys it does not carry (dropped; ?<key> for a query switch). Edit it here first, then copy.",
+  "grammar": "https://oceanmetrics.io/atlas/?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=<lon,lat,zoom>[&taxon=<rank>:<name>|aphia:<id>]&proj=<globe|mercator>[&theme=..][&tour=..][#pl=p.<id>.]",
+  "notes": [
+    "query keys are written in this order, encoded as the atlas's formatSel does (URLSearchParams: a space is +; then , : / unescaped); the hash pl is the p. token encoded the same way, so its % is %25",
+    "taxon splits on its first colon: the rank never holds one, the name may (an encoded colon in obis-hex's l)",
+    "dim.period also takes a year (2015) for the year layers of obis-h3 0.11; no obis-hex link names a year",
+    "the collection id is obis_h3 as the plan's grammar says; obisindicators' obis_h3_stac_collection() writes id obis-h3 today, so step 3 publishes it as obis_h3 or this table changes",
+    "the camera carries the same centre and zoom, but the atlas's panes cover other parts of the map, so the same camera is not the same view (not expressible)",
+    "?legacy= runs through obis-hex's legacyToState() before this table (no case here)"
+  ],
+  "origin": "https://oceanmetrics.io",
+  "keys": {
+    "i": {
+      "to": "dim.indicator",
+      "rule": "es|sp|shannon|simpson|n, the same tokens; anything else is es"
+    },
+    "l": {
+      "to": "i and taxon",
+      "rule": "all -> i=all; eov:<key> -> i=<key> (the item ids are all and the seven EOV keys); taxon:<rank>:<name> -> i=all&taxon=<rank>:<name> (split before decoding, as obis-hex); aphia:<id> -> i=all&taxon=aphia:<id>"
+    },
+    "p": {
+      "to": "dim.period",
+      "rule": "a decade 1960..2020 -> <decade>s; all, absent or anything else -> all; dropped to all for a taxon group (no taxon decades in the release)"
+    },
+    "r": {
+      "to": "res",
+      "rule": "auto or 1..7, else auto; clamped to 5 with a decade, 5 for an aphia subtree, 4 for an aphia subtree with a decade"
+    },
+    "c": {
+      "to": "map",
+      "rule": "obis-hex's camera lon,lat,zoom (read from the old hash only: the atlas's ?c= is the collection); malformed or absent -> the opening camera -103.7,33.2,2.57"
+    },
+    "g": {
+      "to": "proj",
+      "rule": "absent or globe -> proj=globe (written explicitly), flat -> proj=mercator"
+    },
+    "pl": {
+      "to": "the Place page, or #pl=p.<id>.",
+      "rule": "with l=all, i=es, p=all and r=auto -> /places/p/<id>; with any of them chosen -> the atlas, the place as the p. token (empty name) in the hash"
+    },
+    "pc": {
+      "drop": "the Place page is keyed by id and the p. token has no collection: the atlas resolves the id through the gazetteer index (inexact on the atlas side)"
+    },
+    "t": {
+      "drop": "obis-hex's theme, always written (default dark); the atlas's hash t is the report title, so it is never copied"
+    },
+    "o": {
+      "drop": "opacity: the atlas layer's own opacity control, not in the grammar"
+    },
+    "d": {
+      "drop": "ramp domain: the atlas legend's domain comes from stats.parquet (release p02 to p98)"
+    },
+    "b": {
+      "drop": "basemap labels: atlas layout"
+    },
+    "k": {
+      "drop": "the open Controls tab: obis-hex layout"
+    },
+    "cc": {
+      "drop": "the Controls pane folded: obis-hex layout"
+    },
+    "tc": {
+      "drop": "the Time strip folded: obis-hex layout"
+    },
+    "x": {
+      "drop": "the selected hexagon: the grammar has no key for it yet (inexact)"
+    },
+    "xo": {
+      "drop": "the Cell pane open: follows x"
+    },
+    "f": {
+      "drop": "the place filter: the atlas place filter is H3 membership from the gazetteer, with no URL key yet; the Place page has the exact values (inexact)"
+    },
+    "v": {
+      "drop": "v=places, the view as places: replaced by the Place page (inexact)"
+    },
+    "?tour": {
+      "to": "tour",
+      "rule": "on|off, the atlas's own tour= switch"
+    },
+    "?theme": {
+      "to": "theme",
+      "rule": "dark|light, the atlas's own theme= switch"
+    },
+    "?modal": {
+      "drop": "the atlas has no switch that opens a Help modal"
+    },
+    "?data": {
+      "drop": "a pinned release base; the atlas's ?catalog= names a catalog, not a release (inexact)"
+    },
+    "?h3t": {
+      "drop": "the h3t service: the atlas makes no h3t request"
+    },
+    "?legacy": {
+      "drop": "a Shiny bookmark: obis-hex's legacyToState() turns it into a hash first (its redirect page runs it), then that hash follows this table; the atlas codec ignores the switch"
+    }
+  },
+  "cases": [
+    {
+      "name": "the default view",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.85&t=dark&d=release&c=-103.7,33.2,2.57",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-103.7,33.2,2.57&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "an EOV, Shannon, the 1990s (p=1990 is dim.period=1990s), res 3, obis-hex's rounded camera",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=shannon&l=eov:fish&p=1990&r=3&o=0.85&t=light&d=release&c=-20.00,5.00,1.40",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=fish&dim.indicator=shannon&dim.period=1990s&res=3&map=-20,5,1.4&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "seabirds, records, the 2020s, auto",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=n&l=eov:seabirds&p=2020&r=auto&o=0.85&t=dark&d=release&c=-120.5,34.25,6",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=seabirds&dim.indicator=n&dim.period=2020s&res=auto&map=-120.5,34.25,6&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "p=all is the all-years value dim.period=all; a camelCase EOV key is the item id",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=eov:seaTurtles&p=all&r=2&o=0.85&t=dark&d=release&c=-80,25,4",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=seaTurtles&dim.indicator=sp&dim.period=all&res=2&map=-80,25,4&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a period that is not a decade (p=1995) is all years, as obis-hex reads it",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=1995&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "r=7 with a decade is res 5, as obis-hex drew it",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=eov:fish&p=1990&r=7&o=0.85&t=dark&d=release&c=-122,36.8,9",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=fish&dim.indicator=es&dim.period=1990s&res=5&map=-122,36.8,9&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "r=7 with all years stays 7",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=7&o=0.85&t=dark&d=release&c=-122,36.8,9",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=7&map=-122,36.8,9&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a resolution outside 1..7 (r=9) is auto, as obis-hex reads it",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=9&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "g=flat is proj=mercator",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20,5,1.4",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-20,5,1.4&proj=mercator",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a link with only some keys: the missing camera is obis-hex's opening camera, the globe written",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#l=eov:mangroves&i=simpson",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=mangroves&dim.indicator=simpson&dim.period=all&res=auto&map=-103.7,33.2,2.57&proj=globe",
+      "exact": true,
+      "dropped": []
+    },
+    {
+      "name": "a malformed camera (two numbers) is the opening camera; an unknown indicator is es",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=hill&l=all&p=all&r=auto&c=1,2",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-103.7,33.2,2.57&proj=globe",
+      "exact": true,
+      "dropped": []
+    },
+    {
+      "name": "the bare app, no hash",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-103.7,33.2,2.57&proj=globe",
+      "exact": true,
+      "dropped": []
+    },
+    {
+      "name": "a taxon group: item all, taxon=<rank>:<name>",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=taxon:class:Aves&p=all&r=auto&o=0.85&t=dark&d=release&c=-60,-50,3",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-60,-50,3&taxon=class:Aves&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a taxon name with a space (encoded %20 in l): + in the atlas query",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=taxon:family:Incertae%20sedis&p=all&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=sp&dim.period=all&res=auto&map=0,0,1&taxon=family:Incertae+sedis&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a taxon name with an encoded colon stays one name: taxon splits on its first colon",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=taxon:genus:Foo%3Abar&p=all&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&taxon=genus:Foo:bar&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a raw colon in the name is four parts: obis-hex reads all taxa, so does the redirect",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=taxon:genus:Foo:bar&p=all&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a taxon name with an encoded bar stays encoded (the grammar's | is an alternative, never a value)",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=taxon:family:A%7Cb&p=all&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&taxon=family:A%7Cb&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a taxon group with a decade: the release has no taxon decades (obis-hex loaded nothing), the period is all",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=taxon:class:Aves&p=1990&r=auto&o=0.85&t=dark&d=release&c=-60,-50,3",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=-60,-50,3&taxon=class:Aves&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "any WoRMS taxon: taxon=aphia:<id>, item all",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=aphia:137092&p=all&r=auto&o=0.85&t=dark&d=release&c=-70,40,4",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=sp&dim.period=all&res=auto&map=-70,40,4&taxon=aphia:137092&proj=globe",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "aphia at r=7: the atlas serves a subtree up to res 5",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=aphia:137092&p=all&r=7&o=0.85&t=dark&d=release&c=-122,36.8,9",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=sp&dim.period=all&res=5&map=-122,36.8,9&taxon=aphia:137092&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "aphia with a decade at r=5: the species table's decade variant is res 3 and 4",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=aphia:137092&p=1990&r=5&o=0.85&t=dark&d=release&c=-70,40,4",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=sp&dim.period=1990s&res=4&map=-70,40,4&taxon=aphia:137092&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "aphia on auto at zoom 9: obis-hex drew res 7, the atlas res 5",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=sp&l=aphia:137092&p=all&r=auto&o=0.85&t=dark&d=release&c=-122,36.8,9",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=sp&dim.period=all&res=auto&map=-122,36.8,9&taxon=aphia:137092&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a place outlined and nothing else chosen: the Place page",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.85&t=dark&d=release&c=-122,36.7,8&pl=NMS:MBNMS",
+      "atlas": "https://oceanmetrics.io/places/p/NMS:MBNMS",
+      "exact": true,
+      "dropped": [
+        "c",
+        "d",
+        "i",
+        "l",
+        "o",
+        "p",
+        "r",
+        "t"
+      ]
+    },
+    {
+      "name": "a place id with a space and its collection: the Place page by id, pc dropped",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.85&t=dark&d=release&c=-120,34,9&pl=BOEM:OCS-P%200561&pc=boem_lease_blocks",
+      "atlas": "https://oceanmetrics.io/places/p/BOEM:OCS-P%200561",
+      "exact": true,
+      "dropped": [
+        "c",
+        "d",
+        "i",
+        "l",
+        "o",
+        "p",
+        "pc",
+        "r",
+        "t"
+      ]
+    },
+    {
+      "name": "a place on a chosen view: the atlas, the place as the p. token in the hash",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=shannon&l=eov:seabirds&p=all&r=auto&o=0.85&t=dark&d=release&c=-120,34,7&pl=NMS:CINMS",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=seabirds&dim.indicator=shannon&dim.period=all&res=auto&map=-120,34,7&proj=globe#pl=p.NMS%253ACINMS.",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "a place with a space and its collection on a pinned resolution: the p. token, pc not carried",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=4&o=0.85&t=dark&d=release&c=-120,34,9&pl=BOEM:OCS-P%200561&pc=boem_lease_blocks",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=4&map=-120,34,9&proj=globe#pl=p.BOEM%253AOCS-P%25200561.",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "pc",
+        "t"
+      ]
+    },
+    {
+      "name": "the selected hexagon and its open pane are dropped",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=7&o=0.85&t=dark&d=release&c=-122,36.8,9&x=87283082bffffff&xo=1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=7&map=-122,36.8,9&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "o",
+        "t",
+        "x",
+        "xo"
+      ]
+    },
+    {
+      "name": "the place filter and the view as places are dropped (the Place page has the exact values)",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=2010&r=auto&o=0.85&t=dark&d=release&c=-120,34,6&f=places|NMS:CINMS,NMS:MBNMS&v=places",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=2010s&res=auto&map=-120,34,6&proj=globe",
+      "exact": false,
+      "dropped": [
+        "d",
+        "f",
+        "o",
+        "t",
+        "v"
+      ]
+    },
+    {
+      "name": "the layout keys and styling are dropped and the view stays exact",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.5&t=light&d=view&c=0,0,1&k=share&cc=1&tc=1&b=0",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": true,
+      "dropped": [
+        "b",
+        "cc",
+        "d",
+        "k",
+        "o",
+        "t",
+        "tc"
+      ]
+    },
+    {
+      "name": "?tour and ?theme carry to the atlas's own tour= and theme=; the hash t never does",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/?tour=off&theme=light#i=es&l=all&p=all&r=auto&o=0.85&t=dark&d=release&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe&theme=light&tour=off",
+      "exact": true,
+      "dropped": [
+        "d",
+        "o",
+        "t"
+      ]
+    },
+    {
+      "name": "?modal and ?h3t are dropped",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/?modal=sources&h3t=https://example.org/h3t/#i=es&l=all&p=all&r=auto&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": true,
+      "dropped": [
+        "?h3t",
+        "?modal"
+      ]
+    },
+    {
+      "name": "?data (a pinned release) is dropped: the atlas reads the current collection",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/?data=https://example.org/obis-h3/v20261012/#i=es&l=all&p=all&r=auto&c=0,0,1",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "exact": false,
+      "dropped": [
+        "?data"
+      ]
+    }
+  ]
+}

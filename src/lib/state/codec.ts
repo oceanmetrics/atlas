@@ -37,7 +37,7 @@ export interface UrlLike {
  * link a person reads and pastes keeps them raw (same call CalCOFI Explorer made, §4). Parsing needs
  * no matching "re-escape" step: `URLSearchParams` reads a literal `,`/`:` in a value identically to
  * its percent-encoded form, since neither is a `&`/`=` delimiter. */
-function prettyEncode(params: URLSearchParams): string {
+export function prettyEncode(params: URLSearchParams): string {
   return params.toString().replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%2F/g, "/");
 }
 
