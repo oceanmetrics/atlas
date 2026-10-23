@@ -4,11 +4,8 @@
 // this module builds DISPLAY tiles only; scores/values still come from Parquet elsewhere), never
 // recomputed: the rescale is the manifest's own, the colormap is titiler's own ramp name.
 import { signif3 } from "../../lib/geo/round";
-import {
-  titilerMaskTileTemplate,
-  titilerTileTemplate,
-  OUTSIDE_PRA_COLORMAP,
-} from "../../lib/map/layers/titiler";
+import { titilerMaskTileTemplate, OUTSIDE_PRA_COLORMAP } from "../../lib/map/layers/titiler";
+import { createTitilerRasterSource, type RasterSource } from "../../lib/raster/tiles";
 import { SCORE_RASTER_OPACITY, OVERLAY_RASTER_OPACITY } from "../../lib/map/layers/raster";
 import {
   legendStops,
@@ -22,6 +19,11 @@ import { fullSubregion, type BootLayerRow } from "./boot";
 export const SCORE_RASTER_ID = "r_lyr";
 export const OUTSIDE_PRA_OVERLAY_ID = "outside_pra_lyr";
 
+/** the score rasters' default renderer behind the `RasterSource` seam (`lib/raster/tiles.ts`): the
+ * stock titiler, until the release's score COGs carry EPSG:3857 copies and a `cogRasterSource`
+ * (`lib/raster/cog.ts`) can draw them in the browser (build week 6, when titiler retires). */
+const SCORE_RASTER_SOURCE: RasterSource = createTitilerRasterSource();
+
 /**
  * The score/metric raster for `layer` — always the `FULL` COG (D7: the study area is a camera,
  * never a filter), the manifest's `rescale` verbatim, the chosen palette as titiler's
@@ -31,12 +33,14 @@ export const OUTSIDE_PRA_OVERLAY_ID = "outside_pra_lyr";
 export function scoreRasterSpec(
   layer: BootLayerRow | null,
   palette: PaletteName,
+  source: RasterSource = SCORE_RASTER_SOURCE,
 ): RasterLayerSpec | null {
   if (!layer) return null;
   const full = fullSubregion(layer);
   if (!full?.cog || !full.rescale) return null;
+  // the template MapLibre fills: the renderer's own tile URL with literal `{z}/{x}/{y}`
   const tiles = [
-    titilerTileTemplate({
+    source.tileUrl("{z}", "{x}", "{y}", {
       url: full.cog,
       colormapName: palette,
       rescaleMin: full.rescale[0],

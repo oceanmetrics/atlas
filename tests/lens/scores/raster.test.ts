@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layerByKey } from "../../../src/lens/scores/boot";
+import { fullSubregion, layerByKey } from "../../../src/lens/scores/boot";
 import { formatScoresLegendValue } from "../../../src/lens/scores/mapInputs";
 import {
   OUTSIDE_PRA_OVERLAY_ID,
@@ -8,7 +8,8 @@ import {
   rasterLegend,
   scoreRasterSpec,
 } from "../../../src/lens/scores/raster";
-import { tileUrlLeaksStudyArea } from "../../../src/lib/map/layers/titiler";
+import { tileUrlLeaksStudyArea, titilerTileTemplate } from "../../../src/lib/map/layers/titiler";
+import type { RasterSource } from "../../../src/lib/raster/tiles";
 import { BOOT_V7, MANIFEST_OVERLAYS_V7 } from "./fixtures";
 
 const primprod = layerByKey(BOOT_V7, "primprod")!;
@@ -102,5 +103,42 @@ describe("rasterLegend", () => {
     expect(legend.unavailable).toBe(false);
     expect(formatScoresLegendValue(legend.stops[0].value)).toBe("0.0123");
     expect(formatScoresLegendValue(legend.stops.at(-1)!.value)).toBe("98.8");
+  });
+});
+
+// build week 4: the score raster sits behind the `RasterSource` seam (lib/raster/tiles.ts), the same
+// one the Collections lens' COGs use; titiler is its default until the score COGs carry 3857 copies
+describe("scoreRasterSpec behind the RasterSource seam", () => {
+  it("the default source is the stock titiler: the same template as before, byte for byte", () => {
+    const spec = scoreRasterSpec(primprod, "spectral_r")!;
+    expect(spec.tiles[0]).toBe(
+      titilerTileTemplate({
+        url: fullSubregion(primprod)!.cog!,
+        colormapName: "spectral_r",
+        rescaleMin: fullSubregion(primprod)!.rescale![0],
+        rescaleMax: fullSubregion(primprod)!.rescale![1],
+      }),
+    );
+  });
+
+  it("another source draws the same layer: its own tile URL, with the release's rescale and palette", () => {
+    const calls: unknown[] = [];
+    const source: RasterSource = {
+      kind: "cog",
+      tileUrl: (z, x, y, params) => {
+        calls.push(params);
+        return `cog://example/${z}/${x}/${y}`;
+      },
+    };
+    const spec = scoreRasterSpec(primprod, "viridis", source)!;
+    expect(spec.tiles).toEqual(["cog://example/{z}/{x}/{y}"]);
+    expect(calls).toEqual([
+      {
+        url: fullSubregion(primprod)!.cog,
+        colormapName: "viridis",
+        rescaleMin: fullSubregion(primprod)!.rescale![0],
+        rescaleMax: fullSubregion(primprod)!.rescale![1],
+      },
+    ]);
   });
 });
