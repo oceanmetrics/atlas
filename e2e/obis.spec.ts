@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { ATLAS_BASE, routeBucket, waitForHydration } from "./hermetic";
+import { ATLAS_BASE, GAZETTEER_BASE, routeBucket, waitForHydration } from "./hermetic";
 import { fulfillRanged } from "./map-hermetic";
 import { safeRoute } from "./routeSafety";
 
@@ -40,7 +40,12 @@ const catalogLinking = (href: string) => ({
   links: [{ rel: "child", href, type: "application/json", "atlas:group": "obis" }],
 });
 
-async function boot(page: Page, path: string, requests: string[] = []) {
+async function boot(
+  page: Page,
+  path: string,
+  requests: string[] = [],
+  setup?: (page: Page) => Promise<void>,
+) {
   await routeBucket(page);
   // later routes win: the catalog links only the OBIS collection, the release is the fixture tree
   await page.route(
@@ -59,6 +64,7 @@ async function boot(page: Page, path: string, requests: string[] = []) {
       return route.fulfill({ status: 404, body: "" });
     }),
   );
+  await setup?.(page);
   await page.goto(path);
   await waitForHydration(page);
   await page.waitForFunction(
@@ -272,4 +278,132 @@ test("a sea clears the place and flies", async ({ page }) => {
   await expect.poll(() => new URL(page.url()).searchParams.get("map")).toBe("-68.5,42.8,6.2");
   expect(new URL(page.url()).hash).not.toContain("pl=");
   expect(new URL(page.url()).searchParams.get("filter")).toBeNull();
+});
+
+test("a whole collection as the filter: the select writes filter=coll:<slug>, the words say its title", async ({
+  page,
+}) => {
+  // the gazetteer's `places` collection with its H3 membership (the fixture release's trimmed copy)
+  await boot(page, Q, [], async (page) => {
+    await page.route(
+      `${GAZETTEER_BASE}index/layers.json`,
+      safeRoute((route) =>
+        route.fulfill({
+          status: 200,
+          json: {
+            layers: [
+              {
+                slug: "places",
+                collection: "places",
+                title: "Ocean Metrics places",
+                geom_type: "MultiPolygon",
+                n: 18,
+                h3: "https://storage.oceanmetrics.io/gazetteer/places/h3/membership.json",
+              },
+              { slug: "calcofi_lines", title: "CalCOFI lines", geom_type: "LineString", h3: null },
+            ],
+          },
+        }),
+      ),
+    );
+    await page.route(
+      (url) => url.href.startsWith(`${GAZETTEER_BASE}places/h3/`),
+      safeRoute((route) => {
+        const rel = route
+          .request()
+          .url()
+          .slice(GAZETTEER_BASE.length + "places/".length);
+        // the fixture keeps the manifest beside `h3/`, as membership.json's own paths say
+        const file = decodeURIComponent(rel.split("?")[0]);
+        const path = `${FIX}membership/${file === "h3/membership.json" ? "membership.json" : file}`;
+        return existsSync(path)
+          ? path.endsWith(".json")
+            ? route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: readFileSync(path),
+              })
+            : fulfillRanged(route, readFileSync(path))
+          : route.fulfill({ status: 404, body: "" });
+      }),
+    );
+  });
+  const select = page.getByTestId("h3-place").getByLabel("Only inside a collection");
+  // only the polygon collection with a build is offered
+  await expect(select.locator("option")).toHaveText([
+    "Only inside a collection…",
+    "Ocean Metrics places",
+  ]);
+  await select.selectOption("places");
+  await expect.poll(() => new URL(page.url()).searchParams.get("filter")).toBe("coll:places");
+  await expect(page.getByTestId("h3-filter-note")).toContainText(
+    /res-2 hexagons of Ocean Metrics places/,
+    { timeout: 30_000 },
+  );
+  await expect(page.getByTestId("h3-sentence")).toContainText("in Ocean Metrics places");
+  await expect(page.getByTestId("h3-coverage")).toContainText(/hexagons in Ocean Metrics places/, {
+    timeout: 30_000,
+  });
+  // off again
+  await select.selectOption("");
+  await expect.poll(() => new URL(page.url()).searchParams.get("filter")).toBeNull();
+});
+
+test("a collection over the read cap says 'filter by one place instead' and reads none of its files", async ({
+  page,
+}) => {
+  const gaz: string[] = [];
+  await boot(page, `${Q}&filter=coll:big_efh`, [], async (page) => {
+    await page.route(
+      `${GAZETTEER_BASE}index/layers.json`,
+      safeRoute((route) =>
+        route.fulfill({
+          status: 200,
+          json: {
+            layers: [
+              {
+                slug: "big_efh",
+                collection: "big_efh",
+                title: "Essential Fish Habitat",
+                geom_type: "MultiPolygon",
+                n: 782,
+                h3: "https://storage.oceanmetrics.io/gazetteer/big_efh/h3/membership.json",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    await page.route(
+      (url) => url.href.startsWith(`${GAZETTEER_BASE}big_efh/h3/`),
+      safeRoute((route) => {
+        gaz.push(route.request().url());
+        // NOAA EFH's res-2 size, scaled to the cap's edge: 500,001 rows
+        return route.fulfill({
+          status: 200,
+          json: {
+            min_share: 0.01,
+            res: [2],
+            parent_res: {},
+            files: [
+              {
+                res: 2,
+                parent: null,
+                path: "h3/res=2/membership.parquet",
+                rows: 500_001,
+                bytes: 1,
+              },
+            ],
+          },
+        });
+      }),
+    );
+  });
+  await expect(page.getByTestId("h3-filter-note")).toContainText("filter by one place instead", {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("h3-filter-note")).toContainText("Essential Fish Habitat");
+  expect(gaz).toEqual([
+    "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/big_efh/h3/membership.json",
+  ]);
 });

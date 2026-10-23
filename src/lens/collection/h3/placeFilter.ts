@@ -16,6 +16,8 @@ export interface MembershipFile {
   /** the file's url, absolute */
   url: string;
   rows: number;
+  /** the file's size in bytes (membership.json `bytes`), 0 when it does not say */
+  bytes: number;
 }
 
 export interface MembershipManifest {
@@ -45,6 +47,7 @@ export function parseMembership(json: unknown, url: string): MembershipManifest 
       parent: typeof f.parent === "string" ? f.parent : null,
       url: abs,
       rows: Number(f.rows ?? 0),
+      bytes: Number(f.bytes ?? 0),
     });
   }
   const pr: Record<string, number> = {};
@@ -74,12 +77,13 @@ export function membershipFiles(
   );
 }
 
-/** a membership file's hexagons of the given places (hyparquet; a buffer for tests). Every row counts: the gazetteer
- * keeps a cell when at least `min_share` of it is inside the place OR it holds that share of the place (a small place
- * in a large hexagon), so a row's own `share` may be under `min_share`. */
+/** a membership file's hexagons of the given places (hyparquet; a buffer for tests), or of every place when `placeIds`
+ * is null (a whole collection). Every row counts: the gazetteer keeps a cell when at least `min_share` of it is inside
+ * the place OR it holds that share of the place (a small place in a large hexagon), so a row's own `share` may be
+ * under `min_share`. */
 export async function readMembershipCells(
   source: string | ArrayBuffer,
-  placeIds: readonly string[],
+  placeIds: readonly string[] | null,
 ): Promise<string[]> {
   const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
   const file = typeof source === "string" ? await openRangeFile(source) : source;
@@ -88,13 +92,13 @@ export async function readMembershipCells(
   const rows = (await parquetReadObjects({
     file,
     metadata,
-    columns: ["place_id", "h3"],
+    columns: placeIds === null ? ["h3"] : ["place_id", "h3"],
     compressors: COMPRESSORS,
   })) as { place_id?: unknown; h3?: unknown }[];
-  const want = new Set(placeIds);
+  const want = placeIds === null ? null : new Set(placeIds);
   const out = new Set<string>();
   for (const r of rows) {
-    if (!want.has(String(r.place_id))) continue;
+    if (want && !want.has(String(r.place_id))) continue;
     out.add(String(r.h3).toLowerCase());
   }
   return [...out].sort();
@@ -103,6 +107,42 @@ export async function readMembershipCells(
 /** at most this many hexagons in the map's filter (a literal list); past it the filter says to zoom in or pin a
  * coarser resolution */
 export const FILTER_MAX_CELLS = 60_000;
+
+// ---- a whole collection as the filter (`filter=coll:<slug>`; obis-hex `f=<collection>`) -------------------------------
+
+/** a collection's membership is read whole for the drawn resolution (every file of it: no polygon in the browser), so
+ * it has a cap, measured on the gazetteer's membership files (2026-10-23, 36 collections with an H3 build): a file
+ * costs 2.4 to 11 bytes a row (about 8 on the densest large one, `noaa_state_submerged_lands` res 7: 145,680 rows,
+ * 1.2 MB), so 500,000 rows are 1.2 to 5 MB, and the largest read under the cap is about 1.4 MB. Above it, or above
+ * `COLLECTION_MAX_BYTES` by the manifest's own sizes, the filter says "filter by one place instead". */
+export const COLLECTION_MAX_CELLS = 500_000;
+export const COLLECTION_MAX_BYTES = 5 * 1024 * 1024;
+
+export interface CollectionPlan {
+  files: MembershipFile[];
+  /** membership rows (a hexagon of two places is two rows) and bytes of the files the resolution reads */
+  rows: number;
+  bytes: number;
+  /** over the cap: nothing is read */
+  over: boolean;
+}
+
+/** what a collection filter reads at a resolution: every file of the resolution (a split resolution has one file per
+ * parent, all of them), counted from the manifest before any byte is read */
+export function collectionPlan(m: MembershipManifest, res: number): CollectionPlan {
+  const files = m.files.filter((f) => f.res === res);
+  const rows = files.reduce((a, f) => a + f.rows, 0);
+  const bytes = files.reduce((a, f) => a + f.bytes, 0);
+  return { files, rows, bytes, over: rows > COLLECTION_MAX_CELLS || bytes > COLLECTION_MAX_BYTES };
+}
+
+/** every resolution's cells in one list. A loop, not `push(...cells)`: a collection at res 7 holds hundreds of
+ * thousands of hexagons, and spreading that many arguments overflows the call stack. */
+export function allCells(byRes: ReadonlyMap<number, readonly string[]>): string[] {
+  const out: string[] = [];
+  for (const cells of byRes.values()) for (const c of cells) out.push(c);
+  return out;
+}
 
 /** the fill's filter with the place's hexagons: the layer's own filter and `h3` in the list */
 export function placeFilterExpr(
@@ -143,6 +183,34 @@ export function placeFilterNote(o: {
       `${o.cells.toLocaleString("en-US")} res-${o.res} hexagons of the place${o.places > 1 ? "s" : ""} (the gazetteer's H3 membership: at least ${Math.round(o.minShare * 100)}% of the hexagon inside, or ${Math.round(o.minShare * 100)}% of the place in it). The legend and the coverage line are statistics of the hexagons, not the place's own values: the Place page has those.`,
     );
   return lines.join(" ") || null;
+}
+
+/** a collection filter's line: what it keeps, or why it keeps nothing */
+export function collFilterNote(o: {
+  title: string | null;
+  slug: string;
+  phase: "idle" | "loading" | "ready" | "error";
+  /** the collection has no H3 membership (a point or line collection, no build, or not in the gazetteer) */
+  without: boolean;
+  over: boolean;
+  cells: number | null;
+  res: number;
+  minShare: number;
+  error?: string | null;
+  tooMany?: boolean;
+}): string {
+  const name = o.title ?? o.slug;
+  if (o.without) return `${name}: no H3 membership in the gazetteer, so no hexagons.`;
+  if (o.phase === "loading") return `Reading the H3 membership of ${name}…`;
+  if (o.phase === "error")
+    return `The H3 membership of ${name} could not be read (${o.error ?? "unknown"}).`;
+  if (o.over)
+    return `${name} has too many hexagons at res ${o.res} to filter by (over ${COLLECTION_MAX_CELLS.toLocaleString("en-US")} membership rows): filter by one place instead, or pin a coarser hexagon size.`;
+  if (o.tooMany)
+    return `Too many hexagons at res ${o.res} for this filter: zoom out or pin a coarser hexagon size.`;
+  if (o.cells === null) return "";
+  const pct = Math.round(o.minShare * 100);
+  return `${o.cells.toLocaleString("en-US")} res-${o.res} hexagons of ${name} (the gazetteer's H3 membership: at least ${pct}% of the hexagon inside a place, or ${pct}% of a place in it). The legend and the coverage line are statistics of the hexagons, not any place's own values: the Place page has those.`;
 }
 
 // ---- seas and oceans: camera presets (obis-hex `view/regions.ts`) ------------------------------------------------

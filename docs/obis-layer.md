@@ -159,6 +159,36 @@ place's loaded hexagons ("124 of 138 hexagons in the place have ≥ 50 records",
 says these are statistics of the hexagons, not the place's own values, which the Place page has. A drawn or uploaded
 place has no membership and says so. No polygon is read in the browser.
 
+### A whole collection as the filter (`filter=coll:<slug>`, obis-hex `f=<collection>`)
+
+The select "Only inside a collection" in the layer's Place field (the polygon collections of `index/layers.json` that
+have an `h3` build, by title) writes `filter=coll:<slug>` (a gazetteer slug: `[a-z0-9][a-z0-9_-]*`, anything else is
+dropped on read; `parseFilter`, `filterColl`). The hash's places are not needed. The filter reads the collection's
+`membership.json` and, for the drawn resolution, **every file of that resolution** with no place named
+(`readMembershipCells(url, null)`: the hexagons of every place, a shared one once): `<slug>/h3/res=5/membership.parquet`
+up to res 5, and for res 6 and 7 all the parent files (`collectionPlan`; no polygon in the browser). The sentence says
+"in NOAA National Marine Sanctuaries (statistics of its hexagons)", the coverage line "108 of 161 hexagons in NOAA
+National Marine Sanctuaries have ≥ 50 records" (`filteredCoverage`), the status line "No hexagons in <title>.", and the
+filter's line says these are statistics of the hexagons, not any place's own values.
+
+**The cap.** The plan is counted from `membership.json` before a byte is read (each file lists `rows` and `bytes`): a
+resolution over `COLLECTION_MAX_CELLS` = 500,000 membership rows, or over `COLLECTION_MAX_BYTES` = 5 MB, is not read and
+the line says "<title> has too many hexagons at res N to filter by (over 500,000 membership rows): filter by one place
+instead, or pin a coarser hexagon size." Measured on the 36 collections of the gazetteer that have an H3 build
+(2026-10-23, `membership.json` sizes, then the reads below): a file costs 2.4 to 11 bytes a row (about 8 on the densest
+large one, `noaa_state_submerged_lands` res 7: 145,680 rows, 1.2 MB), so 500,000 rows are 1.2 to 5.5 MB and the
+largest read under the cap is 1.2 MB; `noaa_sanctuaries` is 6,584 rows and 25 KB at res 5 (the whole read at res 3 is
+3.4 KB); `noaa_efh` is 36,606 rows at res 3 (88.6 KB read), 181,590 at res 4 (225 KB read) and 1,036,984 at res 5
+(3.8 MB, over by rows: not read). `mr_eez` has no H3 membership in the gazetteer today (`layers.json` `h3: null`,
+its `membership.json` answers 403), so the line says "no H3 membership in the gazetteer, so no hexagons". The
+manifest is itself a read: 52 KB for `noaa_sanctuaries` and 292 KB for `noaa_efh` (a file row per parent). The 60,000
+hexagons the map's filter holds (`FILTER_MAX_CELLS`) still apply after the read: the sanctuaries at res 7 read 214 files (215 requests, 1.10 MB with the manifest, 7.2 s) and then say "Too many hexagons at res 7" (302,343 rows); at res 6, 60 files, 61 requests, 242 KB with the manifest, 3.8 s, 43,916 hexagons drawn. (Found by that run: `push(...cells)` over 302,343 cells overflowed the stack and froze the note; `allCells` loops, regression test in `place.test.ts`.)
+
+Tests: `tests/obis/codec.test.ts` ('filter=coll:<slug> round-trips'), `tests/obis/place.test.ts` (the plan, the cap's
+edges, the words, the collection's membership and the choices), `tests/obis/coverage.test.ts` ('the coverage line of a
+filter'), `e2e/obis.spec.ts` (the select and its words; a collection over the cap reads no file). Shot
+`obis_coll_filter_sanctuaries_1280_light` (the sanctuaries' res-3 hexagons off California, 108 of 161 with ≥ 50 records).
+
 ## Still open after the second pass
 
 - **Bytes in the footer** (parity row 80). The tiles are read in MapLibre's worker by the map package's
@@ -211,8 +241,9 @@ and its proof 0.25 to 0.5 day; words, e2e and shots 0.25 day. 1.5 to 2 days.
 
 - `taxon=aphia:<id>` for a taxon that is no head, and "Search all of WoRMS": designed above. The layer says the id is
   not one of the release's precomputed taxa.
-- The view as places (obis-hex `v=places`, waiting on Ben's word to drop) and a whole collection as the place filter
-  (obis-hex `f=<collection>`: the atlas filters by the places in the list).
+- The view as places (obis-hex `v=places`, waiting on Ben's word to drop). A whole collection as the place filter is
+  built (`filter=coll:<slug>`, above); obis-hex's `f=<coll>|<id>,<id>` (a collection and some of its places) is the
+  places filter with `#pl=`.
 - The decade filter of the Cell pane is the species whose first and last years span the period (their records
   are every year's); the per-decade species table (`species_decade/`, class-partitioned) is not read.
 - An EOV's or a head's species list is every taxon's (the lookup has no EOV column and no ranks above phylum);

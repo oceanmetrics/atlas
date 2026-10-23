@@ -10,7 +10,8 @@
 // The keys, in the order written: `c=obis_h3` (the collection), `i=<item>` (`all` or an EOV key; a taxon has no item
 // of its own and filters `all`), `dim.indicator` (es|sp|shannon|simpson|n), `dim.period` (`<decade>s` or `all`),
 // `res` (`auto` or 1..7, clamped to what the atlas serves), `map=lon,lat,zoom` (obis-hex's camera `c`, read from the
-// old hash only), `taxon=<rank>:<name>` or `aphia:<id>` (split on the FIRST `:`, so a name may hold one), `proj`
+// old hash only), `taxon=<rank>:<name>` or `aphia:<id>` (split on the FIRST `:`, so a name may hold one), `dom=view` (from
+// obis-hex's `d=view`), `proj`
 // (globe|mercator, always written: obis-hex's default is the globe), `theme` and `tour` (only from obis-hex's query
 // switches), and in the hash `pl=` the outlined place as the atlas's `p.` token (docs/gazetteer-places.md). A place
 // outlined with no layer view chosen goes to the Place page instead. Everything else is dropped; the table's `keys`
@@ -224,8 +225,14 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
   params.set("map", `${lon},${lat},${zoom}`);
   if (layer.kind === "taxon") params.set("taxon", `${layer.rank}:${layer.name}`);
   if (layer.kind === "aphia") params.set("taxon", `aphia:${layer.id}`);
-  params.set("proj", proj);
   const carried = new Set(["i", "l", "p", "r", "c", "g"]);
+  // obis-hex's ramp domain: `d=view` (the loaded hexagons) is the atlas's `dom=view`; `d=release` (its default) and
+  // anything else is the atlas's default, the release's stats.parquet range, so it is not carried
+  if (p.get("d") === "view") {
+    params.set("dom", "view");
+    carried.add("d");
+  }
+  params.set("proj", proj);
   const theme = (q.get("theme") ?? "").toLowerCase();
   if (theme === "dark" || theme === "light") {
     params.set("theme", theme);

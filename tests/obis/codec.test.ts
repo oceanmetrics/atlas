@@ -32,6 +32,8 @@ describe("every atlas URL of the case table opens through parseSel", () => {
     expect(s.res).toBe(res === "auto" ? undefined : Number(res));
     expect(s.taxon).toBe(q.get("taxon") ?? undefined);
     expect(s.proj).toBe(q.get("proj"));
+    // obis-hex's d=view is carried as dom=view; no other d is
+    expect(s.dom).toBe(q.get("dom") === "view" ? "view" : undefined);
     // the round trip: what the atlas writes back opens the same view
     const out = formatSel(s);
     expect(parseSel(out)).toEqual(s);
@@ -146,6 +148,22 @@ describe("dom", () => {
     for (const v of ["", "release", "VIEW", "x"]) expect(sel(`?dom=${v}`).dom).toBeUndefined();
     expect(formatSel({ ...DEFAULT_SEL, c: "obis_h3" }).search).toBe("?c=obis_h3");
     expect(QUERY_KEYS).toContain("dom");
+  });
+  it("filter=coll:<slug> round-trips (a whole gazetteer collection, obis-hex f=<collection>); a malformed slug is dropped", () => {
+    expect(sel("?c=obis_h3&filter=coll:noaa_sanctuaries").filter).toBe("coll:noaa_sanctuaries");
+    expect(sel("?c=obis_h3&filter=coll%3Anoaa_sanctuaries").filter).toBe("coll:noaa_sanctuaries");
+    expect(
+      formatSel({ ...DEFAULT_SEL, c: "obis_h3", filter: "coll:noaa_sanctuaries" }).search,
+    ).toBe("?c=obis_h3&filter=coll:noaa_sanctuaries");
+    const s = sel("?c=obis_h3&filter=coll:noaa_sanctuaries");
+    expect(parseSel(formatSel(s))).toEqual(s);
+    for (const v of ["coll:", "coll:A", "coll:a b", "coll:../x", "coll:<x>", "colls:a", "coll"])
+      expect(sel(`?filter=${encodeURIComponent(v)}`).filter, v).toBeUndefined();
+    // the hash's places are untouched by a collection filter, and filter=places still reads
+    expect(sel("?filter=places").filter).toBe("places");
+    expect(sel("?c=obis_h3&filter=coll:places", "#pl=p.NMS%253ACINMS.Channel%2520Islands").pl).toBe(
+      "p.NMS%3ACINMS.Channel%20Islands",
+    );
   });
   it("the place filter is the atlas's own filter=places over the hash's places", () => {
     const s = sel("?c=obis_h3&filter=places", "#pl=p.NMS%253ACINMS.Channel%2520Islands");

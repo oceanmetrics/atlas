@@ -55,8 +55,19 @@ export function toggledOv(
   return sameSet(next, DEFAULT_OVERLAYS) ? undefined : next;
 }
 
-// `?filter=places` -- dim the hex cells outside the selected places.
-export type PlaceFilter = "places";
+// `?filter=places` -- dim the hex cells outside the selected places. `?filter=coll:<slug>` (an h3 layer only) keeps
+// the hexagons of a whole gazetteer polygon collection, by the collection's H3 membership (obis-hex `f=<coll>`).
+export type PlaceFilter = "places" | `coll:${string}`;
 export function parseFilter(v: string | null): PlaceFilter | undefined {
-  return v === "places" ? "places" : undefined;
+  if (v === "places") return "places";
+  if (v !== null && v.startsWith("coll:")) {
+    const slug = v.slice(5);
+    if (SLUG_RE.test(slug)) return `coll:${slug}`;
+  }
+  return undefined;
+}
+
+/** the collection slug of a `coll:<slug>` filter, else null */
+export function filterColl(f: PlaceFilter | undefined): string | null {
+  return f !== undefined && f.startsWith("coll:") ? f.slice(5) : null;
 }

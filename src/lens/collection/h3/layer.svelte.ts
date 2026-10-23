@@ -28,6 +28,8 @@ import { addProtocol, importScriptInWorkers, setWorkerUrl } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { untrack } from "svelte";
+import { filterColl as filterCollOf } from "../../../lib/gazetteer/overlayUrl";
+import type { MembershipCollection } from "../../../lib/gazetteer/resolve";
 import { BRAND_NAME } from "../../../lib/brand/instance";
 import type { H3Spec } from "../../../lib/catalog/h3";
 import type { CollectionEntry } from "../../../lib/catalog/load";
@@ -58,6 +60,7 @@ import {
   resNote,
   sentenceParts,
   statusLine,
+  filteredCoverage,
   withinPart,
   type SentenceParts,
   formatIndicator,
@@ -87,6 +90,9 @@ import {
 } from "./share";
 import {
   FILTER_MAX_CELLS,
+  allCells,
+  collFilterNote,
+  collectionPlan,
   membershipFiles,
   parseMembership,
   placeFilterExpr,
@@ -185,6 +191,13 @@ export interface H3Layer {
   readonly layerId: string | null;
   /** the place filter's line, null when the filter is off */
   readonly filterNote: string | null;
+  /** `filter=coll:<slug>`: the collection the hexagons are filtered to, else null */
+  readonly filterColl: string | null;
+  /** the polygon collections with an H3 membership (the filter's choices); null until `ensureCollections` reads them */
+  readonly collections: readonly MembershipCollection[] | null;
+  ensureCollections(): void;
+  /** filter the hexagons to a whole gazetteer collection, or (null) turn the filter off */
+  setFilterColl(slug: string | null): void;
   /** the selected places' collections (Data sources) */
   readonly placeSources: { title: string; citation: string | null; license: string | null }[];
   /** the app's name and version */
@@ -215,6 +228,33 @@ const linesHtml = (lines: readonly string[]) =>
       l.startsWith("▸ ") ? `<div><b>${esc(l.slice(2))}</b></div>` : `<div>${esc(l)}</div>`,
     )
     .join("")}</div>`;
+
+/** the place filter's reads: the cells per resolution for the current places (or the collection) */
+interface MembershipState {
+  key: string;
+  phase: "idle" | "loading" | "ready" | "error";
+  error: string | null;
+  byRes: Map<number, string[]>;
+  without: string[];
+  minShare: number;
+  sources: { title: string; citation: string | null; license: string | null }[];
+  /** a collection filter: its title, whether it has no membership at all, the resolutions over the read cap */
+  title: string | null;
+  noMembership: boolean;
+  over: ReadonlySet<number>;
+}
+const emptyMembership = (key: string): MembershipState => ({
+  key,
+  phase: "idle",
+  error: null,
+  byRes: new Map(),
+  without: [],
+  minShare: 0.01,
+  sources: [],
+  title: null,
+  noMembership: false,
+  over: new Set(),
+});
 
 // ---- the worker: the h3 module joins MapLibre's worker once per page ----------------------------------------
 let workerReady: Promise<void> | null = null;
@@ -296,23 +336,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
   let viewKm2 = $state(0);
   // the place filter: the places codec (lazy), each place's membership, and the cells per resolution
   let placesModel = $state.raw<typeof import("../../../places/model") | null>(null);
-  let membership = $state.raw<{
-    key: string;
-    phase: "idle" | "loading" | "ready" | "error";
-    error: string | null;
-    byRes: Map<number, string[]>;
-    without: string[];
-    minShare: number;
-    sources: { title: string; citation: string | null; license: string | null }[];
-  }>({
-    key: "",
-    phase: "idle",
-    error: null,
-    byRes: new Map(),
-    without: [],
-    minShare: 0.01,
-    sources: [],
-  });
+  let membership = $state.raw<MembershipState>(emptyMembership(""));
 
   const spec = $derived(deps.spec());
   const entry = $derived(deps.entry());
@@ -352,9 +376,17 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
   const effRes = $derived(pinPlan?.res ?? "auto");
 
   // ---- the place filter (`?filter=places` with gazetteer places in the hash) ---------------------------------------
-  const filterOn = $derived(selStore.sel.filter === "places");
+  const filterColl = $derived(filterCollOf(selStore.sel.filter));
+  let collections = $state.raw<readonly MembershipCollection[] | null>(null);
+  let collectionsLoading = false;
+  /** the collection's words in the sentence, coverage and status: its title once read, else the list's, else the slug */
+  const collTitle = $derived(
+    membership.title ?? collections?.find((c) => c.slug === filterColl)?.title ?? filterColl ?? "",
+  );
+  const placesOn = $derived(selStore.sel.filter === "places");
+  const filterOn = $derived(placesOn || filterColl !== null);
   const filterPlaces = $derived(
-    filterOn && placesModel ? placesModel.placesFromHash(selStore.sel.pl) : [],
+    placesOn && placesModel ? placesModel.placesFromHash(selStore.sel.pl) : [],
   );
   const gazPlaces = $derived(
     filterPlaces.flatMap((p) => (p.kind === "gaz" ? [{ id: p.id, name: p.name || p.id }] : [])),
@@ -490,28 +522,20 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
 
     // the places codec, once the filter is on
     $effect(() => {
-      if (!filterOn || placesModel) return;
+      if (!placesOn || placesModel) return;
       void import("../../../places/model").then((mod) => (placesModel = mod));
     });
 
     // the membership of the filter's places at the drawn resolution (and the parents' for res 6 and 7)
     $effect(() => {
-      const key = placesKey;
+      const coll = filterColl;
+      const key = coll !== null ? `coll:${coll}` : placesKey;
       const res = shownRes;
       if (!filterOn || res === null) return;
       untrack(() => {
-        if (membership.key !== key)
-          membership = {
-            key,
-            phase: "idle",
-            error: null,
-            byRes: new Map(),
-            without: [],
-            minShare: 0.01,
-            sources: [],
-          };
+        if (membership.key !== key) membership = emptyMembership(key);
         if (!key || membership.byRes.has(res) || membership.phase === "loading") return;
-        void loadMembership(key, gazPlaces, res);
+        void (coll !== null ? loadCollection(key, coll, res) : loadMembership(key, gazPlaces, res));
       });
     });
 
@@ -796,12 +820,68 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
 
   /** the filter's cells: every resolution read so far for the current places (the fill's step on the zoom draws one) */
   function filterCells(): string[] {
-    const out: string[] = [];
-    for (const c of untrack(() => membership.byRes).values()) out.push(...c);
-    return out;
+    return allCells(untrack(() => membership.byRes));
   }
 
   const manifestCache = new Map<string, Promise<MembershipManifest | null>>();
+  const manifestOf = (url: string) => {
+    let mp = manifestCache.get(url);
+    if (!mp) {
+      mp = fetchJson(url).then(
+        (j) => parseMembership(j, url),
+        () => null,
+      );
+      manifestCache.set(url, mp);
+    }
+    return mp;
+  };
+
+  /** a whole collection at a resolution (`filter=coll:<slug>`): every file of the resolution read, unless the
+   * manifest's own row and byte counts put it over the cap (nothing is read then) */
+  async function loadCollection(key: string, slug: string, res: number): Promise<void> {
+    membership = { ...membership, phase: "loading" };
+    try {
+      const { collectionMembership } = await import("../../../lib/gazetteer/resolve");
+      const info = await collectionMembership(slug);
+      if (untrack(() => membership.key) !== key) return;
+      if (!info.membership) {
+        membership = { ...membership, phase: "ready", title: info.title, noMembership: true };
+        return;
+      }
+      const man = await manifestOf(info.membership);
+      if (!man) throw new Error(`${info.membership}: no membership manifest`);
+      const plan = collectionPlan(man, res);
+      const cells = new Set<string>();
+      if (!plan.over)
+        for (const c of (
+          await Promise.all(plan.files.map((f) => readMembershipCells(f.url, null)))
+        ).flat())
+          cells.add(c);
+      if (untrack(() => membership.key) !== key) return;
+      const byRes = new Map(membership.byRes);
+      byRes.set(res, [...cells].sort());
+      membership = {
+        ...membership,
+        phase: "ready",
+        byRes,
+        over: plan.over ? new Set([...membership.over, res]) : membership.over,
+        title: info.title,
+        noMembership: false,
+        minShare: man.minShare,
+        sources: info.title
+          ? [{ title: info.title, citation: info.citation, license: info.license }]
+          : [],
+      };
+    } catch (e) {
+      if (untrack(() => membership.key) === key)
+        membership = {
+          ...membership,
+          phase: "error",
+          error: e instanceof Error ? e.message : String(e),
+        };
+    }
+  }
+
   async function loadMembership(
     key: string,
     places: readonly { id: string; name: string }[],
@@ -817,15 +897,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       for (const info of infos) {
         if (!info.membership) continue;
         const url = info.membership;
-        let mp = manifestCache.get(url);
-        if (!mp) {
-          mp = fetchJson(url).then(
-            (j) => parseMembership(j, url),
-            () => null,
-          );
-          manifestCache.set(url, mp);
-        }
-        const man = await mp;
+        const man = await manifestOf(url);
         if (!man) throw new Error(`${url}: no membership manifest`);
         minShare = man.minShare;
         const cellsAt = async (r: number, parents: ReadonlySet<string> | null) => {
@@ -842,6 +914,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       const byRes = new Map(membership.byRes);
       byRes.set(res, [...cells].sort());
       membership = {
+        ...membership,
         key,
         phase: "ready",
         error: null,
@@ -1011,11 +1084,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     void statsTick;
     return slot && view ? resAtZoom(slot.layer(), zoom) : null;
   });
-  const filterList = $derived.by(() => {
-    const out: string[] = [];
-    for (const c of membership.byRes.values()) out.push(...c);
-    return out;
-  });
+  const filterList = $derived(allCells(membership.byRes));
   const filterTooMany = $derived(filterList.length > FILTER_MAX_CELLS);
   /** the loaded hexagons at the drawn resolution, when the reader has them for it */
   const loadedNow = $derived(loaded && loaded.res === shownRes ? loaded.cells : null);
@@ -1078,9 +1147,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       indicator: v.indicator,
       indicatorLabel: ind?.label ?? v.indicator,
       place:
-        filterOn && gazPlaces.length
-          ? withinPart(gazPlaces.map((p) => p.name))
-          : placePart(pr !== undefined ? { parentRes: pr } : null),
+        filterColl !== null
+          ? withinPart([collTitle])
+          : filterOn && gazPlaces.length
+            ? withinPart(gazPlaces.map((p) => p.name))
+            : placePart(pr !== undefined ? { parentRes: pr } : null),
     });
   });
   const sentence = $derived(parts ? sentenceText(parts) : "");
@@ -1090,14 +1161,14 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     const v = view;
     if (!v || shownRes === null) return "";
     // the place filter's line counts its own hexagons (the loaded ones: the release's counts are worldwide)
-    if (filterOn && loadedNow) {
-      const n = loadedNow.length;
-      const k = valued(loadedNow, v.indicator);
-      const fmt = (x: number) => x.toLocaleString("en-US");
-      return v.indicator === "es"
-        ? `${fmt(k)} of ${fmt(n)} hexagons in the place have ≥ ${meta?.esn ?? 50} records`
-        : `${fmt(n)} hexagons in the place`;
-    }
+    if (filterOn && loadedNow)
+      return filteredCoverage({
+        indicator: v.indicator,
+        valued: valued(loadedNow, v.indicator),
+        n: loadedNow.length,
+        esn: meta?.esn ?? 50,
+        ...(filterColl !== null ? { where: collTitle } : {}),
+      });
     return coverageText(statsRows, v.indicator, shownRes, meta?.esn ?? 50);
   });
   const status = $derived(
@@ -1107,20 +1178,17 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       cells: loadedNow ? loadedNow.length : null,
       label: target?.label ?? "this layer",
       period: view?.periodRef ? (spec?.periodLabels[view.period] ?? view.period) : null,
-      filtered: filterOn,
+      filtered: filterColl !== null ? collTitle : filterOn,
     }),
   );
   const filterNote = $derived(
-    filterOn
-      ? placeFilterNote({
+    filterColl !== null
+      ? collFilterNote({
+          title: collTitle,
+          slug: filterColl,
           phase: membership.phase,
-          places: filterPlaces.length,
-          without: [
-            ...membership.without,
-            ...filterPlaces
-              .filter((p) => p.kind !== "gaz")
-              .map((p) => ("name" in p && p.name) || "a drawn place"),
-          ],
+          without: membership.noMembership,
+          over: shownRes !== null && membership.over.has(shownRes),
           cells:
             membership.phase === "ready" && shownRes !== null
               ? (membership.byRes.get(shownRes)?.length ?? null)
@@ -1130,7 +1198,26 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
           error: membership.error,
           tooMany: filterTooMany,
         })
-      : null,
+      : filterOn
+        ? placeFilterNote({
+            phase: membership.phase,
+            places: filterPlaces.length,
+            without: [
+              ...membership.without,
+              ...filterPlaces
+                .filter((p) => p.kind !== "gaz")
+                .map((p) => ("name" in p && p.name) || "a drawn place"),
+            ],
+            cells:
+              membership.phase === "ready" && shownRes !== null
+                ? (membership.byRes.get(shownRes)?.length ?? null)
+                : null,
+            res: shownRes ?? 0,
+            minShare: membership.minShare,
+            error: membership.error,
+            tooMany: filterTooMany,
+          })
+        : null,
   );
 
   const cell = $derived.by((): CellView | null => {
@@ -1287,6 +1374,23 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     ensureTaxa: () => loadTaxa(),
     setDomain(d) {
       selStore.set({ dom: d === "view" ? "view" : undefined });
+    },
+    get filterColl() {
+      return filterColl;
+    },
+    get collections() {
+      return collections;
+    },
+    ensureCollections() {
+      if (collections || collectionsLoading) return;
+      collectionsLoading = true;
+      void import("../../../lib/gazetteer/resolve").then(async (m) => {
+        collections = (await m.listMembershipCollections()) ?? [];
+        collectionsLoading = false;
+      });
+    },
+    setFilterColl(slug) {
+      selStore.set({ filter: slug ? `coll:${slug}` : undefined, cell: undefined });
     },
     goToSea(id) {
       const p = seaPatch(id);

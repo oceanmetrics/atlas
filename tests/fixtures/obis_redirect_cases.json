@@ -1,6 +1,6 @@
 {
   "about": "obis-hex URL -> the atlas URL of the same OBIS layer (build week 4, step 1). One table drives both sides: oceanmetrics/atlas tests/state/obisHex.test.ts (obisHexToAtlas) reads it here, and obis-hex copies it into tests/redirect.test.ts for its redirectFor. Each case: the obis-hex URL, the expected URL, whether the target shows what the old link showed (exact), and the obis-hex keys it does not carry (dropped; ?<key> for a query switch). Edit it here first, then copy.",
-  "grammar": "https://oceanmetrics.io/atlas/?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=<lon,lat,zoom>[&taxon=<rank>:<name>|aphia:<id>]&proj=<globe|mercator>[&theme=..][&tour=..][#pl=p.<id>.]",
+  "grammar": "https://oceanmetrics.io/atlas/?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=<lon,lat,zoom>[&taxon=<rank>:<name>|aphia:<id>][&dom=view]&proj=<globe|mercator>[&theme=..][&tour=..][#pl=p.<id>.]",
   "notes": [
     "query keys are written in this order, encoded as the atlas's formatSel does (URLSearchParams: a space is +; then , : / unescaped); the hash pl is the p. token encoded the same way, so its % is %25",
     "taxon splits on its first colon: the rank never holds one, the name may (an encoded colon in obis-hex's l)",
@@ -49,7 +49,9 @@
       "drop": "opacity: the atlas layer's own opacity control, not in the grammar"
     },
     "d": {
-      "drop": "ramp domain: the atlas legend's domain comes from stats.parquet (release p02 to p98)"
+      "to": "dom",
+      "rule": "view -> dom=view (the colour range is the p02 to p98 of the hexagons loaded in the map); the only value carried",
+      "otherwise": "d=release (obis-hex's default) or any other value is not carried (d is listed in dropped): the atlas legend's default domain is stats.parquet, the release's p02 to p98, which is what d=release is"
     },
     "b": {
       "drop": "basemap labels: atlas layout"
@@ -294,11 +296,11 @@
       "dropped": ["d", "f", "o", "t", "v"]
     },
     {
-      "name": "the layout keys and styling are dropped and the view stays exact",
+      "name": "d=view is carried as dom=view; the layout keys and styling are dropped and the view stays exact",
       "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=all&r=auto&o=0.5&t=light&d=view&c=0,0,1&k=share&cc=1&tc=1&b=0",
-      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&proj=globe",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=0,0,1&dom=view&proj=globe",
       "exact": true,
-      "dropped": ["b", "cc", "d", "k", "o", "t", "tc"]
+      "dropped": ["b", "cc", "k", "o", "t", "tc"]
     },
     {
       "name": "?tour and ?theme carry to the atlas's own tour= and theme=; the hash t never does",

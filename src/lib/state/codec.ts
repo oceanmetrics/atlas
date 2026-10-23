@@ -310,7 +310,8 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.collection) params.set("collection", sel.collection);
   const ovToken = formatOv(sel.ov);
   if (ovToken !== null) params.set("ov", ovToken);
-  if (sel.filter === "places") params.set("filter", "places");
+  if (sel.filter !== undefined && parseFilter(sel.filter) === sel.filter)
+    params.set("filter", sel.filter);
 
   const hashParams = new URLSearchParams();
   if (sel.pl) hashParams.set("pl", sel.pl);

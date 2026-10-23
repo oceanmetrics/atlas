@@ -20,7 +20,7 @@ interface Case {
 }
 const TABLE = JSON.parse(readFileSync("tests/fixtures/obis_redirect_cases.json", "utf8")) as {
   origin: string;
-  keys: Record<string, { to?: string; rule?: string; drop?: string }>;
+  keys: Record<string, { to?: string; rule?: string; drop?: string; otherwise?: string }>;
   cases: Case[];
 };
 
@@ -64,6 +64,8 @@ describe("the obis-hex -> atlas case table", () => {
       const carried = typeof v.to === "string" && typeof v.rule === "string";
       const dropped = typeof v.drop === "string" && v.drop.length > 0;
       expect(carried !== dropped, k).toBe(true);
+      // a carried key may say what happens to its other values (d: view is carried, release is not)
+      if (v.otherwise !== undefined) expect(carried, k).toBe(true);
     }
   });
 
@@ -84,7 +86,8 @@ describe("the obis-hex -> atlas case table", () => {
       const toPlaces = c.atlas.startsWith(`${TABLE.origin}/places/p/`);
       for (const k of c.dropped) {
         if (toPlaces) expect(TABLE.keys[k], `${c.name}: ${k}`).toBeDefined();
-        else expect(TABLE.keys[k]?.drop, `${c.name}: ${k}`).toBeDefined();
+        else
+          expect(TABLE.keys[k]?.drop ?? TABLE.keys[k]?.otherwise, `${c.name}: ${k}`).toBeDefined();
       }
     }
   });
@@ -156,6 +159,20 @@ describe("obisHexRedirect beyond the table", () => {
   });
   it("drops a place id outside the gazetteer alphabet", () => {
     expect(obisHexToAtlas("#pl=%3Cscript%3E&r=3")).not.toContain("#pl=");
+  });
+  it("d=view is the atlas's dom=view; d=release and any other d stay dropped (row 109)", () => {
+    const base = "#i=es&l=all&p=all&r=auto&c=0,0,1";
+    const view = obisHexRedirect(`${base}&d=view`);
+    expect(new URL(view.url).searchParams.get("dom")).toBe("view");
+    expect(view.dropped).not.toContain("d");
+    expect(view.exact).toBe(true);
+    for (const d of ["release", "x", "", "VIEW"]) {
+      const r = obisHexRedirect(`${base}&d=${d}`);
+      expect(new URL(r.url).searchParams.has("dom"), d).toBe(false);
+      expect(r.dropped, d).toContain("d");
+    }
+    // no d at all: nothing to carry or drop
+    expect(obisHexRedirect(base).dropped).toEqual([]);
   });
   it("ports obis-hex's zoomToRes", () => {
     expect([0, 2.2, 3.4, 4, 8.2, 9, 22].map(zoomToRes)).toEqual([1, 2, 3, 3, 7, 7, 10]);

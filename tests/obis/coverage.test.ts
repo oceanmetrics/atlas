@@ -12,6 +12,7 @@ import {
   sentenceParts,
   sentenceText,
   statusLine,
+  filteredCoverage,
   withinPart,
 } from "../../src/lens/collection/h3/paint";
 import { localFetch, REL, spec } from "./support";
@@ -128,6 +129,22 @@ describe("the title sentence", () => {
   });
 });
 
+describe("the coverage line of a filter", () => {
+  it("the place's, and a collection's: 'in <collection title>'", () => {
+    const o = { indicator: "es", valued: 124, n: 138, esn: 50 };
+    expect(filteredCoverage(o)).toBe("124 of 138 hexagons in the place have ≥ 50 records");
+    expect(filteredCoverage({ ...o, where: "NOAA National Marine Sanctuaries" })).toBe(
+      "124 of 138 hexagons in NOAA National Marine Sanctuaries have ≥ 50 records",
+    );
+    expect(
+      filteredCoverage({ ...o, indicator: "n", where: "NOAA National Marine Sanctuaries" }),
+    ).toBe("138 hexagons in NOAA National Marine Sanctuaries");
+    expect(withinPart(["NOAA National Marine Sanctuaries"]).label).toBe(
+      "in NOAA National Marine Sanctuaries",
+    );
+  });
+});
+
 describe("the status line", () => {
   it("status words: loading, an error, no hexagons in view, no records for the period, drawn", () => {
     const o = { loading: false, cells: 12, label: "Seabirds", period: null };
@@ -138,6 +155,9 @@ describe("the status line", () => {
       "No OBIS records for Seabirds in the 1960s in this view.",
     );
     expect(statusLine({ ...o, cells: 0, filtered: true })).toBe("No hexagons in the place.");
+    expect(statusLine({ ...o, cells: 0, filtered: "NOAA National Marine Sanctuaries" })).toBe(
+      "No hexagons in NOAA National Marine Sanctuaries.",
+    );
     expect(statusLine(o)).toBeNull();
     expect(statusLine({ ...o, cells: null })).toBeNull();
   });

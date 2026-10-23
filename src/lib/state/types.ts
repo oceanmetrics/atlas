@@ -15,6 +15,7 @@
 // live there). Importing them here is the SAME cross-domain precedent `../map/layers/zones.ts`
 // already sets in the other direction (it imports `Outline` FROM this file) — this module still has
 // no svelte/DOM/MapLibre dependency, only a plain type import.
+import type { PlaceFilter } from "../gazetteer/overlayUrl";
 import type { LayerStackEntry } from "../map/layerStack";
 import { INSTANCE } from "../brand/instance";
 export type { LayerStackEntry } from "../map/layerStack";
@@ -119,8 +120,9 @@ export interface Sel {
    * the default set (none since 2026-10-15), never written; `[]` = none (`ov=`).
    * `../gazetteer/overlayUrl.ts`. */
   ov?: readonly string[];
-  /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list. */
-  filter?: "places";
+  /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list; on an h3 layer
+   * `?filter=coll:<slug>` keeps the hexagons of a whole gazetteer polygon collection (H3 membership). */
+  filter?: PlaceFilter;
   /** R3-W8 item 2: the species lens' "Zoom to layer on change" preference — `true` (default, never
    * written) refits the camera to whatever input/representation the viewer just picked
    * (`data/camera.ts`'s `refitOnInputChange`); `false` writes `zl=0` so the viewer can flip between

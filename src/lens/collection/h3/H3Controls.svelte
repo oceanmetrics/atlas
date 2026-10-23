@@ -35,6 +35,10 @@
     el.querySelector<HTMLElement>("input, select, button, [tabindex]")?.focus();
   }
   let seaPick = $state(0);
+  // the collection filter's choices (layers.json: the polygon collections with an H3 build), read once
+  $effect(() => {
+    layer.ensureCollections();
+  });
   const SEPS = [", ", ", ", ", ", ": ", ""];
   const chips = $derived(
     layer.parts
@@ -379,6 +383,21 @@
         }}
       />
     {/key}
+    {#if layer.collections?.length || layer.filterColl}
+      <!-- a whole gazetteer collection as the filter (obis-hex f=<collection>); the listed places are the Places tool's -->
+      <Select
+        label="Only inside a collection"
+        value={layer.filterColl ?? ""}
+        options={[
+          { value: "", label: "Only inside a collection…" },
+          ...(layer.collections ?? []).map((c) => ({ value: c.slug, label: c.title })),
+          ...(layer.filterColl && !layer.collections?.some((c) => c.slug === layer.filterColl)
+            ? [{ value: layer.filterColl, label: layer.filterColl }]
+            : []),
+        ]}
+        onchange={(slug) => layer.setFilterColl(slug || null)}
+      />
+    {/if}
     {#if layer.coverage}
       <p class="note" data-testid="h3-coverage">{layer.coverage}</p>
     {/if}

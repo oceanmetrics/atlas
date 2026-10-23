@@ -229,6 +229,24 @@ export function withinPart(names: readonly string[]): SentencePart {
       };
 }
 
+/** the coverage line of a filtered view, counted over the filter's own loaded hexagons (the release's counts are
+ * worldwide): "124 of 138 hexagons in the place have ≥ 50 records", or in a collection "in NOAA National Marine
+ * Sanctuaries"; `valued` of `n` hexagons carry the indicator */
+export function filteredCoverage(o: {
+  indicator: string;
+  valued: number;
+  n: number;
+  esn: number;
+  /** "the place" (the default) or the collection's title */
+  where?: string;
+}): string {
+  const fmt = (x: number) => x.toLocaleString("en-US");
+  const where = o.where ?? "the place";
+  return o.indicator === "es"
+    ? `${fmt(o.valued)} of ${fmt(o.n)} hexagons in ${where} have ≥ ${o.esn} records`
+    : `${fmt(o.n)} hexagons in ${where}`;
+}
+
 /** the five chips (obis-hex `sentenceParts`): taxon, period, place, hexagon size, indicator. */
 export function sentenceParts(o: {
   label: string;
@@ -278,13 +296,18 @@ export function statusLine(o: {
   label: string;
   /** the period token when one is chosen ("1990s", "2015"), else null */
   period: string | null;
-  /** a place filter is on */
-  filtered?: boolean;
+  /** a place filter is on (true), or a collection filter: the collection's title */
+  filtered?: boolean | string;
 }): string | null {
   if (o.error) return `The release could not be read: ${o.error}`;
   if (o.loading) return "Loading the release…";
   if (o.cells === null || o.cells > 0) return null;
-  const where = o.filtered ? "in the place" : "in this view";
+  const where =
+    typeof o.filtered === "string"
+      ? `in ${o.filtered}`
+      : o.filtered
+        ? "in the place"
+        : "in this view";
   return o.period
     ? `No OBIS records for ${o.label} in the ${o.period} ${where}.`
     : `No hexagons ${where}.`;

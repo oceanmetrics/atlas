@@ -239,6 +239,19 @@ export interface PlaceMembership {
   membership: string | null;
 }
 
+/** the membership of a layers.json row (a collection) */
+function membershipOfRow(id: string, slug: string, row: Layer | undefined): PlaceMembership {
+  const h3 = (row as { h3?: string | null } | undefined)?.h3 ?? null;
+  return {
+    id,
+    slug,
+    title: row?.title ?? null,
+    citation: (row as { citation?: string | null } | undefined)?.citation ?? null,
+    license: (row as { license?: string | null } | undefined)?.license ?? null,
+    membership: h3 ? toDataUrl(h3) : null,
+  };
+}
+
 /**
  * Where a gazetteer place's H3 membership is: its collection (the built-in `places` authorities by their prefix, else
  * the feature's own `collection`) and that collection's layers.json `h3` url, re-based on the data base. Never throws:
@@ -254,16 +267,51 @@ export async function placeMembership(
     if (!slug) slug = (await client.getPlace(id))?.collection ?? null;
     if (!slug) return none;
     const row = (await client.listLayers()).find((l) => l.slug === slug || l.collection === slug);
-    const h3 = (row as { h3?: string | null } | undefined)?.h3 ?? null;
-    return {
-      id,
-      slug,
-      title: row?.title ?? null,
-      citation: (row as { citation?: string | null } | undefined)?.citation ?? null,
-      license: (row as { license?: string | null } | undefined)?.license ?? null,
-      membership: h3 ? toDataUrl(h3) : null,
-    };
+    return membershipOfRow(id, slug, row);
   } catch {
     return none;
+  }
+}
+
+/** a whole polygon collection's H3 membership (the h3 layer's `filter=coll:<slug>`): its title and credit from
+ * layers.json and its `membership.json`; `membership` is null for a point or line collection, one without an H3 build,
+ * or an unreachable gazetteer (never throws). */
+export async function collectionMembership(
+  slug: string,
+  client: GazetteerClient = gazetteerClient(),
+): Promise<PlaceMembership> {
+  try {
+    const row = (await client.listLayers()).find((l) => l.slug === slug || l.collection === slug);
+    if (!row || !/polygon/i.test(row.geom_type ?? "")) {
+      return { ...membershipOfRow(slug, slug, undefined), title: row?.title ?? null };
+    }
+    return membershipOfRow(slug, slug, row);
+  } catch {
+    return membershipOfRow(slug, slug, undefined);
+  }
+}
+
+/** a polygon collection with an H3 membership build (the h3 layer's collection filter offers these) */
+export interface MembershipCollection {
+  slug: string;
+  title: string;
+  /** places in the collection */
+  n: number | null;
+}
+/** the collections the filter offers, by title; null when layers.json cannot be read */
+export async function listMembershipCollections(
+  client: GazetteerClient = gazetteerClient(),
+): Promise<MembershipCollection[] | null> {
+  try {
+    return (await client.listLayers())
+      .filter((l) => /polygon/i.test(l.geom_type ?? "") && !!(l as { h3?: string | null }).h3)
+      .map((l) => ({
+        slug: l.slug,
+        title: l.title || l.slug,
+        n: typeof (l as { n?: number }).n === "number" ? (l as { n: number }).n : null,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  } catch {
+    return null;
   }
 }

@@ -6,14 +6,24 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  COLLECTION_MAX_BYTES,
+  COLLECTION_MAX_CELLS,
   FILTER_MAX_CELLS,
+  allCells,
+  collFilterNote,
+  collectionPlan,
   membershipFiles,
   parseMembership,
   placeFilterExpr,
   placeFilterNote,
   readMembershipCells,
 } from "../../src/lens/collection/h3/placeFilter";
-import { placeMembership, type GazetteerClient } from "../../src/lib/gazetteer/resolve";
+import {
+  collectionMembership,
+  listMembershipCollections,
+  placeMembership,
+  type GazetteerClient,
+} from "../../src/lib/gazetteer/resolve";
 import { buffer, FIX } from "./support";
 
 const URL0 =
@@ -172,5 +182,177 @@ describe("seas and oceans", () => {
       },
     });
     expect(seaPatch("atlantis")).toBeNull();
+  });
+});
+
+// ---- a whole collection as the filter (`filter=coll:<slug>`, obis-hex f=<collection>) ----------------------------
+
+describe("a whole collection's hexagons", () => {
+  it("every place of the file when no place is named (the collection's cells, a shared hexagon once)", async () => {
+    const f5 = local(membershipFiles(man, 5)[0].url);
+    const all = await readMembershipCells(f5, null);
+    const one = await readMembershipCells(f5, ["NMS:CINMS"]);
+    expect(all.length).toBeGreaterThan(one.length);
+    expect(one.every((h) => all.includes(h))).toBe(true);
+    expect(new Set(all).size).toBe(all.length);
+    expect(all.every((h) => h[1] === "5")).toBe(true);
+  });
+
+  const manifest = (files: { res: number; rows: number; bytes: number; parent?: string }[]) =>
+    parseMembership(
+      {
+        min_share: 0.01,
+        res: [5, 6],
+        parent_res: { "6": 2 },
+        files: files.map((f) => ({
+          res: f.res,
+          parent: f.parent ?? null,
+          path: `h3/res=${f.res}/${f.parent ? `p=${f.parent}/` : ""}membership.parquet`,
+          rows: f.rows,
+          bytes: f.bytes,
+        })),
+      },
+      URL0,
+    )!;
+
+  it("REGRESSION: a collection's res-7 cells (302,343 rows for the sanctuaries) join in one list without overflowing the stack", () => {
+    const big = Array.from({ length: 302_343 }, (_, i) => i.toString(16));
+    const all = allCells(
+      new Map([
+        [6, ["a", "b"]],
+        [7, big],
+      ]),
+    );
+    expect(all).toHaveLength(302_345);
+    expect(all.slice(0, 3)).toEqual(["a", "b", "0"]);
+  });
+
+  it("the plan reads every file of the resolution (a split one: all of its parents), counted from the manifest", () => {
+    const m = manifest([
+      { res: 5, rows: 6584, bytes: 25_498 },
+      { res: 6, rows: 37, bytes: 1519, parent: "822747fffffffff" },
+      { res: 6, rows: 56, bytes: 1613, parent: "82275ffffffffff" },
+    ]);
+    expect(collectionPlan(m, 5)).toMatchObject({ rows: 6584, bytes: 25_498, over: false });
+    const p6 = collectionPlan(m, 6);
+    expect(p6.files.map((f) => f.parent)).toEqual(["822747fffffffff", "82275ffffffffff"]);
+    expect([p6.rows, p6.bytes, p6.over]).toEqual([93, 3132, false]);
+    expect(collectionPlan(m, 3).files).toEqual([]);
+  });
+
+  it("REGRESSION cap: over 500,000 membership rows or 5 MB by the manifest is not read (NOAA EFH res 5: 1,036,984 rows)", () => {
+    expect(COLLECTION_MAX_CELLS).toBe(500_000);
+    expect(COLLECTION_MAX_BYTES).toBe(5 * 1024 * 1024);
+    // the gazetteer's measured collections (2026-10-23): rows and bytes of one resolution
+    const efh5 = manifest([{ res: 5, rows: 1_036_984, bytes: 3_885_000 }]);
+    expect(collectionPlan(efh5, 5).over).toBe(true);
+    const efh4 = manifest([{ res: 4, rows: 181_590, bytes: 800_000 }]);
+    expect(collectionPlan(efh4, 4).over).toBe(false);
+    // the edge: the cap itself is allowed, one row more is not
+    expect(collectionPlan(manifest([{ res: 5, rows: 500_000, bytes: 1 }]), 5).over).toBe(false);
+    expect(collectionPlan(manifest([{ res: 5, rows: 500_001, bytes: 1 }]), 5).over).toBe(true);
+    // a dense file stays under the bytes cap or is refused by it
+    expect(collectionPlan(manifest([{ res: 5, rows: 1000, bytes: 5 * 1024 * 1024 }]), 5).over).toBe(
+      false,
+    );
+    expect(
+      collectionPlan(manifest([{ res: 5, rows: 1000, bytes: 5 * 1024 * 1024 + 1 }]), 5).over,
+    ).toBe(true);
+  });
+
+  it("the filter's words: the collection's title, 'filter by one place instead' past the cap", () => {
+    const o = {
+      title: "NOAA National Marine Sanctuaries",
+      slug: "noaa_sanctuaries",
+      phase: "ready" as const,
+      without: false,
+      over: false,
+      cells: 6584,
+      res: 5,
+      minShare: 0.01,
+    };
+    expect(collFilterNote(o)).toMatch(
+      /^6,584 res-5 hexagons of NOAA National Marine Sanctuaries \(the gazetteer's H3 membership/,
+    );
+    expect(collFilterNote({ ...o, over: true })).toMatch(/filter by one place instead/);
+    expect(collFilterNote({ ...o, over: true })).toMatch(/too many hexagons at res 5/);
+    expect(collFilterNote({ ...o, phase: "loading" })).toBe(
+      "Reading the H3 membership of NOAA National Marine Sanctuaries…",
+    );
+    expect(collFilterNote({ ...o, without: true })).toBe(
+      "NOAA National Marine Sanctuaries: no H3 membership in the gazetteer, so no hexagons.",
+    );
+    expect(collFilterNote({ ...o, title: null, without: true })).toMatch(
+      /^noaa_sanctuaries: no H3/,
+    );
+    expect(collFilterNote({ ...o, phase: "error", error: "HTTP 403" })).toBe(
+      "The H3 membership of NOAA National Marine Sanctuaries could not be read (HTTP 403).",
+    );
+  });
+
+  const layers = [
+    {
+      slug: "noaa_sanctuaries",
+      collection: "noaa_sanctuaries",
+      title: "NOAA National Marine Sanctuaries",
+      geom_type: "MultiPolygon",
+      n: 47,
+      citation: "NOAA ONMS …",
+      license: "CC-PDDC",
+      h3: "https://storage.oceanmetrics.io/gazetteer/noaa_sanctuaries/h3/membership.json",
+    },
+    {
+      slug: "mr_eez",
+      collection: "mr_eez",
+      title: "Marine Regions EEZ",
+      geom_type: "MultiPolygon",
+      n: 285,
+      h3: null,
+    },
+    { slug: "calcofi_lines", title: "CalCOFI lines", geom_type: "LineString", n: 11, h3: null },
+    { slug: "a_wind", title: "A wind", geom_type: "MultiPolygon", n: 3, h3: "https://x/h3/m.json" },
+  ];
+  const stub = (): GazetteerClient => ({
+    getPlace: async () => null,
+    listLayers: async () => layers as never,
+    creditsFor: async () => "",
+  });
+  it("the choices are the polygon collections with an H3 build, by title; mr_eez has none (no build)", async () => {
+    expect((await listMembershipCollections(stub()))?.map((c) => c.slug)).toEqual([
+      "a_wind",
+      "noaa_sanctuaries",
+    ]);
+    const down: GazetteerClient = {
+      getPlace: async () => null,
+      listLayers: async () => {
+        throw new Error("down");
+      },
+      creditsFor: async () => "",
+    };
+    expect(await listMembershipCollections(down)).toBeNull();
+  });
+  it("a collection's membership url on the data base, its title and credit; a collection without a build, a line collection or no gazetteer is no membership", async () => {
+    expect(await collectionMembership("noaa_sanctuaries", stub())).toEqual({
+      id: "noaa_sanctuaries",
+      slug: "noaa_sanctuaries",
+      title: "NOAA National Marine Sanctuaries",
+      citation: "NOAA ONMS …",
+      license: "CC-PDDC",
+      membership:
+        "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/noaa_sanctuaries/h3/membership.json",
+    });
+    expect((await collectionMembership("mr_eez", stub())).membership).toBeNull();
+    expect((await collectionMembership("calcofi_lines", stub())).membership).toBeNull();
+    expect((await collectionMembership("nope", stub())).membership).toBeNull();
+    const down: GazetteerClient = {
+      getPlace: async () => null,
+      listLayers: async () => {
+        throw new Error("down");
+      },
+      creditsFor: async () => "",
+    };
+    expect(await collectionMembership("noaa_sanctuaries", down)).toMatchObject({
+      membership: null,
+    });
   });
 });
