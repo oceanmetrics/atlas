@@ -375,17 +375,24 @@ export function subtreePlan(o: {
 export const subtreeLine = (name: string, cap = SUBTREE_MAX_RES) =>
   `subtree of ${name} (computed in the browser from the species table, res ≤ ${cap})`;
 
-/** what a computation read: "Read 0.51 MB of the species table (2 files) and the lookup (3.90 MB, once per page);
- * 4,567 hexagons in 1,234 ms." */
+/** what a computation read: "Read 0.49 MB of the species table (2 files) and the lookup (3.90 MB, once per page);
+ * 4,567 hexagons in 1,234 ms." Files read before are kept: "Nothing read: the species table's file (0.26 MB) is kept
+ * from before; ..." */
 export function readLine(o: {
   bytes: number;
   files: number;
   lookupBytes: number;
   cells: number;
   ms: number;
+  /** the files' sizes, read now or before */
+  filesBytes?: number;
 }): string {
   const look = o.lookupBytes > 0 ? ` and the lookup (${mb(o.lookupBytes)}, once per page)` : "";
-  return `Read ${mb(o.bytes)} of the species table (${o.files} file${o.files === 1 ? "" : "s"})${look}; ${o.cells.toLocaleString("en-US")} hexagons in ${Math.round(o.ms).toLocaleString("en-US")} ms.`;
+  const tail = `${o.cells.toLocaleString("en-US")} hexagons in ${Math.round(o.ms).toLocaleString("en-US")} ms.`;
+  const files = o.files === 1 ? "file" : `${o.files} files`;
+  if (o.bytes === 0 && o.lookupBytes === 0 && (o.filesBytes ?? 0) > 0)
+    return `Nothing read: the species table's ${files} (${mb(o.filesBytes!)}) kept from before; ${tail}`;
+  return `Read ${mb(o.bytes)} of the species table (${o.files} file${o.files === 1 ? "" : "s"})${look}; ${tail}`;
 }
 
 /** the taxon's line (obis-hex `.taxon-line`): name and authority, rank, status, the accepted name of a synonym, the

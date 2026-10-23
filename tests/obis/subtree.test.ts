@@ -424,6 +424,11 @@ describe("the cap and the words", () => {
     ).toBe(
       "Read 0.49 MB of the species table (2 files) and the lookup (3.90 MB, once per page); 4,567 hexagons in 1,234 ms.",
     );
+    expect(
+      readLine({ bytes: 0, filesBytes: 276_067, files: 1, lookupBytes: 0, cells: 15617, ms: 36 }),
+    ).toBe(
+      "Nothing read: the species table's file (0.26 MB) kept from before; 15,617 hexagons in 36 ms.",
+    );
     expect(subtreeCoverage({ indicator: "es", valued: 12, cells: 30 })).toBe(
       "12 of 30 hexagons of the subtree have ≥ 50 records",
     );

@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/subtree.ts b/src/lens/collection/h3/subtree.ts
+index 75b0098..cb8d3fe 100644
+--- a/src/lens/collection/h3/subtree.ts
++++ b/src/lens/collection/h3/subtree.ts
+@@ -228,7 +228,7 @@ export function subtreeSql(o: {
+ }): string {
+   const cell = o.res < o.tableRes ? parentIdSql("s.cell_id", o.res) : "s.cell_id";
+   const box = o.ranges ? ` AND ${rangesSql("s.cell_id", o.ranges)}` : "";
+-  const src = `SELECT ${cell} AS cell_id, l.name_key AS species, SUM(s.n) AS ni
++  const src = `SELECT ${cell} AS cell_id, s.aphiaid AS species, SUM(s.n) AS ni
+       FROM ${o.rows} s
+       JOIN ${o.lookup} l USING (aphiaid)
+       WHERE (list_contains(l.lineage, ${Math.trunc(o.aphiaid)}))${box}

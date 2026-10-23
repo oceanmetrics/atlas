@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/subtree.ts b/src/lens/collection/h3/subtree.ts
+index 75b0098..0ce3721 100644
+--- a/src/lens/collection/h3/subtree.ts
++++ b/src/lens/collection/h3/subtree.ts
+@@ -197,7 +197,7 @@ export function indicatorsSql(src: string, esn = ESN): string {
+           WHEN t.n - s.ni >= ${e} THEN 1 - exp(
+                  lgamma(t.n - s.ni + 1) + lgamma(t.n - ${e} + 1)
+                - lgamma(t.n - s.ni - ${e} + 1) - lgamma(t.n + 1))
+-          WHEN t.n >= ${e} THEN 1
++          WHEN t.n >= ${e} THEN 0
+           ELSE NULL END AS esi
+       FROM src s JOIN tot t USING (cell_id))
+     SELECT cell_id,

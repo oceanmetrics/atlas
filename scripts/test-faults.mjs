@@ -966,6 +966,22 @@ export const FAULTS = [
       "a res-1 or res-2 hexagon is read as its own id, not its children's range, and lists no species",
     gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "sum to the cell"],
   },
+  {
+    id: "obis-subtree-es-small-term-dropped",
+    patch: "tests/faults/obis-subtree-es-small-term-dropped.patch",
+    describe:
+      "the subtree's ES(50) gives 0, not 1, to a species that leaves fewer than 50 records (obisindicators' " +
+      "`WHEN t.n >= esn THEN 1`) -- a cell of two names at 30 records each has ES(50) 0 instead of 2",
+    gate: ["npx", "vitest", "run", "tests/obis/subtree.test.ts", "-t", "hand-computed"],
+  },
+  {
+    id: "obis-subtree-sp-counts-aphiaids",
+    patch: "tests/faults/obis-subtree-sp-counts-aphiaids.patch",
+    describe:
+      "the subtree counts aphiaids instead of names (`name_key`, as h3t and the release do) -- a name " +
+      "recorded under two AphiaIDs is two species, and the Animalia cell no longer equals the head",
+    gate: ["npx", "vitest", "run", "tests/obis/subtree.test.ts", "-t", "two aphiaids"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror

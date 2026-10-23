@@ -839,6 +839,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
               sql: outcome.sql,
               readLine: readLine({
                 bytes: outcome.read.bytes,
+                filesBytes: outcome.read.filesBytes,
                 files: outcome.read.files,
                 lookupBytes: outcome.read.lookupBytes,
                 cells: outcome.cells,
