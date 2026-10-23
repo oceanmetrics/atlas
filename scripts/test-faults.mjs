@@ -953,8 +953,8 @@ export const FAULTS = [
     id: "obis-species-children-skipped",
     patch: "tests/faults/obis-species-children-skipped.patch",
     describe:
-      "a coarser hexagon's species list reads its own id from the res-3 table instead of its children's " +
-      "range -- the Cell pane of a res-1 or res-2 hexagon lists no species",
+      "the Cell pane asks `speciesForCell` for the hexagon's own resolution instead of the table's (res 3) -- " +
+      "a res-1 or res-2 hexagon is read as its own id, not its children's range, and lists no species",
     gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "sum to the cell"],
   },
 ];

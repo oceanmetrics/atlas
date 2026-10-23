@@ -1,13 +1,13 @@
 diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
-index 4af91c7..3bb950a 100644
+index 13272d0..e510100 100644
 --- a/src/lens/collection/h3/cellSpecies.ts
 +++ b/src/lens/collection/h3/cellSpecies.ts
-@@ -67,7 +67,7 @@ export function cellPlan(
-   if (flatRes.includes(res)) return { res, tableRes: res, scope: "cell", range: [id, id] };
-   const finer = flatRes.filter((r) => r > res).sort((a, b) => a - b)[0];
-   if (finer !== undefined)
--    return { res, tableRes: finer, scope: "children", range: childRange(id, finer) };
-+    return { res, tableRes: finer, scope: "children", range: [id, id] };
-   const coarser = flatRes.filter((r) => r < res).sort((a, b) => b - a)[0];
-   const p = parentId(id, coarser);
-   return { res, tableRes: coarser, scope: "parent", range: [p, p] };
+@@ -392,7 +392,7 @@ export async function readCellRows(
+     (c): c is string => !!c,
+   );
+   const got = await speciesForCell(url, h3, {
+-    res: plan.tableRes,
++    res: plan.res,
+     id: cols?.cell ?? "cell_id",
+     columns: want,
+     reader,
