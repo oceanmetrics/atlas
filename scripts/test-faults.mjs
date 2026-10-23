@@ -1077,7 +1077,14 @@ export const FAULTS = [
     describe:
       "withSeaFloor hands @oceanmetrics/map's composeStyle CARTO's style as it is -- the shell's Svelte $state Proxy, " +
       "which the package's structuredClone refuses, so every compose throws and the map never restyles",
-    gate: ["npx", "vitest", "run", "tests/map/seaFloor.test.ts", "-t", "regression: a CARTO style held"],
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/map/seaFloor.test.ts",
+      "-t",
+      "regression: a CARTO style held",
+    ],
   },
   {
     id: "seafloor-default-ignores-instance",
@@ -1085,7 +1092,14 @@ export const FAULTS = [
     describe:
       "the Bathymetry row's default visibility ignores instance defaults.bathymetry -- the oceanmetrics atlas " +
       "opens without the GEBCO sea floor",
-    gate: ["npx", "vitest", "run", "tests/map/layerStack.test.ts", "-t", "visible but for the Bathymetry row"],
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/map/layerStack.test.ts",
+      "-t",
+      "visible but for the Bathymetry row",
+    ],
   },
 ];
 

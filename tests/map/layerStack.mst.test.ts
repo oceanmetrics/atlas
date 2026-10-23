@@ -102,7 +102,9 @@ describe("defaultLayerStackEntries / isDefaultLayerStack", () => {
     // marinesensitivity keeps its own (MMA) basemap: the sea floor is a choice (instance defaults.bathymetry off)
     expect(entries.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(false);
     expect(BATHYMETRY_DEFAULT_ON).toBe(false);
-    expect(defaultLayerStackEntries(false, true).find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
+    expect(
+      defaultLayerStackEntries(false, true).find((e) => e.id === "basemap-bathymetry")?.visible,
+    ).toBe(true);
     expect(new Set(entries.map((e) => e.id)).size).toBe(ALL_LAYER_GROUPS.length);
   });
 
@@ -535,8 +537,15 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
     expect(token).not.toContain("basemap-bathymetry:h");
     expect(parseLayerStack(token!)?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
     // an old link that names the row visible draws the sea floor; one that leaves it out keeps the default (off)
-    expect(parseLayerStack("basemap-land,basemap-bathymetry,basemap-boundaries")?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
-    expect(parseLayerStack("basemap-labels,data-raster")?.find((e) => e.id === "basemap-bathymetry")?.visible ?? false).toBe(false);
+    expect(
+      parseLayerStack("basemap-land,basemap-bathymetry,basemap-boundaries")?.find(
+        (e) => e.id === "basemap-bathymetry",
+      )?.visible,
+    ).toBe(true);
+    expect(
+      parseLayerStack("basemap-labels,data-raster")?.find((e) => e.id === "basemap-bathymetry")
+        ?.visible ?? false,
+    ).toBe(false);
   });
 });
 
@@ -682,7 +691,9 @@ describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", 
       canMoveLayerStackEntryVisible(entries, "basemap-labels", "down", LAYER_GROUP_IN_PANEL),
     ).toBe(true);
     // two basemap rows side by side share one rank (M1): the move changes no pixel; Bathymetry moves only past a data row
-    expect(rankForStack(next.map((e) => e.id)).get("basemap-labels")).toBe(rankForStack(next.map((e) => e.id)).get("basemap-bathymetry"));
+    expect(rankForStack(next.map((e) => e.id)).get("basemap-labels")).toBe(
+      rankForStack(next.map((e) => e.id)).get("basemap-bathymetry"),
+    );
   });
 
   it("basemap-labels (Place labels) 'up' swaps with its real visible neighbour, data-raster (Data)", () => {

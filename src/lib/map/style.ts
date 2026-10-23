@@ -363,7 +363,9 @@ export interface ComposeStyleInput {
 }
 
 /** does this input draw the sea floor? the Bathymetry row visible, the composer loaded and a basemap at all */
-export function drawsSeaFloor(input: Pick<ComposeStyleInput, "seaFloor" | "layerStack" | "basemap">): boolean {
+export function drawsSeaFloor(
+  input: Pick<ComposeStyleInput, "seaFloor" | "layerStack" | "basemap">,
+): boolean {
   if (!input.seaFloor || input.basemap === null) return false;
   const entries = normalizeLayerStack(input.layerStack ?? defaultLayerStackEntries());
   return entries.find((e) => e.id === "basemap-bathymetry")?.visible ?? false;

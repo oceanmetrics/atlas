@@ -180,7 +180,10 @@ export const LABELS_ABOVE_DATA_STACK: readonly LayerGroupId[] = (() => {
 
 /** whether a group is visible on a fresh page: every group but `basemap-bathymetry`, which follows the
  * instance's `defaults.bathymetry` ({@link BATHYMETRY_DEFAULT_ON}; `bathymetryOn` overrides it in a test). */
-export function defaultVisible(id: LayerGroupId, bathymetryOn: boolean = BATHYMETRY_DEFAULT_ON): boolean {
+export function defaultVisible(
+  id: LayerGroupId,
+  bathymetryOn: boolean = BATHYMETRY_DEFAULT_ON,
+): boolean {
   return id !== "basemap-bathymetry" || bathymetryOn;
 }
 

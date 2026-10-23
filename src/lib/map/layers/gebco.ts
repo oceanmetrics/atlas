@@ -50,7 +50,8 @@ export const SEA_FLOOR_ATTRIBUTION = `${GEBCO_ATTRIBUTION}; ${NAMES_ATTRIBUTION}
 export const GEBCO_TILES: BasemapTiles = tilesAt();
 
 /** the package's themes: navy is dark-matter, paper positron (`layers/basemap.ts#CARTO_STYLE_PATH`) */
-export const seaFloorTheme = (theme: ResolvedTheme): "dark" | "light" => (theme === "navy" ? "dark" : "light");
+export const seaFloorTheme = (theme: ResolvedTheme): "dark" | "light" =>
+  theme === "navy" ? "dark" : "light";
 
 /** the sea floor's share of its theme default while a data layer draws over it (a COG, the OBIS hexagons): the
  * relief, shading and isobaths step back so the data reads first (the package's one `opacity` scales all three) */

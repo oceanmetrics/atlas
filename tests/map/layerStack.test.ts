@@ -98,7 +98,9 @@ describe("defaultLayerStackEntries / isDefaultLayerStack", () => {
     // oceanmetrics: the GEBCO sea floor on every map (Ben 2026-10-22, instance defaults.bathymetry on)
     expect(entries.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
     expect(BATHYMETRY_DEFAULT_ON).toBe(true);
-    expect(defaultLayerStackEntries(false, false).find((e) => e.id === "basemap-bathymetry")?.visible).toBe(false);
+    expect(
+      defaultLayerStackEntries(false, false).find((e) => e.id === "basemap-bathymetry")?.visible,
+    ).toBe(false);
     expect(new Set(entries.map((e) => e.id)).size).toBe(ALL_LAYER_GROUPS.length);
   });
 
@@ -508,7 +510,9 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
     );
     const token = formatLayerStack(off);
     expect(token).toContain("basemap-bathymetry:h");
-    expect(parseLayerStack(token!)?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(false);
+    expect(parseLayerStack(token!)?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(
+      false,
+    );
   });
 });
 
@@ -636,7 +640,9 @@ describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", 
       canMoveLayerStackEntryVisible(entries, "basemap-labels", "down", LAYER_GROUP_IN_PANEL),
     ).toBe(true);
     // two basemap rows side by side share one rank (M1): the move changes no pixel; Bathymetry moves only past a data row
-    expect(rankForStack(next.map((e) => e.id)).get("basemap-labels")).toBe(rankForStack(next.map((e) => e.id)).get("basemap-bathymetry"));
+    expect(rankForStack(next.map((e) => e.id)).get("basemap-labels")).toBe(
+      rankForStack(next.map((e) => e.id)).get("basemap-bathymetry"),
+    );
   });
 
   it("basemap-labels (Place labels) 'up' swaps with its real visible neighbour, data-raster (Data)", () => {

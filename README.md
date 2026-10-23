@@ -182,10 +182,10 @@ row (`docs/map.md`, "The GEBCO sea floor"). On by default in the oceanmetrics in
 device pixel on the globe (the app's default projection), a fresh cache, bytes on the wire until idle; the far tier
 draws z0-5, core from z6):
 
-| view | CARTO | GEBCO and OSM tiers | total |
-|---|---|---|---|
-| z2 over the North Pacific (-120, 30) | 70,964 B (4 requests) | 8,914,822 B (44): far 2,938,708, core 2,938,730, contours 1,807,866, land 1,229,518 | 8,985,786 B (8.6 MiB) |
-| z8 over the Channel Islands (-119.7, 34.0) | 92,062 B (5) | 1,854,480 B (44): core 1,595,345, contours 116,109, far 88,160, land 30,892, names 23,974 | 1,946,542 B (1.9 MiB) |
+| view                                       | CARTO                 | GEBCO and OSM tiers                                                                       | total                 |
+| ------------------------------------------ | --------------------- | ----------------------------------------------------------------------------------------- | --------------------- |
+| z2 over the North Pacific (-120, 30)       | 70,964 B (4 requests) | 8,914,822 B (44): far 2,938,708, core 2,938,730, contours 1,807,866, land 1,229,518       | 8,985,786 B (8.6 MiB) |
+| z8 over the Channel Islands (-119.7, 34.0) | 92,062 B (5)          | 1,854,480 B (44): core 1,595,345, contours 116,109, far 88,160, land 30,892, names 23,974 | 1,946,542 B (1.9 MiB) |
 
 At z2 core's z0-5 tiles are fetched beside far's (the same tiles twice, the map package README's "Known" note): a
 third of the bytes, which gating core's layers from z6 in the package would save. The marinesensitivity instance

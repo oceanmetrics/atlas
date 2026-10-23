@@ -1485,7 +1485,9 @@
   // `defaults.bathymetry: "on"`, else when the viewer turns the row on); landing, it recomposes like the CARTO style does.
   // `$state.raw`: a module namespace is never proxied.
   let seaFloor = $state.raw<SeaFloorModule | null>(null);
-  const bathymetryOn = $derived(layerStack.find((e) => e.id === "basemap-bathymetry")?.visible ?? false);
+  const bathymetryOn = $derived(
+    layerStack.find((e) => e.id === "basemap-bathymetry")?.visible ?? false,
+  );
   $effect(() => {
     if (!bathymetryOn || seaFloor) return;
     void loadSeaFloor().then((m) => {
@@ -1539,7 +1541,9 @@
     seaFloor,
   });
   // the credit line names GEBCO and the gazetteer while the sea floor draws
-  const mapAttribution = $derived(basemapAttribution(drawsSeaFloor(composeStyleInput) ? seaFloor : null));
+  const mapAttribution = $derived(
+    basemapAttribution(drawsSeaFloor(composeStyleInput) ? seaFloor : null),
+  );
 
   $effect(() => {
     mapHandle?.applyStyle(composeStyle(composeStyleInput));
