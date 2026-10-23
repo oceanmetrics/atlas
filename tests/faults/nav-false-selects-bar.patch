@@ -1,0 +1,13 @@
+diff --git a/scripts/instance-modules.mjs b/scripts/instance-modules.mjs
+index 33e1562..6c8f277 100644
+--- a/scripts/instance-modules.mjs
++++ b/scripts/instance-modules.mjs
+@@ -148,7 +148,7 @@ export function selectedEntries(instance, table = MODULE_TABLE) {
+   for (const t of instance.tools ?? []) out.push(["tools", t, table.tools[t]]);
+   for (const c of Object.keys(table.capabilities)) {
+     // a capability block turns it on; `false` (`nav: false`) says the instance has none
+-    if (instance[c] !== undefined && instance[c] !== false)
++    if (instance[c] !== undefined)
+       out.push(["capabilities", c, table.capabilities[c]]);
+   }
+   return out;

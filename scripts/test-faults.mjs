@@ -933,6 +933,15 @@ export const FAULTS = [
     gate: ["npx", "vitest", "run", "tests/instance-modules.test.ts"],
   },
   {
+    id: "nav-false-selects-bar",
+    patch: "tests/faults/nav-false-selects-bar.patch",
+    describe:
+      "a capability declared as `false` (`nav: false`) counts as turned on -- the marinesensitivity " +
+      "instance would be held to the Ocean Metrics bar's markers and the dist check could not tell " +
+      "a bar-less build from a broken one",
+    gate: ["npx", "vitest", "run", "tests/instance-modules.test.ts"],
+  },
+  {
     id: "early-fetch-not-written",
     patch: "tests/faults/early-fetch-not-written.patch",
     describe:
