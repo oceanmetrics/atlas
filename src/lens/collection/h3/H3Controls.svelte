@@ -52,6 +52,18 @@
     }
   }
 
+  // the strip scrolls to the period on the map (the years run from the 12th century: the latest are at the end)
+  let stripEl = $state<HTMLDivElement | null>(null);
+  $effect(() => {
+    const el = stripEl;
+    void view?.period;
+    void shownBars.length;
+    if (!el) return;
+    const on = el.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (on) el.scrollLeft = on.offsetLeft - el.clientWidth / 2;
+    else el.scrollLeft = el.scrollWidth;
+  });
+
   // ---- resolution ----
   const ladder = $derived(view?.ladder ?? spec.resolutions);
   const pinned = $derived(view && view.res !== "auto" ? view.res : null);
@@ -152,6 +164,7 @@
         class="strip"
         class:years={shownGrain === "year"}
         role="toolbar"
+        bind:this={stripEl}
         aria-label="Hexagons with records per period (res 3); ←/→ step, Esc all years"
         tabindex="0"
         data-testid="h3-strip"
@@ -344,6 +357,7 @@
     outline-offset: 1px;
   }
   .strip {
+    position: relative;
     display: flex;
     align-items: flex-end;
     gap: 2px;

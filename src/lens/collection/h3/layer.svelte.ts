@@ -136,6 +136,16 @@ export interface H3Layer {
   destroy(): void;
 }
 
+const esc = (t: string) =>
+  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/** the popup's lines as HTML (each line escaped; the chosen indicator bold) */
+const linesHtml = (lines: readonly string[]) =>
+  `<div class="atlas-popup-lines">${lines
+    .map((l) =>
+      l.startsWith("▸ ") ? `<div><b>${esc(l.slice(2))}</b></div>` : `<div>${esc(l)}</div>`,
+    )
+    .join("")}</div>`;
+
 // ---- the worker: the h3 module joins MapLibre's worker once per page ----------------------------------------
 let workerReady: Promise<void> | null = null;
 export function ensureH3Worker(): Promise<void> {
@@ -546,14 +556,13 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       if (h3 !== hovered) {
         hovered = h3;
         const ind = untrack(() => view?.indicator ?? "es");
-        popup.setText(
-          hoverLines(
-            h3,
-            f.properties ?? {},
-            untrack(() => spec?.indicators ?? []),
-            ind,
-          ).join("\n"),
+        const lines = hoverLines(
+          h3,
+          f.properties ?? {},
+          untrack(() => spec?.indicators ?? []),
+          ind,
         );
+        popup.setHTML(linesHtml(lines));
       }
       popup.setLngLat(e.lngLat);
       if (!shown) {
@@ -563,8 +572,6 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     };
     // the click popup states the values and links to Details (the Cell pane), as every lens's popup does
     const clickPopup = createPopup({ offset: 10, maxWidth: "260px" });
-    const esc = (t: string) =>
-      t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const onClick = (e: MapLayerMouseEvent) => {
       if (owned()) return;
       const f = e.features?.[0];
@@ -581,9 +588,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       );
       clickPopup
         .setLngLat(e.lngLat)
-        .setHTML(
-          `<div class="atlas-popup-lines">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>${detailsLinkHtml()}`,
-        )
+        .setHTML(`${linesHtml(lines)}${detailsLinkHtml()}`)
         .addTo(map);
     };
     // a click off the hexagons clears the selection (obis-hex's click off the cells)

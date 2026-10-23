@@ -4,6 +4,7 @@
 // release does not carry a records total per period, so the strip counts hexagons, and says so. One read per layer
 // (the row groups of the layer's period rows only); pure functions plus that reader, Node-tested
 // (tests/obis/periods.test.ts).
+import { COMPRESSORS, openRangeFile } from "@oceanmetrics/map";
 import type { H3PeriodSet } from "../../../lib/catalog/h3";
 import { periodToken } from "./view";
 
@@ -102,10 +103,12 @@ export async function readPeriodRows(
   res = STRIP_RES,
 ): Promise<PeriodStatRow[]> {
   if (sets.length === 0) return [];
-  const [{ asyncBufferFromUrl, parquetMetadataAsync, parquetReadObjects }, { compressors }] =
-    await Promise.all([import("hyparquet"), import("hyparquet-compressors")]);
-  const file = typeof url === "string" ? await asyncBufferFromUrl({ url }) : url;
-  const meta = await parquetMetadataAsync(file);
+  const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
+  const compressors = COMPRESSORS;
+  // one suffix read gives the length and the footer (no HEAD); the metadata is read once for every group
+  const file = typeof url === "string" ? await openRangeFile(url) : url;
+  if (!file) return [];
+  const meta = await parquetMetadataAsync(file, { initialFetchSize: 65_536 });
   const layers = new Set(sets.map((s) => `${s.grain}_${item.layer}`));
   const names = meta.schema.slice(1).map((s) => s.name);
   const li = names.indexOf("layer");
@@ -120,6 +123,7 @@ export async function readPeriodRows(
     if (hit) {
       const rows = (await parquetReadObjects({
         file,
+        metadata: meta,
         rowStart: start,
         rowEnd: start + n,
         columns: ["layer", "key", "rank", "decade", "year", "res", "variable", "n_cells"].filter(

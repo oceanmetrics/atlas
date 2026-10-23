@@ -139,8 +139,26 @@ URL, `exact`, `dropped`). **Both repos' tests read it**: `tests/state/obisHex.te
 what it writes; obis-hex copies the table into its `tests/redirect.test.ts` for `redirectFor` (step 5). Change the
 table here first, then copy it.
 
+## The OBIS layer
+
+The obis-h3 release is a collection of the catalog (group `obis`, oceanmetrics instance), drawn by the Collections
+lens as H3 hexagons through `@oceanmetrics/map`'s `h3ReleaseSlot` (the release's own Parquet read in MapLibre's
+worker), a lazy module (`src/lens/collection/h3/`): the Taxa selector (all taxa, the 7 EOVs), a taxon field over
+the release's taxon layers, the indicator, the period strip (decades and years), the resolution (auto or pinned),
+the legend from `stats.parquet` (records on a log scale), the coverage line, hover and click, and the Cell pane
+with the hexagon's species from the release's species table (CSV). The design, the measurements (hover, the
+globe, p95 frame over a 5 s pan, the Monterey zoom 9 bytes) and what is not built yet: **`docs/obis-layer.md`**.
+
+**The Place page link** ("Species on the map", places web): `placeObisUrl({ placeId, name, bbox })`
+(`src/lib/state/obisPlace.ts`, tested in `tests/obis/placeLink.test.ts`; the places repo copies it) writes
+`https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto&map=<lon>,<lat>,<zoom>#pl=p.<id>.<name>`:
+the OBIS grammar above, `map` the centre of the place's bbox at `log2(600 / span)` clamped to 1..10 (no bbox, no
+`map`), and the place as the gazetteer `p.` token written as the atlas codec writes the hash (its `%` as `%25`).
+CINMS: `…&map=-119.75,33.725,8.38#pl=p.NMS%253ACINMS.Channel%2520Islands`.
+
 Collections declare their renderers in STAC through `atlas:*` hooks; `src/lib/catalog/hooks.ts` is the
-one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`) to its module.
+one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`, and `h3`, the platform
+profile) to its module.
 `unknownHooks` lists a collection's `atlas:*` keys that are neither a registered hook nor a data field.
 
 ## Build-time configuration (all optional)

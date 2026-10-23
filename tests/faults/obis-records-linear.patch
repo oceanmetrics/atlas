@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/paint.ts b/src/lens/collection/h3/paint.ts
+index 9679e79..7c8a31c 100644
+--- a/src/lens/collection/h3/paint.ts
++++ b/src/lens/collection/h3/paint.ts
+@@ -22,7 +22,7 @@ export const H3_RAMP = "viridis";
+ /** the stops of the fill ramp (and the legend's gradient) */
+ export const RAMP_STOPS = 9;
+ /** the indicators drawn on a log scale */
+-export const LOG_INDICATORS: ReadonlySet<string> = new Set(["n"]);
++export const LOG_INDICATORS: ReadonlySet<string> = new Set([]);
+ 
+ export const scaleOf = (indicator: string): "log" | "linear" =>
+   LOG_INDICATORS.has(indicator) ? "log" : "linear";

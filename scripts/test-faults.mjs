@@ -940,6 +940,23 @@ export const FAULTS = [
       "registry ships index.html and report.html with no access gate, and the app never resolves a release",
     gate: ["npx", "vitest", "run", "tests/release/inline-early-fetch.test.ts"],
   },
+  // --- build week 4, step 5: the OBIS layer ---------------------------------------------------------
+  {
+    id: "obis-records-linear",
+    patch: "tests/faults/obis-records-linear.patch",
+    describe:
+      "the OBIS layer paints records (`n`) on a linear ramp again -- 1 to 6.9 million records at res 2, " +
+      "so almost every hexagon takes the bottom colour",
+    gate: ["npx", "vitest", "run", "tests/obis/legend.test.ts", "-t", "log scale"],
+  },
+  {
+    id: "obis-species-children-skipped",
+    patch: "tests/faults/obis-species-children-skipped.patch",
+    describe:
+      "a coarser hexagon's species list reads its own id from the res-3 table instead of its children's " +
+      "range -- the Cell pane of a res-1 or res-2 hexagon lists no species",
+    gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "sum to the cell"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror

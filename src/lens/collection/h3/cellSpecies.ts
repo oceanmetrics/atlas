@@ -11,7 +11,15 @@
 // list shows). A taxon layer of rank phylum, class, order or family filters the list by that rank column; the EOVs
 // and the heads above class are not a column of the lookup, so their list is every taxon's, and says so. Pure
 // functions plus the readers; Node-tested (tests/obis/cellSpecies.test.ts, on a synthetic table).
-import { cellIdOf, cellIdRes, childRange, parentId, ReleaseReader } from "@oceanmetrics/map";
+import {
+  COMPRESSORS,
+  cellIdOf,
+  cellIdRes,
+  childRange,
+  openRangeFile,
+  parentId,
+  ReleaseReader,
+} from "@oceanmetrics/map";
 import type { H3Spec } from "../../../lib/catalog/h3";
 
 export interface SpeciesRow {
@@ -302,17 +310,19 @@ export async function readLookup(
   const lk = spec.speciesTable?.lookup;
   const src = source ?? lk?.href;
   if (!lk || !src) return new Map();
-  const [{ asyncBufferFromUrl, parquetReadObjects }, { compressors }] = await Promise.all([
-    import("hyparquet"),
-    import("hyparquet-compressors"),
-  ]);
-  const file = typeof src === "string" ? await asyncBufferFromUrl({ url: src }) : src;
+  const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
+  const compressors = COMPRESSORS;
+  const file = typeof src === "string" ? await openRangeFile(src) : src;
+  if (!file) throw new Error(`${String(src)}: not found`);
+  const metadata = await parquetMetadataAsync(file, { initialFetchSize: 65_536 });
   const col = (rank: string) => lk.rankColumns[rank] ?? rank;
   const columns = [lk.key, lk.nameColumn, col("phylum"), col("class"), col("order"), col("family")];
-  const rows = (await parquetReadObjects({ file, columns, compressors })) as Record<
-    string,
-    unknown
-  >[];
+  const rows = (await parquetReadObjects({
+    file,
+    columns,
+    compressors,
+    metadata,
+  })) as Record<string, unknown>[];
   const out = new Map<number, LookupRow>();
   const s = (v: unknown) => (v === null || v === undefined || v === "" ? null : String(v));
   for (const r of rows)

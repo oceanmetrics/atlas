@@ -3,6 +3,7 @@
 // as taxon layers by obisindicators 0.11) as one searchable list, with record counts on a log bar and common names
 // for the groups people look for. `heads.json` says which layer serves each head (`served_by`). Pure functions
 // plus two readers (hyparquet, a dynamic import, and fetch); Node-tested (tests/obis/taxa.test.ts).
+import { COMPRESSORS, openRangeFile } from "@oceanmetrics/map";
 import type { HeadRow, TaxonRow } from "./view";
 
 /** scientific name -> English common name (WoRMS names as they appear in taxon_groups.parquet), obis-hex 0.11.3 */
@@ -258,13 +259,14 @@ export function taxonGroups(
 
 /** the rows of the search asset (an absolute url read by range, or a buffer for tests). Throws on failure. */
 export async function readTaxonRows(source: string | ArrayBuffer): Promise<TaxonRow[]> {
-  const [{ asyncBufferFromUrl, parquetReadObjects }, { compressors }] = await Promise.all([
-    import("hyparquet"),
-    import("hyparquet-compressors"),
-  ]);
-  const file = typeof source === "string" ? await asyncBufferFromUrl({ url: source }) : source;
+  const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
+  const compressors = COMPRESSORS;
+  const file = typeof source === "string" ? await openRangeFile(source) : source;
+  if (!file) throw new Error(`${String(source)}: not found`);
+  const metadata = await parquetMetadataAsync(file, { initialFetchSize: 65_536 });
   const rows = (await parquetReadObjects({
     file,
+    metadata,
     columns: ["kind", "rank", "taxon", "label", "n", "url_path"],
     compressors,
   })) as Record<string, unknown>[];

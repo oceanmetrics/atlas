@@ -126,7 +126,10 @@
               type="button"
               class="link"
               data-testid="h3-cell-expand"
-              onclick={() => (expanded = true)}>All {fmt(list.rows.length)} species ▸</button
+              onclick={() => (expanded = true)}
+              >All {fmt(list.names)} species{list.rows.length !== list.names
+                ? ` (${fmt(list.rows.length)} AphiaIDs)`
+                : ""} ▸</button
             >
           {/if}
         {:else}
