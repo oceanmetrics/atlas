@@ -998,6 +998,37 @@ export const FAULTS = [
       "taxon and resolution on screen (or a run in flight) lose the table they are reading past the cap",
     gate: ["npx", "vitest", "run", "tests/obis/subtreeCache.test.ts", "-t", "class files kept"],
   },
+  // --- build week 6 step 5: the species and Scores lenses draw release COGs from their 3857 copies ------
+  {
+    id: "release-cog-pending-titiler",
+    patch: "tests/faults/release-cog-pending-titiler.patch",
+    describe:
+      "a species COG whose side-table answer is pending is drawn by titiler -- every v7 view asks titiler " +
+      "for the first tiles of a COG the browser is about to draw",
+    gate: ["npx", "vitest", "run", "tests/lens/species/mapInputs.test.ts", "-t", "pending"],
+  },
+  {
+    id: "outside-pra-mask-titiler",
+    patch: "tests/faults/outside-pra-mask-titiler.patch",
+    describe:
+      "the outside-Program-Area mask ignores its resolved 3857 copy and stays on titiler's colormap template",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/lens/scores/mapInputs.test.ts",
+      "-t",
+      "mask COG's own 3857 copy",
+    ],
+  },
+  {
+    id: "raster-tally-counts-hidden",
+    patch: "tests/faults/raster-tally-counts-hidden.patch",
+    describe:
+      "the About tally counts a hidden layer (the mask switched off) as a raster drawn -- by titiler, " +
+      "though it asks for no tile",
+    gate: ["npx", "vitest", "run", "tests/raster/drawTally.test.ts", "-t", "hidden layer"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror
