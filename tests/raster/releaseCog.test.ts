@@ -55,6 +55,7 @@ describe("releaseCogDraw: the side table decides who draws", () => {
       paint: { kind: "stops", stops: SPECTRAL_R },
       opacity: 0.8,
       table: table(),
+      sharedTable: null,
     });
     expect(c.kind).toBe("cog");
     if (c.kind !== "cog") return;
@@ -76,6 +77,7 @@ describe("releaseCogDraw: the side table decides who draws", () => {
       paint: { kind: "stops", stops: SPECTRAL_R },
       opacity: 0.6,
       table: table(),
+      sharedTable: null,
     });
     expect(c.kind === "cog" && c.histogram).toEqual({
       binCount: 32,
@@ -97,6 +99,7 @@ describe("releaseCogDraw: the side table decides who draws", () => {
       paint: { kind: "classes", classes: OUTSIDE_PRA_CLASSES },
       opacity: 0.55,
       table: table(),
+      sharedTable: null,
     });
     expect(c.kind).toBe("cog");
     if (c.kind !== "cog") return;
@@ -112,26 +115,58 @@ describe("releaseCogDraw: the side table decides who draws", () => {
       opacity: 0.8,
     };
     expect(
-      await releaseCogDraw({ ...req, cogUrl: orig("ffffffffffffffff"), table: table() }),
+      await releaseCogDraw({
+        ...req,
+        cogUrl: orig("ffffffffffffffff"),
+        table: table(),
+        sharedTable: null,
+      }),
     ).toEqual({
       kind: "titiler",
     });
-    expect(await releaseCogDraw({ ...req, cogUrl: "https://x.org/a.tif", table: table() })).toEqual(
-      {
-        kind: "titiler",
-      },
-    );
+    expect(
+      await releaseCogDraw({
+        ...req,
+        cogUrl: "https://x.org/a.tif",
+        table: table(),
+        sharedTable: null,
+      }),
+    ).toEqual({
+      kind: "titiler",
+    });
     const notParquet = new TextEncoder().encode("<Error>403</Error>").buffer as ArrayBuffer;
-    expect(await releaseCogDraw({ ...req, cogUrl: orig(SPECIES), table: notParquet })).toEqual({
+    expect(
+      await releaseCogDraw({ ...req, cogUrl: orig(SPECIES), table: notParquet, sharedTable: null }),
+    ).toEqual({
       kind: "titiler",
     });
   });
 });
 
+describe("releaseCogDraw: the shared pool's table first", () => {
+  it("a row in the shared table draws without the release's own table (unreadable here)", async () => {
+    const notParquet = new TextEncoder().encode("<Error>404</Error>").buffer as ArrayBuffer;
+    const c = await releaseCogDraw({
+      ver: "v7",
+      cogUrl: orig(SPECIES),
+      domain: [1, 100],
+      paint: { kind: "stops", stops: SPECTRAL_R },
+      opacity: 0.8,
+      table: notParquet,
+      sharedTable: table(),
+    });
+    expect(c.kind === "cog" && c.drawHref).toBe(copy(SPECIES));
+  });
+});
+
 describe("releaseOriginal: where values and bounds are read", () => {
   it("the 4326 original when the table resolves the COG, else null (titiler's /cog/point and /cog/info)", async () => {
-    expect(await releaseOriginal("v7", orig(SPECIES), { table: table() })).toBe(orig(SPECIES));
-    expect(await releaseOriginal("v7", orig("ffffffffffffffff"), { table: table() })).toBeNull();
+    expect(await releaseOriginal("v7", orig(SPECIES), { table: table(), sharedTable: null })).toBe(
+      orig(SPECIES),
+    );
+    expect(
+      await releaseOriginal("v7", orig("ffffffffffffffff"), { table: table(), sharedTable: null }),
+    ).toBeNull();
   });
 });
 

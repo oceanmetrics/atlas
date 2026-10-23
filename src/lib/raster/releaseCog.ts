@@ -54,6 +54,20 @@ export interface ReleaseCogRequest {
   session?: SessionLike | null;
   /** the side table itself (tests), instead of `{ver}/tables/cog_3857.parquet`. */
   table?: string | ArrayBuffer;
+  /** the shared table itself (tests), instead of the root's `tables/cog_3857.parquet`; `null` skips it. */
+  sharedTable?: string | ArrayBuffer | null;
+}
+
+/** the session and the tables a test hands in, as `releaseOriginal` takes them. */
+export type TableOptions = Pick<ReleaseCogRequest, "session" | "table" | "sharedTable">;
+
+/** `resolveCog3857`'s options for a request (it reads the shared pool's table first, then the release's own). */
+function resolveOpts(o: TableOptions) {
+  return {
+    session: o.session ?? null,
+    ...(o.table ? { source: o.table } : {}),
+    ...(o.sharedTable !== undefined ? { sharedSource: o.sharedTable } : {}),
+  };
 }
 
 /** a stand-in Item for `cogRasterSource` (it reads the id and the item's `proj:code`). */
@@ -72,12 +86,7 @@ function itemOf(ver: string, cogUrl: string): StacItem {
  * titiler). */
 export async function releaseCogDraw(req: ReleaseCogRequest): Promise<ReleaseCogChoice> {
   try {
-    const choice = await resolveCog3857(
-      req.ver,
-      req.cogUrl,
-      {},
-      { session: req.session ?? null, ...(req.table ? { source: req.table } : {}) },
-    );
+    const choice = await resolveCog3857(req.ver, req.cogUrl, {}, resolveOpts(req));
     if (choice.kind !== "cog") return TITILER;
     const source = cogRasterSource(itemOf(req.ver, req.cogUrl), choice.draw.asset, {
       domain: req.domain,
@@ -101,18 +110,10 @@ export async function releaseCogDraw(req: ReleaseCogRequest): Promise<ReleaseCog
 export async function releaseOriginal(
   ver: string,
   cogUrl: string,
-  opts: { session?: SessionLike | null; table?: string | ArrayBuffer } = {},
+  opts: TableOptions = {},
 ): Promise<string | null> {
   try {
-    const c = await resolveCog3857(
-      ver,
-      cogUrl,
-      {},
-      {
-        session: opts.session ?? null,
-        ...(opts.table ? { source: opts.table } : {}),
-      },
-    );
+    const c = await resolveCog3857(ver, cogUrl, {}, resolveOpts(opts));
     return c.kind === "cog" ? c.values.asset.href : null;
   } catch {
     return null;

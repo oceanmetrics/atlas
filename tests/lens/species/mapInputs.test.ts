@@ -429,6 +429,7 @@ describe("speciesMapInputs — who draws the COG (the release's side table)", ()
       paint: { kind: "stops", stops: boot.palettes.spectral_r },
       opacity: SPECIES_RASTER_OPACITY,
       table: table(),
+      sharedTable: null,
     });
     return { bar, asset, cog };
   }

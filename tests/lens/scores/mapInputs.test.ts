@@ -342,6 +342,7 @@ describe("scoresMapInputs — who draws the score raster and the mask (the relea
       paint: { kind: "stops", stops: ["#5e4ea1", "#9e0041"] },
       opacity: SCORE_RASTER_OPACITY,
       table: table(),
+      sharedTable: null,
     });
   const mask = () =>
     releaseCogDraw({
@@ -351,6 +352,7 @@ describe("scoresMapInputs — who draws the score raster and the mask (the relea
       paint: { kind: "classes", classes: OUTSIDE_PRA_CLASSES },
       opacity: OVERLAY_RASTER_OPACITY,
       table: table(),
+      sharedTable: null,
     });
 
   it("a score COG the table lists: the raster is its 3857 copy (cog://), the grid bounds kept, maxzoom the copy's", async () => {
