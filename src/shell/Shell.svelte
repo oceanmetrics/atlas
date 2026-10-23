@@ -82,7 +82,7 @@
     BASEMAP_ATTRIBUTION,
     type CartoStyleLike,
   } from "../lib/map/layers/basemap";
-  import { BRAND_CREDIT, BRAND_NAME, RELEASE, REPO } from "../lib/brand/instance";
+  import { BRAND_CREDIT, BRAND_NAME, NAV, RELEASE, REPO } from "../lib/brand/instance";
   // build week 4: the instance module table (scripts/instance-modules.mjs). Each export is the module
   // this instance builds, a loader for it, or `null`: the Collections lens and its place summaries are
   // eager (their map inputs exist before any panel mounts); the Scores lens, the Report tool and the
@@ -223,6 +223,14 @@
     }
   });
   const resolvedTheme = $derived(resolveTheme(sel.theme, prefersDark));
+  // the Ocean Metrics bar (@oceanmetrics/nav): registered by a dynamic import, only in an instance
+  // with `nav` (`__NAV__`), so the bar's 4.9 kB stays out of the static path and out of an instance
+  // without it. The element is in the markup from the first render, undefined until the chunk
+  // lands, and shell.css reserves its 48 px row meanwhile. Its scheme follows the shell's theme
+  // (the bar reads only `light` and `dark`; the shell's own names are navy and paper).
+  onMount(() => {
+    if (__NAV__ && NAV) void import("@oceanmetrics/nav/define");
+  });
   $effect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
   });
@@ -1872,6 +1880,18 @@
      Playwright run) to intercept pointer events across the WHOLE page -- `elementFromPoint`
      resolved to `#shell.app` itself, nowhere near any toast, and every rail/panel click timed out. -->
 <Toast phoneBottomOffsetPx={toastPhoneBottomOffsetPx} />
+
+{#if __NAV__ && NAV}
+  <!-- no search-href: the bar's place search goes to the places site (its default) -->
+  <om-nav
+    current={NAV.current}
+    items={NAV.items ? JSON.stringify(NAV.items) : undefined}
+    mark={NAV.mark}
+    label={NAV.label}
+    changes-href={NAV.changes_href}
+    theme={resolvedTheme === "navy" ? "dark" : "light"}
+  ></om-nav>
+{/if}
 
 <header class="topbar" data-tour="topbar">
   <span data-tour="brand" style="display:flex;align-items:center;gap:var(--space-2)">

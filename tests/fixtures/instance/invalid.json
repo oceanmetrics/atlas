@@ -4,5 +4,10 @@
   "tool_unknown.json": "$.tools[3]: \"reports\" not one of",
   "pages_without_index.json": "$.pages: has no \"index\"",
   "seal_without_src.json": "$.seal: missing \"src\"",
-  "budget_without_worker_kb.json": "$.budget: missing \"worker_kb\""
+  "budget_without_worker_kb.json": "$.budget: missing \"worker_kb\"",
+  "nav_missing.json": "$: missing \"nav\"",
+  "nav_true.json": "$.nav: matches 0 of oneOf",
+  "nav_without_current.json": "$.nav: matches 0 of oneOf",
+  "nav_unknown_key.json": "$.nav: matches 0 of oneOf",
+  "nav_changes_href_http.json": "$.nav: matches 0 of oneOf"
 }

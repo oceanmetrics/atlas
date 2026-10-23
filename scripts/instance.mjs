@@ -300,7 +300,7 @@ export function instanceHtmlExtras(instance, root = ".") {
  *                             siteName, siteUrl, favicon
  *   `<!--instance:<block>-->` markup: `og-image` (the og:image tags, or nothing), `mark-box` (the
  *                             mark's empty, sized <svg> box), `wordmark` (the wordmark spans),
- *                             `early-fetch` and `version-chip` (an instance with a release: its
+ *                             `nav` (an instance with the Ocean Metrics bar: its placeholder element), `early-fetch` and `version-chip` (an instance with a release: its
  *                             inline early-fetch script and the version chip's skeleton; nothing
  *                             otherwise), `font-preload` (the instance's web fonts)
  * An unknown placeholder throws, so a typo can never ship as literal text.
@@ -332,6 +332,11 @@ export function renderInstanceHtml(html, instance, mark, extras = {}) {
     "version-chip": instance.release
       ? `<button type="button" class="chip" id="sk-version-chip" data-tour="version-chip" ` +
         `data-control="version-chip" aria-hidden="true" tabindex="-1"></button>`
+      : "",
+    // an instance with the Ocean Metrics bar: its undefined element, which shell.css gives the bar's
+    // 48 px row (the shell's own `<om-nav>` replaces it when the app mounts)
+    nav: instance.nav
+      ? `<om-nav class="sk-nav" aria-hidden="true" current="${escapeHtml(instance.nav.current)}"></om-nav>`
       : "",
     // the skeleton lens switch: the instance's lenses, the default pressed (src/shell/lenses.ts labels)
     "lens-switch": (instance.lenses ?? [])

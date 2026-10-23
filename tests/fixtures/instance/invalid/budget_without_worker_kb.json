@@ -88,5 +88,6 @@
   },
   "budget": {
     "static_kb": 460
-  }
+  },
+  "nav": { "current": "atlas" }
 }

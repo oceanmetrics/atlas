@@ -60,6 +60,18 @@ export interface Instance {
   report?: { title: string; stem: string };
   /** the gzip budgets scripts/size-budget.mjs holds the build to, in KB (1.1). */
   budget: { static_kb: number; worker_kb: number };
+  /** the Ocean Metrics bar (`@oceanmetrics/nav`) above the top bar, or `false` for an instance without it (1.2). */
+  nav: false | NavSpec;
+}
+
+/** the bar's per-instance settings: `current` marks one item; the rest are the element's own attributes. */
+export interface NavSpec {
+  current: string;
+  items?: readonly { id: string; label: string; href: string; door?: boolean }[];
+  /** a file under the instance's `assets/` (page-relative), shown instead of the bar's own mark. */
+  mark?: string;
+  label?: string;
+  changes_href?: string;
 }
 
 // `unknown` first: the JSON module types `wordmark` as string[], not the tuple; the schema is what
@@ -120,4 +132,12 @@ export const CATALOG_PAGE_HREF = "./catalog.html";
 /** the map page, optionally opened on collection `id` (the `?c=` URL key). */
 export function openInMapHref(id: string): string {
   return `./index.html?c=${encodeURIComponent(id)}`;
+}
+
+/** the Ocean Metrics bar's settings, or `null` for an instance without the bar (`nav: false`). */
+export const NAV: NavSpec | null = navOf(INSTANCE);
+
+/** an instance's bar settings, or `null` when it says `nav: false`. */
+export function navOf(instance: Pick<Instance, "nav">): NavSpec | null {
+  return instance.nav === false ? null : instance.nav;
 }

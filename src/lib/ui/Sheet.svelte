@@ -172,12 +172,15 @@
   /* B4 fix (docs/usability.md, shell.css's own header on `.panel-region`): a flat `92svh` grew
      the sheet back down over the tool rail's own reserved row -- `--size-rail-row` (set by
      shell.css on this element's parent, `.panel-region`, so it inherits here) is that row's exact
-     height; `--size-topbar` is the one other fixed chrome above the sheet. Both default to `0px`
+     height; `--size-topbar` (and `--size-nav`, the Ocean Metrics bar's row in an instance that has it) is the other fixed chrome above the sheet. Both default to `0px`
      so this degrades to the old, simpler `92svh` if ever rendered somewhere neither custom
      property is defined (never happens today -- Sheet.svelte only ever mounts on the phone
      layout, inside `.panel-region`). */
   .sheet.detent-full {
-    height: min(92svh, calc(100svh - var(--size-topbar, 0px) - var(--size-rail-row, 0px)));
+    height: min(
+      92svh,
+      calc(100svh - var(--size-nav, 0px) - var(--size-topbar, 0px) - var(--size-rail-row, 0px))
+    );
   }
 
   /* the sheet's upper edge is the wave (guide p. 10) */

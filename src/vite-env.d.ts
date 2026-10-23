@@ -19,6 +19,7 @@ declare const __LENS_COLLECTION__: boolean;
 declare const __TOOL_REPORT__: boolean;
 declare const __RELEASE__: boolean;
 declare const __SEAL__: boolean;
+declare const __NAV__: boolean;
 
 // the instance's mark (vite.config.ts's atlas-instance plugin, from instances/<id>/<mark>.svg): its
 // viewBox and the markup inside the root <svg>, inlined by src/lib/brand/Mark.svelte.

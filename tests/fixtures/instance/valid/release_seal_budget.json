@@ -89,5 +89,6 @@
   "budget": {
     "static_kb": 460,
     "worker_kb": 150
-  }
+  },
+  "nav": false
 }

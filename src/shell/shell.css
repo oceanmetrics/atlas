@@ -110,9 +110,24 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--size-topbar) 1fr;
+  --size-nav: 0px; /* the Ocean Metrics bar's row, below; the phone sheet's full height subtracts it */
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+}
+
+/* an instance with the Ocean Metrics bar (@oceanmetrics/nav) puts it in the first row, above the top
+   bar: `auto`, so the row is the bar's own height (48 px, its --om-nav-height) once defined */
+.app:has(> om-nav) {
+  grid-template-rows: auto var(--size-topbar) 1fr;
+  --size-nav: 48px;
+}
+
+/* before the bar's chunk has registered the element, its row is already 48 px, so the top bar and
+   the stage do not move when it arrives (the package's own rule for a page that loads it lazily) */
+om-nav:not(:defined) {
+  display: block;
+  min-height: 48px;
 }
 
 .stage {

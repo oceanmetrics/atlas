@@ -120,6 +120,12 @@ tests are not in CI (run `cd pipeline && uv run --group dev pytest -q`).
 - Tests run once per instance (`vitest.config.ts`: `logic:<id>`); a module's tests run under an instance that builds it.
   A test of an instance's own strings reads them from the instance (or a per-instance table), never a literal brand.
   `*.mst.test.ts` are the shared modules' tests as MarineSensitivity/atlas wrote them (zones, `out`, the scores keys).
+- The Ocean Metrics bar (`@oceanmetrics/nav`, dev decision D7): `instance.json` `nav` is required, `false` or `{ current, items?,
+mark?, label?, changes_href? }`; `NAV` (`lib/brand/instance.ts`) is `null` for `false`. `Shell.svelte` renders `<om-nav>` above
+  the top bar behind `__NAV__` and registers it with a dynamic `import('@oceanmetrics/nav/define')` (a 4.9 kB lazy chunk), so an
+  instance with `nav: false` carries neither element nor chunk (`check-instance-dist.mjs`, the `nav` capability's markers are
+  `<om-nav` and `om-nav-search`, never the bare tag: shell.css's `om-nav:not(:defined)` is in every build). The shell grid's
+  extra row is `.app:has(> om-nav)`; the bar follows the shell's theme (`theme` attribute) and its place search goes to the places site.
 - The two instances: `oceanmetrics` (Collections, Species; Places rail; index, catalog; 450/150 KB) and
   `marinesensitivity` (Scores, Species; Report rail; index, report; the marine-atlas release registry with the access
   gate; the MMA seal; 470/150 KB, raised from 0.10.93's 460 because this codebase carries maplibre-gl 6.15 (the

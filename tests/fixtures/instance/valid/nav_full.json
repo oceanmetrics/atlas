@@ -1,0 +1,118 @@
+{
+  "id": "example-stac",
+  "name": "OceanMetrics Atlas",
+  "wordmark": ["Ocean", "Metrics", "Atlas"],
+  "title": "OceanMetrics Atlas",
+  "description": "OceanMetrics Atlas: a catalog of species distribution model products with explicit credits, plus places, for U.S. marine areas. Supported by MMA and MBON.",
+  "og": {
+    "siteName": "OceanMetrics Atlas",
+    "siteUrl": "https://oceanmetrics.io/atlas/",
+    "image": "og.png",
+    "imageAlt": "OceanMetrics Atlas: a hexagon holding a wave, beside the name."
+  },
+  "favicon": "favicon.svg",
+  "mark": "mark.svg",
+  "supporters": [
+    {
+      "label": "MMA",
+      "name": "Marine Minerals Administration",
+      "href": "https://marinesensitivity.org",
+      "logo": "./logos/mma-seal-320.png"
+    },
+    {
+      "label": "MBON",
+      "name": "Marine Biodiversity Observation Network",
+      "href": "https://marinebon.org",
+      "logo": "./logos/mbon-logo.png",
+      "logoDark": "./logos/mbon-logo-white.png"
+    }
+  ],
+  "credit": "OceanMetrics Atlas · supported by MMA and MBON",
+  "cite": "OceanMetrics Atlas (2026), oceanmetrics.io/atlas",
+  "about": {
+    "description": "The OceanMetrics Atlas is a catalog of species distribution model products with explicit credits: every collection names who made it, how to cite it and under what license. It is built on STAC and the stac-sdm extension. The data stays in the cloud (cloud-optimized PMTiles, Parquet and GeoTIFF read straight from storage) and the app itself is a static site.",
+    "links": [
+      {
+        "label": "MBON Data & Products",
+        "href": "https://marinebon.org/data-products/"
+      },
+      {
+        "label": "BioTrack",
+        "href": "https://marinebon.org/biotrack/"
+      },
+      {
+        "label": "SECOORA",
+        "href": "https://secoora.org"
+      },
+      {
+        "label": "OceanMetrics gazetteer (places)",
+        "href": "https://oceanmetrics.io/places/"
+      },
+      {
+        "label": "Code on GitHub",
+        "href": "https://github.com/oceanmetrics/atlas"
+      }
+    ]
+  },
+  "catalog": {
+    "base": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/",
+    "groups": [
+      {
+        "id": "oceanmetrics",
+        "label": "OceanMetrics"
+      },
+      {
+        "id": "mst-v7",
+        "label": "MarineSensitivity v7"
+      },
+      {
+        "id": "mst-v8",
+        "label": "MarineSensitivity v8"
+      },
+      {
+        "id": "external",
+        "label": "Other"
+      },
+      {
+        "id": "unlisted",
+        "label": "Unlisted (shared by link)"
+      }
+    ]
+  },
+  "lenses": ["collection", "species"],
+  "defaults": {
+    "lens": "collection",
+    "theme": "dark",
+    "tour": "on"
+  },
+  "tools": ["layers", "details", "table", "places"],
+  "pages": ["index", "catalog"],
+  "repo": "oceanmetrics/atlas",
+  "download": {
+    "prefix": "example-atlas"
+  },
+  "feedback": {
+    "app": "oceanmetrics-atlas"
+  },
+  "places": {
+    "site": "https://oceanmetrics.io/places/",
+    "attribution": "NOAA Office of National Marine Sanctuaries; Marine Regions (VLIZ); ProtectedSeas. Processed by Ocean Metrics."
+  },
+  "titiler": {
+    "host": "https://titiler-v8.marinesensitivity.org"
+  },
+  "budget": {
+    "static_kb": 450,
+    "worker_kb": 150
+  },
+  "nav": {
+    "current": "mine",
+    "items": [
+      { "id": "mine", "label": "Mine", "href": "https://example.org/mine/", "door": true },
+      { "id": "docs", "label": "Docs", "href": "https://example.org/docs/" }
+    ],
+    "mark": "./logos/mbon-logo.png",
+    "label": "Example",
+    "changes_href": "https://example.org/changes/"
+  }
+}

@@ -28,7 +28,8 @@
     "feedback",
     "places",
     "titiler",
-    "budget"
+    "budget",
+    "nav"
   ],
   "allOf": [
     {
@@ -363,6 +364,47 @@
           "pattern": "^[A-Za-z0-9-]+$"
         }
       }
+    },
+    "nav": {
+      "description": "the Ocean Metrics bar (@oceanmetrics/nav, one navigation bar for the apps and the site) above the top bar, or false for an instance without it; `current` is the id of the item to mark (places, indicators, atlas, or an id of `items`)",
+      "oneOf": [
+        { "const": false },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["current"],
+          "properties": {
+            "current": { "$ref": "#/$defs/token" },
+            "items": {
+              "description": "replaces the bar's five default items; doors sit left of the search, links right of it",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "label", "href"],
+                "properties": {
+                  "id": { "$ref": "#/$defs/token" },
+                  "label": { "$ref": "#/$defs/text" },
+                  "href": { "$ref": "#/$defs/https" },
+                  "door": { "type": "boolean" }
+                }
+              }
+            },
+            "mark": {
+              "description": "the instance's own mark in the bar, a file under assets/",
+              "$ref": "#/$defs/relativeUrl"
+            },
+            "label": {
+              "description": "the wordmark text and accessible names",
+              "$ref": "#/$defs/text"
+            },
+            "changes_href": {
+              "description": "where \"What changed\" goes",
+              "$ref": "#/$defs/https"
+            }
+          }
+        }
+      ]
     },
     "budget": {
       "description": "the gzip size budgets scripts/size-budget.mjs holds this instance's build to, in KB",

@@ -104,5 +104,6 @@
   "budget": {
     "static_kb": 450,
     "worker_kb": 150
-  }
+  },
+  "nav": { "current": "atlas" }
 }

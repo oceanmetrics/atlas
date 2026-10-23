@@ -62,5 +62,6 @@
     "attribution": "NOAA Office of National Marine Sanctuaries; Marine Regions (VLIZ); ProtectedSeas. Processed by Ocean Metrics."
   },
   "titiler": { "host": "https://titiler-v8.marinesensitivity.org" },
-  "budget": { "static_kb": 450, "worker_kb": 150 }
+  "budget": { "static_kb": 450, "worker_kb": 150 },
+  "nav": { "current": "atlas" }
 }

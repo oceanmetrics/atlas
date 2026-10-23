@@ -93,6 +93,7 @@ describe("the generated virtual:instance-modules", () => {
       __TOOL_REPORT__: false,
       __RELEASE__: false,
       __SEAL__: false,
+      __NAV__: true,
     });
     expect(instanceFlags(MST)).toEqual({
       __LENS_SCORES__: true,
@@ -100,6 +101,7 @@ describe("the generated virtual:instance-modules", () => {
       __TOOL_REPORT__: true,
       __RELEASE__: true,
       __SEAL__: true,
+      __NAV__: false,
     });
     expect(instanceDefines(MST).__RELEASE__).toBe("true");
   });
@@ -187,7 +189,7 @@ function fakeDist(name: string, pages: string[], sources: string[], text: string
   return dir;
 }
 
-const OM_TEXT = `x='data-testid="collection-details"'`;
+const OM_TEXT = [`x='data-testid="collection-details"'`, "<om-nav", "om-nav-search"].join(";");
 const MST_TEXT = [
   'data-testid="scores-legend"',
   'data-testid="report-subject-sentence"',
@@ -237,6 +239,38 @@ describe("check-instance-dist over synthetic dists", () => {
       "page report.html is missing",
       'lenses.scores: its marker "data-testid="scores-legend"" is not in the build',
       'tools.report: its marker "data-testid="report-subject-sentence"" is not in the build',
+    ]);
+  });
+
+  it("SEEDED FAULT: the Ocean Metrics bar in a marinesensitivity dist, or missing from an oceanmetrics one, fails", () => {
+    // shell.css's `om-nav:not(:defined)` and the tokens' `--om-navy` are in every dist and are no marker
+    const clean = `${MST_TEXT};om-nav:not(:defined){display:block};--om-navy:#102a43`;
+    const mst = fakeDist(
+      "mst-nav",
+      ["index.html", "report.html"],
+      ["index.html", "src/lens/scores/shell.ts"],
+      clean,
+    );
+    expect(instanceDistProblems(mst, MST)).toEqual([]);
+    const bad = fakeDist(
+      "mst-nav-bad",
+      ["index.html", "report.html"],
+      ["index.html", "src/lens/scores/shell.ts"],
+      `${clean};<om-nav current="atlas">;om-nav-search`,
+    );
+    expect(instanceDistProblems(bad, MST)).toEqual([
+      'capabilities.nav: its marker "<om-nav" is in assets/x.js',
+      'capabilities.nav: its marker "om-nav-search" is in assets/x.js',
+    ]);
+    const none = fakeDist(
+      "om-nav-none",
+      ["index.html", "catalog.html"],
+      ["index.html", "src/lens/collection/shell.ts"],
+      `x='data-testid="collection-details"'`,
+    );
+    expect(instanceDistProblems(none, OM)).toEqual([
+      'capabilities.nav: its marker "<om-nav" is not in the build',
+      'capabilities.nav: its marker "om-nav-search" is not in the build',
     ]);
   });
 

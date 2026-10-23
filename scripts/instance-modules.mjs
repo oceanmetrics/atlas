@@ -119,6 +119,14 @@ export const MODULE_TABLE = {
       ],
     },
     seal: { markers: ["Prepared for the"], tests: ["tests/ui/sealVisibility.test.ts"] },
+    // the Ocean Metrics bar (@oceanmetrics/nav): the element in the shell and the skeleton, and the
+    // package's lazy define chunk. The markers are not the bare tag: shell.css's `om-nav:not(:defined)`
+    // is in every instance's CSS, so `<om-nav` (markup) and the bar's own event name stand for it.
+    nav: {
+      owns: ["node_modules/@oceanmetrics/nav/"],
+      markers: ["<om-nav", "om-nav-search"],
+      tests: ["tests/nav.test.ts"],
+    },
   },
 };
 
@@ -139,7 +147,9 @@ export function selectedEntries(instance, table = MODULE_TABLE) {
   for (const l of instance.lenses ?? []) out.push(["lenses", l, table.lenses[l]]);
   for (const t of instance.tools ?? []) out.push(["tools", t, table.tools[t]]);
   for (const c of Object.keys(table.capabilities)) {
-    if (instance[c] !== undefined) out.push(["capabilities", c, table.capabilities[c]]);
+    // a capability block turns it on; `false` (`nav: false`) says the instance has none
+    if (instance[c] !== undefined && instance[c] !== false)
+      out.push(["capabilities", c, table.capabilities[c]]);
   }
   return out;
 }
@@ -201,7 +211,7 @@ export function instanceModulesSource(instance, root = ".") {
 
 /**
  * The instance's build-time flags (vite.config.ts `define`, the same in vitest): whether it builds the
- * Scores lens, the Collections lens and the Report tool, and whether it has a release registry. The
+ * Scores lens, the Collections lens and the Report tool, whether it has a release registry, a seal and the Ocean Metrics bar. The
  * shell guards each instance-only template branch with one, so the minifier drops the branch (and
  * the code only it reaches) from a build that does not have it, on top of the module table's `null`
  * modules never being bundled.
@@ -213,6 +223,7 @@ export function instanceFlags(instance) {
     __TOOL_REPORT__: (instance.tools ?? []).includes("report"),
     __RELEASE__: instance.release !== undefined,
     __SEAL__: instance.seal !== undefined,
+    __NAV__: instance.nav !== undefined && instance.nav !== false,
   };
 }
 
