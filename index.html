@@ -22,6 +22,9 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="OceanMetrics Atlas: a hexagon holding a wave, beside the name." />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- the instance's web fonts (instances/<id>/fonts/*.woff2), preloaded so the first frame paints in
+         them; nothing for an instance on system fonts -->
+    
 
     <!--
       critical CSS, inlined so the shell paints before any JavaScript bundle loads or parses (plan
@@ -90,6 +93,14 @@
     </script>
 
     <!--
+      an instance with a release registry (instance.json `release`): the inline early-fetch script,
+      written here by the build from src/lib/release/earlyFetch.inline.js (scripts/instance.mjs). It
+      resolves the release this host may render (the access gate, fail closed) and starts its files
+      before the bundle parses; the app reads the results off window.__early. Nothing otherwise.
+    -->
+    
+
+    <!--
       fix list #14 (atlas-3 handover item (b), still open until now): the only fallback for
       "JavaScript is on and the bundle 404'd or failed to parse" used to be a <noscript> -- which
       by definition never runs when script IS enabled and just broken. With every asset blocked,
@@ -123,15 +134,15 @@
         }, 8000);
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-CXGmSMVe.js"></script>
+    <script type="module" crossorigin src="./assets/index-DqSWFlfz.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-hePW80VL.js">
-    <link rel="modulepreload" crossorigin href="./assets/licenses-C-W-sAY9.js">
-    <link rel="modulepreload" crossorigin href="./assets/codec-BulEajuH.js">
+    <link rel="modulepreload" crossorigin href="./assets/licenses-BuLbF7-B.js">
+    <link rel="modulepreload" crossorigin href="./assets/codec-CVURXZ5j.js">
     <link rel="modulepreload" crossorigin href="./assets/round-C9uUmS4Q.js">
-    <link rel="modulepreload" crossorigin href="./assets/legendTitle-DpORliPn.js">
-    <link rel="modulepreload" crossorigin href="./assets/shards-Bkr1Y0XK.js">
+    <link rel="modulepreload" crossorigin href="./assets/legendTitle-DqMEcyXt.js">
+    <link rel="modulepreload" crossorigin href="./assets/shards-BWgBCTIb.js">
     <link rel="modulepreload" crossorigin href="./assets/colors-De800Qkt.js">
-    <link rel="modulepreload" crossorigin href="./assets/layerBar-CuPGgwxu.js">
+    <link rel="modulepreload" crossorigin href="./assets/layerBar-RO7BC-mj.js">
     <link rel="modulepreload" crossorigin href="./assets/categories-CvhJi-H3.js">
     <link rel="stylesheet" crossorigin href="./assets/licenses-Bl7FQJma.css">
     <link rel="stylesheet" crossorigin href="./assets/index-DJbX1Ekr.css">
@@ -157,6 +168,9 @@
           </h1>
         </span>
 
+        <!-- an instance with a release: the version chip's empty skeleton twin -->
+        
+
         <div
           class="sk-seg"
           role="group"
@@ -165,8 +179,8 @@
           data-control="lens-switch"
           aria-hidden="true"
         >
-          <span class="is-pressed">Collections</span>
-          <span>Species</span>
+          <!-- the instance's lenses, the default one pressed (src/shell/lenses.ts labels) -->
+          <span class="is-pressed">Collections</span><span>Species</span>
         </div>
 
         <div
