@@ -15,6 +15,7 @@
     sortSpecies,
     speciesCsv,
     speciesCsvName,
+    readLine,
     wormsUrl,
     yearsText,
     type SpeciesSortKey,
@@ -192,7 +193,7 @@
           Species CSV
         </button>
         <p class="note" data-testid="h3-cell-read">
-          Read {(list.bytes / 1024).toFixed(0)} KB in {list.requests} requests, {list.ms} ms.
+          {readLine(list)}
         </p>
       {/if}
     </div>

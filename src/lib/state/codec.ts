@@ -213,7 +213,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     sel: parseSelToken(params.get("sel")),
     show: parseList(params.get("show")),
     hide: parseList(params.get("hide")),
-    layers: parseLayerStack(params.get("layers")) ?? undefined,
+    layers: parseLayerStack(params.get("layers"), { keepDefault: true }) ?? undefined,
     theme: parseEnum(aliasTheme(params.get("theme")), THEMES, DEFAULT_SEL.theme),
     tour: parseEnum(params.get("tour"), ["on", "off"] as const, DEFAULT_SEL.tour),
     zl: parseZoomToLayer(params.get("zl")),
@@ -290,7 +290,7 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.sel) params.set("sel", sel.sel);
   if (sel.show.length > 0) params.set("show", sel.show.join(","));
   if (sel.hide.length > 0) params.set("hide", sel.hide.join(","));
-  const layersToken = formatLayerStack(sel.layers);
+  const layersToken = formatLayerStack(sel.layers, { keepDefault: true });
   if (layersToken !== null) params.set("layers", layersToken);
   if (sel.theme !== DEFAULT_SEL.theme) params.set("theme", sel.theme);
   if (sel.tour !== DEFAULT_SEL.tour) params.set("tour", sel.tour);

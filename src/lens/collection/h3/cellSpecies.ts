@@ -18,7 +18,9 @@ import {
   childRange,
   openRangeFile,
   parentId,
-  ReleaseReader,
+  speciesForCell,
+  type ReadStats,
+  type ReleaseReader,
 } from "@oceanmetrics/map";
 import type { H3Spec } from "../../../lib/catalog/h3";
 
@@ -46,8 +48,14 @@ export interface CellSpeciesList {
   records: number;
   names: number;
   notes: string[];
+  /** the bytes and requests of the species table's read (the footer too on the page's first hexagon) */
   bytes: number;
   requests: number;
+  /** row groups read and skipped by the `cell_id` statistics */
+  groupsRead: number;
+  groupsSkipped: number;
+  /** the lookup's bytes when this hexagon's read was the page's first (the names, once per page), else 0 */
+  lookupBytes: number;
   ms: number;
 }
 
@@ -179,6 +187,24 @@ export function totalsNote(
   return `The species list (${fmt(list.records)} records of ${fmt(list.names)} species) does not add up to the hexagon's ${fmt(n)} records of ${fmt(sp)} species.`;
 }
 
+/** what the Cell pane prints under the list: the species table's bytes and requests (the footer is in them on a
+ * page's first hexagon), the row groups read of those the table has, the names once per page, and the time. */
+export function readLine(
+  l: Pick<
+    CellSpeciesList,
+    "bytes" | "requests" | "groupsRead" | "groupsSkipped" | "lookupBytes" | "ms"
+  >,
+): string {
+  const kb = (b: number) => `${fmt(Math.round(b / 1024))} KB`;
+  const groups = l.groupsRead + l.groupsSkipped;
+  const parts = [
+    `Read ${kb(l.bytes)} of the species table in ${l.requests} ${l.requests === 1 ? "request" : "requests"}`,
+    ...(groups > 0 ? [`${l.groupsRead} of ${groups} row groups`] : []),
+    ...(l.lookupBytes > 0 ? [`plus the names, ${kb(l.lookupBytes)}, once per page`] : []),
+  ];
+  return `${parts.join(", ")}; ${l.ms} ms.`;
+}
+
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 /** the rows whose first-last years overlap a period (a decade `1990` spans 1990 to 1999, a year itself). */
@@ -306,13 +332,14 @@ export function speciesCsvName(o: {
 export async function readLookup(
   spec: H3Spec,
   source?: string | ArrayBuffer,
+  stats?: ReadStats,
 ): Promise<Map<number, LookupRow>> {
   const lk = spec.speciesTable?.lookup;
   const src = source ?? lk?.href;
   if (!lk || !src) return new Map();
   const { parquetMetadataAsync, parquetReadObjects } = await import("hyparquet");
   const compressors = COMPRESSORS;
-  const file = typeof src === "string" ? await openRangeFile(src) : src;
+  const file = typeof src === "string" ? await openRangeFile(src, { stats }) : src;
   if (!file) throw new Error(`${String(src)}: not found`);
   const metadata = await parquetMetadataAsync(file, { initialFetchSize: 65_536 });
   const col = (rank: string) => lk.rankColumns[rank] ?? rank;
@@ -336,7 +363,12 @@ export async function readLookup(
   return out;
 }
 
-/** the summed flat rows of a hexagon (one range read through the map package's row-group reader). */
+/** the suffix the species table is opened with: the live `species_flat/res=3.parquet` footer is 245 KB, so a 64 KiB
+ * tail costs a second request for it; 256 KiB reads it in one (the map package's README, "The species of a cell"). */
+export const SPECIES_TAIL = 262_144;
+
+/** the summed flat rows of a hexagon (`speciesForCell`: only the row groups of its range; the reader keeps the
+ * table's footer between hexagons), with the requests and bytes of this read. */
 export async function readCellRows(
   spec: H3Spec,
   h3: string,
@@ -344,33 +376,42 @@ export async function readCellRows(
 ): Promise<{
   plan: NonNullable<ReturnType<typeof cellPlan>>;
   summed: ReturnType<typeof sumBySpecies>;
+  requests: number;
+  bytes: number;
+  groupsRead: number;
+  groupsSkipped: number;
 } | null> {
   const flat = spec.speciesFlat;
   const plan = flat ? cellPlan(h3, flat.resolutions) : null;
   if (!flat || !plan) return null;
   const cols = spec.speciesTable?.columns;
   const url = flat.hrefTemplate.replace("{res}", String(plan.tableRes));
-  const want = [
-    cols?.species ?? "aphiaid",
-    cols?.count ?? "n",
-    cols?.nameKey,
-    cols?.yearMin,
-    cols?.yearMax,
-  ].filter((c): c is string => !!c);
-  const got = await reader.rows(url, [plan.range], {
+  const colAphia = cols?.species ?? "aphiaid";
+  const colN = cols?.count ?? "n";
+  const want = [colAphia, colN, cols?.nameKey, cols?.yearMin, cols?.yearMax].filter(
+    (c): c is string => !!c,
+  );
+  const got = await speciesForCell(url, h3, {
+    res: plan.tableRes,
     id: cols?.cell ?? "cell_id",
-    idType: "int64",
     columns: want,
+    reader,
   });
-  const c = got?.columns ?? {};
+  if (!got) return null;
+  const col = (name: string | undefined) =>
+    name ? got.rows.map((r) => (typeof r[name] === "number" ? (r[name] as number) : NaN)) : [];
   return {
     plan,
     summed: sumBySpecies({
-      aphiaid: c[cols?.species ?? "aphiaid"] ?? [],
-      n: c[cols?.count ?? "n"] ?? [],
-      ...(cols?.nameKey && c[cols.nameKey] ? { name_key: c[cols.nameKey] } : {}),
-      ...(cols?.yearMin && c[cols.yearMin] ? { year_min: c[cols.yearMin] } : {}),
-      ...(cols?.yearMax && c[cols.yearMax] ? { year_max: c[cols.yearMax] } : {}),
+      aphiaid: col(colAphia),
+      n: col(colN),
+      ...(cols?.nameKey ? { name_key: col(cols.nameKey) } : {}),
+      ...(cols?.yearMin ? { year_min: col(cols.yearMin) } : {}),
+      ...(cols?.yearMax ? { year_max: col(cols.yearMax) } : {}),
     }),
+    requests: got.requests,
+    bytes: got.bytes,
+    groupsRead: got.groupsRead,
+    groupsSkipped: got.groupsSkipped,
   };
 }

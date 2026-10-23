@@ -248,6 +248,9 @@ export interface CollectionLens {
   /** the H3 layer of an `h3` collection (the obis-h3 release: indicator, period, resolution, taxon, the Cell
    * pane), a lazy module loaded when such a collection opens; `null` for any other collection, or while it loads. */
   readonly h3: H3Layer | null;
+  /** the selected collection is an `h3` collection (known before its lazy layer loads): its Layers stack puts the
+   * place labels above the data by default (`layerStack.ts#LABELS_ABOVE_DATA_STACK`). */
+  readonly drawsH3: boolean;
   /** the MarineSensitivity side of the active collection (taxon search, identifiers, notices). */
   readonly mst: MstSource;
   /** the registry side of the active collection (AquaMaps native: taxon search, representation switch). */
@@ -1320,6 +1323,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get siblings() {
       return siblings;
+    },
+    get drawsH3() {
+      return h3Spec !== null;
     },
     get h3() {
       return h3Spec ? h3Layer : null;

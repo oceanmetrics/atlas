@@ -167,8 +167,26 @@ export interface LayerStackEntry {
   opacity: number;
 }
 
-export function defaultLayerStackEntries(): LayerStackEntry[] {
-  return DEFAULT_LAYER_STACK.map((id) => ({ id, visible: true, opacity: 1 }));
+/**
+ * The default stack of a layer whose hexagons are opaque and large (the OBIS h3 layer, `docs/obis-layer.md`):
+ * `basemap-labels` sits just ABOVE `data-raster`, so place names read over the hexagons (the stock stack draws
+ * them under the data, and a res-1 to 3 hexagon hides them). A per-layer default, not a global change: every other
+ * layer keeps {@link DEFAULT_LAYER_STACK}, and a viewer who moves the labels back down writes a `layers=` token,
+ * since it then differs from this layer's default.
+ */
+export const LABELS_ABOVE_DATA_STACK: readonly LayerGroupId[] = (() => {
+  const out: LayerGroupId[] = DEFAULT_LAYER_STACK.filter((id) => id !== "basemap-labels");
+  out.splice(out.indexOf("data-raster") + 1, 0, "basemap-labels");
+  return out;
+})();
+
+/** the stack a fresh page of a layer shows: `labelsAboveData` is the h3 layer's ({@link LABELS_ABOVE_DATA_STACK}). */
+export function defaultLayerStackEntries(labelsAboveData = false): LayerStackEntry[] {
+  return (labelsAboveData ? LABELS_ABOVE_DATA_STACK : DEFAULT_LAYER_STACK).map((id) => ({
+    id,
+    visible: true,
+    opacity: 1,
+  }));
 }
 
 /** shared by {@link parseLayerStack} (M2, review round 1) and {@link normalizeLayerStack} below:
@@ -254,11 +272,31 @@ export function normalizeLayerStack(
   return enforceDataOrder(filled);
 }
 
+/** the stack a view draws: the URL's deviation (`sel.layers`) or the shown layer's default. */
+export function resolveLayerStack(
+  fromUrl: readonly LayerStackEntry[] | undefined,
+  labelsAboveData = false,
+): readonly LayerStackEntry[] {
+  return fromUrl ?? defaultLayerStackEntries(labelsAboveData);
+}
+
+/** what the URL keeps after a change in the panel: nothing when `next` is the shown layer's default, else `next`
+ * (so labels moved back UNDER the hexagons are a deviation on the h3 layer and are written to `layers=`). */
+export function layerStackForUrl(
+  next: readonly LayerStackEntry[],
+  labelsAboveData = false,
+): readonly LayerStackEntry[] | undefined {
+  return isDefaultLayerStack(next, labelsAboveData) ? undefined : next;
+}
+
 /** true iff `entries` is draw-order-and-value identical to `defaultLayerStackEntries()` — the
  * "is this a default?" comparison `state/codec.ts#formatSel` needs (mirrors every other field's own
  * `!== DEFAULT_SEL.x` check) and what "Reset layers" restores. */
-export function isDefaultLayerStack(entries: readonly LayerStackEntry[]): boolean {
-  const def = defaultLayerStackEntries();
+export function isDefaultLayerStack(
+  entries: readonly LayerStackEntry[],
+  labelsAboveData = false,
+): boolean {
+  const def = defaultLayerStackEntries(labelsAboveData);
   return (
     entries.length === def.length &&
     entries.every(
@@ -497,7 +535,10 @@ function parseOneToken(token: string): { id: string; visible: boolean; opacity: 
  * future group the same way (an id later than everything named still lands at the default's own
  * tail, exactly as before).
  */
-export function parseLayerStack(v: string | null): LayerStackEntry[] | null {
+export function parseLayerStack(
+  v: string | null,
+  opts: { keepDefault?: boolean } = {},
+): LayerStackEntry[] | null {
   if (v === null || v.trim() === "") return null;
   const seen = new Set<LayerGroupId>();
   const out: LayerStackEntry[] = [];
@@ -514,7 +555,11 @@ export function parseLayerStack(v: string | null): LayerStackEntry[] | null {
   // `normalizeLayerStack` gives a hand-built `layerStack` that bypasses this parser entirely.
   const ordered = [...enforceDataOrder(out)];
   if (ordered.length === 0) return null;
-  return isDefaultLayerStack(ordered) ? null : ordered;
+  // `keepDefault` (the URL codec): a token that names at least one group and lands on the stock stack is kept, since
+  // on the h3 layer the stock stack (labels under the data) is the DEVIATION from that layer's default
+  // ({@link LABELS_ABOVE_DATA_STACK}) and must survive a reload; the default is `null`, as every other caller expects.
+  if (isDefaultLayerStack(ordered)) return opts.keepDefault && seen.size > 0 ? ordered : null;
+  return ordered;
 }
 
 function formatOneToken(e: LayerStackEntry): string {
@@ -532,8 +577,10 @@ function formatOneToken(e: LayerStackEntry): string {
  * field follows (`state/codec.ts#formatSel`). */
 export function formatLayerStack(
   entries: readonly LayerStackEntry[] | null | undefined,
+  opts: { keepDefault?: boolean } = {},
 ): string | null {
-  if (!entries || entries.length === 0 || isDefaultLayerStack(entries)) return null;
+  if (!entries || entries.length === 0) return null;
+  if (isDefaultLayerStack(entries) && !opts.keepDefault) return null;
   return entries.map(formatOneToken).join(",");
 }
 

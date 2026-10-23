@@ -8,6 +8,8 @@ import {
   filterSpecies,
   overlapsPeriod,
   readCellRows,
+  readLine,
+  SPECIES_TAIL,
   readLookup,
   shareText,
   sortSpecies,
@@ -60,6 +62,49 @@ describe("the species of a hexagon", () => {
     const whole = buffer("species_flat/res=3.parquet").byteLength;
     expect(stats.requests).toBeGreaterThanOrEqual(1);
     expect(stats.bytes).toBeLessThanOrEqual(whole);
+  });
+  it("the pane's read: the table's requests and bytes of this call, the footer kept for the next hexagon", async () => {
+    // one reader per page with the 256 KiB tail (SPECIES_TAIL): the first hexagon opens the table, the second
+    // reads row groups only (or nothing, when its groups are in the cache)
+    const stats = { requests: 0, bytes: 0 };
+    const r = new ReleaseReader({ fetch: localFetch(stats), tail: SPECIES_TAIL });
+    expect(SPECIES_TAIL).toBe(262_144);
+    const a = (await readCellRows(S, "826a8ffffffffff", r))!;
+    expect(a.requests).toBe(stats.requests);
+    expect(a.bytes).toBe(stats.bytes);
+    expect(a.requests).toBeGreaterThanOrEqual(1);
+    expect(a.groupsRead).toBeGreaterThanOrEqual(1);
+    const before = { ...stats };
+    const b = (await readCellRows(S, "825acffffffffff", r))!;
+    // the second call opens nothing again: its requests are the ones counted since, and fewer than the first's
+    expect(b.requests).toBe(stats.requests - before.requests);
+    expect(b.bytes).toBe(stats.bytes - before.bytes);
+    expect(b.requests).toBeLessThan(a.requests);
+    expect(b.summed.size).toBeGreaterThan(0);
+  });
+  it("the pane prints the bytes it read (KB, requests, row groups, the names once, ms)", () => {
+    expect(
+      readLine({
+        bytes: 329_000,
+        requests: 2,
+        groupsRead: 1,
+        groupsSkipped: 369,
+        lookupBytes: 0,
+        ms: 310,
+      }),
+    ).toBe("Read 321 KB of the species table in 2 requests, 1 of 370 row groups; 310 ms.");
+    expect(
+      readLine({
+        bytes: 68_000,
+        requests: 1,
+        groupsRead: 1,
+        groupsSkipped: 0,
+        lookupBytes: 2_097_152,
+        ms: 150,
+      }),
+    ).toBe(
+      "Read 66 KB of the species table in 1 request, 1 of 1 row groups, plus the names, 2,048 KB, once per page; 150 ms.",
+    );
   });
   it("names and ranks from the lookup; a class layer keeps its class", async () => {
     const lookup = await readLookup(S, buffer("species/species.parquet"));

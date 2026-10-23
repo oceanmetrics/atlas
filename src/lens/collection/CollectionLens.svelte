@@ -276,6 +276,7 @@
   <LibLayersPanel
     stack={layerStack}
     onChange={onLayerStackChange}
+    labelsAboveData={lens.drawsH3}
     {projection}
     {rowState}
     {expandedRow}

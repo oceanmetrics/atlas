@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",
-    "@oceanmetrics/map": "^0.3.0",
+    "@oceanmetrics/map": "^0.3.2",
     "@oceanmetrics/places": "^0.5.2",
     "@tmcw/togeojson": "7.1.2",
     "d3-hierarchy": "3.1.2",

@@ -18,8 +18,8 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   collections at https://file.marinesensitivity.org/stac/). `src/lens/collection/` is the generic lens.
 - External: MST titiler `https://titiler.marinesensitivity.org` (stock `/cog`), gazetteer
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
-- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.2.2: the MapLibre setup, the COG
-  provider), `@oceanmetrics/places` (the gazetteer client; called only from
+- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.3.2: the MapLibre setup, the COG
+  provider, the h3 release slot and `speciesForCell`), `@oceanmetrics/places` (the gazetteer client; called only from
   `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
   `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
 

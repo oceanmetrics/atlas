@@ -148,6 +148,9 @@
   interface Props {
     stack: readonly LayerStackEntry[];
     onChange: (next: readonly LayerStackEntry[]) => void;
+    /** this layer's default stack has the place labels above the data (the OBIS h3 layer): "Reset layers" restores
+     * it and the button is disabled on it. */
+    labelsAboveData?: boolean;
     /** the lens's own controls (today's scores `LayersPanel.svelte` content / species'
      * title+layer-bar+card), rendered inside the "Data" row once it is expanded. Optional so a
      * lens that has not resolved yet (boot still loading) can omit it and the row just shows
@@ -198,6 +201,7 @@
   let {
     stack,
     onChange,
+    labelsAboveData = false,
     dataControls,
     unitToggle,
     layerField,
@@ -309,7 +313,7 @@
   }
 
   function reset() {
-    onChange(defaultLayerStackEntries());
+    onChange(defaultLayerStackEntries(labelsAboveData));
     announce("Layers reset to the default stack");
   }
 </script>
@@ -568,7 +572,12 @@
   {/if}
 
   <div class="stack-footer">
-    <button type="button" class="reset-btn" disabled={isDefaultLayerStack(stack)} onclick={reset}>
+    <button
+      type="button"
+      class="reset-btn"
+      disabled={isDefaultLayerStack(stack, labelsAboveData)}
+      onclick={reset}
+    >
       Reset layers
     </button>
   </div>

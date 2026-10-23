@@ -76,7 +76,7 @@
   // R3 (round-2 plan §5 U4): the layer stack — resolved here (the SAME resolved object both
   // `composeStyleInput` and each lens's `LayersPanel` mount read, per this task's own instructions
   // to keep Shell.svelte's edits to exactly "the panel mount and the composeStyle input").
-  import { defaultLayerStackEntries, isDefaultLayerStack } from "../lib/map/layerStack";
+  import { layerStackForUrl, resolveLayerStack } from "../lib/map/layerStack";
   import {
     warmBasemapStyles,
     BASEMAP_ATTRIBUTION,
@@ -1406,9 +1406,16 @@
   // release's default stack (`defaultLayerStackEntries()`, a no-op on `composeStyle`'s own default
   // when nothing has been customized). Both lens panels below and `composeStyleInput` read this
   // SAME value, so the panel's rows and what the map actually draws can never disagree.
-  const layerStack = $derived<readonly LayerStackEntry[]>(sel.layers ?? defaultLayerStackEntries());
+  // the OBIS h3 layer's default stack has the place labels above the data (a per-layer default, not a global one:
+  // `layerStack.ts#LABELS_ABOVE_DATA_STACK`); `sel.layers` is a deviation from the default OF THE LAYER SHOWN.
+  const labelsAboveData = $derived(
+    __LENS_COLLECTION__ && sel.lens === "collection" && !!collectionLens?.drawsH3,
+  );
+  const layerStack = $derived<readonly LayerStackEntry[]>(
+    resolveLayerStack(sel.layers, labelsAboveData),
+  );
   function onLayerStackChange(next: readonly LayerStackEntry[]) {
-    selStore.set({ layers: isDefaultLayerStack(next) ? undefined : next });
+    selStore.set({ layers: layerStackForUrl(next, labelsAboveData) });
   }
 
   // --- the release's zone units (an instance with a release: `releaseMod`) ------------------------

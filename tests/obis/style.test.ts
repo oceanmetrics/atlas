@@ -4,7 +4,17 @@
 import { describe, expect, it } from "vitest";
 import { h3ReleaseSlot, releaseSource } from "@oceanmetrics/map";
 import { composeStyle } from "../../src/lib/map/style";
-import { defaultLayerStackEntries } from "../../src/lib/map/layerStack";
+import {
+  DEFAULT_LAYER_STACK,
+  LABELS_ABOVE_DATA_STACK,
+  defaultLayerStackEntries,
+  formatLayerStack,
+  isDefaultLayerStack,
+  layerStackForUrl,
+  parseLayerStack,
+  resolveLayerStack,
+} from "../../src/lib/map/layerStack";
+import { formatSel, parseSel } from "../../src/lib/state/codec";
 import type { H3LayerSpec } from "../../src/lib/map/types";
 import type { CartoStyleLike } from "../../src/lib/map/layers/basemap";
 import { releaseTarget } from "../../src/lens/collection/h3/view";
@@ -72,6 +82,30 @@ describe("composeStyle({ h3 })", () => {
       ids.indexOf(s.ids.fill),
     );
   });
+  it("the h3 layer's own default stack draws the place labels above the hexagons (a per-layer default)", () => {
+    const s = slotOf();
+    const style = composeStyle({
+      theme: "navy",
+      basemapStyle: CARTO,
+      h3: specOf(s),
+      layerStack: resolveLayerStack(undefined, true),
+    });
+    const ids = style.layers.map((l) => l.id);
+    expect(ids.findIndex((id) => id.endsWith("place_label"))).toBeGreaterThan(
+      ids.indexOf(s.ids.fill),
+    );
+    // the same view with another layer's default (not h3) keeps the labels under the data
+    const other = composeStyle({
+      theme: "navy",
+      basemapStyle: CARTO,
+      h3: specOf(s),
+      layerStack: resolveLayerStack(undefined, false),
+    });
+    const oids = other.layers.map((l) => l.id);
+    expect(oids.findIndex((id) => id.endsWith("place_label"))).toBeLessThan(
+      oids.indexOf(s.ids.fill),
+    );
+  });
   it("the data group's opacity scales the hexagons (the Layers panel's opacity control)", () => {
     const s = slotOf();
     const stack = defaultLayerStackEntries().map((e) =>
@@ -111,5 +145,56 @@ describe("the slot's tile url", () => {
     const s = slotOf();
     s.update({ res: 4 });
     expect(s.layer().pin).toBe(4);
+  });
+});
+
+describe("the Labels row above the data is the h3 layer's default, not the stack's", () => {
+  it("the h3 default is the stock stack with basemap-labels right above data-raster; the stock stack is unchanged", () => {
+    const ids = LABELS_ABOVE_DATA_STACK;
+    expect(ids.indexOf("basemap-labels")).toBe(ids.indexOf("data-raster") + 1);
+    expect(ids.filter((id) => id !== "basemap-labels")).toEqual(
+      DEFAULT_LAYER_STACK.filter((id) => id !== "basemap-labels"),
+    );
+    expect(DEFAULT_LAYER_STACK.indexOf("basemap-labels")).toBeLessThan(
+      DEFAULT_LAYER_STACK.indexOf("data-raster"),
+    );
+    expect(defaultLayerStackEntries().map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
+    expect(defaultLayerStackEntries(true).map((e) => e.id)).toEqual([...LABELS_ABOVE_DATA_STACK]);
+    // data-places stays on top, every group is present once
+    expect(ids[ids.length - 1]).toBe("data-places");
+    expect(new Set(ids).size).toBe(DEFAULT_LAYER_STACK.length);
+  });
+  it("what is default depends on the layer shown (Reset layers, the URL)", () => {
+    const h3 = defaultLayerStackEntries(true);
+    const stock = defaultLayerStackEntries();
+    expect(isDefaultLayerStack(h3, true)).toBe(true);
+    expect(isDefaultLayerStack(h3)).toBe(false);
+    expect(isDefaultLayerStack(stock)).toBe(true);
+    expect(isDefaultLayerStack(stock, true)).toBe(false);
+    // the URL keeps a deviation only: on h3 the stock order IS one
+    expect(layerStackForUrl(h3, true)).toBeUndefined();
+    expect(layerStackForUrl(stock, true)).toBe(stock);
+    expect(layerStackForUrl(stock, false)).toBeUndefined();
+    expect(layerStackForUrl(h3, false)).toBe(h3);
+    expect(resolveLayerStack(undefined, true)).toEqual(h3);
+    expect(resolveLayerStack(stock, true)).toBe(stock);
+  });
+  it("regression: labels moved back under the hexagons survive a reload (the stock stack is written to layers=)", () => {
+    const stock = defaultLayerStackEntries();
+    // the model's own contract is unchanged: the stock stack is no token
+    expect(formatLayerStack(stock)).toBeNull();
+    expect(parseLayerStack(DEFAULT_LAYER_STACK.join(","))).toBeNull();
+    // the URL codec keeps it
+    const token = formatLayerStack(stock, { keepDefault: true })!;
+    expect(token).toBe(DEFAULT_LAYER_STACK.join(","));
+    const url = formatSel({ ...parseSel({ search: "", hash: "" }), c: "obis_h3", layers: stock });
+    expect(url.search).toContain("layers=");
+    const back = parseSel(url);
+    expect(back.layers?.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
+    // a view with no layers= is the layer's default
+    const none = parseSel({ search: "?c=obis_h3", hash: "" });
+    expect(none.layers).toBeUndefined();
+    // garbage names no group: still no token
+    expect(parseLayerStack("%%%nope%%%", { keepDefault: true })).toBeNull();
   });
 });

@@ -10,6 +10,8 @@
 import {
   H3_LAYER,
   ReleaseReader,
+  newReadStats,
+  type ReadStats,
   cellIdOf,
   cellIdRes,
   h3OfCellId,
@@ -39,6 +41,7 @@ import {
   CACHE_MAX,
   readCellRows,
   readLookup,
+  SPECIES_TAIL,
   speciesRows,
   totalsNote,
   totalsOf,
@@ -181,7 +184,15 @@ export const H3_FILL_OPACITY = 0.85;
 
 /** the main thread's reader (the Cell pane's values and species): files opened once, row groups cached */
 const pageReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024 });
-let lookupPromise: { href: string; p: Promise<Map<number, LookupRow>> } | null = null;
+/** the species table's own reader, one per page: its 245 KB footer is read once (a 256 KiB tail, one request) and
+ * kept for every hexagon after the first; `speciesForCell` reads the row groups of the hexagon's range only. */
+const speciesReader = new ReleaseReader({ maxBytes: 32 * 1024 * 1024, tail: SPECIES_TAIL });
+let lookupPromise: {
+  href: string;
+  p: Promise<Map<number, LookupRow>>;
+  stats: ReadStats;
+  counted: boolean;
+} | null = null;
 
 export function createH3Layer(deps: H3LayerDeps): H3Layer {
   const { selStore } = deps;
@@ -460,13 +471,17 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     v: H3View,
   ): Promise<CellSpeciesList> {
     const t0 = performance.now();
-    const before = { ...pageReader.stats };
     if (!lookupPromise || lookupPromise.href !== sp.speciesTable!.lookup!.href) {
-      const p = readLookup(sp);
-      lookupPromise = { href: sp.speciesTable!.lookup!.href, p };
+      const stats = newReadStats();
+      const p = readLookup(sp, undefined, stats);
+      lookupPromise = { href: sp.speciesTable!.lookup!.href, p, stats, counted: false };
       p.catch(() => (lookupPromise = null));
     }
-    const [cells, lookup] = await Promise.all([readCellRows(sp, h3, pageReader), lookupPromise.p]);
+    const lk = lookupPromise;
+    const [cells, lookup] = await Promise.all([readCellRows(sp, h3, speciesReader), lk.p]);
+    // the names are read once per page: the hexagon that waited for them reports their bytes
+    const lookupBytes = lk.counted ? 0 : lk.stats.bytes;
+    lk.counted = true;
     if (!cells) throw new Error("not a hexagon of the species table");
     const taxon = t.kind === "taxon" ? { rank: t.item.rank ?? "", taxon: t.item.key ?? "" } : null;
     let rows = speciesRows(cells.summed, lookup, taxon);
@@ -504,8 +519,11 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       records: totals.records,
       names: totals.names,
       notes,
-      bytes: pageReader.stats.bytes - before.bytes,
-      requests: pageReader.stats.requests - before.requests,
+      bytes: cells.bytes,
+      requests: cells.requests,
+      groupsRead: cells.groupsRead,
+      groupsSkipped: cells.groupsSkipped,
+      lookupBytes,
       ms: Math.round(performance.now() - t0),
     };
   }
