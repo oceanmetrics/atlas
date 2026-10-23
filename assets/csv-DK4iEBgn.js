@@ -1,0 +1,3 @@
+function e(e){let t=e==null?``:String(e);return/[",\n\r]/.test(t)?`"${t.replace(/"/g,`""`)}"`:t}function t(t,n){return[n.map(t=>e(t.key)).join(`,`),...t.map(t=>n.map(n=>e(n.value(t))).join(`,`))].join(`\r
+`)+`\r
+`}function n(e){return e.toISOString().slice(0,10)}function r(e,t=`place`){return e.trim().toLowerCase().replace(/[^a-z0-9]+/g,`-`).replace(/^-+|-+$/g,``)||t}function i(e,t=new Date){return`${e}_${n(t)}.csv`}function a(e,t,n=new Date){let r=new Blob([e],{type:`text/csv;charset=utf-8`}),a=URL.createObjectURL(r);try{let e=document.createElement(`a`);e.href=a,e.download=i(t,n),e.click()}finally{URL.revokeObjectURL(a)}}export{t as i,a as n,r,i as t};
