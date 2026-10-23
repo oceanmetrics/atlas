@@ -60,3 +60,21 @@ the 8 risk Items: overviews rebuilt nearest (3600 × 1800 down to 225 × 113; th
 no recorded resampling) in 2.2 s, the nine band summaries in 2.2 s, the 3857 copy (8192 × 8192, zoom 0 to 5,
 11,121,693 B) in 25.3 s; 30 s for the whole call. Band 1 (`all`): minimum 0, maximum 88, mean 2.95722, stddev 9.2489,
 valid_percent 62.69, the spike's GDAL reference; the smallest overview's mean is now 2.932 (-0.9%), not +29%.
+
+Same call on the published `score_share.tif` (laptop, 2026-10-23, the 8 share Items): overviews rebuilt nearest down to
+225 × 112 (the published ones were averaged, 450 × 225 at the smallest), 8192 × 8192 3857 copy of 15,508,152 B, 25.8 s;
+`score_share.tif` 10,055,670 B to 10,064,899 B. Band 1 mean 6.03525, stddev 10.9548, valid_percent 62.69.
+
+### Re-publishing an `aquamaps_eov` COG without the full workflow
+
+After `build.py cog-assets` on a downloaded COG and its Items, stage them as `<stage>/aquamaps_eov/` (`score_*.tif`,
+`score_*_3857.tif`, `items/*.json`, and `collection.json` read from the bucket with the new `score_*` `file:size` and
+`file:checksum`), then:
+
+```sh
+ATLAS_STAGE=<stage> pipeline/publish.sh --only aquamaps_eov [--really]
+```
+
+It uploads the COGs, then their copies, then the Items, then `collection.json` last, under `atlas/aquamaps_eov/` only,
+with the same keys and `image/tiff` / `application/json` content types; it never deletes, and `--size-only` skips a
+key whose size did not change (the risk COG and Items published on 2026-10-23 are not touched).
