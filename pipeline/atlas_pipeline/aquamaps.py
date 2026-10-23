@@ -92,6 +92,14 @@ REGISTRY_FIELDS = [
                                 "`?sp=` link; null when v7 had no model of it"),
 ]
 
+# registry version 2 (written by `build.py cog-3857-batch --pool`, published additively at registry/v2/registry.parquet):
+# the same rows and columns plus the EPSG:3857 copy of each COG, which the browser draws
+REGISTRY_V2_FIELDS = REGISTRY_FIELDS + [
+  ("cog_3857_url",     "string", "EPSG:3857 copy of `cog_url` (what the browser draws; `cog_url` stays the original the numbers are "
+                                "read from); null when the shared pool has no copy"),
+  ("cog_3857_url_005", "string", "EPSG:3857 copy of `cog_url_005`; null when the shared pool has no copy"),
+]
+
 _NAME_RE = re.compile(r"^AquaMaps suitability for (.+?), interpolated")
 
 
@@ -446,7 +454,7 @@ def check_collection(coll_dir: Path, coll: dict) -> list[str]:
     if k not in coll:
       bad.append(f"missing {k}")
   reg = coll.get("assets", {}).get("registry")
-  f = Path(coll_dir) / "registry.parquet"
+  f = Path(coll_dir) / (reg["href"] if reg else "registry.parquet")   # ./registry.parquet, or ./registry/v2/registry.parquet
   if reg is None or not f.exists():
     return bad + ["registry asset or registry.parquet missing"]
   meta = pq.read_metadata(f)
@@ -462,6 +470,59 @@ def check_collection(coll_dir: Path, coll: dict) -> list[str]:
   if idx.exists() and len(json.loads(idx.read_text())) != meta.num_rows:
     bad.append("registry_index.json row count differs from registry.parquet")
   return bad
+
+
+# ---- registry version 2: the collection points at it, additively ----
+
+COLLECTION_URL = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/aquamaps_native/collection.json"
+COPY_COLUMNS   = ["cog_3857_url", "cog_3857_url_005"]
+
+
+def bump_version(v: str) -> str:
+  """the collection's next `version`: the AquaMaps release `2019.10` -> `2019.10.1` -> `2019.10.2` (a revision of
+  the same data; the data version stays the prefix)."""
+  if v == VERSION:
+    return f"{VERSION}.1"
+  m = re.fullmatch(re.escape(VERSION) + r"\.(\d+)", v)
+  if not m:
+    raise ValueError(f"collection version {v!r} is not {VERSION} or {VERSION}.<n>")
+  return f"{VERSION}.{int(m.group(1)) + 1}"
+
+
+def registry_version_collection(live: dict, registry: Path, version: str = "v2", updated: str | None = None) -> dict:
+  """the live collection.json repointed at the registry version file `registry`: `version` bumped, `updated`, the
+  `registry` asset's href (`./registry/<version>/registry.parquet`), `file:size`, `file:checksum` and `table:columns`
+  (the file's columns, each keeping its description, the new ones described), and the item template listing the copy
+  assets. Everything else is the live document as it is (additive: no field removed, no other asset touched).
+  Raises ValueError when the file is not the registry the collection describes (a missing column, another row count)."""
+  coll = json.loads(json.dumps(live))
+  asset = coll["assets"]["registry"]
+  meta, names = pq.read_metadata(registry), pq.read_schema(registry).names
+  missing = [c for c in REGISTRY_COLUMNS + COPY_COLUMNS if c not in names]
+  if missing:
+    raise ValueError(f"{registry} lacks the registry columns {missing}")
+  if meta.num_rows != asset.get("table:row_count"):
+    raise ValueError(f"{registry} has {meta.num_rows} rows, the collection says {asset.get('table:row_count')}")
+  known = {c["name"]: c for c in asset["table:columns"]}
+  described = {c: (t, d) for c, t, d in REGISTRY_V2_FIELDS}
+  cols = []
+  for n in names:
+    cols.append(known[n] if n in known else {"name": n, "type": described[n][0], "description": described[n][1]})
+  asset["href"] = f"./registry/{version}/registry.parquet"
+  asset["table:columns"] = cols
+  asset["file:size"] = Path(registry).stat().st_size
+  asset["file:checksum"] = stac.multihash_sha256(Path(registry))
+  asset["title"] = asset["title"].replace("(names, ids, COG urls, bboxes)", "(names, ids, COG urls and their EPSG:3857 copies, bboxes)")
+  coll["version"] = bump_version(coll["version"])
+  coll["updated"] = updated or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+  assets = coll["atlas:item_template"]["assets"]
+  for key, src, rep_key in (("cog_3857", "cog_3857_url", "cog"), ("cog_3857_005", "cog_3857_url_005", "cog_005")):
+    base = assets[rep_key]
+    assets[key] = {**{k: base[k] for k in ("type", "bands", "atlas:bbox", "atlas:rescale", "atlas:colormap", "atlas:bidx")},
+                   "href": "{" + src + "}", "roles": ["data", "visual"] if key == "cog_3857" else ["reference"],
+                   "proj:code": "EPSG:3857",
+                   "title": f"{base['title']}: EPSG:3857 copy, drawn in the browser; omit when null"}
+  return coll
 
 
 # ---- thumbnail ----

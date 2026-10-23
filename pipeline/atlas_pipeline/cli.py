@@ -9,6 +9,7 @@ import json
 import secrets
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -436,7 +437,22 @@ def main(argv=None) -> int:
   m.add_argument("--workers", type=int, default=4, help="COGs at a time (downloads included)")
   m.add_argument("--limit", type=int, default=None, help="only the first N not yet done (to time a run)")
   m.add_argument("--flush-every", type=int, default=1000, help="rewrite the Parquet side table every N rows")
+  v = sub.add_parser("aquamaps-registry", help="the aquamaps_native collection.json repointed at a registry version file "
+                     "(additive: written to catalog/staging/aquamaps_native/collection.json, published by publish.sh --only aquamaps_native)")
+  v.add_argument("registry", type=Path, help="the registry version's Parquet (cog-3857-batch --pool writes <out>/om/aquamaps_native/registry/v2/registry.parquet)")
+  v.add_argument("--version", default="v2", help="the registry version (its folder under registry/)")
+  v.add_argument("--live", default=aquamaps.COLLECTION_URL, help="the collection.json to repoint: its URL or a file (default: the published one)")
+  v.add_argument("--out", type=Path, default=STAGING)
   a = ap.parse_args(argv)
+
+  if a.cmd == "aquamaps-registry":
+    live = json.loads(urllib.request.urlopen(a.live).read() if a.live.startswith("http") else Path(a.live).read_text())
+    coll = aquamaps.registry_version_collection(live, a.registry, a.version)
+    dest = a.out / aquamaps.COLLECTION_ID / "collection.json"
+    stac.write_json(dest, coll)
+    r = coll["assets"]["registry"]
+    log(f"{dest}: version {live['version']} -> {coll['version']}, registry {r['href']} {r['file:size']:,} B {r['file:checksum']}")
+    return 0
 
   if a.cmd == "cog-3857-batch":
     if a.pool:

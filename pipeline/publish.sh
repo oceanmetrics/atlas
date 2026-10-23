@@ -4,6 +4,7 @@
 #   pipeline/publish.sh --really   # real upload (needs AWS keys with write access to the bucket)
 #   pipeline/publish.sh --only swfsc_cce_becker2020b [--really]   # ONE restricted collection (+ its COGs), nothing else
 #   pipeline/publish.sh --only aquamaps_eov [--really]   # the EOV score + density COGs, their _3857 copies, Items, collection.json; no delete
+#   pipeline/publish.sh --only aquamaps_native [--really]   # ONLY aquamaps_native/collection.json (repointed at registry/v2); nothing else, no delete
 # the restricted species collection goes to an unlisted prefix kept in pipeline/restricted_prefix.txt (git-ignored);
 # a collection published with --only has its own prefix file (pipeline/restricted_prefix_<name>.txt, git-ignored).
 set -euo pipefail
@@ -49,6 +50,25 @@ if [ "$only" = "aquamaps_eov" ]; then
   exit 0
 fi
 
+# ---- --only aquamaps_native: the collection.json alone, repointed at a registry version already on the bucket ----
+# `build.py aquamaps-registry <registry/v2/registry.parquet>` writes the staged collection.json (the live one with its
+# registry asset's href, file:size, file:checksum and table:columns following the new file, version bumped). The registry
+# file itself was uploaded by `build.py cog-3857-batch --pool` and is NOT touched here: one `s3 cp` of collection.json, no
+# sync, no --delete, and only after the file the collection names is confirmed on the bucket (a collection never points at
+# a registry that is not there). The old unversioned registry.parquet stays, so a cached collection.json still works.
+if [ "$only" = "aquamaps_native" ]; then
+  src="$stage/aquamaps_native"
+  dest="s3://$bucket/atlas/aquamaps_native"
+  [ -f "$src/collection.json" ] || { echo "nothing staged at $src (run: uv run pipeline/build.py aquamaps-registry <registry.parquet>)" >&2; exit 1; }
+  href="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["assets"]["registry"]["href"])' "$src/collection.json")"
+  [[ "$href" =~ ^\./[A-Za-z0-9_./-]+\.parquet$ && "$href" != *..* ]] || { echo "refusing: registry href '$href' is not a relative .parquet path" >&2; exit 1; }
+  echo "target: $dest/collection.json (registry asset: $href)"
+  aws s3api head-object --bucket "$bucket" --key "atlas/aquamaps_native/${href#./}" > /dev/null || {
+    echo "refusing: $dest/${href#./} is not on the bucket" >&2; exit 1; }
+  aws s3 cp "$src/collection.json" "$dest/collection.json" --content-type application/json --cache-control "no-cache" $flag
+  exit 0
+fi
+
 # ---- --only <collection>: one restricted collection to its own unlisted prefix; touches nothing else ----
 # the collections this mode knows, each with its prefix file. catalog.json, the public collections and biotrack_species
 # are never uploaded here.
@@ -59,7 +79,7 @@ only_prefix_file() {
   esac
 }
 if [ -n "$only" ]; then
-  pf="$(only_prefix_file "$only")" || { echo "--only: unknown collection '$only' (known: swfsc_cce_becker2020b)" >&2; exit 2; }
+  pf="$(only_prefix_file "$only")" || { echo "--only: unknown collection '$only' (known: swfsc_cce_becker2020b, aquamaps_eov, aquamaps_native)" >&2; exit 2; }
   src="$stage/$only"
   [ -f "$src/collection.json" ] || { echo "nothing staged at $src (run: uv run pipeline/build.py build --collection $only)" >&2; exit 1; }
   [ -f "$pf" ] || { echo "missing $pf (the build creates it)" >&2; exit 1; }

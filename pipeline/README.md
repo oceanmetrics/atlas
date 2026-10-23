@@ -140,8 +140,8 @@ uv run pipeline/build.py cog-3857-batch --pool --release v7b --release v7c --reg
   `cog_3857_key` stays `marine-atlas/v7/cog_3857/...`: v7's copies are not uploaded again), and the pool's own;
 - each registry's next version, additive: `<dir>/om/<registry>/registry/v2/registry.parquet`, the current
   `registry.parquet`'s rows and columns as they are plus `cog_3857_url` and `cog_3857_url_005` (path-style, null where
-  there is no copy). The collection's `registry` asset still names `./registry.parquet`; pointing it at
-  `./registry/v2/registry.parquet` is the collection's next publish.
+  there is no copy). The collection's `registry` asset names `./registry.parquet` until the collection is repointed
+  (next section).
 
 Publish, additive (never `--delete`, never an original):
 
@@ -151,6 +151,20 @@ aws s3 cp <dir>/shared/tables/cog_3857.parquet s3://oceanmetrics.io-public/marin
 aws s3 cp <dir>/om/aquamaps_native/registry/v2/registry.parquet \
   s3://oceanmetrics.io-public/atlas/aquamaps_native/registry/v2/registry.parquet
 ```
+
+### The collection points at registry v2 (`aquamaps-registry`, `publish.sh --only aquamaps_native`)
+
+```sh
+uv run pipeline/build.py aquamaps-registry <dir>/om/aquamaps_native/registry/v2/registry.parquet   # -> catalog/staging/aquamaps_native/collection.json
+pipeline/publish.sh --only aquamaps_native            # dry run: one `s3 cp` of collection.json, after `head-object` of the registry file it names
+pipeline/publish.sh --only aquamaps_native --really
+```
+
+`aquamaps-registry` reads the published `collection.json` (or `--live <file>`) and writes it back with the `registry`
+asset's `href` (`./registry/v2/registry.parquet`), `file:size`, `file:checksum` and `table:columns` following the new
+file, `version` bumped (`2019.10` -> `2019.10.1`), `updated`, and the two copy assets in `atlas:item_template`;
+nothing else changes. The publish uploads that one file (no sync, no `--delete`, the registry file and the old
+unversioned `registry.parquet` untouched), and refuses when the registry file is not on the bucket.
 
 The restricted releases' copies sit in the public pool because their originals do: v7b's and v7c's tables name only
 `marine-atlas/cog/usa05/` and `marine-atlas/native/am/` files, the same public prefixes as v7's (`versions.json`
