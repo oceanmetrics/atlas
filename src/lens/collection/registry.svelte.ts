@@ -8,6 +8,9 @@
 //                   Item of the picked taxon is one of its rows);
 //   search index    `registry_index.json`, loaded at idle or when the search box is focused, never on the
 //                   static path and never twice (the picker is the Species lens' own, so the ranking is);
+//   copy numbers    a row of registry v2 with `cog_3857_url` is drawn in the browser from that copy; its band statistics,
+//                   histogram and zoom range are read from the shared side table by the original's content hash
+//                   (`release/cog3857.ts`, a lazy chunk; nothing is drawn until the read settles, never titiler);
 //   taxon           `?sp=` (default: *Dermochelys coriacea*, else the first row), its Item built from the
 //                   row; a v7-era key (`sp_key_v7`) is mapped to the row's v8 key and the URL rewritten with
 //                   replaceState; `?rep=native|005` picks which COG is drawn (005 only for a row that has one).
@@ -27,7 +30,14 @@ import {
   type RegistryRow,
   type RegistryRows,
 } from "../../lib/catalog/registry/rows";
-import { effectiveRep, registryItem, type RegistryRep } from "../../lib/catalog/registry/item";
+import {
+  effectiveRep,
+  registryItem,
+  type CopySides,
+  type RegistryRep,
+} from "../../lib/catalog/registry/item";
+import { contentHashOf } from "../../lib/release/contentHash";
+import type { Cog3857Row } from "../../lib/release/cog3857";
 import { AM005_COLLECTION_ID, AM005_COLLECTION_URL } from "../../lib/catalog/registry/credits";
 import type { StacCollection, StacItem } from "../../lib/catalog/types";
 import type { TaxaIndex } from "../../lens/species/data/picker";
@@ -43,6 +53,8 @@ export interface RegistrySourceDeps {
   entries?: () => readonly CollectionEntry[];
   /** overrides for tests. */
   readRows?: (url: string, keyColumn?: string) => Promise<Loaded<RegistryRows>>;
+  /** the shared side table's row of a content hash (default: `readCog3857Row` on the shared table); `null` = none. */
+  readSide?: (contentHash: string) => Promise<Cog3857Row | null>;
   fetchJson?: FetchJson;
   /** run `fn` when the browser is idle (default `requestIdleCallback`, else a short timeout). */
   whenIdle?: (fn: () => void) => void;
@@ -96,9 +108,19 @@ async function fetchCollection(url: string, fetchJson?: FetchJson): Promise<Stac
   }
 }
 
+async function sharedSideRow(contentHash: string): Promise<Cog3857Row | null> {
+  try {
+    const m = await import("../../lib/release/cog3857");
+    return await m.readCog3857Row(m.sharedTableUrl(), contentHash);
+  } catch {
+    return null;
+  }
+}
+
 export function createRegistrySource(deps: RegistrySourceDeps): RegistrySource {
   const { selStore } = deps;
   const readRows = deps.readRows ?? readRegistryRows;
+  const readSide = deps.readSide ?? sharedSideRow;
   const whenIdle = deps.whenIdle ?? idleDefault;
 
   let rows = $state.raw<RegistryRows | null>(null);
@@ -183,10 +205,35 @@ export function createRegistrySource(deps: RegistrySourceDeps): RegistrySource {
   const row = $derived(taxonKey && rows ? (rows.get(taxonKey) ?? null) : null);
   const rep = $derived(effectiveRep(row, selStore.sel.rep));
   const template = $derived(itemTemplateOf(deps.entry()?.collection));
+  // --- the drawn copy's numbers: the shared side table's row, by the original's content hash ------------
+  // (only a row that names a copy of the drawn surface asks; the answer is dropped when the pick has moved on)
+  const sideTarget = $derived.by((): { rep: RegistryRep; hash: string } | null => {
+    if (!row) return null;
+    const copy = rep === "005" ? row.cog3857Url005 : row.cog3857Url;
+    const original = rep === "005" ? row.cogUrl005 : row.cogUrl;
+    const hash = original ? contentHashOf(original) : null;
+    return copy && hash ? { rep, hash } : null;
+  });
+  let side = $state.raw<{ rep: RegistryRep; hash: string; row: Cog3857Row | null } | null>(null);
+  let sideToken = 0;
+  $effect(() => {
+    const t = sideTarget;
+    const token = ++sideToken;
+    if (!t) return;
+    void readSide(t.hash)
+      .catch(() => null)
+      .then((r) => {
+        if (token === sideToken) side = { ...t, row: r };
+      });
+  });
   const items = $derived.by((): StacItem[] => {
     const entry = deps.entry();
     if (!ref || !row || !entry) return [];
-    return [registryItem(row, entry.id, template, { rep, collectionTitle: entry.title })];
+    const sides: CopySides =
+      sideTarget && side && side.rep === sideTarget.rep && side.hash === sideTarget.hash
+        ? { [sideTarget.rep]: side.row }
+        : {};
+    return [registryItem(row, entry.id, template, { rep, collectionTitle: entry.title, sides })];
   });
   const phase = $derived.by((): RegistryPhase => {
     if (!ref) return "idle";

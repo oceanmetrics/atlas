@@ -237,6 +237,9 @@ export function collectionMapInputs(args: {
 
   const choice = cog ? rasterChoiceOf(item) : null;
   if (cog && choice?.kind === "cog") {
+    // a registry copy whose side-table numbers are still being read: nothing is drawn yet (not titiler either);
+    // the lens re-derives the Item when the read settles (`lib/catalog/registry/item.ts`)
+    if (choice.draw.asset["atlas:stats_pending"] === true) return EMPTY_COLLECTION_INPUTS;
     // drawn in the browser: the 3857 asset through cogSlot, coloured by its `atlas:colormap` over the lens's
     // domain (the item's value range, else the asset's rescale, else the band's STAC statistics), the legend
     // and its histogram from STAC

@@ -28,6 +28,7 @@
 import type { CogAsset } from "@oceanmetrics/map";
 import type { RasterChoice } from "../raster/cog";
 import { onStorage } from "../catalog/storage";
+import { contentHashOf } from "./contentHash";
 import { PUBLIC_DATA_BASE, dataBase, dataUrl, registryUrl, type SessionLike } from "./dataBase";
 
 /** the side table's path inside a release, and the shared table's under the registry root. */
@@ -72,12 +73,7 @@ export interface Cog3857Row {
 /** the draw hints a lens has for the COG (the release tables' `rescale_min/max`, `colormap`, the band). */
 export type CogHints = Pick<CogAsset, "atlas:bidx" | "atlas:rescale" | "atlas:colormap" | "title">;
 
-/** the store key of an original COG URL (its file stem: MST names every stored object `<content_hash>.tif`), or
- * null when the URL is not a `.tif` with a hex stem. */
-export function contentHashOf(url: string): string | null {
-  const m = /\/([0-9a-f]{8,64})\.tif(?:[?#].*)?$/.exec(url);
-  return m ? m[1] : null;
-}
+export { contentHashOf };
 
 /** the copy's absolute URL: the key under the data base (`dataBase(ver)` ends in `marine-atlas/`, the key starts
  * with it); null for a key outside `marine-atlas/`. */

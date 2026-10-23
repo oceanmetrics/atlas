@@ -21,6 +21,10 @@ export interface RegistryRow {
   cogUrl: string;
   /** the same model's global 0.05 degree COG (MarineSensitivity v8 downscale; the native-vs-downscaled switch). */
   cogUrl005: string | null;
+  /** the EPSG:3857 copies of the two COGs (registry v2's `cog_3857_url`, `cog_3857_url_005`: the files the browser
+   * draws); `null` when the registry version has no such column or the pool has no copy of that COG (titiler then). */
+  cog3857Url: string | null;
+  cog3857Url005: string | null;
   /** `[west, south, east, north]` of the native COG; `null` when absent or malformed. */
   bboxNative: [number, number, number, number] | null;
   /** the same for the 0.05 degree COG. */
@@ -81,6 +85,8 @@ export function rowFromRecord(
     redlistCode: text(rec.redlist_code),
     cogUrl,
     cogUrl005: cogHref(rec.cog_url_005),
+    cog3857Url: cogHref(rec.cog_3857_url),
+    cog3857Url005: cogHref(rec.cog_3857_url_005),
     bboxNative: bboxOfRow(rec.bbox_native),
     bbox005: bboxOfRow(rec.bbox_005),
     mdlKey: text(rec.mdl_key),
