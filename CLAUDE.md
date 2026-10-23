@@ -137,7 +137,7 @@ mark?, label?, changes_href? }`; `NAV` (`lib/brand/instance.ts`) is `null` for `
   extra row is `.app:has(> om-nav)`; the bar follows the shell's theme (`theme` attribute) and its place search goes to the places site.
 - The two instances: `oceanmetrics` (Collections, Species; Places rail; index, catalog; 450/150 KB) and
   `marinesensitivity` (Scores, Species; Report rail; index, report; the marine-atlas release registry with the access
-  gate; the MMA seal; 470/150 KB, raised from 0.10.93's 460 because this codebase carries maplibre-gl 6.15 (the
+  gate; the MMA seal; 472/150 KB (470 plus 2 for the registry lens's copy assets; CI measures 1.4 KB over a laptop), raised from 0.10.93's 460 because this codebase carries maplibre-gl 6.15 (the
   `@oceanmetrics/map` peer range, about 10 KB gzip over 0.10.93's 6.10) and the shared Place layers). Both build from
   `.github/workflows/build-instance.yml`; MarineSensitivity/atlas calls it at a pinned tag (`docs/mst-thin-repo.md`).
 

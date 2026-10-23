@@ -128,7 +128,7 @@ jobs:
           VITE_SEAL: ${{ inputs.VITE_SEAL }}
 
       # the instance's budget (instance.json `budget`: oceanmetrics 450/150, marinesensitivity
-      # 470/150 KB gzip): the static path "before first interaction", the runtime worker, and no
+      # 472/150 KB gzip): the static path "before first interaction", the runtime worker, and no
       # lazy-only chunk reachable by a static import
       - run: node scripts/size-budget.mjs
 

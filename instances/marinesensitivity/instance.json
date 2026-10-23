@@ -52,6 +52,6 @@
   },
   "seal": { "agency": "MMA", "src": "https://marinesensitivity.org/branding/mma-seal.svg" },
   "report": { "title": "Marine Sensitivity Report", "stem": "MarineSensitivity" },
-  "budget": { "static_kb": 470, "worker_kb": 150 },
+  "budget": { "static_kb": 472, "worker_kb": 150 },
   "nav": false
 }

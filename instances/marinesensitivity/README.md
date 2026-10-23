@@ -25,9 +25,11 @@ repo once that repo calls this one's `.github/workflows/build-instance.yml` at a
   `VITE_SEAL=1` (the thin repo's workflow sets it): About and the report cover.
 - **Report** title "Marine Sensitivity Report", export stem `MarineSensitivity`; feedback issues and the
   "Code on GitHub" link go to MarineSensitivity/atlas (`repo`); figures are named `marine-atlas_...`.
-- **Budget** 470 / 150 KB gzip. 0.10.93 held 460; this codebase carries maplibre-gl 6.15 (the
+- **Budget** 472 / 150 KB gzip. 0.10.93 held 460; this codebase carries maplibre-gl 6.15 (the
   `@oceanmetrics/map` peer range), about 10 KB gzip over 0.10.93's 6.10, and the shared Place layers.
-  Measured with `scripts/size-budget.mjs`: 0.10.93 449.7 KB, this build 465.9 KB.
+  Measured with `scripts/size-budget.mjs`: 0.10.93 449.7 KB, this build 465.9 KB. Raised 470 -> 472 for the registry lens's
+  copy assets (`lib/catalog/registry/item.ts`, `registry.svelte.ts`: +0.55 KB gzip in this instance's index, which carries
+  the collection lens's state module); CI's gzip (Node 22) measures about 1.4 KB over a laptop's: 470.5 KB there.
 
 ## What is here
 
