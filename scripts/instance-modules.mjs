@@ -118,6 +118,13 @@ export const MODULE_TABLE = {
         "tests/map/{zones,zoneHighlight,queryLayers}.test.ts",
       ],
     },
+    // Help -> "Try these" (five atlas views as codec urls): the plain module the shell loads when Help opens
+    tryThese: {
+      lazy: { loadTryThese: "src/lib/tryThese.ts" },
+      owns: ["src/lib/tryThese.ts", "src/shell/TryThese.svelte"],
+      markers: ["OBIS species richness on the globe"],
+      tests: ["tests/lib/tryThese.test.ts"],
+    },
     seal: { markers: ["Prepared for the"], tests: ["tests/ui/sealVisibility.test.ts"] },
     // the Ocean Metrics bar (@oceanmetrics/nav): the element in the shell and the skeleton, and the
     // package's lazy define chunk. The markers are not the bare tag: shell.css's `om-nav:not(:defined)`
@@ -224,6 +231,7 @@ export function instanceFlags(instance) {
     __RELEASE__: instance.release !== undefined,
     __SEAL__: instance.seal !== undefined,
     __NAV__: instance.nav !== undefined && instance.nav !== false,
+    __TRY_THESE__: instance.tryThese !== undefined && instance.tryThese !== false,
   };
 }
 

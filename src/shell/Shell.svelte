@@ -435,9 +435,13 @@
   let helpTriggerEl: HTMLButtonElement | undefined;
   let helpMenuEl: HTMLDivElement | undefined;
 
+  // Help -> "Try these" (an instance with `tryThese`): the component loads on the first open, so it is off the static path
+  let TryTheseList = $state<(typeof import("./TryThese.svelte"))["default"] | null>(null);
   function onHelp() {
     helpOpen = !helpOpen;
     if (helpOpen) analytics.track("open_help", {});
+    if (__TRY_THESE__ && helpOpen && !TryTheseList)
+      void import("./TryThese.svelte").then((m) => (TryTheseList = m.default)).catch(() => {});
   }
 
   function closeHelp(returnFocus = true) {
@@ -2128,6 +2132,9 @@
       bind:this={helpMenuEl}
     >
       <button type="button" class="help-menu-item" onclick={onHelpTakeTour}>Take a tour</button>
+      {#if __TRY_THESE__ && TryTheseList}
+        <TryTheseList />
+      {/if}
       <div class="help-shortcuts">
         <h3>Keyboard shortcuts</h3>
         <ul>

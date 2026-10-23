@@ -369,6 +369,10 @@
         }
       }
     },
+    "tryThese": {
+      "description": "Help lists five example views (\"Try these\", src/lib/tryThese.ts); absent or false for an instance without them",
+      "type": "boolean"
+    },
     "nav": {
       "description": "the Ocean Metrics bar (@oceanmetrics/nav, one navigation bar for the apps and the site) above the top bar, or false for an instance without it; `current` is the id of the item to mark (places, indicators, atlas, or an id of `items`)",
       "oneOf": [

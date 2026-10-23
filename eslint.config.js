@@ -57,6 +57,7 @@ export default ts.config(
         __TOOL_REPORT__: "readonly",
         __RELEASE__: "readonly",
         __SEAL__: "readonly",
+        __TRY_THESE__: "readonly",
         __NAV__: "readonly",
       },
     },

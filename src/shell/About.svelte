@@ -56,6 +56,10 @@
   const showSeal = $derived(!!SEAL && shouldShowSeal(sealFlag, SEAL.agency) && !sealFailed);
   const agencyName = $derived(SEAL ? agencyDisplayName(SEAL.agency) : null);
   const hasCatalogPage = INSTANCE.pages.includes("catalog");
+  // "Try these" (an instance with `tryThese`): a lazy component, loaded when the dialog mounts
+  let TryTheseList = $state<(typeof import("./TryThese.svelte"))["default"] | null>(null);
+  if (__TRY_THESE__)
+    void import("./TryThese.svelte").then((m) => (TryTheseList = m.default)).catch(() => {});
 </script>
 
 <Modal {open} title="About {BRAND_NAME}" {onclose}>
@@ -85,6 +89,10 @@
     <div data-testid="about-layer">
       {#each layerAbout.lines as line (line)}<p class="cite">{line}</p>{/each}
     </div>
+  {/if}
+
+  {#if __TRY_THESE__ && TryTheseList}
+    <TryTheseList />
   {/if}
 
   <h3>How to cite this atlas</h3>

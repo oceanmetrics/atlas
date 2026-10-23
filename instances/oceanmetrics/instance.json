@@ -63,5 +63,6 @@
   },
   "titiler": { "host": "https://titiler-v8.marinesensitivity.org" },
   "budget": { "static_kb": 450, "worker_kb": 150 },
+  "tryThese": true,
   "nav": { "current": "atlas" }
 }

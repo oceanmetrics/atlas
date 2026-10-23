@@ -250,8 +250,12 @@ describe("the hook is generic: no collection id is hard-coded in src/ (regressio
       const p = join(dir, f);
       return statSync(p).isDirectory() ? walk(p) : [p];
     });
-  it("`aquamaps_eov` appears nowhere under src/", () => {
-    const hits = walk("src").filter((p) => readFileSync(p, "utf8").includes("aquamaps_eov"));
+  // the one exception: Help's "Try these" (src/lib/tryThese.ts) is a list of example urls, data about the catalog,
+  // not renderer logic; it is the only file that names a collection to link to it (tests/lib/tryThese.test.ts)
+  it("`aquamaps_eov` appears nowhere under src/ but the example links", () => {
+    const hits = walk("src")
+      .filter((p) => p !== join("src", "lib", "tryThese.ts"))
+      .filter((p) => readFileSync(p, "utf8").includes("aquamaps_eov"));
     expect(hits).toEqual([]);
   });
 });

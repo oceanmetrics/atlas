@@ -25,6 +25,7 @@ declare const __TOOL_REPORT__: boolean;
 declare const __RELEASE__: boolean;
 declare const __SEAL__: boolean;
 declare const __NAV__: boolean;
+declare const __TRY_THESE__: boolean;
 
 // the instance's mark (vite.config.ts's atlas-instance plugin, from instances/<id>/<mark>.svg): its
 // viewBox and the markup inside the root <svg>, inlined by src/lib/brand/Mark.svelte.
@@ -51,4 +52,6 @@ declare module "virtual:instance-modules" {
   export const loadReport: (() => Promise<typeof import("./shell/reportTool")>) | null;
   /** the release registry: the zone units and the release picker (lazy). */
   export const loadRelease: (() => Promise<typeof import("./lib/release/shell")>) | null;
+  /** Help -> "Try these": the example views (lazy, an instance with `tryThese`). */
+  export const loadTryThese: (() => Promise<typeof import("./lib/tryThese")>) | null;
 }

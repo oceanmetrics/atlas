@@ -63,6 +63,8 @@ export interface Instance {
   budget: { static_kb: number; worker_kb: number };
   /** the Ocean Metrics bar (`@oceanmetrics/nav`) above the top bar, or `false` for an instance without it (1.2). */
   nav: false | NavSpec;
+  /** Help lists the example views of `lib/tryThese.ts` ("Try these"); absent or false = none. */
+  tryThese?: boolean;
 }
 
 /** the bar's per-instance settings: `current` marks one item; the rest are the element's own attributes. */

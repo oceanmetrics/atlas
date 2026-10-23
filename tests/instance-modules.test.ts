@@ -94,6 +94,7 @@ describe("the generated virtual:instance-modules", () => {
       __RELEASE__: false,
       __SEAL__: false,
       __NAV__: true,
+      __TRY_THESE__: true,
     });
     expect(instanceFlags(MST)).toEqual({
       __LENS_SCORES__: true,
@@ -102,6 +103,7 @@ describe("the generated virtual:instance-modules", () => {
       __RELEASE__: true,
       __SEAL__: true,
       __NAV__: false,
+      __TRY_THESE__: false,
     });
     expect(instanceDefines(MST).__RELEASE__).toBe("true");
   });
@@ -189,7 +191,12 @@ function fakeDist(name: string, pages: string[], sources: string[], text: string
   return dir;
 }
 
-const OM_TEXT = [`x='data-testid="collection-details"'`, "<om-nav", "om-nav-search"].join(";");
+const OM_TEXT = [
+  `x='data-testid="collection-details"'`,
+  "<om-nav",
+  "om-nav-search",
+  "OBIS species richness on the globe",
+].join(";");
 const MST_TEXT = [
   'data-testid="scores-legend"',
   'data-testid="report-subject-sentence"',
@@ -269,9 +276,24 @@ describe("check-instance-dist over synthetic dists", () => {
       `x='data-testid="collection-details"'`,
     );
     expect(instanceDistProblems(none, OM)).toEqual([
+      'capabilities.tryThese: its marker "OBIS species richness on the globe" is not in the build',
       'capabilities.nav: its marker "<om-nav" is not in the build',
       'capabilities.nav: its marker "om-nav-search" is not in the build',
     ]);
+  });
+
+  it("SEEDED FAULT: the Try these list in a marinesensitivity dist fails", () => {
+    const bad = fakeDist(
+      "mst-try-bad",
+      ["index.html", "report.html"],
+      ["index.html", "src/lens/scores/shell.ts", "src/shell/TryThese.svelte"],
+      `${MST_TEXT};OBIS species richness on the globe`,
+    );
+    const problems = instanceDistProblems(bad, MST);
+    expect(problems).toContain(
+      'capabilities.tryThese: its marker "OBIS species richness on the globe" is in assets/x.js',
+    );
+    expect(problems.some((p) => p.includes("src/shell/TryThese.svelte"))).toBe(true);
   });
 
   it("a page the instance does not publish is a problem", () => {
