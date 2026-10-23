@@ -174,6 +174,27 @@ describe("obisHexRedirect beyond the table", () => {
     // no d at all: nothing to carry or drop
     expect(obisHexRedirect(base).dropped).toEqual([]);
   });
+  it("f=<collection> is the atlas's filter=coll:<slug>; f with ids, a bad slug and v=places stay dropped (row 47)", () => {
+    const base = "#i=es&l=all&p=all&r=auto&c=0,0,1";
+    const ok = obisHexRedirect(`${base}&f=noaa_sanctuaries`);
+    expect(new URL(ok.url).searchParams.get("filter")).toBe("coll:noaa_sanctuaries");
+    expect(ok.dropped).not.toContain("f");
+    expect(ok.exact).toBe(true);
+    for (const f of [
+      "noaa_sanctuaries|NMS:CINMS",
+      "places|NMS:CINMS,NMS:MBNMS",
+      "Bad",
+      "a-b",
+      "1abc",
+      "a b",
+      `x${"y".repeat(64)}`,
+    ]) {
+      const r = obisHexRedirect(`${base}&f=${encodeURIComponent(f)}`);
+      expect(new URL(r.url).searchParams.has("filter"), f).toBe(false);
+      expect(r.dropped, f).toContain("f");
+      expect(r.exact, f).toBe(false);
+    }
+  });
   it("ports obis-hex's zoomToRes", () => {
     expect([0, 2.2, 3.4, 4, 8.2, 9, 22].map(zoomToRes)).toEqual([1, 2, 3, 3, 7, 7, 10]);
   });

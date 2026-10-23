@@ -11,7 +11,7 @@
 // of its own and filters `all`), `dim.indicator` (es|sp|shannon|simpson|n), `dim.period` (`<decade>s` or `all`),
 // `res` (`auto` or 1..7, clamped to what the atlas serves), `map=lon,lat,zoom` (obis-hex's camera `c`, read from the
 // old hash only), `taxon=<rank>:<name>` or `aphia:<id>` (split on the FIRST `:`, so a name may hold one), `dom=view` (from
-// obis-hex's `d=view`), `proj`
+// obis-hex's `d=view`), `filter=coll:<slug>` (from `f=<collection>`), `proj`
 // (globe|mercator, always written: obis-hex's default is the globe), `theme` and `tour` (only from obis-hex's query
 // switches), and in the hash `pl=` the outlined place as the atlas's `p.` token (docs/gazetteer-places.md). A place
 // outlined with no layer view chosen goes to the Place page instead. Everything else is dropped; the table's `keys`
@@ -232,6 +232,14 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
     params.set("dom", "view");
     carried.add("d");
   }
+  // obis-hex's `f=<collection>` (no ids) is the atlas's `filter=coll:<slug>`; `f=<collection>|<ids>` (some of a
+  // collection's places) and a malformed value are not carried
+  const filt = p.get("f") ?? "";
+  const filterColl = !filt.includes("|") && PLACE_COLL_RE.test(filt) ? filt : null;
+  if (filterColl) {
+    params.set("filter", `coll:${filterColl}`);
+    carried.add("f");
+  }
   params.set("proj", proj);
   const theme = (q.get("theme") ?? "").toLowerCase();
   if (theme === "dark" || theme === "light") {
@@ -261,10 +269,10 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
     exact = false;
     notes.push("the selected hexagon (x) is not carried");
   }
-  if (p.has("f") || p.get("v") === "places") {
+  if ((p.has("f") && !filterColl) || p.get("v") === "places") {
     exact = false;
     notes.push(
-      "the place filter (f) and the view as places (v) are not carried; the Place page has the exact values",
+      "the filter by chosen places (f=<collection>|<ids>), a malformed f and the view as places (v) are not carried; the Place page has the exact values",
     );
   }
   if (q.has("data")) {

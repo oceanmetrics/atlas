@@ -32,6 +32,8 @@ describe("every atlas URL of the case table opens through parseSel", () => {
     expect(s.res).toBe(res === "auto" ? undefined : Number(res));
     expect(s.taxon).toBe(q.get("taxon") ?? undefined);
     expect(s.proj).toBe(q.get("proj"));
+    // obis-hex's f=<collection> is filter=coll:<slug>; any other f is not carried
+    expect(s.filter).toBe(q.get("filter") ?? undefined);
     // obis-hex's d=view is carried as dom=view; no other d is
     expect(s.dom).toBe(q.get("dom") === "view" ? "view" : undefined);
     // the round trip: what the atlas writes back opens the same view

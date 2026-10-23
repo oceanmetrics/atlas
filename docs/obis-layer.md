@@ -242,8 +242,8 @@ and its proof 0.25 to 0.5 day; words, e2e and shots 0.25 day. 1.5 to 2 days.
 - `taxon=aphia:<id>` for a taxon that is no head, and "Search all of WoRMS": designed above. The layer says the id is
   not one of the release's precomputed taxa.
 - The view as places (obis-hex `v=places`, waiting on Ben's word to drop). A whole collection as the place filter is
-  built (`filter=coll:<slug>`, above); obis-hex's `f=<coll>|<id>,<id>` (a collection and some of its places) is the
-  places filter with `#pl=`.
+  built (`filter=coll:<slug>`, above); obis-hex's `f=<coll>` redirects to it; `f=<coll>|<id>,<id>` (a collection and some
+  of its places) is not carried (the places filter with `#pl=` is its nearest).
 - The decade filter of the Cell pane is the species whose first and last years span the period (their records
   are every year's); the per-decade species table (`species_decade/`, class-partitioned) is not read.
 - An EOV's or a head's species list is every taxon's (the lookup has no EOV column and no ranks above phylum);

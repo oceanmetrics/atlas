@@ -1,6 +1,6 @@
 {
   "about": "obis-hex URL -> the atlas URL of the same OBIS layer (build week 4, step 1). One table drives both sides: oceanmetrics/atlas tests/state/obisHex.test.ts (obisHexToAtlas) reads it here, and obis-hex copies it into tests/redirect.test.ts for its redirectFor. Each case: the obis-hex URL, the expected URL, whether the target shows what the old link showed (exact), and the obis-hex keys it does not carry (dropped; ?<key> for a query switch). Edit it here first, then copy.",
-  "grammar": "https://oceanmetrics.io/atlas/?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=<lon,lat,zoom>[&taxon=<rank>:<name>|aphia:<id>][&dom=view]&proj=<globe|mercator>[&theme=..][&tour=..][#pl=p.<id>.]",
+  "grammar": "https://oceanmetrics.io/atlas/?c=obis_h3&i=<item>&dim.indicator=<es|sp|shannon|simpson|n>&dim.period=<1990s|2015|all>&res=<auto|1..7>&map=<lon,lat,zoom>[&taxon=<rank>:<name>|aphia:<id>][&dom=view][&filter=coll:<slug>]&proj=<globe|mercator>[&theme=..][&tour=..][#pl=p.<id>.]",
   "notes": [
     "query keys are written in this order, encoded as the atlas's formatSel does (URLSearchParams: a space is +; then , : / unescaped); the hash pl is the p. token encoded the same way, so its % is %25",
     "taxon splits on its first colon: the rank never holds one, the name may (an encoded colon in obis-hex's l)",
@@ -72,7 +72,9 @@
       "drop": "the Cell pane open: follows x"
     },
     "f": {
-      "drop": "the place filter: the atlas place filter is H3 membership from the gazetteer, with no URL key yet; the Place page has the exact values (inexact)"
+      "to": "filter",
+      "rule": "f=<collection> (no ids; the slug is [a-z][a-z0-9_]{0,63}) -> filter=coll:<collection>, the hexagons of the whole gazetteer collection by its H3 membership",
+      "otherwise": "f=<collection>|<id>,<id> (some of a collection's places) and a malformed slug are not carried (f is listed in dropped, inexact): the atlas filters by the places in its list (filter=places and #pl=), and the Place page has the exact values"
     },
     "v": {
       "drop": "v=places, the view as places: replaced by the Place page (inexact)"
@@ -289,11 +291,18 @@
       "dropped": ["d", "o", "t", "x", "xo"]
     },
     {
-      "name": "the place filter and the view as places are dropped (the Place page has the exact values)",
+      "name": "a filter by chosen places (f=<collection>|<ids>) and the view as places are dropped (the Place page has the exact values)",
       "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=2010&r=auto&o=0.85&t=dark&d=release&c=-120,34,6&f=places|NMS:CINMS,NMS:MBNMS&v=places",
       "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=2010s&res=auto&map=-120,34,6&proj=globe",
       "exact": false,
       "dropped": ["d", "f", "o", "t", "v"]
+    },
+    {
+      "name": "f=<collection> is the atlas's filter=coll:<slug> (a whole gazetteer collection's hexagons)",
+      "obis_hex": "https://oceanmetrics.io/obis-hex/#i=es&l=all&p=2010&r=3&o=0.85&t=dark&d=release&c=-120,34,6&f=noaa_sanctuaries",
+      "atlas": "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=2010s&res=3&map=-120,34,6&filter=coll:noaa_sanctuaries&proj=globe",
+      "exact": true,
+      "dropped": ["d", "o", "t"]
     },
     {
       "name": "d=view is carried as dom=view; the layout keys and styling are dropped and the view stays exact",
