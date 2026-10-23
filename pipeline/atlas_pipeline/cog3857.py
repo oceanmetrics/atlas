@@ -41,6 +41,8 @@ from .stac import projection_code
 
 BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/"
 ROOT = "marine-atlas/"
+OM_BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/"
+REGISTRY_COPY_COLS = {"cog_url": "cog_3857_url", "cog_url_005": "cog_3857_url_005"}   # D8's new registry columns
 COPY_DIR = "cog_3857"
 TABLE = "tables/cog_3857.parquet"
 JOURNAL = "cog_3857.jsonl"
@@ -218,10 +220,12 @@ def fill_band_info(rows: dict[str, dict], out: Path) -> int:
   return n
 
 
-def process_one(entry: dict, ver: str, out: Path, store: dict | None = None, fetcher=None) -> dict:
+def process_one(entry: dict, ver: str, out: Path, store: dict | None = None, fetcher=None,
+                key: str | None = None, dst: Path | None = None) -> dict:
   """download the original (cached at `<out>/src/<rel>`, its md5 checked against the store catalog when it lists the
-  key; a cached file that fails is fetched once more), write its 3857 copy at `<out>/<ver>/cog_3857/<rel>_3857.tif`,
-  read the band summaries from the original, and return the side-table row."""
+  key; a cached file that fails is fetched once more), write its 3857 copy at `dst` (default
+  `<out>/<ver>/cog_3857/<rel>_3857.tif`, bucket key `key`, default `copy_key(ver, url)`), read the band summaries
+  from the original, and return the side-table row."""
   url, h = entry["url"], entry["content_hash"]
   rel = rel_path(url)
   if content_hash_of(url) != h:
@@ -241,9 +245,10 @@ def process_one(entry: dict, ver: str, out: Path, store: dict | None = None, fet
     src_proj, nb = projection_code(ds), ds.count
   if src_proj == cog.WEB_MERCATOR:
     raise ValueError(f"{url}: already {cog.WEB_MERCATOR}")
-  key = copy_key(ver, url)
-  dst = Path(out) / ver / key[len(f"{ROOT}{ver}/"):]
-  dst, zoom = cog.web_mercator_copy(src, dst)
+  if key is None:
+    key = copy_key(ver, url)
+    dst = Path(out) / ver / key[len(f"{ROOT}{ver}/"):]
+  dst, zoom = cog.web_mercator_copy(src, Path(dst))
   stats, hist = _summaries_arrow(cog.band_summaries(src))
   types, nodata = band_info(src)
   return {"content_hash": h, "url": url, "cog_3857_key": key, "proj:code": cog.WEB_MERCATOR,
@@ -299,34 +304,26 @@ def write_table(rows: dict[str, dict] | list[dict], path: Path) -> Path:
   return path
 
 
-def run_batch(ver: str, out: Path, base: str = BASE, workers: int = 4, limit: int | None = None,
-              flush_every: int = 1000, cogs: list[dict] | None = None, store: dict | None = None,
-              fetcher=None, log: Callable[[str], None] | None = None) -> dict:
-  """make the 3857 copy and side-table row of every COG of release `ver` not yet in the side table (or the
-  journal), `workers` at a time, the first `limit` only when given. Returns {total, skipped, done, failed, rows,
-  seconds, rate}."""
-  out = Path(out)
-  log = log or (lambda m: None)
-  if fetcher is None:   # one pooled HTTP session, at most `workers` connections (polite to S3)
-    import requests
-    session = requests.Session()
-    session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=workers, pool_maxsize=workers))
-    fetcher = lambda u, d: fetch(u, d, session)  # noqa: E731
-  cogs = cogs if cogs is not None else release_cogs(ver, base, out, fetcher)
-  store = store if store is not None else store_catalog(base, out, fetcher)
-  rows = load_rows(out, ver)
-  todo = [c for c in cogs if c["content_hash"] not in rows]
-  skipped = len(cogs) - len(todo)
-  if limit is not None:
-    todo = todo[:limit]
-  log(f"{ver}: {len(cogs):,} COGs, {skipped:,} already in the side table, {len(todo):,} to do ({workers} workers)")
-  jpath, epath = journal_path(out, ver), out / ver / ERRORS
+def _http_fetcher(workers: int):
+  """one pooled HTTP session, at most `workers` connections (polite to S3)."""
+  import requests
+  session = requests.Session()
+  session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=workers, pool_maxsize=workers))
+  return lambda u, d: fetch(u, d, session)
+
+
+def _run(label: str, todo: list[dict], job: Callable[[dict], dict], rows: dict[str, dict], dirname: Path,
+         tpath: Path, workers: int, flush_every: int, log: Callable[[str], None]) -> tuple[int, int, float]:
+  """`job` on each of `todo`, `workers` at a time: each row journaled to `<dirname>/cog_3857.jsonl` as it lands
+  and put in `rows`, each failure to `<dirname>/cog_3857_errors.jsonl`, the table `tpath` rewritten from `rows`
+  every `flush_every` rows. Returns (done, failed, seconds)."""
+  jpath, epath = dirname / JOURNAL, dirname / ERRORS
   jpath.parent.mkdir(parents=True, exist_ok=True)
   lock = threading.Lock()
   done = failed = 0
   t0 = time.perf_counter()
   with open(jpath, "a") as jf, open(epath, "a") as ef, ThreadPoolExecutor(max_workers=workers) as ex:
-    futs = {ex.submit(process_one, c, ver, out, store, fetcher): c for c in todo}
+    futs = {ex.submit(job, c): c for c in todo}
     for k, fut in enumerate(as_completed(futs), 1):
       c = futs[fut]
       try:
@@ -342,27 +339,194 @@ def run_batch(ver: str, out: Path, base: str = BASE, workers: int = 4, limit: in
         jf.flush()
         done += 1
       if done % flush_every == 0:
-        write_table(rows, table_path(out, ver))
+        write_table(rows, tpath)
       if k % 100 == 0 or k == len(todo):
         el = time.perf_counter() - t0
         rate = k / el if el else 0.0
         eta = (len(todo) - k) / rate if rate else 0.0
-        log(f"{ver}: {k:,}/{len(todo):,} ({done:,} ok, {failed:,} failed) {rate:.2f}/s, "
+        log(f"{label}: {k:,}/{len(todo):,} ({done:,} ok, {failed:,} failed) {rate:.2f}/s, "
             f"elapsed {el / 60:.1f} min, eta {eta / 60:.1f} min")
+  return done, failed, time.perf_counter() - t0
+
+
+def run_batch(ver: str, out: Path, base: str = BASE, workers: int = 4, limit: int | None = None,
+              flush_every: int = 1000, cogs: list[dict] | None = None, store: dict | None = None,
+              fetcher=None, log: Callable[[str], None] | None = None) -> dict:
+  """make the 3857 copy and side-table row of every COG of release `ver` not yet in the side table (or the
+  journal), `workers` at a time, the first `limit` only when given. Returns {total, skipped, done, failed, rows,
+  seconds, rate}."""
+  out = Path(out)
+  log = log or (lambda m: None)
+  fetcher = fetcher or _http_fetcher(workers)
+  cogs = cogs if cogs is not None else release_cogs(ver, base, out, fetcher)
+  store = store if store is not None else store_catalog(base, out, fetcher)
+  rows = load_rows(out, ver)
+  todo = [c for c in cogs if c["content_hash"] not in rows]
+  skipped = len(cogs) - len(todo)
+  if limit is not None:
+    todo = todo[:limit]
+  log(f"{ver}: {len(cogs):,} COGs, {skipped:,} already in the side table, {len(todo):,} to do ({workers} workers)")
+  done, failed, el = _run(ver, todo, lambda c: process_one(c, ver, out, store, fetcher), rows, out / ver,
+                          table_path(out, ver), workers, flush_every, log)
   filled = fill_band_info(rows, out)
   if filled:
     log(f"{ver}: data_type and nodata filled from the cached originals on {filled:,} earlier rows")
   write_table(rows, table_path(out, ver))
-  el = time.perf_counter() - t0
   return {"total": len(cogs), "skipped": skipped, "done": done, "failed": failed, "rows": len(rows),
+          "seconds": round(el, 1), "rate": round((done + failed) / el, 3) if el else 0.0}
+
+
+# ---- the shared pool: one copy per content hash for every release and registry (D8, part 2) ----
+#
+# The copies are content addressed (the original's `content_hash` is its file stem, shared across releases), so one
+# pool serves every release: `marine-atlas/cog_3857/<content_hash>_3857.tif` and one table
+# `marine-atlas/tables/cog_3857.parquet` (`SCHEMA`, sorted by hash, row groups of 512). A hash a release side table
+# already has (v7's) is not copied again: its row joins the shared table as it is, pointing at the existing
+# `marine-atlas/v7/cog_3857/...` key. Locally the pool is `<out>/shared/` (the journal, the errors, `cog_3857/`,
+# `tables/`), the new registry versions `<out>/om/<registry>/registry/<version>/registry.parquet` (published under
+# the OM `atlas/` root).
+
+SHARED = "shared"
+REGISTRY_VERSION = "v2"   # the aquamaps_native registry's next version: the current one is the unversioned registry.parquet
+REGISTRY_VERSIONS = [REGISTRY_VERSION]   # newest first, read by the sweep before the unversioned file
+
+
+def shared_key(content_hash: str) -> str:
+  """the pool copy's bucket key: `marine-atlas/cog_3857/<content_hash>_3857.tif`."""
+  return f"{ROOT}{COPY_DIR}/{content_hash}{cog.COPY_SUFFIX}.tif"
+
+
+def key_url(key: str, base: str = BASE) -> str:
+  """a `marine-atlas/...` key as a URL on the same root as `base` (path-style, as the release tables name
+  originals)."""
+  if not key.startswith(ROOT) or not base.endswith(ROOT):
+    raise ValueError(f"{key} under {base}: not both on {ROOT}")
+  return base + key[len(ROOT):]
+
+
+def registry_path(name: str, version: str | None = None) -> str:
+  """a registry's path under the OM `atlas/` root: the unversioned `<name>/registry.parquet` (the collection's
+  `registry` asset today) or `<name>/registry/<version>/registry.parquet`."""
+  return f"{name}/registry.parquet" if not version else f"{name}/registry/{version}/registry.parquet"
+
+
+def registry_cogs(name: str, om_base: str = OM_BASE, cache: Path | None = None,
+                  fetcher=None) -> tuple[list[dict], Path]:
+  """([{content_hash, url}] of every distinct `.tif` the CURRENT registry `name` names (`cog_url`,
+  `cog_url_005`), the cached registry file)."""
+  fetcher = fetcher or fetch
+  cache = Path(cache) if cache else Path(".")
+  path = fetcher(f"{om_base}{registry_path(name)}", cache / "om_current" / registry_path(name))
+  t = pq.read_table(path)
+  seen: dict[str, str] = {}
+  for col in REGISTRY_COPY_COLS:
+    if col not in t.column_names:
+      continue
+    for url in t[col].to_pylist():
+      if url and url.split("?", 1)[0].endswith(".tif"):
+        seen.setdefault(url, content_hash_of(url))
+  return [{"content_hash": h, "url": u} for u, h in sorted(seen.items())], path
+
+
+def side_rows(ver: str, base: str = BASE, out: Path | None = None, fetcher=None) -> dict[str, dict]:
+  """{content_hash: row} of release `ver`'s side table: the local `<out>/<ver>/tables/cog_3857.parquet` when the
+  batch wrote one there, else the bucket's; {} when there is none."""
+  out = Path(out) if out else Path(".")
+  p = table_path(out, ver)
+  if not p.exists():
+    try:
+      p = (fetcher or fetch)(f"{base}{ver}/{TABLE}", out / "om_current" / ver / TABLE)
+    except FileNotFoundError:
+      return {}
+  return {r["content_hash"]: r for r in pq.read_table(p).to_pylist()}
+
+
+def pool_sources(releases: list[str], registries: list[str], base: str = BASE, om_base: str = OM_BASE,
+                 cache: Path | None = None, fetcher=None) -> tuple[list[dict], dict[str, Path]]:
+  """the union, by content hash, of the COGs the releases' tables and the registries name (the first url seen
+  kept), sorted by hash; and {registry: its cached current file}."""
+  seen: dict[str, str] = {}
+  for ver in releases:
+    for c in release_cogs(ver, base, cache, fetcher):
+      seen.setdefault(c["content_hash"], c["url"])
+  regs = {}
+  for name in registries:
+    cogs, regs[name] = registry_cogs(name, om_base, cache, fetcher)
+    for c in cogs:
+      seen.setdefault(c["content_hash"], c["url"])
+  return [{"content_hash": h, "url": u} for h, u in sorted(seen.items())], regs
+
+
+def write_registry_version(current: Path, rows: dict[str, dict], dest: Path, base: str = BASE) -> dict:
+  """the registry's next version: the current file's rows and columns as they are, plus `cog_3857_url` and
+  `cog_3857_url_005` (the copy of `cog_url` / `cog_url_005` by content hash, a path-style URL like theirs; null
+  when the pool has no copy). Returns {rows, <copy col>: non-null count}."""
+  t = pq.read_table(current)
+  counts = {"rows": t.num_rows}
+  for col, copy_col in REGISTRY_COPY_COLS.items():
+    if copy_col in t.column_names:
+      t = t.drop_columns([copy_col])
+    vals = []
+    for url in (t[col].to_pylist() if col in t.column_names else [None] * t.num_rows):
+      r = rows.get(content_hash_of(url)) if url and url.split("?", 1)[0].endswith(".tif") else None
+      vals.append(key_url(r["cog_3857_key"], base) if r else None)
+    t = t.append_column(pa.field(copy_col, pa.string()), pa.array(vals, pa.string()))
+    counts[copy_col] = sum(v is not None for v in vals)
+  dest.parent.mkdir(parents=True, exist_ok=True)
+  tmp = dest.with_name(dest.name + ".part")
+  pq.write_table(t, tmp, compression="zstd", row_group_size=50_000)
+  tmp.replace(dest)
+  return counts
+
+
+def run_pool(releases: list[str], registries: list[str], out: Path, base: str = BASE, om_base: str = OM_BASE,
+             pointers: list[str] = ("v7",), workers: int = 4, limit: int | None = None, flush_every: int = 1000,
+             registry_version: str = REGISTRY_VERSION, store: dict | None = None, fetcher=None,
+             log: Callable[[str], None] | None = None) -> dict:
+  """the shared pool: every content hash the `releases` and `registries` name that no side table of `pointers`
+  (v7's) and no earlier pool row has gets its copy at `<out>/shared/cog_3857/<hash>_3857.tif` (key
+  `shared_key`); the shared table `<out>/shared/tables/cog_3857.parquet` is the union of the pointer releases' rows
+  (their keys as they are) and the pool's own; then each registry's next version
+  (`<out>/om/<registry>/registry/<version>/registry.parquet`). Resumable like `run_batch`. Returns {total,
+  skipped, done, failed, rows, pointer_rows, registries, seconds, rate}."""
+  out = Path(out)
+  log = log or (lambda m: None)
+  fetcher = fetcher or _http_fetcher(workers)
+  cogs, regs = pool_sources(list(releases), list(registries), base, om_base, out, fetcher)
+  store = store if store is not None else store_catalog(base, out, fetcher)
+  ptr: dict[str, dict] = {}
+  for ver in pointers:
+    for h, r in side_rows(ver, base, out, fetcher).items():
+      ptr.setdefault(h, r)
+  own = load_rows(out, SHARED)
+  rows = {**ptr, **own}   # a hash the pool already copied keeps its own row
+  todo = [c for c in cogs if c["content_hash"] not in rows]
+  skipped = len(cogs) - len(todo)
+  if limit is not None:
+    todo = todo[:limit]
+  log(f"{SHARED}: {len(cogs):,} COGs from {list(releases) + list(registries)}, {skipped:,} already in a side table "
+      f"({len(ptr):,} rows of {list(pointers)}, {len(own):,} of the pool), {len(todo):,} to do ({workers} workers)")
+  copies = out / SHARED / COPY_DIR
+
+  def job(c):
+    h = c["content_hash"]
+    return process_one(c, SHARED, out, store, fetcher, key=shared_key(h), dst=copies / f"{h}{cog.COPY_SUFFIX}.tif")
+
+  done, failed, el = _run(SHARED, todo, job, rows, out / SHARED, table_path(out, SHARED), workers, flush_every, log)
+  write_table(rows, table_path(out, SHARED))
+  reg_out = {}
+  for name, current in regs.items():
+    dest = out / "om" / registry_path(name, registry_version)
+    reg_out[name] = {"path": str(dest), **write_registry_version(current, rows, dest, base)}
+    log(f"{name}: registry {registry_version} {reg_out[name]}")
+  return {"total": len(cogs), "skipped": skipped, "done": done, "failed": failed, "rows": len(rows),
+          "pointer_rows": sum(1 for h in rows if h in ptr and h not in own), "registries": reg_out,
           "seconds": round(el, 1), "rate": round((done + failed) / el, 3) if el else 0.0}
 
 
 # ---- the sweep: COGs referenced without a 3857 copy (the step 5 gate counter) ----
 
-OM_BASE = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/"
 SWEEP_RELEASES = ["v7", "v7b", "v7c"]   # the public catalogs' MST releases (the week 6 inventory's 57,279)
-REGISTRY_COPY_COLS = {"cog_url": "cog_3857_url", "cog_url_005": "cog_3857_url_005"}   # D8's new registry columns
 
 
 def read_bytes(src: str) -> bytes | None:
@@ -434,22 +598,52 @@ def registry_refs(table: pa.Table) -> list[tuple[str, bool]]:
   return out
 
 
-def side_table_hashes(ver: str, base: str = BASE, side_dir: Path | None = None, reader=read_bytes) -> set[str]:
-  """the content hashes release `ver`'s side table covers (local `<side_dir>/<ver>/tables/cog_3857.parquet` first,
-  else the bucket's); empty when there is none."""
-  if side_dir is not None and table_path(side_dir, ver).exists():
-    return set(pq.read_table(table_path(side_dir, ver), columns=["content_hash"])["content_hash"].to_pylist())
-  raw = reader(f"{base}{ver}/{TABLE}")
+def _hashes(raw: bytes | None, local: Path | None) -> set[str]:
+  if local is not None and local.exists():
+    return set(pq.read_table(local, columns=["content_hash"])["content_hash"].to_pylist())
   if raw is None:
     return set()
   return set(pq.read_table(pa.BufferReader(raw), columns=["content_hash"])["content_hash"].to_pylist())
 
 
+def side_table_hashes(ver: str, base: str = BASE, side_dir: Path | None = None, reader=read_bytes) -> set[str]:
+  """the content hashes release `ver`'s side table covers (local `<side_dir>/<ver>/tables/cog_3857.parquet` first,
+  else the bucket's); empty when there is none."""
+  local = table_path(side_dir, ver) if side_dir is not None else None
+  if local is not None and local.exists():
+    return _hashes(None, local)
+  return _hashes(reader(f"{base}{ver}/{TABLE}"), None)
+
+
+def shared_table_hashes(base: str = BASE, side_dir: Path | None = None, reader=read_bytes) -> set[str]:
+  """the content hashes the shared table `marine-atlas/tables/cog_3857.parquet` covers (local
+  `<side_dir>/shared/tables/cog_3857.parquet` first, else the bucket's); empty when there is none."""
+  local = table_path(side_dir, SHARED) if side_dir is not None else None
+  if local is not None and local.exists():
+    return _hashes(None, local)
+  return _hashes(reader(f"{base}{TABLE}"), None)
+
+
+def newest_registry(name: str, om_base: str = OM_BASE, side_dir: Path | None = None,
+                    reader=read_bytes) -> tuple[str | None, pa.Table | None]:
+  """(version, table) of the newest registry `name` there is: each of `REGISTRY_VERSIONS` (local
+  `<side_dir>/om/...` first, else the OM root), else the unversioned `registry.parquet` (version None); (None,
+  None) when there is none."""
+  for v in [*REGISTRY_VERSIONS, None]:
+    local = Path(side_dir) / "om" / registry_path(name, v) if side_dir is not None else None
+    if local is not None and local.exists():
+      return v, pq.read_table(local)
+    raw = reader(f"{om_base}{registry_path(name, v)}")
+    if raw is not None:
+      return v, pq.read_table(pa.BufferReader(raw))
+  return None, None
+
+
 def sweep(releases: list[str] = SWEEP_RELEASES, base: str = BASE, om_base: str = OM_BASE,
           side_dir: Path | None = None, cache: Path | None = None, reader=read_bytes) -> dict:
   """{part: (referenced, without a copy)} and the distinct totals over the MST releases (each against its own side
-  table), the OM aquamaps_native registry and the OM Items. A COG counts once in the total, missing when any
-  reference to it lacks a copy."""
+  table and the shared table), the OM aquamaps_native registry (its newest version's copy columns) and the OM
+  Items. A COG counts once in the total, missing when any reference to it lacks a copy."""
   import tempfile
   missing: dict[str, bool] = {}
   parts: dict[str, tuple[int, int]] = {}
@@ -468,13 +662,14 @@ def sweep(releases: list[str] = SWEEP_RELEASES, base: str = BASE, om_base: str =
     return dest
 
   with tempfile.TemporaryDirectory() as tmp:
+    shared = shared_table_hashes(base, side_dir, reader)
     for ver in releases:
-      have = side_table_hashes(ver, base, side_dir, reader)
+      have = side_table_hashes(ver, base, side_dir, reader) | shared
       add(f"mst {ver}", [(c["url"], c["content_hash"] in have)
                          for c in release_cogs(ver, base, Path(cache or tmp), fetcher)])
-    raw = reader(f"{om_base}aquamaps_native/registry.parquet")
-    if raw is not None:
-      add("om aquamaps_native registry", registry_refs(pq.read_table(pa.BufferReader(raw))))
+    v, reg = newest_registry("aquamaps_native", om_base, side_dir, reader)
+    if reg is not None:
+      add(f"om aquamaps_native registry{' ' + v if v else ''}", registry_refs(reg))
     add("om items", om_item_refs(om_base, reader))
   return {"parts": parts, "referenced": len(missing), "missing": sum(missing.values())}
 

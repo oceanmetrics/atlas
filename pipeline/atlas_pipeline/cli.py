@@ -422,7 +422,15 @@ def main(argv=None) -> int:
   g.add_argument("--resampling", choices=sorted(cog.RESAMPLING), default="nearest", help="overviews: nearest, or mode for classes")
   g.add_argument("--copy-key", default=None, help="the copy's asset key (default: cog_3857 for a data asset, <key>_3857 otherwise)")
   m = sub.add_parser("cog-3857-batch", help="the EPSG:3857 copies + side table (cog_3857.parquet) of a MST release's COGs")
-  m.add_argument("--release", required=True, help="the MST release label (v7, v7b, ...)")
+  m.add_argument("--release", action="append", default=[], help="the MST release label (v7, v7b, ...); with --pool, repeatable")
+  m.add_argument("--pool", action="store_true", help="the shared pool marine-atlas/cog_3857/<hash>_3857.tif + tables/cog_3857.parquet: "
+                 "every hash the --release and --registry name minus those a --pointer side table (or the pool) has")
+  m.add_argument("--registry", action="append", default=[], help="with --pool: an OM registry (aquamaps_native) whose cog_url and "
+                 "cog_url_005 join the pool and whose next version gets cog_3857_url and cog_3857_url_005")
+  m.add_argument("--pointer", action="append", default=None, help="with --pool: a release whose side table rows join the shared "
+                 "table as they are, never copied again (default: v7)")
+  m.add_argument("--registry-version", default=cog3857.REGISTRY_VERSION, help="with --pool: the registry version written")
+  m.add_argument("--om-base", default=cog3857.OM_BASE, help="with --pool: the OM atlas/ root the registries are read from")
   m.add_argument("--out", type=Path, required=True, help="work dir: src/ (cached originals), <ver>/cog_3857/, <ver>/tables/")
   m.add_argument("--base", default=cog3857.BASE, help="the marine-atlas/ root the release tables are read from")
   m.add_argument("--workers", type=int, default=4, help="COGs at a time (downloads included)")
@@ -431,9 +439,19 @@ def main(argv=None) -> int:
   a = ap.parse_args(argv)
 
   if a.cmd == "cog-3857-batch":
-    r = cog3857.run_batch(a.release, a.out, a.base, a.workers, a.limit, a.flush_every, log=log)
+    if a.pool:
+      if not (a.release or a.registry):
+        ap.error("--pool needs a --release or a --registry")
+      r = cog3857.run_pool(a.release, a.registry, a.out, a.base, a.om_base, a.pointer or ["v7"], a.workers, a.limit,
+                           a.flush_every, a.registry_version, log=log)
+      ver = cog3857.SHARED
+    else:
+      if len(a.release) != 1 or a.registry:
+        ap.error("without --pool: exactly one --release and no --registry")
+      ver = a.release[0]
+      r = cog3857.run_batch(ver, a.out, a.base, a.workers, a.limit, a.flush_every, log=log)
     log(f"done: {r}")
-    log(f"side table: {cog3857.table_path(a.out, a.release)} ({r['rows']:,} rows)")
+    log(f"side table: {cog3857.table_path(a.out, ver)} ({r['rows']:,} rows)")
     return 1 if r["failed"] else 0
 
   if a.cmd == "cog-assets":

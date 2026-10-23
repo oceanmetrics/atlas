@@ -122,6 +122,42 @@ aws s3 sync <out>/<ver>/cog_3857 s3://oceanmetrics.io-public/marine-atlas/<ver>/
 aws s3 cp <out>/<ver>/tables/cog_3857.parquet s3://oceanmetrics.io-public/marine-atlas/<ver>/tables/cog_3857.parquet
 ```
 
+### The shared pool (`cog-3857-batch --pool`)
+
+The copies are content addressed (the original's `content_hash` is its file stem, shared across releases), so one
+pool serves every release and registry after v7: `marine-atlas/cog_3857/<content_hash>_3857.tif` and one shared
+table `marine-atlas/tables/cog_3857.parquet` (the same `SCHEMA`, sorted by hash, row groups of 512).
+
+```sh
+uv run pipeline/build.py cog-3857-batch --pool --release v7b --release v7c --registry aquamaps_native --out <dir>
+```
+
+- input: the union, by hash, of the COGs the `--release` tables and the `--registry` files name (a registry's
+  `cog_url` and `cog_url_005`), minus every hash a `--pointer` release's side table has (default v7: local
+  `<dir>/v7/tables/` first, else the bucket's) or the pool already has;
+- the copies at `<dir>/shared/cog_3857/<hash>_3857.tif`, the journal and errors in `<dir>/shared/`, resumable as above;
+- the shared table `<dir>/shared/tables/cog_3857.parquet`: the union of the pointer release's rows, as they are (their
+  `cog_3857_key` stays `marine-atlas/v7/cog_3857/...`: v7's copies are not uploaded again), and the pool's own;
+- each registry's next version, additive: `<dir>/om/<registry>/registry/v2/registry.parquet`, the current
+  `registry.parquet`'s rows and columns as they are plus `cog_3857_url` and `cog_3857_url_005` (path-style, null where
+  there is no copy). The collection's `registry` asset still names `./registry.parquet`; pointing it at
+  `./registry/v2/registry.parquet` is the collection's next publish.
+
+Publish, additive (never `--delete`, never an original):
+
+```sh
+aws s3 sync <dir>/shared/cog_3857 s3://oceanmetrics.io-public/marine-atlas/cog_3857/ --content-type image/tiff
+aws s3 cp <dir>/shared/tables/cog_3857.parquet s3://oceanmetrics.io-public/marine-atlas/tables/cog_3857.parquet
+aws s3 cp <dir>/om/aquamaps_native/registry/v2/registry.parquet \
+  s3://oceanmetrics.io-public/atlas/aquamaps_native/registry/v2/registry.parquet
+```
+
+The restricted releases' copies sit in the public pool because their originals do: v7b's and v7c's tables name only
+`marine-atlas/cog/usa05/` and `marine-atlas/native/am/` files, the same public prefixes as v7's (`versions.json`
+`access: restricted` gates the app and the STAC trees, D10, not the store's files).
+
 `scripts/sweep_3857.py` prints the gate's one line, `COGs referenced without a 3857 copy = N of M (...)`, over the
-MST releases v7, v7b and v7c (each against its own side table), the OM `aquamaps_native` registry (D8's
-`cog_3857_url` and `cog_3857_url_005`) and the OM Items (a `*_3857` asset beside each COG asset); exit 0 at 0.
+MST releases v7, v7b and v7c (each against its own side table and the shared table), the OM `aquamaps_native`
+registry (its newest version, `registry/v2/` before `registry.parquet`, by D8's `cog_3857_url` and
+`cog_3857_url_005`) and the OM Items (a `*_3857` asset beside each COG asset); exit 0 at 0. `--side-dir` reads the
+local `<dir>/<ver>/tables/`, `<dir>/shared/tables/` and `<dir>/om/` before the bucket's.

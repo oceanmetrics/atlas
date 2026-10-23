@@ -311,3 +311,169 @@ def test_the_sweep_reads_the_side_table_from_the_bucket_when_there_is_no_local_o
   shutil.copyfile(out / "v7" / "tables" / "cog_3857.parquet", dst)
   r = cog3857.sweep(["v7"], release["base"], om_catalog(tmp_path, registry_copy=True))
   assert r["parts"]["mst v7"] == (3, 0)
+
+
+# ---- the shared pool (D8 part 2): one copy per content hash for every release and registry ----
+
+P = {"v7b": "aaaa000000000007", "am": "cccc000000000008", "g05": "eeee000000000009"}
+
+
+@pytest.fixture
+def pool(release, tmp_path):
+  """v7 as `release` gives it, plus a restricted-style v7b (model_asset: v7's usa COG and one new COG) and an OM
+  aquamaps_native registry of two rows (row 1: v7's native COG + a new global05 COG; row 2: a new native COG + the
+  same global05 COG)."""
+  root = release["root"]
+  new = {"v7b": tiny_tif(root / f"cog/usa05/{P['v7b']}.tif"),
+         "am": tiny_tif(root / f"native/am/{P['am']}.tif"),
+         "g05": tiny_tif(root / f"cog/global05/{P['g05']}.tif")}
+  u = {k: f"{URL}{p.relative_to(root)}" for k, p in new.items()}
+  tables = root / "v7b" / "tables"
+  tables.mkdir(parents=True)
+  pq.write_table(pa.table({"content_hash": [H["usa"], P["v7b"]], "cog_url": [release["urls"]["usa"], u["v7b"]]}),
+                 tables / "model_asset.parquet")
+  om = tmp_path / "om" / "atlas"
+  (om / "aquamaps_native").mkdir(parents=True)
+  (om / "catalog.json").write_text(json.dumps({"links": []}))
+  reg = om / "aquamaps_native" / "registry.parquet"
+  pq.write_table(pa.table({"sp_key": ["Fis-1", "Fis-2"], "cog_url": [release["urls"]["native"], u["am"]],
+                           "cog_url_005": [u["g05"], u["g05"]], "rescale_min": pa.array([1, 1], pa.int32())}), reg)
+  return {**release, "new": new, "new_urls": u, "om": str(om) + "/", "registry": reg}
+
+
+def run_pool(pool, out, **kw):
+  return cog3857.run_pool(["v7b"], ["aquamaps_native"], out, pool["base"], pool["om"], ["v7"], workers=2,
+                          fetcher=pool["fetcher"], **kw)
+
+
+def test_the_shared_key_is_the_content_hash_under_the_marine_atlas_root():
+  assert cog3857.shared_key(P["g05"]) == f"marine-atlas/cog_3857/{P['g05']}_3857.tif"
+  assert cog3857.key_url(cog3857.shared_key(P["g05"])) == f"{URL}cog_3857/{P['g05']}_3857.tif"
+  assert cog3857.registry_path("aquamaps_native", "v2") == "aquamaps_native/registry/v2/registry.parquet"
+  assert cog3857.registry_path("aquamaps_native") == "aquamaps_native/registry.parquet"
+
+
+def test_the_pool_copies_the_union_of_the_releases_and_registries_minus_every_hash_a_side_table_has(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)   # v7's own side table (3 rows), as the first batch left it
+  v7_files = sorted(p.relative_to(out).as_posix() for p in (out / "v7").rglob("*.tif"))
+  r = run_pool(pool, out)
+  # union: v7b {usa, v7b}, registry {native, am, g05}; v7 has usa and native, so three are copied
+  assert (r["total"], r["skipped"], r["done"], r["failed"]) == (5, 2, 3, 0)
+  copied = sorted(p.name for p in (out / "shared" / "cog_3857").glob("*.tif"))
+  assert copied == sorted(f"{h}_3857.tif" for h in P.values())
+  # nothing of v7's is copied again, nothing written under v7/
+  assert sorted(p.relative_to(out).as_posix() for p in (out / "v7").rglob("*.tif")) == v7_files
+  assert not list((out / "shared").rglob(f"*{H['usa']}*"))
+
+
+def test_the_shared_table_is_the_union_with_v7s_rows_pointing_at_their_existing_keys(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)
+  r = run_pool(pool, out)
+  t = pq.read_table(out / "shared" / "tables" / "cog_3857.parquet")
+  assert t.schema.equals(cog3857.SCHEMA)
+  assert t["content_hash"].to_pylist() == sorted([*H.values(), *P.values()])   # every v7 row, the pool's own, sorted
+  assert (r["rows"], r["pointer_rows"]) == (6, 3)
+  rows = {x["content_hash"]: x for x in t.to_pylist()}
+  v7 = {x["content_hash"]: x for x in pq.read_table(out / "v7" / "tables" / "cog_3857.parquet").to_pylist()}
+  for h in H.values():   # the pointer rows: v7's row as it is, its key under marine-atlas/v7/
+    assert rows[h] == v7[h] and rows[h]["cog_3857_key"].startswith("marine-atlas/v7/cog_3857/")
+  for k, h in P.items():
+    row = rows[h]
+    assert row["cog_3857_key"] == cog3857.shared_key(h) and row["url"] == pool["new_urls"][k]
+    copy = out / "shared" / "cog_3857" / f"{h}_3857.tif"
+    assert row["md5"] == md5(copy) and row["src_md5"] == md5(pool["new"][k])
+    with rasterio.open(copy) as ds:
+      assert ds.crs.to_epsg() == 3857
+  # the published layout: <out>/shared/cog_3857 -> marine-atlas/cog_3857, <out>/shared/tables -> marine-atlas/tables
+  assert sorted(f"marine-atlas/cog_3857/{p.name}" for p in (out / "shared" / "cog_3857").glob("*.tif")) == sorted(
+    x["cog_3857_key"] for x in rows.values() if x["content_hash"] in P.values())
+
+
+def test_the_pool_reads_v7s_side_table_from_the_bucket_when_there_is_no_local_one(pool, tmp_path):
+  out = tmp_path / "first"
+  run(pool, out)
+  dst = pool["root"] / "v7" / "tables" / "cog_3857.parquet"
+  shutil.copyfile(out / "v7" / "tables" / "cog_3857.parquet", dst)
+  r = run_pool(pool, tmp_path / "second")
+  assert (r["skipped"], r["done"], r["pointer_rows"]) == (2, 3, 3)
+
+
+def test_the_pool_resumes_and_a_second_run_copies_nothing(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)
+  r1 = run_pool(pool, out, limit=1)
+  assert (r1["done"], r1["rows"]) == (1, 4)
+  r2 = run_pool(pool, out)
+  assert (r2["skipped"], r2["done"], r2["rows"]) == (3, 2, 6)
+  n = len(pool["calls"])
+  r3 = run_pool(pool, out)
+  assert (r3["skipped"], r3["done"], r3["rows"]) == (5, 0, 6)
+  assert all(not c.endswith(".tif") for c in pool["calls"][n:])
+
+
+def test_the_registry_gets_a_new_version_with_the_copy_urls_and_the_current_one_is_untouched(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)
+  before = pool["registry"].read_bytes()
+  r = run_pool(pool, out)
+  dest = out / "om" / "aquamaps_native" / "registry" / "v2" / "registry.parquet"
+  assert r["registries"]["aquamaps_native"] == {"path": str(dest), "rows": 2, "cog_3857_url": 2,
+                                                "cog_3857_url_005": 2}
+  assert pool["registry"].read_bytes() == before
+  t = pq.read_table(dest)
+  cur = pq.read_table(pool["registry"])
+  assert t.column_names == cur.column_names + ["cog_3857_url", "cog_3857_url_005"]
+  assert t.select(cur.column_names).equals(cur)   # the rows and columns as they were
+  v7_native = cog3857.copy_key("v7", pool["urls"]["native"])
+  assert t["cog_3857_url"].to_pylist() == [cog3857.key_url(v7_native, pool["base"]),     # v7's existing copy
+                                           cog3857.key_url(cog3857.shared_key(P["am"]), pool["base"])]
+  assert t["cog_3857_url_005"].to_pylist() == [cog3857.key_url(cog3857.shared_key(P["g05"]), pool["base"])] * 2
+
+
+def test_a_registry_url_without_a_copy_is_null_in_the_new_version(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)
+  store = cog3857.store_catalog(pool["base"], out)
+  store[cog3857.rel_path(pool["new_urls"]["g05"])] = ("0" * 32, 1)   # seeded fault: the global05 download fails
+  r = cog3857.run_pool([], ["aquamaps_native"], out, pool["base"], pool["om"], ["v7"], workers=1, store=store,
+                       fetcher=pool["fetcher"])
+  assert (r["done"], r["failed"]) == (1, 1)
+  assert r["registries"]["aquamaps_native"]["cog_3857_url_005"] == 0
+  t = pq.read_table(out / "om" / "aquamaps_native" / "registry" / "v2" / "registry.parquet")
+  assert t["cog_3857_url_005"].to_pylist() == [None, None]
+
+
+def test_the_sweep_counts_a_release_cog_in_the_shared_table_and_reads_the_registrys_new_version(pool, tmp_path):
+  out = tmp_path / "out"
+  run(pool, out)
+  before = cog3857.sweep(["v7", "v7b"], pool["base"], pool["om"], side_dir=out)
+  # a release is covered by its own side table or the shared one, never by another release's: v7b's usa is
+  # v7's file, but v7b has no side table and there is no shared table yet
+  assert before["parts"]["mst v7b"] == (2, 2) and before["parts"]["om aquamaps_native registry"] == (3, 3)
+  run_pool(pool, out)
+  r = cog3857.sweep(["v7", "v7b"], pool["base"], pool["om"], side_dir=out)
+  assert r["parts"] == {"mst v7": (3, 0), "mst v7b": (2, 0), "om aquamaps_native registry v2": (3, 0),
+                        "om items": (0, 0)}
+  assert r["missing"] == 0
+  # the same from the bucket once uploaded: the shared table at marine-atlas/tables/, the registry under registry/v2/
+  shutil.copyfile(out / "v7" / "tables" / "cog_3857.parquet", pool["root"] / "v7" / "tables" / "cog_3857.parquet")
+  (pool["root"] / "tables").mkdir()
+  shutil.copyfile(out / "shared" / "tables" / "cog_3857.parquet", pool["root"] / "tables" / "cog_3857.parquet")
+  v2 = tmp_path / "om" / "atlas" / "aquamaps_native" / "registry" / "v2"
+  v2.mkdir(parents=True)
+  shutil.copyfile(out / "om" / "aquamaps_native" / "registry" / "v2" / "registry.parquet", v2 / "registry.parquet")
+  assert cog3857.sweep(["v7", "v7b"], pool["base"], pool["om"])["missing"] == 0
+
+
+def test_the_pool_command_writes_the_shared_table_and_the_registry_version(pool, tmp_path, monkeypatch):
+  out = tmp_path / "out"
+  run(pool, out)
+  monkeypatch.setattr(cog3857, "fetch", pool["fetcher"])
+  assert cli.main(["cog-3857-batch", "--pool", "--release", "v7b", "--registry", "aquamaps_native", "--out", str(out),
+                   "--base", pool["base"], "--om-base", pool["om"], "--workers", "2"]) == 0
+  assert pq.read_table(out / "shared" / "tables" / "cog_3857.parquet").num_rows == 6
+  assert (out / "om" / "aquamaps_native" / "registry" / "v2" / "registry.parquet").exists()
+  with pytest.raises(SystemExit):
+    cli.main(["cog-3857-batch", "--release", "v7", "--release", "v7b", "--out", str(out)])
