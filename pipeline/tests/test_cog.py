@@ -67,6 +67,19 @@ def test_web_mercator_copy_is_3857_tiled_256_with_overviews_nodata_and_values_ke
   assert v == 42 and nd == 255
 
 
+def test_source_zoom_is_the_upper_zoom_of_the_longitude_pixel():
+  assert [cog.source_zoom(r) for r in (0.5, 0.05, 1.0, 0.01)] == [2, 5, 1, 8]
+
+
+def test_a_high_latitude_half_degree_copy_keeps_zoom_2(tmp_path):
+  """regression (v7 batch, 2026-10-23): a 0.5 degree AquaMaps file of 68 x 73 cells from 71.5N southwards came out
+  at zoom 1 under GDAL's UPPER estimate, coarser than its own longitude pixels."""
+  a = np.random.default_rng(3).integers(1, 101, (73, 68)).astype("uint8")
+  src = write_tif(tmp_path / "arctic.tif", [a], from_origin(-77, 71.5, 0.5, 0.5), nodata=0)
+  _, zoom = cog.web_mercator_copy(src, tmp_path / "arctic_3857.tif")
+  assert zoom[1] == 2
+
+
 def test_the_clip_window_applies_only_past_the_mercator_limit():
   assert cog._clip_window((-180, -80, 180, 80)) == []
   assert cog._clip_window((-130, -90, -110, 90)) == ["-te_srs", "EPSG:4326", "-te", "-130", "-85.0511287798",

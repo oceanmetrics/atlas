@@ -66,6 +66,15 @@ def zoom_range(path: Path) -> tuple[int, int]:
   return zmax - (int(round(math.log2(max(ovr)))) if ovr else 0), zmax
 
 
+def source_zoom(lon_res_deg: float) -> int:
+  """the GoogleMapsCompatible zoom whose pixel is no coarser than a source pixel of `lon_res_deg` degrees of
+  longitude (UPPER: 0.5 degree -> 2, 0.05 degree -> 5). Longitude, because a degree of longitude is the same
+  mercator width at every latitude; gdalwarp's own estimate of a high-latitude extent is coarser (a 0.5 degree file
+  north of 70N came out at zoom 1, 78 km pixels over 56 km of longitude: v7 batch, 2026-10-23)."""
+  m = lon_res_deg * EARTH_CIRCUMFERENCE / 360.0
+  return max(0, math.ceil(math.log2(EARTH_CIRCUMFERENCE / (256 * m)) - 1e-9))
+
+
 def web_mercator_copy(src: Path, dst: Path) -> tuple[Path, tuple[int, int]]:
   """write `dst`, the EPSG:3857 copy of `src` the cog protocol draws (the spike's recipe): nearest warp, clipped to
   +-85.0511 degrees when the source reaches past it, COG with GoogleMapsCompatible tiling, UPPER zoom strategy,
@@ -78,10 +87,13 @@ def web_mercator_copy(src: Path, dst: Path) -> tuple[Path, tuple[int, int]]:
       raise ValueError(f"{src}: no CRS, cannot warp to {WEB_MERCATOR}")
     te = _clip_window(rasterio.warp.transform_bounds(ds.crs, "EPSG:4326", *ds.bounds)) if ds.crs.to_epsg() != 4326 \
       else _clip_window(ds.bounds)
+    # a geographic source: the zoom from its longitude pixel (see source_zoom); otherwise GDAL's UPPER estimate
+    zoom = ["-co", f"ZOOM_LEVEL={source_zoom(abs(ds.res[0]))}"] if ds.crs.is_geographic else \
+      ["-co", "ZOOM_LEVEL_STRATEGY=UPPER"]
   dst.parent.mkdir(parents=True, exist_ok=True)
   tmp = dst.with_name(dst.name + ".part")
   _run(["gdalwarp", "-q", "-overwrite", "-t_srs", WEB_MERCATOR, *te, "-r", "near", "-of", "COG",
-        "-co", "TILING_SCHEME=GoogleMapsCompatible", "-co", "ZOOM_LEVEL_STRATEGY=UPPER", "-co", "BLOCKSIZE=256",
+        "-co", "TILING_SCHEME=GoogleMapsCompatible", *zoom, "-co", "BLOCKSIZE=256",
         "-co", "COMPRESS=DEFLATE", "-co", "ADD_ALPHA=NO", "-co", "OVERVIEW_RESAMPLING=NEAREST",
         "-co", "OVERVIEWS=IGNORE_EXISTING", "-co", "SPARSE_OK=YES", str(src), str(tmp)])
   os.replace(tmp, dst)
