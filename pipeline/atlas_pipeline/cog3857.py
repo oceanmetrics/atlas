@@ -62,6 +62,8 @@ SCHEMA = pa.schema([
   pa.field("zoom_min", pa.int8()),
   pa.field("zoom_max", pa.int8()),
   pa.field("bands", pa.int16(), nullable=False),
+  pa.field("data_type", pa.list_(pa.string())),             # per band, rasterio's spelling (uint8, float32)
+  pa.field("nodata", pa.list_(pa.float64())),               # per band; null = none (NaN kept as NaN)
   pa.field("statistics", pa.list_(STAT)),                  # per band, from the 4326 original; null for an empty band
   pa.field("histogram", pa.list_(HIST)),                   # per band, 32 buckets; null for an empty band
   pa.field("bytes", pa.int64(), nullable=False),           # the copy's
@@ -195,6 +197,27 @@ def _summaries_arrow(summaries: list[dict | None]) -> tuple[list, list]:
   return stats, hist
 
 
+def band_info(src: Path) -> tuple[list[str], list[float | None]]:
+  """(data_type, nodata) per band of `src` (nodata None when the band has none)."""
+  import rasterio
+  with rasterio.open(src) as ds:
+    return list(ds.dtypes), [None if v is None else float(v) for v in ds.nodatavals]
+
+
+def fill_band_info(rows: dict[str, dict], out: Path) -> int:
+  """rows written before the side table had `data_type` and `nodata` get them from the cached original
+  (`<out>/src/<rel>`); returns how many were filled (a row whose original is not cached is left as it is)."""
+  n = 0
+  for r in rows.values():
+    if r.get("data_type") is not None:
+      continue
+    src = Path(out) / "src" / rel_path(r["url"])
+    if src.exists():
+      r["data_type"], r["nodata"] = band_info(src)
+      n += 1
+  return n
+
+
 def process_one(entry: dict, ver: str, out: Path, store: dict | None = None, fetcher=None) -> dict:
   """download the original (cached at `<out>/src/<rel>`, its md5 checked against the store catalog when it lists the
   key; a cached file that fails is fetched once more), write its 3857 copy at `<out>/<ver>/cog_3857/<rel>_3857.tif`,
@@ -222,8 +245,10 @@ def process_one(entry: dict, ver: str, out: Path, store: dict | None = None, fet
   dst = Path(out) / ver / key[len(f"{ROOT}{ver}/"):]
   dst, zoom = cog.web_mercator_copy(src, dst)
   stats, hist = _summaries_arrow(cog.band_summaries(src))
+  types, nodata = band_info(src)
   return {"content_hash": h, "url": url, "cog_3857_key": key, "proj:code": cog.WEB_MERCATOR,
           "src_proj:code": src_proj, "zoom_min": zoom[0], "zoom_max": zoom[1], "bands": nb,
+          "data_type": types, "nodata": nodata,
           "statistics": stats, "histogram": hist, "bytes": dst.stat().st_size, "md5": md5_of(dst),
           "src_bytes": src.stat().st_size, "src_md5": src_md5,
           "created": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
@@ -267,7 +292,9 @@ def write_table(rows: dict[str, dict] | list[dict], path: Path) -> Path:
   t = pa.Table.from_pylist([{f.name: r.get(f.name) for f in SCHEMA} for r in rs], schema=SCHEMA)
   path.parent.mkdir(parents=True, exist_ok=True)
   tmp = path.with_name(path.name + ".part")
-  pq.write_table(t, tmp, compression="zstd", row_group_size=20_000)
+  # small row groups, sorted by content_hash: a reader asking for one hash (hyparquet's `filter`) skips the
+  # others by their min/max statistics and reads about 1/70 of the v7 table
+  pq.write_table(t, tmp, compression="zstd", row_group_size=512, write_statistics=True)
   tmp.replace(path)
   return path
 
@@ -322,6 +349,9 @@ def run_batch(ver: str, out: Path, base: str = BASE, workers: int = 4, limit: in
         eta = (len(todo) - k) / rate if rate else 0.0
         log(f"{ver}: {k:,}/{len(todo):,} ({done:,} ok, {failed:,} failed) {rate:.2f}/s, "
             f"elapsed {el / 60:.1f} min, eta {eta / 60:.1f} min")
+  filled = fill_band_info(rows, out)
+  if filled:
+    log(f"{ver}: data_type and nodata filled from the cached originals on {filled:,} earlier rows")
   write_table(rows, table_path(out, ver))
   el = time.perf_counter() - t0
   return {"total": len(cogs), "skipped": skipped, "done": done, "failed": failed, "rows": len(rows),

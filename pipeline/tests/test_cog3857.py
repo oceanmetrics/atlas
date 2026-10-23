@@ -123,6 +123,7 @@ def test_the_side_table_has_the_schema_one_row_per_cog_and_each_copy_at_its_key(
     assert row["url"] == release["urls"][k]
     assert row["cog_3857_key"] == cog3857.copy_key("v7", release["urls"][k])
     assert (row["proj:code"], row["src_proj:code"], row["bands"]) == ("EPSG:3857", "EPSG:4326", 1)
+    assert (row["data_type"], row["nodata"]) == ((["float32"], [-9999.0]) if k == "score" else (["uint8"], [0.0]))
     copy = out / "v7" / row["cog_3857_key"][len("marine-atlas/v7/"):]
     assert copy.exists() and row["bytes"] == copy.stat().st_size and row["md5"] == md5(copy)
     with rasterio.open(copy) as ds:
@@ -190,6 +191,31 @@ def test_the_side_table_alone_is_enough_to_resume(release, tmp_path):
   (out / "v7" / "cog_3857.jsonl").unlink()
   r = run(release, out)
   assert (r["skipped"], r["done"], r["rows"]) == (1, 2, 3)
+
+
+def test_rows_written_before_data_type_and_nodata_get_them_from_the_cached_original(release, tmp_path):
+  out = tmp_path / "out"
+  run(release, out)
+  t = pq.read_table(out / "v7" / "tables" / "cog_3857.parquet")
+  old = [dict(r, data_type=None, nodata=None) for r in t.to_pylist()]
+  cog3857.write_table(old, out / "v7" / "tables" / "cog_3857.parquet")
+  (out / "v7" / "cog_3857.jsonl").unlink()
+  r = run(release, out)
+  assert (r["skipped"], r["done"]) == (3, 0)
+  rows = pq.read_table(out / "v7" / "tables" / "cog_3857.parquet").to_pylist()
+  assert all(x["data_type"] and x["nodata"] for x in rows)
+
+
+def test_the_side_table_is_sorted_by_content_hash_in_small_row_groups_with_statistics(tmp_path):
+  rows = [{f.name: None for f in cog3857.SCHEMA} | {"content_hash": f"{i:016x}", "url": "u", "cog_3857_key": "k",
+          "proj:code": "EPSG:3857", "src_proj:code": "EPSG:4326", "bands": 1, "bytes": 1, "md5": "m",
+          "src_bytes": 1, "src_md5": "m", "created": "t"} for i in reversed(range(1100))]
+  p = cog3857.write_table(rows, tmp_path / "t.parquet")
+  md = pq.ParquetFile(p).metadata
+  assert md.num_row_groups == 3
+  st = [md.row_group(i).column(0).statistics for i in range(3)]
+  assert [(s.min, s.max) for s in st] == [(f"{0:016x}", f"{511:016x}"), (f"{512:016x}", f"{1023:016x}"),
+                                          (f"{1024:016x}", f"{1099:016x}")]
 
 
 # ---- the hash ----

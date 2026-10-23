@@ -109,11 +109,12 @@ MST's published releases are immutable (D7), so the copies of their COGs go besi
   `marine-atlas/<ver>/cog_3857/<path>_3857.tif`;
 - one side-table row per COG in `<out>/<ver>/tables/cog_3857.parquet` (`cog3857.SCHEMA`): `content_hash` (the
   original's, the join key), `url` (the original as the release names it), `cog_3857_key`, `proj:code` (EPSG:3857),
-  `src_proj:code`, `zoom_min`, `zoom_max`, `bands`, `statistics` and `histogram` (per band, from the full-resolution
+  `src_proj:code`, `zoom_min`, `zoom_max`, `bands`, `data_type` and `nodata` (per band), `statistics` and `histogram` (per band, from the full-resolution
   4326 original, null for an empty band), `bytes` and `md5` of the copy, `src_bytes`, `src_md5`, `created`.
 
 Resumable: each finished COG is a line of `<out>/<ver>/cog_3857.jsonl` (the journal); the Parquet is rewritten from it
-every 1,000 rows and at the end; a rerun skips every `content_hash` in either. Failures go to
+every 1,000 rows and at the end, sorted by `content_hash` in row groups of 512 (a reader filtering on one
+hash skips the rest by their statistics); a rerun skips every `content_hash` in either. Failures go to
 `<out>/<ver>/cog_3857_errors.jsonl` and are retried by the next run (exit 1 while any remain). Publish, additive:
 
 ```sh
