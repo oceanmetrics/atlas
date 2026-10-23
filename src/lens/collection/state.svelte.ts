@@ -1281,6 +1281,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       return mapInputs;
     },
     get itemTitle() {
+      // an h3 taxon layer or WoRMS subtree filters the all-taxa Item: the Details title is the taxon's
+      const t = h3Spec ? h3Layer?.target : null;
+      if (t && (t.kind === "taxon" || t.kind === "subtree")) return t.label;
       return item ? itemTitleOf(item, view.dims) : null;
     },
     get itemDescription() {

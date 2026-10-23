@@ -407,3 +407,73 @@ test("a collection over the read cap says 'filter by one place instead' and read
     "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/big_efh/h3/membership.json",
   ]);
 });
+
+test("the WoRMS subtree: search, pick, computed in the page (DuckDB-WASM over the class file), drawn from a blob: url", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  const record = JSON.parse(readFileSync(`${FIX}subtree/worms_record_2688.json`, "utf8"));
+  const worms: string[] = [];
+  await boot(
+    page,
+    "/?c=obis_h3&i=all&dim.indicator=sp&res=3&map=-121,35.5,5&tour=off",
+    requests,
+    (p) =>
+      p.route(
+        (url) => url.href.startsWith("https://www.marinespecies.org/rest/"),
+        safeRoute((route) => {
+          const u = route.request().url();
+          worms.push(u);
+          if (u.includes("AphiaRecordsByName/Cetac"))
+            return route.fulfill({ status: 200, json: [record] });
+          if (u.includes("AphiaRecordByAphiaID/2688"))
+            return route.fulfill({ status: 200, json: record });
+          return route.fulfill({ status: 204, body: "" });
+        }),
+      ),
+  );
+  await page.getByTestId("h3-worms-search").fill("Cetac");
+  await page.getByTestId("h3-worms-hit").first().click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("taxon")).toBe("aphia:2688");
+  // the fixture's seven res-3 hexagons off California, computed from species/res=3/class=Mammalia
+  await expect(page.getByTestId("h3-subtree-read")).toContainText("7 hexagons", {
+    timeout: 60_000,
+  });
+  await expect(page.getByTestId("h3-subtree-line")).toHaveText(
+    "subtree of Cetacea (computed in the browser from the species table, res ≤ 5)",
+  );
+  await expect(page.getByTestId("h3-sentence")).toContainText(
+    "Whales and dolphins (infraorder Cetacea, WoRMS)",
+  );
+  await expect(page.getByTestId("h3-coverage")).toHaveText("7 hexagons of the subtree");
+  expect(requests.some((u) => u.includes("species/res=3/class=Mammalia/data_0.parquet"))).toBe(
+    true,
+  );
+  expect(requests.some((u) => u.includes("taxon/rank="))).toBe(false); // no release layer: the page computed it
+  expect(worms[0]).toContain("AphiaRecordsByName/Cetac?like=true");
+  // the map package's worker read the blob: the fill draws the computed richness (832834fffffffff: 22 names)
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const m = (
+            window as never as {
+              __atlasMap: {
+                handle: {
+                  map: {
+                    querySourceFeatures: (
+                      s: string,
+                      o: object,
+                    ) => { properties: Record<string, unknown> }[];
+                  };
+                };
+              };
+            }
+          ).__atlasMap.handle.map;
+          const f = m.querySourceFeatures("slot:h3", { sourceLayer: "h3" });
+          return f.find((x) => x.properties.h3 === "832834fffffffff")?.properties.sp ?? null;
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(22);
+});
