@@ -83,6 +83,13 @@ export function toolTakesFullStage(tool: ToolName): boolean {
   return tool === "table";
 }
 
+/** the tool a map click on a cell switches to (Collections lens; Neil Hammerschlag, 2026-10-23: a click
+ * said "3 likely species" but the names sat behind the Details tool). Details, from any tool but the
+ * Places flow, where a click is part of choosing places and the popup is enough. */
+export function toolOnCellClick(active: ToolName): ToolName {
+  return active === "places" || active === "report" ? active : "details";
+}
+
 /** R4-B: the panel header names what is being SHOWN, not the spine entry beside it
  * (control-grammar rule 6). Every input is a plain string (or null while unknown) computed by
  * the shell from its own state; the fallbacks are the tool's own label so a header is never

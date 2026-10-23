@@ -151,6 +151,8 @@ export interface H3LayerDeps {
   mapHandle: () => MapHandle | undefined;
   /** true while a place pick/draw session owns map clicks */
   isOwned?: () => boolean;
+  /** a click selected a hexagon: the shell opens Details (the Cell pane) */
+  onCellClick?: () => void;
   entry: () => CollectionEntry | null;
   item: () => StacItem | null;
   /** the collection's Items: a taxon filters the all-taxa one */
@@ -1379,6 +1381,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       const h3 = f?.properties?.h3;
       if (typeof h3 !== "string") return;
       selStore.set({ cell: h3 });
+      deps.onCellClick?.();
       hide();
       const ind = untrack(() => view?.indicator ?? "es");
       const lines = hoverLines(

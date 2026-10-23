@@ -167,6 +167,8 @@ export interface CollectionLensDeps {
   /** WP4 "Only inside places": the hex FIDs to keep at full opacity (every other painted cell is
    * dimmed), read reactively; `null`/absent = no filter. */
   insideFids?: () => ReadonlySet<number> | null;
+  /** a click selected a cell (hex, raster or H3): the shell opens Details (`toolOnCellClick`). */
+  onCellClick?: () => void;
 }
 
 /** the species list of the clicked cell, for the item's season and group (see `lib/catalog/species.ts`). */
@@ -490,6 +492,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           selStore,
           mapHandle: deps.mapHandle,
           ...(deps.isOwned ? { isOwned: deps.isOwned } : {}),
+          ...(deps.onCellClick ? { onCellClick: deps.onCellClick } : {}),
           entry: () => entry,
           item: () => item,
           items: () => items,
@@ -1103,6 +1106,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         const it = untrack(() => item);
         if (!e || !it) return;
         store.set({ collection: e.id, item: it.id, fid, value, lngLat });
+        deps.onCellClick?.();
       },
     });
     return () => interaction.destroy();
@@ -1151,6 +1155,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           bands: null,
           bandsUrl: null,
         };
+        deps.onCellClick?.();
       },
       onClickValue: setPointValue,
       announce,

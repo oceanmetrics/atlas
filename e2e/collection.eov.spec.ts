@@ -69,14 +69,7 @@ test("a click shows the flower: one /cog/point request, petals from bands, absen
 }) => {
   const points: string[] = [];
   await boot(page, points);
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __atlasMap: { handle: { map: { fire(type: string, props: object): void } } };
-      }
-    ).__atlasMap.handle.map.fire("click", { lngLat: { lng: -70, lat: 40 }, point: { x: 0, y: 0 } });
-  });
-  await page.locator("[data-atlas-open-details]").first().click();
+  await clickCell(page, -70, 40);
   const flower = page.getByTestId("collection-flower");
   await expect(flower).toBeVisible({ timeout: 15_000 });
   // five EOVs with a value draw a petal, the two absent ones leave their slot empty
@@ -91,20 +84,40 @@ test("a click shows the flower: one /cog/point request, petals from bands, absen
   expect(points[0]).not.toContain("bidx");
 });
 
+// a fired click before the raster's click handler is installed does nothing (both lenses' handlers
+// install after the first paint), so fire until it lands; a cell click opens Details itself
+async function clickCell(page: Page, lng: number, lat: number) {
+  const details = page.locator('#rail-region button.railitem[aria-label="Details"]');
+  await expect(async () => {
+    await page.evaluate(
+      ([lng, lat]) => {
+        (
+          window as unknown as {
+            __atlasMap: { handle: { map: { fire(type: string, props: object): void } } };
+          }
+        ).__atlasMap.handle.map.fire("click", { lngLat: { lng, lat }, point: { x: 0, y: 0 } });
+      },
+      [lng, lat],
+    );
+    await expect(details).toHaveAttribute("aria-current", "true", { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+}
+
 // the fixture's tile 954 holds cells 9844265-9844267; (-86.73, 21.62) is cell 9844266 (six species)
 async function clickCancun(page: Page) {
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __atlasMap: { handle: { map: { fire(type: string, props: object): void } } };
-      }
-    ).__atlasMap.handle.map.fire("click", {
-      lngLat: { lng: -86.73, lat: 21.62 },
-      point: { x: 0, y: 0 },
-    });
-  });
-  await page.locator("[data-atlas-open-details]").first().click();
+  await clickCell(page, -86.73, 21.62);
 }
+
+// Neil Hammerschlag, 2026-10-23: a click said "3 likely species" while the names sat behind Details
+test("regression: a cell click opens Details with its species, no popup link needed", async ({
+  page,
+}) => {
+  await boot(page, []);
+  await clickCancun(page);
+  await expect(
+    page.getByTestId("raster-cell-species").getByTestId("raster-cell-species-count"),
+  ).toHaveText("6 species in this cell");
+});
 
 test("a click lists the species of the cell, with an Atlas link that keeps the camera", async ({
   page,
