@@ -34,6 +34,7 @@
     el.scrollIntoView({ block: "nearest" });
     el.querySelector<HTMLElement>("input, select, button, [tabindex]")?.focus();
   }
+  let seaPick = $state(0);
   const SEPS = [", ", ", ", ", ", ": ", ""];
   const chips = $derived(
     layer.parts
@@ -362,15 +363,22 @@
 
   <div class="field" data-control-field="place" data-testid="h3-place">
     <span class="field-label">Place</span>
-    <Select
-      label="Go to a sea or ocean"
-      value=""
-      options={[
-        { value: "", label: "Go to a sea or ocean…" },
-        ...SEAS.map((s) => ({ value: s.id, label: s.label })),
-      ]}
-      onchange={(id) => id && layer.goToSea(id)}
-    />
+    <!-- a preset moves the map; the select returns to its prompt (the map can be panned away) -->
+    {#key seaPick}
+      <Select
+        label="Go to a sea or ocean"
+        value=""
+        options={[
+          { value: "", label: "Go to a sea or ocean…" },
+          ...SEAS.map((s) => ({ value: s.id, label: s.label })),
+        ]}
+        onchange={(id) => {
+          if (!id) return;
+          layer.goToSea(id);
+          seaPick++;
+        }}
+      />
+    {/key}
     {#if layer.coverage}
       <p class="note" data-testid="h3-coverage">{layer.coverage}</p>
     {/if}

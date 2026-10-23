@@ -117,14 +117,115 @@ What is over and why:
   names sorted by AphiaID in row groups the pane can range-read (or a per-cell index). Until then the bar is met only
   by a res-3 hexagon after the page's first.
 
+## Second pass (2026-10-23): obis-hex's parity rows
+
+The rows of obis-hex `docs/parity.md` that the first pass left open, built in the lazy H3 chunks (the static path is
+433.4 of 450 KB for oceanmetrics, 432.8 before; 466.7 of 470 KB for marinesensitivity, 466.5 before). Each one has a
+node test (`tests/obis/`), and the behaviour of the built app a hermetic Playwright spec (`e2e/obis.spec.ts`, the
+fixture release `tests/fixtures/obis_h3/` served as S3 serves it; run it with
+`npx playwright test --project=chromium e2e/obis.spec.ts`).
+
+| what                                                                                                                                                                                                                                                                                                                                      | where                                                                      | test                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| the title sentence as five chips (taxon, period, place, hexagon size, indicator), each opening its field; a taxon's common name first ("Birds (class Aves)"); "in view (the res-3 parent files under the map)" at a split resolution                                                                                                      | `paint.ts` `sentenceParts`, `placePart`, `withinPart`; `H3Controls.svelte` | `coverage.test.ts`                             |
+| the layer list: All taxa, then the 7 EOVs most records first with their counts (the search asset's EOV rows) on a log bar; "What defines each EOV?" (IOOS); the generic Taxa select is not shown for an h3 collection                                                                                                                     | `taxa.ts` `layerRows`; `CollectionLens.svelte`                             | `taxa.test.ts`                                 |
+| the colour range of the loaded hexagons (`dom=view`, a new codec key): p02 to p98 of the cells in the map's loaded tiles at the drawn resolution (`querySourceFeatures` on idle, deduplicated), DuckDB `quantile_cont`'s rule                                                                                                             | `share.ts` `viewDomain`; `layer.svelte.ts` `readLoaded`                    | `legend.test.ts`, `codec.test.ts`              |
+| a pinned res 6 or 7 over a view that needs more than 64 parent files (its area over a parent's) draws a coarser one and says so                                                                                                                                                                                                           | `share.ts` `pinForView`                                                    | `resolution.test.ts`                           |
+| the status line ("Loading the release…", "No hexagons in this view.", "No OBIS records for Seabirds in the 1960s in this view.", "The release could not be read: …")                                                                                                                                                                      | `paint.ts` `statusLine`                                                    | `coverage.test.ts`                             |
+| the footer line: the OBIS and WoRMS dates, the release, the resolution and the app, from `release.json` (the collection's `release` asset)                                                                                                                                                                                                | `share.ts` `footerText`, `releaseMetaOf`                                   | `share.test.ts`                                |
+| Cite this data (the collection's `sci:citation`, else the release's own line, then OBIS's), Reproduce (DuckDB SQL over the layer's own file for the drawn resolution and period, the selected hexagon by `cell_id`; a split resolution lists its files from `files.parquet`), Data sources and attribution, About this layer and its keys | `share.ts`; `H3Controls.svelte`                                            | `share.test.ts`, `keys.test.ts`                |
+| the `g` key (globe or flat; never while typing, with a modifier, or under a dialog or the tour), listed in Help with the layer's entry ("This layer: sources, citation, keys")                                                                                                                                                            | `share.ts` `h3ShortcutFor`; `Shell.svelte`                                 | `keys.test.ts`, e2e 'help entries'             |
+| seven tour stops after Layers when the layer is an h3 one, a lazy chunk                                                                                                                                                                                                                                                                   | `src/shell/tourH3.ts`, `tour.ts` `tourStepsForLens`                        | `tour.test.ts`                                 |
+| the About modal's section for the layer (its description, the release and its inputs, the MBON credit)                                                                                                                                                                                                                                    | `share.ts` `aboutLines`; `About.svelte`                                    | `share.test.ts`, e2e 'about names the release' |
+| the map PNG stamped with the title sentence, the release as its version (`<prefix>_collection_<title>_v20261012_<date>.png`) and the colour scale in the indicator's format                                                                                                                                                               | `share.ts` `pngStamp`; `Shell.svelte`                                      | `share.test.ts`, e2e 'download png'            |
+| the period strip folds (a per-viewer convenience in localStorage) and resizes between 48 and 240 px                                                                                                                                                                                                                                       | `H3Controls.svelte`                                                        | e2e 'strip fold'                               |
+| the Cell pane's error line links OBIS's checklist of the hexagon's box (the tile pieces that draw it)                                                                                                                                                                                                                                     | `share.ts` `obisChecklistUrl`, `boxOfRings`                                | `share.test.ts`                                |
+| the 13 seas and oceans of obis-hex as camera presets; a sea writes its camera and clears the places, their filter and the hexagon                                                                                                                                                                                                         | `placeFilter.ts` `SEAS`, `seaPatch`                                        | `place.test.ts`, e2e 'a sea clears the place'  |
+| a release's dry run through `?catalog=` (a staging catalog linking a staging collection: every template, the legend, the search asset and `release.json` from it, nothing from the stable one)                                                                                                                                            | the catalog loader, `h3.ts`                                                | `catalog.test.ts`, e2e 'catalog override'      |
+
+## The place filter
+
+The Places tool's "Only inside places" (`filter=places`) on an h3 layer keeps the hexagons of the hash's gazetteer
+places (`#pl=p.<id>.<name>`), by the gazetteer's place x H3 membership, as obis-hex's `f=` did: a place's collection
+(the built-in `places` authorities by prefix, else the feature's own) and its layers.json `h3` url
+(`<slug>/h3/membership.json`, re-based on the bucket host: `gazetteer/resolve.ts` `placeMembership`), then the
+membership files of the drawn resolution: one whole file up to res 5, the files of the place's own parents (its cells
+at `parent_res`) for res 6 and 7 (`placeFilter.ts`). Every row of a file counts: the gazetteer keeps a cell when 1% of
+it is inside the place or it holds 1% of the place. The fill's filter is the layer's own and `h3` in the list (nothing
+drawn while the membership loads, never the unfiltered view); the resolutions read so far are kept, so a zoom across a
+resolution change shows the next as soon as it is read. Past 60,000 hexagons the filter says to zoom out or pin a
+coarser size. The sentence says "in Channel Islands (statistics of its hexagons)", the coverage line counts the
+place's loaded hexagons ("124 of 138 hexagons in the place have ≥ 50 records", CINMS at res 6), and the filter's line
+says these are statistics of the hexagons, not the place's own values, which the Place page has. A drawn or uploaded
+place has no membership and says so. No polygon is read in the browser.
+
+## Still open after the second pass
+
+- **Bytes in the footer** (parity row 80). The tiles are read in MapLibre's worker by the map package's
+  `releaseReader`, which keeps its `stats` (bytes, requests) but has no message to the page, and a worker's
+  resource timings are not the page's. The footer has every other part of obis-hex's line. Needs a map package
+  change (a `h3r-stats` request or a worker message, with the page's own readers added): about 2 hours in
+  `oceanmetrics/platform` plus the atlas wiring, then a re-measure.
+- **Monterey zoom 9 and the Cell pane bars** (rows 30, 63): unchanged, measured above.
+- **The WoRMS subtree** (rows 7, 9, 10, 11): designed below, not built (over a day).
+
+### The WoRMS subtree, in the page (design; estimate 1.5 to 2 days)
+
+What obis-hex's h3t service did for any AphiaID, from the release's own species tables, through the DuckDB-WASM engine
+the atlas already ships (`src/lib/engine/`, lazy, the `parquet` extension self-hosted; no `h3` extension).
+
+1. **Search all of WoRMS** (row 9). The names a search can serve without a service: the species lookup
+   (`species/species.parquet`: `species`, `genus`, `family`, `order`, `class`, `phylum`, `lineage`; 1.97 MB for the
+   name columns, once per page, the Cell pane already reads it) and the heads (`heads.json`). An intermediate rank
+   (infraorder Cetacea, suborder, tribe) has no row: its name and AphiaID come from the WoRMS REST API
+   (`https://www.marinespecies.org/rest/AphiaRecordsByName/<name>?like=true&marine_only=true`, CORS-open, live), which
+   also gives the status and the accepted name of a synonym (row 10's line and its "in WoRMS" link). Two letters,
+   250 ms debounce, 20 hits, accepted first: the rule of obis-hex's `AphiaSearch`, its tests moved.
+2. **The subtree's cells** (rows 7, 11). For AphiaID `a`: the taxa `SELECT aphiaid, name_key, class FROM lookup WHERE
+list_contains(lineage, a)` (the lookup's `lineage` is self first, then the ancestors), then the class partitions
+   those taxa fall in, `species/res=<r>/class=<c>/data_0.parquet` (res 3, 4 and 5 only: the table's resolutions),
+   read whole (Cetacea is Mammalia: 0.28 MB at res 3, 0.76 MB at res 4, 1.94 MB at res 5; Aves 1.5 / 3.4 / 7.6 MB;
+   Teleostei 4.9 / 8.2 / 13.8 MB, so a fish subtree caps at res 4 and res 5 only with the view's box, `cell_id`
+   ranges of the viewport's parents, as `tileRanges` forms them), with `n` summed per (cell, name_key) and per cell
+   the five indicators in SQL: records `sum(n)`, richness `count(DISTINCT name_key)`, Shannon and Simpson over the
+   name shares, ES(50) `sum(1 - exp(lgamma(N-n_i+1) + lgamma(N-50+1) - lgamma(N-n_i-50+1) - lgamma(N+1)))` where
+   `N >= 50`. A decade reads `species_decade/res=<r>/decade=<d>/class=<c>/` (res 3 and 4). Res 1 and 2 roll res 3 up
+   by the parent's `cell_id` bits (the indicators recomputed from the summed (cell, name) counts, never averaged).
+   The cap: res 5 at most, the view's box from res 5 (obis-hex: res 7 with a bbox; the release has no species table
+   past res 5), a class set over 25 MB (the engine's `MATERIALIZE_MAX_BYTES`) refused with a line that says which
+   resolution would serve it.
+3. **Drawing them**. The cells go back to the map package's own renderer: DuckDB writes them sorted by `cell_id`
+   as Parquet (`COPY ... TO 'subtree_<res>.parquet'`), handed to the slot as a `blob:` url per resolution in a
+   one-layer `H3CollectionLike` (the `h3r://` worker reads it by range like any release file; to be proven: Range on a
+   `blob:` url in the worker, else a whole-file read, which these sizes allow). The legend is the loaded hexagons'
+   (`dom=view`, built in this pass: a subtree has no stats.parquet), the coverage line counts the subtree's cells, the
+   sentence's taxon chip reads "Whales and dolphins (infraorder Cetacea, WoRMS)".
+4. **Tests and shots**: a species-table fixture (a class partition trimmed to two res-3 parents) for the SQL (spike
+   2's rows, `_none`, a name shared by two AphiaIDs), the search parser over a recorded WoRMS answer, the cap and its
+   words, an e2e search-and-draw on the fixture; shots `obis_cetacea_res4` and `obis_worms_search`.
+
+Estimate: search and the taxon line 0.5 day; the SQL, its tests and the cap 0.5 day; the blob hand-off to the slot
+and its proof 0.25 to 0.5 day; words, e2e and shots 0.25 day. 1.5 to 2 days.
+
 ## Not built yet
 
-- `taxon=aphia:<id>` for a taxon that is no head (a WoRMS subtree computed in the page over the class-partitioned
-  species table, DuckDB-WASM, spike 2's SQL): the layer says the id is not one of the release's precomputed taxa.
-  "Search all of WoRMS" over the lookup's names comes with it.
-- The place filter (`f=`, H3 membership from the gazetteer, "statistics of the hexagons") and the view as places.
+- `taxon=aphia:<id>` for a taxon that is no head, and "Search all of WoRMS": designed above. The layer says the id is
+  not one of the release's precomputed taxa.
+- The view as places (obis-hex `v=places`, waiting on Ben's word to drop) and a whole collection as the place filter
+  (obis-hex `f=<collection>`: the atlas filters by the places in the list).
 - The decade filter of the Cell pane is the species whose first and last years span the period (their records
   are every year's); the per-decade species table (`species_decade/`, class-partitioned) is not read.
 - An EOV's or a head's species list is every taxon's (the lookup has no EOV column and no ranks above phylum);
   the pane says so.
-- The tour stops, keys (`g`), Help entries, Cite and Reproduce lines of obis-hex.
+- obis-hex's "Register a product" (Help) and its Start here card (row 94, Ben's word).
+
+## Shots of the second pass (`docs/shots/obis_*`, headless Chromium on the Mac mini, the live release)
+
+`obis_sentence_layers_1280_light` (the chips and the EOV list with counts), `obis_sentence_390_light` (phone),
+`obis_domain_view_seabirds_1990s_1280_dark` (the loaded hexagons' range, 7.55 to 19), `obis_cinms_outline_1280_light`
+(CINMS outlined over species richness, res 6 "in view", its credit in the attribution), `obis_cinms_filtered_1280_dark`
+(the filter: 138 res-6 hexagons, "124 of 138 hexagons in the place have ≥ 50 records"), `obis_places_filter_switch_1280_dark`
+(the Places tool's switch on the layer), `obis_res7_wide_note_1280_light` (res 7 pinned over the California Current:
+res 5 drawn, the note), `obis_status_no_records_1280_light` (sea turtles, 1960s, Svalbard), `obis_cite_reproduce_1280_dark`,
+`obis_sources_about_1280_light`, `obis_help_layer_1280_dark`, `obis_about_layer_1280_light`, `obis_tour_h3_layer_1280_dark`
+(stop 5 of 13), `obis_sea_gulf_of_maine_1280_light`, and the downloaded figure `obis_png_seabirds_1990s_1280_dark`.

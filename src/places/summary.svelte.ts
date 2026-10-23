@@ -260,6 +260,10 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
   );
 
   const unavailable = $derived.by<string | null>(() => {
+    // an h3 layer's places are its filter's: the statistics of the hexagons are in the layer's panel, the place's own
+    // values on its Place page
+    if (lens.drawsH3)
+      return "This layer is summarised per hexagon: turn on “Only inside places” for the hexagons of your places; each place's own values are on its Place page.";
     if (mode === "none") return "Pick a layer the map can draw to summarise it over your places.";
     if (mode === "hex" && !centroidsAsset) {
       return "This collection publishes no cell centroids, so it can't be summarised over places yet.";
