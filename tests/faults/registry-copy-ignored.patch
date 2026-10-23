@@ -1,0 +1,14 @@
+diff --git a/src/lib/catalog/registry/rows.ts b/src/lib/catalog/registry/rows.ts
+index c0fee1d..2d5d9de 100644
+--- a/src/lib/catalog/registry/rows.ts
++++ b/src/lib/catalog/registry/rows.ts
+@@ -85,7 +85,8 @@ export function rowFromRecord(
+     redlistCode: text(rec.redlist_code),
+     cogUrl,
+     cogUrl005: cogHref(rec.cog_url_005),
+-    cog3857Url: cogHref(rec.cog_3857_url),
++    // SEEDED FAULT (tests/faults/registry-copy-ignored.patch): the copy column is not read
++    cog3857Url: null,
+     cog3857Url005: cogHref(rec.cog_3857_url_005),
+     bboxNative: bboxOfRow(rec.bbox_native),
+     bbox005: bboxOfRow(rec.bbox_005),

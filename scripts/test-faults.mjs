@@ -1029,6 +1029,30 @@ export const FAULTS = [
       "though it asks for no tile",
     gate: ["npx", "vitest", "run", "tests/raster/drawTally.test.ts", "-t", "hidden layer"],
   },
+  // --- build week 6 step 5: the registry lens draws a row's COG from its 3857 copy ---------------------
+  {
+    id: "registry-copy-ignored",
+    patch: "tests/faults/registry-copy-ignored.patch",
+    describe:
+      "a registry row ignores its cog_3857_url column -- every aquamaps_native taxon stays on titiler though " +
+      "registry v2 carries the copy",
+    gate: ["npx", "vitest", "run", "tests/catalog/registry/copy.test.ts", "-t", "copy columns"],
+  },
+  {
+    id: "registry-copy-pending-drawn",
+    patch: "tests/faults/registry-copy-pending-drawn.patch",
+    describe:
+      "a registry copy whose side-table numbers are still being read is drawn at once -- a legend without its " +
+      "histogram and a source without its zoom range, replaced when the read settles",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/catalog/registry/copy.test.ts",
+      "-t",
+      "while the side table is being read",
+    ],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror
