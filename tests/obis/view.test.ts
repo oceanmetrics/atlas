@@ -167,3 +167,19 @@ describe("the heads (heads.json served_by)", () => {
     expect(r.reason).toContain("AphiaID 2688 is not one of the release's precomputed taxa");
   });
 });
+
+describe("no h3t", () => {
+  it("no h3t request anywhere: the atlas source names no h3t service", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const walk = (d: string): string[] =>
+      readdirSync(d).flatMap((f) => {
+        const p = `${d}/${f}`;
+        return statSync(p).isDirectory() ? walk(p) : [p];
+      });
+    // a service path (`/h3t/cell`), host (`h3t.<domain>`) or base constant, as obis-hex's `aphia/h3t.ts` has them
+    const hits = walk("src").filter((p) =>
+      /\/h3t\/|h3t\.[a-z]|H3T_BASE/i.test(readFileSync(p, "utf8")),
+    );
+    expect(hits).toEqual([]);
+  });
+});
