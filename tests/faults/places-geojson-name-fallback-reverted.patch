@@ -1,0 +1,13 @@
+diff --git a/src/places/zoneDownload.ts b/src/places/zoneDownload.ts
+index 0c18dcb..d7336eb 100644
+--- a/src/places/zoneDownload.ts
++++ b/src/places/zoneDownload.ts
+@@ -52,7 +52,7 @@ export function zoneFeature(
+   polygons: ZonePolygonSource | undefined,
+ ): NullableFeature {
+   const unit = unitForZoneSet(p.set);
+-  const name = zoneDisplayName(zoneStatsFor(boot, unit, p.keys));
++  const name = p.keys.join(", ");
+   const properties: Record<string, unknown> = { kind: "zone", set: p.set, keys: p.keys, name };
+ 
+   const rendered = polygons?.queryZonePolygons(unit, p.keys) ?? [];

@@ -8,12 +8,14 @@ import pkg from "./package.json" with { type: "json" };
 import {
   instanceAssetsDir,
   instanceDir,
+  instanceHtmlExtras,
   instanceId,
   listInstanceAssets,
   loadInstance,
   readMark,
   renderInstanceHtml,
 } from "./scripts/instance.mjs";
+import { instanceDefines, instanceModulesPlugin, pageInputs } from "./scripts/instance-modules.mjs";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 
@@ -40,6 +42,8 @@ const CONTENT_TYPES: Record<string, string> = {
 function instancePlugin(id: string): Plugin {
   const instance = loadInstance(id, ROOT);
   const mark = readMark(instance, ROOT);
+  // the inline early-fetch script (an instance with a release) and the font preloads
+  const extras = instanceHtmlExtras(instance, ROOT);
   const assetsDir = join(ROOT, instanceAssetsDir(id));
   return {
     name: "atlas-instance",
@@ -51,7 +55,7 @@ function instancePlugin(id: string): Plugin {
     },
     transformIndexHtml: {
       order: "pre",
-      handler: (html) => renderInstanceHtml(html, instance, mark),
+      handler: (html) => renderInstanceHtml(html, instance, mark, extras),
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -93,7 +97,9 @@ function resolveAppSha(): string {
 // the same dist/ must run under both https://oceanmetrics.io/atlas/ and any other mount path (a
 // preview deploy, a local `vite preview`), so every asset URL has to be relative (base: "./") and
 // every piece of view state has to live in the query string or the hash, never a client router.
-// Two HTML entries: index.html (the map) and catalog.html (the credits-first catalog page).
+// The HTML entries are the instance's `pages` (index.html, the map; catalog.html, the credits-first
+// catalog page; report.html, the print-first report), each its own input, so one page's static path
+// (and its size budget) never carries another's.
 export default defineConfig(({ mode }) => {
   // `.env` files count too (loadEnv), then the process environment; scripts/*.mjs read the same
   // variable from the process environment only.
@@ -120,14 +126,23 @@ export default defineConfig(({ mode }) => {
     // strings, which then trips size-budget.mjs's forbidden-lazy-chunk scan for those exact substrings
     // (measured: a real build FAILs on it). `define` inlines only this one string literal instead.
     define: {
+      // the instance's build-time flags (`__LENS_SCORES__`, `__RELEASE__`, ...): scripts/instance-modules.mjs
+      ...instanceDefines(loadInstance(id, ROOT)),
       __APP_VERSION__: JSON.stringify(pkg.version),
       __APP_SHA__: JSON.stringify(resolveAppSha()),
+      // the code's own repository (`package.json` `repository`, "owner/name"): the About dialog's
+      // "oceanmetrics/atlas 0.5.0 · instance <id>", the same for every instance built from it
+      __APP_SOURCE__: JSON.stringify(
+        new URL(pkg.repository.url).pathname.replace(/^\/|\.git$/g, ""),
+      ),
     },
     // no client router, so there is no "route" for the dev/preview server to fall back to index.html
     // for. `appType: "mpa"` turns that SPA fallback OFF -- without it, a missing sibling file would
     // 200 with index.html's own markup in dev/preview instead of the real 404 GitHub Pages returns.
     appType: "mpa",
-    plugins: [svelte(), instancePlugin(id)],
+    // `virtual:instance-modules` (scripts/instance-modules.mjs): the lens, tool and capability modules
+    // this instance builds, and `null` for every other one, so the bundler never emits those
+    plugins: [svelte(), instancePlugin(id), instanceModulesPlugin(id, ROOT)],
     optimizeDeps: {
       // @duckdb/duckdb-wasm ships its own worker + wasm and the optimizer breaks it (same story that made
       // CalCOFI Explorer exclude it, atlas-refs/"calcofi explore review.md" §1). Pinned at exactly 1.32.0
@@ -139,12 +154,10 @@ export default defineConfig(({ mode }) => {
       target: "es2022",
       manifest: true, // scripts/size-budget.mjs reads dist/.vite/manifest.json
       rollupOptions: {
-        input: {
-          index: fileURLToPath(new URL("./index.html", import.meta.url)),
-          // the catalog page: its own entry, so the map's static path (and its size budget) never
-          // carries it (`scripts/size-budget.mjs --entry index.html` walks only index's graph).
-          catalog: fileURLToPath(new URL("./catalog.html", import.meta.url)),
-        },
+        // the instance's pages, each its own entry, so the map's static path (and its size budget)
+        // never carries the catalog or report page (`scripts/size-budget.mjs --entry index.html`
+        // walks only index's graph)
+        input: pageInputs(loadInstance(id, ROOT), ROOT),
         output: {
           // atlas-6 step 2: terra-draw/terra-draw-maplibre-gl-adapter are genuinely lazy (reached
           // only via `places/draw.ts`'s dynamic import()) — collectStaticGraph in

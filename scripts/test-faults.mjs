@@ -713,6 +713,223 @@ export const FAULTS = [
   // --- round 4, R4-B (the rail attaches to the panel; four tabs; left by default) ---------------
   // --- round 4, R4-D (the Report tool is one flow, no sub-tabs) ---------------------------------
   // --- round 4 CI-red follow-up (R4-ci): the globe's empty viewport query ----------------------
+  // --- build week 4: moved with the MarineSensitivity modules (MarineSensitivity/atlas 0.10.93) ------
+  // the vitest-gated faults of the Scores lens, the Report, the release registry and the zone places;
+  // each gate runs under the instance that builds the module (vitest.config.ts, one project per
+  // instance). Their e2e-gated twins stay with the MST Playwright specs, not moved this week.
+  {
+    id: "scores-footnote-floor-reverted",
+    patch: "tests/faults/scores-footnote-floor-reverted.patch",
+    describe:
+      "scores.ts#COVERAGE_FOOTNOTE_FLOOR_PCT reverted from 99 to 100 -- a component at 99.9% " +
+      "coverage footnotes again, and a fully-covered place with one component at 99.9% gets a " +
+      "footnote it should not (the original 'footnotes almost every cell' bug, replayed)",
+    gate: ["npx", "vitest", "run", "tests/lib/report/scores.test.ts"],
+  },
+  {
+    id: "popup-no-value-cellid-title",
+    patch: "tests/faults/popup-no-value-cellid-title.patch",
+    describe:
+      "cellPopupText() drops its no-value branch -- a click outside the scored area is back to " +
+      "'Cell {id} ... {long layer title}: 0' instead of 'No scored cell here' (D3, the owner's " +
+      "original Utah-click defect)",
+    gate: ["npx", "vitest", "run", "tests/lens/scores/popup.test.ts"],
+  },
+  {
+    id: "places-missing-tile-treated-as-error",
+    patch: "tests/faults/places-missing-tile-treated-as-error.patch",
+    describe:
+      "isMissingTileStatus() always returns false -- a release-side gap (a tile the release " +
+      "never generated, 403/404) is treated as a real failure again, so a place spanning a " +
+      "missing tile rejects instead of showing a composite from the tiles that DID exist",
+    gate: ["npx", "vitest", "run", "tests/analysis/missingTile.test.ts"],
+  },
+  {
+    id: "places-zonestats-flat-composite",
+    patch: "tests/faults/places-zonestats-flat-composite.patch",
+    describe:
+      "compositeOf() stops reading metrics[compositeMetricKey] -- a Program-Area row falls back " +
+      "to the flat composite/score fields no real release publishes, so it reads 'not published' " +
+      "forever even when the release DID publish a composite",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/places/zoneStats.test.ts",
+      "-t",
+      "REAL v7 boot.json shape",
+    ],
+  },
+  {
+    id: "scores-search-matcher-empty",
+    patch: "tests/faults/scores-search-matcher-empty.patch",
+    describe:
+      "matchZones() reads zoneRows(boot, '') instead of the real unit -- the top-bar Scores " +
+      "search matcher against Program Areas/subregions/ecoregions always finds nothing, for " +
+      "any query (Q1 round, owner-reported: the search box did nothing at all)",
+    gate: ["npx", "vitest", "run", "tests/lens/scores/search.test.ts"],
+  },
+  {
+    id: "programarea-names-fallback-dropped",
+    patch: "tests/faults/programarea-names-fallback-dropped.patch",
+    describe:
+      "paLabel() reverts to its pre-V1 shape -- no PROGRAM_AREA_NAMES fallback, no `unit` " +
+      "scoping -- so a Program Area key with no bundle-published `name` (every real release " +
+      "through v9) falls straight back to the bare acronym, exactly Ben's live complaint",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/places/zoneStats.test.ts",
+      "-t",
+      "PROGRAM_AREA_NAMES fallback",
+    ],
+  },
+  {
+    id: "report-common-name-casing-dropped",
+    patch: "tests/faults/report-common-name-casing-dropped.patch",
+    describe:
+      "formatCommonName() stops sentence-casing and prints a source common name verbatim again -- " +
+      '"great hammerhead shark" reappears lowercase in the Top-20 table (Opus eyes-on desktop-15)',
+    gate: ["npx", "vitest", "run", "tests/lib/report/format.test.ts", "-t", "formatCommonName"],
+  },
+  {
+    id: "scores-search-name-fallback-lost",
+    patch: "tests/faults/scores-search-name-fallback-lost.patch",
+    describe:
+      "matchZones()'s rank call reverts to the bundle's raw z.name, dropping resolvedZoneName()'s " +
+      "PROGRAM_AREA_NAMES fallback -- on a real release (no published zones.programarea[*].name), " +
+      'typing a Program Area\'s full name ("Aleutian", "Gulf of Alaska") finds nothing again, ' +
+      'even though the dropdown\'s own option still reads "Aleutian Arc (ALA)" (V6 round, ' +
+      "owner-reported: found while shooting the Program Area harness state)",
+    gate: ["npx", "vitest", "run", "tests/lens/scores/search.test.ts"],
+  },
+  {
+    id: "zonebbox-rings-dropped",
+    patch: "tests/faults/zonebbox-rings-dropped.patch",
+    describe:
+      "zoneBboxFromFeatures() (zoneStats.ts, item 1: the Scores search field never flew the camera " +
+      "to a chosen Program Area) hardcodes `polygons: Ring[][] = []` instead of calling " +
+      "ringsFromFeatures() -- always returns null, so a zone search pick falls straight through to " +
+      "the (currently unpublished) label_pt fallback again",
+    gate: ["npx", "vitest", "run", "tests/places/zoneStats.test.ts"],
+  },
+  {
+    id: "aquamaps-citation-spacing-not-fixed",
+    patch: "tests/faults/aquamaps-citation-spacing-not-fixed.patch",
+    describe:
+      "fixKnownCitationTypos() (cite.ts, W3 item 6) becomes a no-op -- the AquaMaps dataset's own " +
+      "published citation runs 'UnportedLicense' together again in the report's Sources list",
+    gate: ["npx", "vitest", "run", "tests/release/cite.test.ts"],
+  },
+  {
+    id: "metric-key-label-reverted",
+    patch: "tests/faults/metric-key-label-reverted.patch",
+    describe:
+      "R3-W1 (round-3 plan, R3-B1, fix round): boot.ts's metricKeyLabel() drops its `label` " +
+      "argument entirely (back to a bare 'title-case the key' pass-through) -- a REAL, curated " +
+      "label (e.g. primprod's real manifest.metrics text) is no longer returned verbatim, " +
+      "overwritten by the title-cased key instead; the degenerate-label case ('score' curated as " +
+      "'score') keeps working by coincidence (title-casing the key either way), so this exercises " +
+      "the OTHER half of the same function -- a real label must win over the key, not just an " +
+      "absent one must fall back to it.",
+    gate: ["npx", "vitest", "run", "tests/lens/scores/boot.test.ts", "-t", "metricKeyLabel"],
+  },
+  {
+    id: "docsurl-always-root",
+    patch: "tests/faults/docsurl-always-root.patch",
+    describe:
+      "atlasDocsUrl() reverts to unconditionally returning DOCS_ROOT (P10: Help > Docs used to " +
+      "open the book's Preface instead of the release's Atlas chapter) -- a pure function, so " +
+      "this is a plain vitest gate like rmod-guard-drop above; the real-browser property (the " +
+      "rendered Shell.svelte href) is covered separately by e2e/shell.chrome.spec.ts's " +
+      "'P10: Help > Docs' block, proven red-first by hand against the pre-fix Shell.svelte.",
+    gate: ["npx", "vitest", "run", "tests/release/docsUrl.test.ts"],
+  },
+  {
+    id: "out-outline-ignored",
+    patch: "tests/faults/out-outline-ignored.patch",
+    describe:
+      "zoneUnitsWithOutline() stops reading `out` -- G-25's exact regression (out=none no " +
+      "longer hides the zone outline), replayed against the real function",
+    gate: ["npx", "vitest", "run", "tests/map/style.mst.test.ts", "-t", "G-25"],
+  },
+  {
+    id: "report-map-summary-coloured-reverted",
+    patch: "tests/faults/report-map-summary-coloured-reverted.patch",
+    describe:
+      "describeMap()'s summary sentence reverts to \"coloured\" -- the same report's map caption " +
+      "and desktop map intro spell the word two different ways again (Opus eyes-on)",
+    gate: ["npx", "vitest", "run", "tests/lib/report/model.test.ts", "-t", "spells 'colored'"],
+  },
+  {
+    id: "report-species-counts-category-raw-reverted",
+    patch: "tests/faults/report-species-counts-category-raw-reverted.patch",
+    describe:
+      "describeCounts()'s largest-category clause reverts to the raw sp_cat string -- the report's " +
+      'species summary sentence reads "largest turtle 1" again instead of "largest Turtle 1"',
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/lib/report/model.test.ts",
+      "-t",
+      "names the largest category through categoryLabel",
+    ],
+  },
+  {
+    id: "modeled-spelling-reverted",
+    patch: "tests/faults/modeled-spelling-reverted.patch",
+    describe:
+      "model.ts's SOURCES_TEXT (W3 item 6) reverts 'modeled' back to the UK spelling 'modelled', " +
+      "the one holdout in this app's otherwise-US-spelling report copy",
+    gate: ["npx", "vitest", "run", "tests/lib/report/model.test.ts", "-t", "US spelling"],
+  },
+  {
+    id: "flower-ring-fixed-at-100",
+    patch: "tests/faults/flower-ring-fixed-at-100.patch",
+    describe:
+      "flowerGeometry.ts's computeFlowerReferenceRing() ignores maxScore and always returns the " +
+      "FLOWER_MAX_FALLBACK (100) ring -- a release with a real, smaller published maximum still " +
+      "draws its reference ring at the fixed outer edge",
+    gate: ["npx", "vitest", "run", "tests/ui/flowerGeometry.test.ts", "-t", "a real maxScore"],
+  },
+  {
+    id: "flower-category-label-reverted",
+    patch: "tests/faults/flower-category-label-reverted.patch",
+    describe:
+      "computeFlowerGeometry() (flowerGeometry.ts, item 9: v1's real 'reptile' component rendered " +
+      "as a flower petal literally labelled 'No data') drops the categoryLabel() override and goes " +
+      "back to bare categoryFor(c.key) -- any unrecognized-but-real category is 'No data' again",
+    gate: ["npx", "vitest", "run", "tests/lens/scores/flower.test.ts"],
+  },
+  {
+    id: "places-geojson-name-fallback-reverted",
+    patch: "tests/faults/places-geojson-name-fallback-reverted.patch",
+    describe:
+      "zoneDownload.ts's zoneFeature() reverts to the bare `p.keys.join(\", \")` for a zone place's " +
+      "name (item 2: 'Download places' wrote the bare acronym instead of the release's full 'Name " +
+      "(KEY)' label) instead of zoneDisplayName(zoneStatsFor(...))",
+    gate: ["npx", "vitest", "run", "tests/places/zoneDownload.test.ts"],
+  },
+  // --- build week 4: the instance module table and the release capability ----------------------
+  {
+    id: "instance-dist-unselected-marker-ignored",
+    patch: "tests/faults/instance-dist-unselected-marker-ignored.patch",
+    describe:
+      "check-instance-dist stops looking for the markers of the modules an instance does NOT build -- " +
+      "an oceanmetrics dist carrying the Scores lens (or a marinesensitivity dist carrying the " +
+      "Collections lens) would pass the CI build check",
+    gate: ["npx", "vitest", "run", "tests/instance-modules.test.ts"],
+  },
+  {
+    id: "early-fetch-not-written",
+    patch: "tests/faults/early-fetch-not-written.patch",
+    describe:
+      "renderInstanceHtml writes nothing at <!--instance:early-fetch--> -- an instance with a release " +
+      "registry ships index.html and report.html with no access gate, and the app never resolves a release",
+    gate: ["npx", "vitest", "run", "tests/release/inline-early-fetch.test.ts"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror

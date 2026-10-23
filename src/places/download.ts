@@ -6,13 +6,13 @@
 // zone layers are gone, so it exports its keys with `geometry: null` and says so; a `gaz` place
 // exports its fetched geometry when the session has it.
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import type { Place } from "../lib/geo/placeCodec";
+import type { Place, ZonePlace } from "../lib/geo/placeCodec";
 import type { AreaGeometry } from "../lib/geo/types";
 
 /** RFC 7946 permits `"geometry": null` (a place with no resolvable geometry at all); the
  * `@types/geojson` `Feature` type does not model that directly, so this local widening is the
  * narrowest fix rather than an `any`. */
-type NullableFeature = Feature<Geometry | null>;
+export type NullableFeature = Feature<Geometry | null>;
 
 /**
  * One Feature per place -- never a thrown error, never a dropped place.
@@ -22,6 +22,9 @@ export function placesToGeoJson(
   /** a gazetteer (`p.`) place's resolved geometry, when the session has fetched it; `null`/absent
    * leaves `geometry: null` with the place_id, which names it fully for anyone with the gazetteer. */
   gazGeometry?: (id: string) => AreaGeometry | null | undefined,
+  /** a zone place's feature when the caller can resolve it (a release's zone units: its full name
+   * and its real polygon, `places/zoneDownload.ts`); absent, the keys with `geometry: null`. */
+  zoneFeature?: (p: ZonePlace) => NullableFeature,
 ): FeatureCollection<Geometry | null> {
   const features: NullableFeature[] = places.map((p) => {
     if (p.kind === "gaz") {
@@ -50,6 +53,7 @@ export function placesToGeoJson(
         },
       };
     }
+    if (zoneFeature) return zoneFeature(p);
     return {
       type: "Feature",
       geometry: null,

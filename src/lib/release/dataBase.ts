@@ -9,15 +9,16 @@
 // depend on where it is mounted. Release keys are absolute, always, and they are built here.
 //
 // `session.json` remains the only same-origin fetch in the app (plan D6, `session.ts`).
+import { RELEASE_REGISTRY_BASE } from "../catalog/base";
 
 /**
- * The public registry/data prefix. `latest.txt`, `versions.json` and every published release live
+ * The public registry/data prefix (`catalog/base.ts#RELEASE_REGISTRY_BASE`, the instance's
+ * `release.registry`). `latest.txt`, `versions.json` and every published release live
  * directly under it (`{base}latest.txt`, `{base}{ver}/manifest.json`). Path-style S3 URL: the
  * bucket answers CORS for `Origin`/`Range` this way, and the bare `…/{ver}/…` path without the
  * `marine-atlas/` prefix answers 403 (plan "Ground truth", Addendum 2026-09-21).
  */
-export const PUBLIC_DATA_BASE =
-  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
+export const PUBLIC_DATA_BASE = RELEASE_REGISTRY_BASE;
 
 /**
  * A data origin offered by a signed-in `session.json` (plan D6's committed follow-up: a restricted

@@ -15,8 +15,13 @@
   import Icon from "../lib/ui/Icon.svelte";
   import { nextRovingIndex } from "../lib/ui/roving";
   import { uid } from "../lib/ui/uid";
+  import type { AboutRelease } from "./aboutRelease";
 
   interface Props {
+    /** an instance with a release registry: the resolved release (About's "Release" row and the
+     * restricted note); `null` for an instance without one. Shell.svelte computes it from
+     * the early-fetch results. */
+    release?: AboutRelease | null;
     appVersion: string;
     feedbackHref: string;
     onFeedbackClick: (e: MouseEvent) => void;
@@ -49,6 +54,7 @@
   }
 
   let {
+    release = null,
     appVersion,
     feedbackHref,
     onFeedbackClick,
@@ -284,6 +290,7 @@
     {appVersion}
     {helpDocsHref}
     {changelogHref}
+    {release}
   />
 {/if}
 

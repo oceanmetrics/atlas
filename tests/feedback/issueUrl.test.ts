@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REPO } from "../../src/lib/brand/instance";
 import {
   feedbackIssueUrl,
   MAX_ISSUE_URL_LENGTH,
@@ -69,7 +70,7 @@ describe("pageUrlFromLocation", () => {
 describe("feedbackIssueUrl: base shape", () => {
   it("targets the atlas repo's new-issue endpoint with the beta-feedback label", () => {
     const url = feedbackIssueUrl(BASE_CTX);
-    expect(url.startsWith("https://github.com/oceanmetrics/atlas/issues/new?")).toBe(true);
+    expect(url.startsWith(`https://github.com/${REPO}/issues/new?`)).toBe(true);
     const params = new URL(url).searchParams;
     expect(params.get("labels")).toBe("beta-feedback");
   });

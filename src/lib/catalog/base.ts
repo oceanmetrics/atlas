@@ -26,6 +26,18 @@ import { INSTANCE } from "../brand/instance";
 /** the instance's default catalog base (`catalog.base` in instances/<id>/instance.json). */
 export const CATALOG_BASE = INSTANCE.catalog.base;
 
+/** the MarineSensitivity release registry the Species lens reads its pinned release from on an
+ * instance without a registry of its own (path-style S3: the bare `…/{ver}/…` path without the
+ * `marine-atlas/` prefix answers 403). */
+const MST_RELEASE_REGISTRY =
+  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/";
+
+/** the release registry base (`latest.txt`, `versions.json`, `{ver}/...`): the instance's
+ * `release.registry`, else the MarineSensitivity registry the pinned Species release lives in
+ * (`release/mst.ts`). `release/dataBase.ts` forms every release URL from it; the inline early-fetch
+ * script is written with the same value (scripts/instance.mjs). */
+export const RELEASE_REGISTRY_BASE = INSTANCE.release?.registry ?? MST_RELEASE_REGISTRY;
+
 /**
  * Validate a candidate catalog base. Strict, because the value arrives as data (a query string):
  * a non-empty string; parseable as an absolute URL; `https:` only (`allowLoopbackHttp` additionally

@@ -29,7 +29,7 @@
  * text    --text-link       : --surface-panel-basis, --surface-raised
  * text    --text-danger     : --surface-panel-basis, --surface-raised
  * text    --text-on-accent  : --fill-accent
- * text    --text-on-cat     : --cat-bird, --cat-coral, --cat-fish, --cat-invertebrate, --cat-mammal, --cat-other, --cat-primprod, --cat-turtle
+ * text    --text-on-cat     : --cat-bird, --cat-coral, --cat-fish, --cat-invertebrate, --cat-mammal, --cat-mangrove, --cat-other, --cat-primprod, --cat-turtle
  * nontext --border-accent   : --surface-panel-basis, --surface-raised, --surface-map
  * nontext --border-control  : --surface-panel-basis, --surface-raised, --surface-map
  * nontext --focus-ring      : --surface-panel-basis, --surface-raised, --surface-map
@@ -41,6 +41,7 @@
  * nontext --cat-fish        : --surface-panel-basis
  * nontext --cat-invertebrate: --surface-panel-basis
  * nontext --cat-mammal      : --surface-panel-basis
+ * nontext --cat-mangrove    : --surface-panel-basis
  * nontext --cat-other       : --surface-panel-basis
  * nontext --cat-primprod    : --surface-panel-basis
  * nontext --cat-turtle      : --surface-panel-basis
@@ -220,6 +221,9 @@
   --cat-fish: #9f81e4;
   --cat-invertebrate: #e79ec4;
   --cat-mammal: #e6c700;
+  /* red mangrove: the shared data palette's ninth hue (the same value as every instance's: --cat-*
+     are data colours, never brand; the AquaMaps EOV flower reads it) */
+  --cat-mangrove: #ee6f6f;
   --cat-other: #b6bfd0;
   --cat-primprod: #4cc9a0;
   --cat-turtle: #a1c76b;
@@ -302,6 +306,7 @@
   --cat-fish: #4822a0;
   --cat-invertebrate: #a3517e;
   --cat-mammal: #82773d;
+  --cat-mangrove: #9c1f2e;
   --cat-other: #5b6472;
   --cat-primprod: #00765a;
   --cat-turtle: #495625;

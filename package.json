@@ -4,6 +4,10 @@
   "version": "0.5.0",
   "description": "OceanMetrics Atlas: catalog-driven maps of species distribution model products, with places from the Ocean Metrics gazetteer.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oceanmetrics/atlas"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -40,13 +44,17 @@
     "@oceanmetrics/map": "^0.2.2",
     "@oceanmetrics/places": "^0.5.2",
     "@tmcw/togeojson": "7.1.2",
+    "d3-hierarchy": "3.1.2",
+    "docx": "^9.7.1",
     "driver.js": "^1.8.0",
+    "fflate": "^0.8.3",
     "flatgeobuf": "4.4.0",
     "html-to-image": "^1.11.13",
     "hyparquet": "1.31.3",
     "hyparquet-compressors": "1.1.2",
     "maplibre-gl": "^6.13.0",
     "pmtiles": "^4.5.0",
+    "qrcode-generator": "^1.5.2",
     "shpjs": "6.2.0",
     "terra-draw": "1.35.0",
     "terra-draw-maplibre-gl-adapter": "1.4.1"
@@ -64,7 +72,11 @@
     "@oceanmetrics/map": "^0.2.2 (build week 2 step 3; 0.2.1 carries the consumer check's fixes, platform spikes/map-consumer/results/checklist.md; 0.2.2 puts the band in the cog url, `cogHref`: `?b=<atlas:bidx>`, which the eight EOV Items, bands of one file, need: tests/raster/cog.test.ts). The map stack: setupMapLibre (the worker url, pmtiles:// and the lazy cog:// protocol, src/lib/map/map.ts) and the browser COG provider (cogSlot, pickCogAssets, legendFromStac, pointValue; src/lib/raster/cog.ts, cogPoint.ts). maplibre-gl (^6.13) and pmtiles (^4) are its peer dependencies, so the app bundles ONE copy of each (`npm ls pmtiles maplibre-gl`); geotiff and @geomatico/maplibre-cog-protocol are its own dependencies (geotiff's core in the static path, the protocol a lazy chunk on the first cog:// request).",
     "pmtiles": "^4.5.0 (atlas-map). The pmtiles:// protocol src/lib/map/map.ts registers with maplibre's addProtocol, and the version spike S2's harness measured alongside maplibre-gl 6.10 (spikes/2/package.json). Caret, not exact: it is not one of S2's verdict pins -- S2 pinned only maplibre-gl -- and its own failure mode (a range read that returns the wrong bytes) is caught loudly by e2e/map.spec.ts's rendered-vector-feature assertion against a real archive, not silently. It is part of the 288 KB maplibre+pmtiles critical-path measurement D13's 450 KB budget was set from, so a bump means re-reading `npm run size-budget`.",
     "terra-draw": "EXACT 1.35.0 (atlas-6 step 2). No dedicated spike (not one of S1/S2/S4, so tests/pins.test.ts's spike-verdict gate does not cover this pair) -- pinned anyway for the same reason every lazy dependency here is: a version bump changing mode behaviour must be a reviewed diff, not a silent `npm install`. Reached only through `src/places/draw.ts`'s dynamic `import()`; `tests/places/lazyImports.test.ts` is this pair's own version of `tests/geo/upload/lazyImports.test.ts`.",
-    "terra-draw-maplibre-gl-adapter": "EXACT 1.4.1, matching terra-draw's own pin above (peerDependencies: `terra-draw@^1.0.0`, `maplibre-gl@>=4` -- both satisfied by this repo's pins). Its own version numbering lags terra-draw's (1.x vs 1.35.x): they are published from separate packages, not a lockstep monorepo, so pin both explicitly rather than assume a caret keeps them compatible."
+    "terra-draw-maplibre-gl-adapter": "EXACT 1.4.1, matching terra-draw's own pin above (peerDependencies: `terra-draw@^1.0.0`, `maplibre-gl@>=4` -- both satisfied by this repo's pins). Its own version numbering lags terra-draw's (1.x vs 1.35.x): they are published from separate packages, not a lockstep monorepo, so pin both explicitly rather than assume a caret keeps them compatible.",
+    "d3-hierarchy": "atlas-3 step 2b: EXACT 3.1.2 (not from a dedicated spike -- pinned for the same reason as the others: a dependency that must stay LAZY should not silently change behavior on `npm install` from an unreviewed bump). Treemap.svelte reaches it ONLY through a dynamic import() -- it must never enter index.html's static graph (scripts/size-budget-core.mjs's FORBIDDEN_LAZY_MARKERS already lists \"treemap\"; tests/fixtures/size-budget-static-treemap/ is the committed red fixture proving a static import of it fails the checker). Only `hierarchy()`/`.sum()` are used, to build the tree and roll up values -- the actual squarified layout math is this repo's own pure function (src/lib/ui/treemapLayout.ts), unit-tested independently of d3. (Moved with the Report and the treemap from MarineSensitivity/atlas 0.10.93, build week 4; reached only by the marinesensitivity build, whose instance selects the Report tool and the Scores lens.)",
+    "qrcode-generator": "^1.5.2 (atlas-7 step 2/3). The report header's permalink QR -- reached ONLY through `src/report/qr.ts`'s dynamic `import()`, never a static import, so it never enters `report.html`'s own critical-path budget. No dedicated spike; caret is fine because the module's whole surface used here is `qrcode(typeNumber, errorCorrectionLevel)` + `.make()`/`.createSvgTag()`, a stable API this package has not broken across 1.x. (Moved with the Report and the treemap from MarineSensitivity/atlas 0.10.93, build week 4; reached only by the marinesensitivity build, whose instance selects the Report tool and the Scores lens.)",
+    "fflate": "^0.8.3 (atlas-7 step 3). The data-package ZIP exporter -- reached ONLY through `src/report/exportZip.ts`'s dynamic `import()`. Chosen over JSZip for size (this package's whole `zip`/`strToU8` surface is a few KB gzip); caret is fine, no format-sensitive behaviour pinned. (Moved with the Report and the treemap from MarineSensitivity/atlas 0.10.93, build week 4; reached only by the marinesensitivity build, whose instance selects the Report tool and the Scores lens.)",
+    "docx": "^9.7.1 (atlas-7 step 3, master plan D9: Word yes, no reference template so coded styles). The `.docx` exporter -- reached ONLY through `src/report/exportDocx.ts`'s dynamic `import()`. Caret: this repo only uses the documented `Document`/`Paragraph`/`Table`/`ImageRun` builder API, not template-fidelity behaviour a patch bump would change. (Moved with the Report and the treemap from MarineSensitivity/atlas 0.10.93, build week 4; reached only by the marinesensitivity build, whose instance selects the Report tool and the Scores lens.)"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -74,6 +86,7 @@
     "@playwright/test": "^1.63.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/node": "^24.13.3",
     "@xmldom/xmldom": "^0.9.12",
     "eslint": "^10.11.0",

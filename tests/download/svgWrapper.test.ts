@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BRAND_NAME } from "../../src/lib/brand/instance";
 import { buildMapSvg, escapeXml } from "../../src/lib/download/svgWrapper";
 
 const BASE = {
@@ -99,7 +100,7 @@ describe("buildMapSvg", () => {
     expect(texts[0][2]).toBe("Sensitivity · score");
     expect(texts[1][2]).toBe("A longer explanation of the metric");
     expect(Number(texts[1][1])).toBeLessThan(Number(texts[0][1])); // description is the SMALLER font
-    expect(texts[2][2]).toContain("OceanMetrics Atlas");
+    expect(texts[2][2]).toContain(`${BRAND_NAME}`);
   });
 
   it("draws only 2 <text> lines when there is no description", () => {

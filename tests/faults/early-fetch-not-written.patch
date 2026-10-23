@@ -1,0 +1,13 @@
+diff --git a/scripts/instance.mjs b/scripts/instance.mjs
+index 333f34c..b96fda6 100644
+--- a/scripts/instance.mjs
++++ b/scripts/instance.mjs
+@@ -328,7 +328,7 @@ export function renderInstanceHtml(html, instance, mark, extras = {}) {
+       `style="display: inline-block; vertical-align: -0.15em; flex: none"></svg>`,
+     wordmark: wordmarkHtml(instance.wordmark),
+     // an instance with a release: its inline early-fetch script, and the version chip's skeleton twin
+-    "early-fetch": extras.earlyFetch ?? "",
++    "early-fetch": "",
+     "version-chip": instance.release
+       ? `<button type="button" class="chip" id="sk-version-chip" data-tour="version-chip" ` +
+         `data-control="version-chip" aria-hidden="true" tabindex="-1"></button>`

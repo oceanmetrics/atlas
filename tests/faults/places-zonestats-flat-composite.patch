@@ -1,0 +1,13 @@
+diff --git a/src/places/zoneStats.ts b/src/places/zoneStats.ts
+index f3b2ae5..7ade6d2 100644
+--- a/src/places/zoneStats.ts
++++ b/src/places/zoneStats.ts
+@@ -70,7 +70,7 @@ function compositeMetricKey(boot: unknown): string | null {
+ function compositeOf(boot: unknown, raw: BootZoneRow): number | null {
+   const key = compositeMetricKey(boot);
+   const metrics = raw.metrics;
+-  if (key && metrics && typeof metrics === "object") {
++  if (false && key && metrics && typeof metrics === "object") {
+     const v = num((metrics as Record<string, unknown>)[key]);
+     if (v !== null) return v;
+   }

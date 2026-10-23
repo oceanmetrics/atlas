@@ -19,6 +19,9 @@
     <meta property="og:url" content="%instance.siteUrl%" />
     <!--instance:og-image-->
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- the instance's web fonts (instances/<id>/fonts/*.woff2), preloaded so the first frame paints in
+         them; nothing for an instance on system fonts -->
+    <!--instance:font-preload-->
 
     <!--
       critical CSS, inlined so the shell paints before any JavaScript bundle loads or parses (plan
@@ -89,6 +92,14 @@
     </script>
 
     <!--
+      an instance with a release registry (instance.json `release`): the inline early-fetch script,
+      written here by the build from src/lib/release/earlyFetch.inline.js (scripts/instance.mjs). It
+      resolves the release this host may render (the access gate, fail closed) and starts its files
+      before the bundle parses; the app reads the results off window.__early. Nothing otherwise.
+    -->
+    <!--instance:early-fetch-->
+
+    <!--
       fix list #14 (atlas-3 handover item (b), still open until now): the only fallback for
       "JavaScript is on and the bundle 404'd or failed to parse" used to be a <noscript> -- which
       by definition never runs when script IS enabled and just broken. With every asset blocked,
@@ -144,6 +155,9 @@
           </h1>
         </span>
 
+        <!-- an instance with a release: the version chip's empty skeleton twin -->
+        <!--instance:version-chip-->
+
         <div
           class="sk-seg"
           role="group"
@@ -152,8 +166,8 @@
           data-control="lens-switch"
           aria-hidden="true"
         >
-          <span class="is-pressed">Collections</span>
-          <span>Species</span>
+          <!-- the instance's lenses, the default one pressed (src/shell/lenses.ts labels) -->
+          <!--instance:lens-switch-->
         </div>
 
         <div

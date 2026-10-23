@@ -16,10 +16,13 @@
   import LayerBarView from "./LayerBarView.svelte";
   import SpeciesCardView from "./SpeciesCardView.svelte";
   import LibLayersPanel, {
+    type LayersOutlineChoice,
     type LayersProjectionControl,
     type LayersRowState,
   } from "../../lib/ui/LayersPanel.svelte";
-  import type { LayerStackEntry, Representation, Sel } from "../../lib/state/types";
+  import type { LayerStackEntry, Outline, Representation, Sel } from "../../lib/state/types";
+  // the Outlines choice exists only where the release draws zone units (an instance with `release`)
+  import { RELEASE_KEYS } from "../../lib/state/types";
   import { isPlacesSelectionEmpty } from "../../lib/state/types";
   import { placesFromHash } from "../../places/model";
   import type { SelStore } from "../../lib/state/sel.svelte";
@@ -70,6 +73,19 @@
     part = "layers",
     overlays,
   }: Props = $props();
+
+  // Orchestrator hand-off (Opus UI review of main, 2026-09-25): "in the Species lens HIDE the
+  // 'Raster cells | Program areas' toggle instead of showing it disabled with a reason." Species
+  // surfaces are rasters only -- there is no zone-fill CHOICE to make in this lens at all (unlike
+  // the scores lens' zone choropleth), so the toggle is simply omitted (`LibLayersPanel`'s own
+  // `unitToggle` prop is optional, and its whole block does not render without it) rather than
+  // shown disabled with a reason nobody asked for.
+  // fix round D7: `value` is the wider `Outline` type now -- see ScoresLens.svelte's own comment
+  // on `onOutlineChange` (same shape here, species-lens copy).
+  function onOutlineChange(value: Outline) {
+    selStore.set({ out: value });
+  }
+  const outline = $derived<LayersOutlineChoice>({ value: sel.out, onChange: onOutlineChange });
 
   function onProjChange(checked: boolean) {
     const proj = checked ? "globe" : "mercator";
@@ -129,6 +145,7 @@
   <LibLayersPanel
     stack={layerStack}
     onChange={onLayerStackChange}
+    outline={RELEASE_KEYS ? outline : undefined}
     {projection}
     {rowState}
     {expandedRow}

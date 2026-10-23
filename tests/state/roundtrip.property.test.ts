@@ -76,6 +76,13 @@ function randomSel(rng: Rng): Sel {
   const obis = rng.bool(0.3);
 
   return {
+    // an instance without the Scores lens or a release registry keeps these at their defaults
+    // (roundtrip.property.mst.test.ts generates them)
+    ver: undefined,
+    lyr: undefined,
+    unit: DEFAULT_SEL.unit,
+    area: DEFAULT_SEL.area,
+    out: DEFAULT_SEL.out,
     lens,
     pal: rng.pick(PALETTES),
     map: rng.maybe(

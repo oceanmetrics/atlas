@@ -3,7 +3,7 @@
 // is `teal on paper is a FAIL` below, so the gate can never quietly stop being able to fail.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { instanceTokensCss } from "../scripts/instance.mjs";
+import { instanceId, instanceTokensCss } from "../scripts/instance.mjs";
 import {
   checkContrast,
   contrastRatio,
@@ -12,6 +12,35 @@ import {
 } from "../scripts/contrast-core.mjs";
 
 const TOKENS = readFileSync(instanceTokensCss(), "utf8");
+
+// each instance's own seeded fault (its accent as text on paper) and palette facts
+const PALETTE = (
+  {
+    oceanmetrics: {
+      seed: ["--text-accent: var(--om-teal-deep);", "--text-accent: var(--om-teal);"],
+      ratio: /\[paper\] --text-accent .* 2\.10:1 < 4\.5:1 \(text\)/,
+      exemptToken: "--om-teal",
+      exemptValue: "#2fc7b8",
+      navy: "var(--om-navy)",
+    },
+    marinesensitivity: {
+      seed: ["--text-accent: var(--mma-steel);", "--text-accent: var(--mma-gold);"],
+      ratio: /\[paper\] --text-accent .* 1\.71:1 < 4\.5:1 \(text\)/,
+      exemptToken: "--mma-gold",
+      exemptValue: "#e8c24a",
+      navy: "var(--mma-navy)",
+    },
+  } as Record<
+    string,
+    {
+      seed: [string, string];
+      ratio: RegExp;
+      exemptToken: string;
+      exemptValue: string;
+      navy: string;
+    }
+  >
+)[instanceId()];
 
 /** a minimal two-theme tokens file with one pair, used to exercise one rule at a time */
 function fixture({
@@ -53,14 +82,11 @@ describe("the contrast contract", () => {
     expect(new Set(results.map((r) => r.theme))).toEqual(new Set(["navy", "paper"]));
   });
 
-  it("teal on paper is a FAIL (the seeded fault of `node scripts/contrast.mjs`)", () => {
-    const seeded = TOKENS.replace(
-      "--text-accent: var(--om-teal-deep);",
-      "--text-accent: var(--om-teal);",
-    );
+  it("the accent as text on paper is a FAIL (the seeded fault of `node scripts/contrast.mjs`)", () => {
+    const seeded = TOKENS.replace(PALETTE.seed[0], PALETTE.seed[1]);
     expect(seeded).not.toEqual(TOKENS); // the seed actually applied
     const { failures } = checkContrast(seeded);
-    expect(failures.join("\n")).toMatch(/\[paper\] --text-accent .* 2\.10:1 < 4\.5:1 \(text\)/);
+    expect(failures.join("\n")).toMatch(PALETTE.ratio);
   });
 
   it("holds text to 4.5:1 and non-text to 3:1 — the same color can pass one and fail the other", () => {
@@ -145,7 +171,7 @@ describe("the manifest is the contract (it is read from tokens.css, not from the
     ]) {
       expect(subjects).toContain(`--cat-${cat}`);
     }
-    expect(exempt.has("--om-teal")).toBe(true);
+    expect(exempt.has(PALETTE.exemptToken)).toBe(true);
   });
 
   it("throws when tokens.css has no manifest at all", () => {
@@ -154,8 +180,8 @@ describe("the manifest is the contract (it is read from tokens.css, not from the
 
   it("reads the navy block as the default :root and paper as the override", () => {
     const { base, navy, paper } = parseThemes(TOKENS);
-    expect(base.get("--om-teal")).toBe("#2fc7b8");
+    expect(base.get(PALETTE.exemptToken)).toBe(PALETTE.exemptValue);
     expect(navy.get("--text-primary")).toBe("#ffffff");
-    expect(paper.get("--text-primary")).toBe("var(--om-navy)");
+    expect(paper.get("--text-primary")).toBe(PALETTE.navy);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BRAND_NAME } from "../../src/lib/brand/instance";
 import {
   canonicalShareUrl,
   fitsWidth,
@@ -95,13 +96,13 @@ describe("footerLines", () => {
     });
     expect(lines).toEqual([
       "Richness · species",
-      "OceanMetrics Atlas · v9 · https://oceanmetrics.io/atlas/?lens=collection",
+      `${BRAND_NAME} · v9 · https://oceanmetrics.io/atlas/?lens=collection`,
     ]);
   });
 
   it("omits the release segment entirely when there is no release (a collection)", () => {
     const lines = footerLines({ title: "Richness", ver: null, url: "https://x/atlas/" });
-    expect(lines).toEqual(["Richness", "OceanMetrics Atlas · https://x/atlas/"]);
+    expect(lines).toEqual(["Richness", `${BRAND_NAME} · https://x/atlas/`]);
   });
 
   it("omits the unit separator when unit is absent", () => {
@@ -123,7 +124,7 @@ describe("footerLines", () => {
     expect(lines[1]).toBe(
       "Combined score of extinction risk per species category and primary productivity",
     );
-    expect(lines[2]).toBe("OceanMetrics Atlas · v9 · https://x/atlas/");
+    expect(lines[2]).toBe(`${BRAND_NAME} · v9 · https://x/atlas/`);
   });
 
   it("omits the description line when null/undefined (2 lines)", () => {

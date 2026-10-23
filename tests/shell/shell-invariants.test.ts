@@ -5,6 +5,14 @@
 // proxy, and e2e/shell.url-state.spec.ts covers the real-browser version of the same rule).
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  instanceHtmlExtras,
+  loadInstance,
+  readMark,
+  renderInstanceHtml,
+} from "../../scripts/instance.mjs";
+
+const INSTANCE_JSON = loadInstance();
 
 const INDEX_HTML = readFileSync("index.html", "utf8");
 const MAIN_TS = readFileSync("src/main.ts", "utf8");
@@ -34,10 +42,12 @@ describe('the shell never calls history.pushState -- only src/lib/state\'s repla
   });
 });
 
-describe("src/shell/* reaches the legacy MST release only through the one pinned seam", () => {
-  // the Species lens still reads one fixed MarineSensitivity release; Shell.svelte gets its version
-  // and boot bundle ONLY through src/lib/release/mst.ts, never by importing the other release
-  // modules (dataBase/boot) itself, and never from window.__early (that registry is gone).
+describe("src/shell/* reaches a release through the pinned seam or the early-fetch results only", () => {
+  // without a release registry the Species lens reads one fixed MarineSensitivity release:
+  // Shell.svelte gets its version and boot bundle ONLY through src/lib/release/mst.ts, never by
+  // importing the other release modules (dataBase/boot) itself. An instance WITH a registry
+  // (instance.json `release`) has the inline early-fetch script resolve the release before any bundle
+  // parses; the shell only READS its results off window.__early, after the `__RELEASE__` guard.
   it("Shell.svelte imports from src/lib/release/mst only", () => {
     const imports = [...SHELL_SVELTE.matchAll(/from\s+["']\.\.\/lib\/release\/([^"']+)["']/g)].map(
       (m) => m[1],
@@ -46,8 +56,16 @@ describe("src/shell/* reaches the legacy MST release only through the one pinned
     for (const i of imports) expect(i).toBe("mst");
   });
 
-  it("nothing in src/shell reads window.__early", () => {
-    expect(SHELL_SVELTE).not.toMatch(/__early/);
+  it("Shell.svelte reads window.__early only past the release guard; TopBarActions never", () => {
+    const reads = [
+      ...SHELL_SVELTE.matchAll(/\(window as unknown as \{ __early\?: Early \}\)\.__early/g),
+    ];
+    expect(reads).toHaveLength(1);
+    const before = SHELL_SVELTE.slice(0, reads[0].index);
+    // the closest guard above the one read returns early for an instance without a release
+    expect(before.slice(before.lastIndexOf("if (!__RELEASE__)"))).toMatch(
+      /^if \(!__RELEASE__\) \{[\s\S]*?return;\s*\}\s*const early = $/,
+    );
     expect(TOP_BAR_ACTIONS_SVELTE).not.toMatch(/__early/);
   });
 
@@ -72,23 +90,34 @@ function dataAttrValues(source: string, attr: string): string[] {
   return [...source.matchAll(new RegExp(`${attr}="([^"]+)"`, "g"))].map((m) => m[1]);
 }
 
+// the skeleton as the build writes it for this instance (scripts/instance.mjs fills the instance
+// blocks: an instance with a release gets the version chip), and the hydrated controls this instance
+// renders (the chip is the shell's one release-only control)
+const RENDERED_INDEX = renderInstanceHtml(
+  INDEX_HTML,
+  INSTANCE_JSON,
+  readMark(INSTANCE_JSON),
+  instanceHtmlExtras(INSTANCE_JSON),
+);
+const RELEASE_ONLY = new Set(INSTANCE_JSON.release ? [] : ["version-chip"]);
+const hydratedValues = (attr: string) =>
+  new Set(
+    [...dataAttrValues(SHELL_SVELTE, attr), ...dataAttrValues(TOP_BAR_ACTIONS_SVELTE, attr)].filter(
+      (v) => !RELEASE_ONLY.has(v),
+    ),
+  );
+
 describe("the skeleton and the hydrated shell agree on every data-control/data-tour anchor", () => {
   it("every data-control in the skeleton also appears in Shell.svelte + TopBarActions.svelte, and vice versa", () => {
-    const skeleton = new Set(dataAttrValues(INDEX_HTML, "data-control"));
-    const hydrated = new Set([
-      ...dataAttrValues(SHELL_SVELTE, "data-control"),
-      ...dataAttrValues(TOP_BAR_ACTIONS_SVELTE, "data-control"),
-    ]);
+    const skeleton = new Set(dataAttrValues(RENDERED_INDEX, "data-control"));
+    const hydrated = hydratedValues("data-control");
     expect([...skeleton].sort()).toEqual([...hydrated].sort());
     expect(skeleton.size).toBeGreaterThan(0);
   });
 
   it("every data-tour anchor in the skeleton also appears in Shell.svelte + TopBarActions.svelte, and vice versa", () => {
-    const skeleton = new Set(dataAttrValues(INDEX_HTML, "data-tour"));
-    const hydrated = new Set([
-      ...dataAttrValues(SHELL_SVELTE, "data-tour"),
-      ...dataAttrValues(TOP_BAR_ACTIONS_SVELTE, "data-tour"),
-    ]);
+    const skeleton = new Set(dataAttrValues(RENDERED_INDEX, "data-tour"));
+    const hydrated = hydratedValues("data-tour");
     expect([...skeleton].sort()).toEqual([...hydrated].sort());
     expect(skeleton.size).toBeGreaterThan(0);
   });

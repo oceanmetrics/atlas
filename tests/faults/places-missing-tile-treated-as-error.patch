@@ -1,0 +1,13 @@
+diff --git a/src/lib/analysis/sources.ts b/src/lib/analysis/sources.ts
+index f17d22f..11451bf 100644
+--- a/src/lib/analysis/sources.ts
++++ b/src/lib/analysis/sources.ts
+@@ -30,7 +30,7 @@ import type { Engine } from "../engine/engine";
+ export function isMissingTileStatus(err: unknown): boolean {
+   const msg = err instanceof Error ? err.message : String(err);
+   const m = /HTTP (\d+)\s*$/.exec(msg);
+-  return m !== null && (m[1] === "403" || m[1] === "404");
++  return false;
+ }
+ 
+ /** the `boot.tables` entry shape atlas-1 publishes. */

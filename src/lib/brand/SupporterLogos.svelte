@@ -5,15 +5,19 @@
   let { testid = "supporter-logos" }: { testid?: string } = $props();
 </script>
 
-<p class="support" data-testid={testid}>
-  <span class="label">Supported by</span>
-  {#each SUPPORTERS as s (s.label)}
-    <a class="supporter" href={s.href} target="_blank" rel="noopener" title={s.name}>
-      <img class="logo light" src={s.logo} alt={s.name} loading="lazy" />
-      {#if s.logoDark}<img class="logo dark" src={s.logoDark} alt="" loading="lazy" />{/if}
-    </a>
-  {/each}
-</p>
+<!-- an instance with no supporters (the MarineSensitivity Atlas credits its agency with the seal) shows
+     nothing, never a bare "Supported by" -->
+{#if SUPPORTERS.length}
+  <p class="support" data-testid={testid}>
+    <span class="label">Supported by</span>
+    {#each SUPPORTERS as s (s.label)}
+      <a class="supporter" href={s.href} target="_blank" rel="noopener" title={s.name}>
+        <img class="logo light" src={s.logo} alt={s.name} loading="lazy" />
+        {#if s.logoDark}<img class="logo dark" src={s.logoDark} alt="" loading="lazy" />{/if}
+      </a>
+    {/each}
+  </p>
+{/if}
 
 <style>
   .support {

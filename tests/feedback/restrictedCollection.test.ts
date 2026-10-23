@@ -233,7 +233,7 @@ describe("Shell.svelte wires the view's access into feedback (the 0.3.4 bug was 
     expect(def).toMatch(/viewAccess\(/);
     expect(def).toMatch(/collectionParam:\s*sel\.collection/);
     expect(def).toMatch(/catalogParam:\s*sel\.catalog/);
-    expect(def).toMatch(/collectionLens\.entry/);
+    expect(def).toMatch(/collectionLens\??\.entry/);
   });
   it("the feedback page link is built through searchForAccess", () => {
     expect(shell).toMatch(/searchForAccess\(formatSel\(sel\)\.search,\s*feedbackAccess\)/);

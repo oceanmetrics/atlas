@@ -85,8 +85,18 @@ describe("mapClick", () => {
   it("computes the cell id with the RELEASE's grid — the same lon/lat differs per grid", () => {
     const map = fakeMap([]);
     const lngLat = { lng: -160.2, lat: 55.3 };
-    const usa05 = mapClick(map, lngLat, { x: 10, y: 20 }, { grid: gridFromBoot(USA05_BOOT) });
-    const global05 = mapClick(map, lngLat, { x: 10, y: 20 }, { grid: gridFromBoot(GLOBAL05_BOOT) });
+    const usa05 = mapClick(
+      map,
+      lngLat,
+      { x: 10, y: 20 },
+      { grid: gridFromBoot(USA05_BOOT), units: [] },
+    );
+    const global05 = mapClick(
+      map,
+      lngLat,
+      { x: 10, y: 20 },
+      { grid: gridFromBoot(GLOBAL05_BOOT), units: [] },
+    );
     expect(usa05.cellId).toBe(cellFromLonLat(-160.2, 55.3, gridFromBoot(USA05_BOOT)));
     expect(global05.cellId).toBe(cellFromLonLat(-160.2, 55.3, gridFromBoot(GLOBAL05_BOOT)));
     // the regression this rule exists for: the same click is a DIFFERENT cell on the two grids.
@@ -99,7 +109,7 @@ describe("mapClick", () => {
       map,
       { lng: 10, lat: 50 },
       { x: 1, y: 1 },
-      { grid: gridFromBoot(USA05_BOOT) },
+      { grid: gridFromBoot(USA05_BOOT), units: [] },
     );
     expect(click.cellId).toBeNull();
   });
@@ -110,9 +120,10 @@ describe("mapClick", () => {
       map,
       { lng: -160.2, lat: 55.3 },
       { x: 10, y: 20 },
-      { grid: gridFromBoot(USA05_BOOT) },
+      { grid: gridFromBoot(USA05_BOOT), units: [] },
     );
-    expect(map.queryRenderedFeatures).not.toHaveBeenCalled(); // zones are gone: no layer to query
+    // no zone units (an instance without a release): no layer to query
+    expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
     expect(click.lngLat).toEqual({ lng: -160.2, lat: 55.3 });
     expect(click.cellId).not.toBeNull();
   });

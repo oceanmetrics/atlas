@@ -1,0 +1,13 @@
+diff --git a/src/lens/scores/search.ts b/src/lens/scores/search.ts
+index 1111111..2222222 100644
+--- a/src/lens/scores/search.ts
++++ b/src/lens/scores/search.ts
+@@ -82,7 +82,7 @@ export function matchZones(boot: unknown, query: string, limit = MAX_RESULTS):
+       // raw `z.name`, which a real release never publishes for `zones.programarea`. Before this,
+       // "Aleutian" found nothing on the real v7/v9 shape even though the dropdown's own option text
+       // ("Aleutian Arc (ALA)") came from that same fallback table; only the bare key matched.
+-      const rank = matchRank(q, z.key, resolvedZoneName(z.key, z.name, unit));
++      const rank = matchRank(q, z.key, z.name);
+       if (rank === null) continue;
+       ranked.push({
+         m: { kind: "zone", unit, key: z.key, label: paLabel(z.key, z.name, unit) },

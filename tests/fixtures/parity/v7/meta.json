@@ -1,0 +1,1 @@
+{"ver":"v7","msens":"0.43.0","grid_id":"usa05","id_field":"mdl_seq","generated_at":"2026-09-21T14:10:44Z","note":"R reference for the atlas-2 parity gate; scripts/parity/run.mjs asserts the sql/*.sql twins reproduce it. Regenerate with scripts/parity/fixtures.R."}

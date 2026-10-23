@@ -18,6 +18,8 @@
   import type { Place, GeomPlace } from "../lib/geo/placeCodec";
   import type { Sel } from "../lib/state/types";
   import type { SelStore } from "../lib/state/sel.svelte";
+  import type { GridSpec } from "../lib/grid/grid";
+  import type { FeatureCollection, Geometry } from "geojson";
 
   interface Props {
     open: boolean;
@@ -28,9 +30,23 @@
     /** Deliverable 7: counts/buckets only -- defaults to a no-op until the GA4 loader is wired
      * app-wide (analytics.ts's own header; this stays a no-op call site until that lands). */
     onShare?: (linkLength: number) => void;
+    /** an instance with a release: its grid, so the simplification diff counts covered cells. */
+    grid?: GridSpec | null;
+    /** the "Download" GeoJSON when the caller resolves more than the generic builder can (a release's
+     * zone places, named and with their polygons: `places/zoneDownload.ts`); absent, the generic one. */
+    placesGeoJson?: () => FeatureCollection<Geometry | null>;
   }
 
-  let { open, onclose, sel, selStore, places, onShare }: Props = $props();
+  let {
+    open,
+    onclose,
+    sel,
+    selStore,
+    places,
+    onShare,
+    grid = null,
+    placesGeoJson,
+  }: Props = $props();
 
   let fit = $state<FitResult | null>(null);
   let busy = $state(false);
@@ -73,7 +89,9 @@
   });
 
   const diff = $derived(
-    changedPlace ? diffSimplification(changedPlace.before, changedPlace.after) : null,
+    changedPlace
+      ? diffSimplification(changedPlace.before, changedPlace.after, grid ?? undefined)
+      : null,
   );
 
   async function accept() {
@@ -110,7 +128,7 @@
   }
 
   function download() {
-    downloadGeoJson(placesToGeoJson(places));
+    downloadGeoJson(placesGeoJson ? placesGeoJson() : placesToGeoJson(places));
     announce("Downloaded places as GeoJSON.");
   }
 </script>

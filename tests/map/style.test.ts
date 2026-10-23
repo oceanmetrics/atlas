@@ -613,15 +613,20 @@ describe("composeStyle + layerStack (R3: the layer stack model)", () => {
   });
 });
 
+// an instance without a release has no Outlines group (`data-zones`, layerStack.ts): its three roles
+// get no rank, and nothing it composes carries them (tests/map/style.mst.test.ts has them ranked)
+const ZONE_GROUP_ROLES: readonly LayerRole[] = ["zone-fill", "zone-line", "zone-label"];
+const RANKED_ROLES = LAYER_ORDER.filter((r) => !ZONE_GROUP_ROLES.includes(r));
+
 describe("rankForStack", () => {
   it("defaults to a rank consistent with the flat LAYER_ORDER's relative order", () => {
     const rank = rankForStack();
     expect(rank.get("background")).toBe(0);
-    for (let i = 1; i < LAYER_ORDER.length; i++) {
-      expect(rank.get(LAYER_ORDER[i])!).toBeGreaterThanOrEqual(rank.get(LAYER_ORDER[i - 1])!);
+    for (let i = 1; i < RANKED_ROLES.length; i++) {
+      expect(rank.get(RANKED_ROLES[i])!).toBeGreaterThanOrEqual(rank.get(RANKED_ROLES[i - 1])!);
     }
-    // every role is present.
-    expect(new Set(rank.keys())).toEqual(new Set(LAYER_ORDER));
+    // every role of this instance's groups is present.
+    expect(new Set(rank.keys())).toEqual(new Set(RANKED_ROLES));
   });
 
   // M1 fix (Opus 5.5 review): the five DEFAULT basemap sub-roles are one contiguous run, so they
@@ -659,7 +664,7 @@ describe("rankForStack", () => {
   it("every role from the custom stack is present, none gained or lost", () => {
     const custom = moveLayerStackEntry(defaultLayerStackEntries(), 4, 5).map((e) => e.id);
     const rank = rankForStack(custom);
-    expect(new Set(rank.keys())).toEqual(new Set(LAYER_ORDER));
+    expect(new Set(rank.keys())).toEqual(new Set(RANKED_ROLES));
   });
 });
 

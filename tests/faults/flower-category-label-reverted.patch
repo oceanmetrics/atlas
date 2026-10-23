@@ -1,0 +1,13 @@
+diff --git a/src/lib/ui/flowerGeometry.ts b/src/lib/ui/flowerGeometry.ts
+index 9968a64..ecbcf98 100644
+--- a/src/lib/ui/flowerGeometry.ts
++++ b/src/lib/ui/flowerGeometry.ts
+@@ -72,7 +72,7 @@ export function componentCategory(c: FlowerComponentInput): Category {
+   const base = categoryFor(c.key);
+   return {
+     ...base,
+-    label: c.label?.trim() || categoryLabel(c.key),
++    label: c.label?.trim() || base.label,
+     ...(c.color ? { color: c.color } : {}),
+   };
+ }

@@ -7,7 +7,7 @@
 // Pure helpers plus two small file readers (`readInstance`, `readMark`); nothing here writes. The
 // JSON Schema (`instances/instance.schema.json`) is checked by `validateInstance`, a hand validator
 // for the subset of draft 2020-12 the schema uses (no ajv dependency).
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export const DEFAULT_INSTANCE = "oceanmetrics";
@@ -159,9 +159,14 @@ export function validateInstance(value, schema, root = schema, path = "$") {
     }
     if (
       schema.contains &&
-      !value.some((v, i) => validateInstance(v, schema.contains, root, `${path}[${i}]`).length === 0)
+      !value.some(
+        (v, i) => validateInstance(v, schema.contains, root, `${path}[${i}]`).length === 0,
+      )
     ) {
-      const want = "const" in schema.contains ? JSON.stringify(schema.contains.const) : "an item matching contains";
+      const want =
+        "const" in schema.contains
+          ? JSON.stringify(schema.contains.const)
+          : "an item matching contains";
       errs.push(`${path}: has no ${want}`);
     }
     const prefix = schema.prefixItems ?? [];
@@ -241,19 +246,75 @@ function ogImageHtml(og) {
   ].join("\n    ");
 }
 
+/** the lens switch's labels; `src/shell/lenses.ts` `LENS_LABEL` is the same table (a test keeps them
+ * equal), duplicated because the skeleton is written before any bundle exists. */
+export const LENS_LABEL = { collection: "Collections", scores: "Scores", species: "Species" };
+
+/** the inline early-fetch script's source (one file for every page, src/lib/release/). */
+export const EARLY_FETCH_FILE = "src/lib/release/earlyFetch.inline.js";
+
+/**
+ * The inline early-fetch `<script>` for an instance with a release registry (`release`), or `""`:
+ * the source file without its leading comment block, `%release.registry%` filled from the instance.
+ * Pure over the file text (`readEarlyFetch` reads it).
+ */
+export function earlyFetchScript(instance, sourceText) {
+  if (!instance.release) return "";
+  const body = sourceText.replace(/^(?:\/\/[^\n]*\n)+/, "").trim();
+  if (!body.includes("%release.registry%")) {
+    throw new Error("earlyFetchScript: the script has no %release.registry% placeholder");
+  }
+  const filled = body.replace(/%release\.registry%/g, instance.release.registry);
+  return `<script>\n${filled}\n    </script>`;
+}
+
+/** the early-fetch source file's text (read once per build or test). */
+export function readEarlyFetch(root = ".") {
+  return readFileSync(join(root, EARLY_FETCH_FILE), "utf8");
+}
+
+/** the instance's web fonts to preload (`instances/<id>/fonts/*.woff2`, sorted), repo-relative; none
+ * for an instance without a `fonts/` folder. */
+export function instanceFontFiles(id = instanceId(), root = ".") {
+  const dir = join(root, instanceDir(id), "fonts");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".woff2"))
+    .sort()
+    .map((f) => `${instanceDir(id)}/fonts/${f}`);
+}
+
+/** what `renderInstanceHtml` writes beyond the instance.json strings: the early-fetch script and the
+ * font preloads, read from files (`instanceHtmlExtras` reads them for vite.config.ts and the tests). */
+export function instanceHtmlExtras(instance, root = ".") {
+  return {
+    earlyFetch: earlyFetchScript(instance, readEarlyFetch(root)),
+    fonts: instanceFontFiles(instance.id, root),
+  };
+}
+
 /**
  * Fill an HTML entry from the instance (the `transformIndexHtml` hook in vite.config.ts; tests run
  * the same function over the raw files). Two placeholder forms:
- *   `%instance.<key>%`        a text value, HTML-escaped: name, title, description, siteName,
- *                             siteUrl, favicon
+ *   `%instance.<key>%`        a text value, HTML-escaped: name, title, reportTitle, description,
+ *                             siteName, siteUrl, favicon
  *   `<!--instance:<block>-->` markup: `og-image` (the og:image tags, or nothing), `mark-box` (the
- *                             mark's empty, sized <svg> box), `wordmark` (the wordmark spans)
+ *                             mark's empty, sized <svg> box), `wordmark` (the wordmark spans),
+ *                             `early-fetch` and `version-chip` (an instance with a release: its
+ *                             inline early-fetch script and the version chip's skeleton; nothing
+ *                             otherwise), `font-preload` (the instance's web fonts)
  * An unknown placeholder throws, so a typo can never ship as literal text.
+ *
+ * @param {string} html
+ * @param {any} instance
+ * @param {{ viewBox: string, body: string }} mark
+ * @param {{ earlyFetch?: string, fonts?: string[] }} [extras] `instanceHtmlExtras(instance)`
  */
-export function renderInstanceHtml(html, instance, mark) {
+export function renderInstanceHtml(html, instance, mark, extras = {}) {
   const text = {
     name: instance.name,
     title: instance.title,
+    reportTitle: instance.report?.title ?? instance.name,
     description: instance.description,
     siteName: instance.og.siteName,
     siteUrl: instance.og.siteUrl,
@@ -266,6 +327,27 @@ export function renderInstanceHtml(html, instance, mark) {
       `aria-hidden="true" focusable="false" ` +
       `style="display: inline-block; vertical-align: -0.15em; flex: none"></svg>`,
     wordmark: wordmarkHtml(instance.wordmark),
+    // an instance with a release: its inline early-fetch script, and the version chip's skeleton twin
+    "early-fetch": extras.earlyFetch ?? "",
+    "version-chip": instance.release
+      ? `<button type="button" class="chip" id="sk-version-chip" data-tour="version-chip" ` +
+        `data-control="version-chip" aria-hidden="true" tabindex="-1"></button>`
+      : "",
+    // the skeleton lens switch: the instance's lenses, the default pressed (src/shell/lenses.ts labels)
+    "lens-switch": (instance.lenses ?? [])
+      .map(
+        (l) =>
+          `<span${l === instance.defaults?.lens ? ' class="is-pressed"' : ""}>${escapeHtml(LENS_LABEL[l] ?? l)}</span>`,
+      )
+      .join(""),
+    // the instance's web fonts, preloaded so the first frame paints in them (MarineSensitivity/atlas
+    // measured CLS = 0 with the preloads, nonzero without)
+    "font-preload": (extras.fonts ?? [])
+      .map(
+        (f) =>
+          `<link rel="preload" as="font" type="font/woff2" href="./${escapeHtml(f)}" crossorigin />`,
+      )
+      .join("\n    "),
   };
   return html
     .replace(/%instance\.([A-Za-z]+)%/g, (_, k) => {

@@ -13,6 +13,7 @@
   // in by Shell.svelte (which reads the live location global itself, same as issueUrl.ts's own
   // contract) -- this file never reads that global, by any spelling (tests/feedback/noHash.test.ts's
   // source scan covers this whole directory, including comments).
+  import { REPO } from "../brand/instance";
   import Modal from "../ui/Modal.svelte";
   import Segmented from "../ui/Segmented.svelte";
   import { announce } from "../ui/announcer";
@@ -584,12 +585,12 @@
       viewport and theme, and the screenshot{includeShot ? "" : " (off)"} — the page link only if you
       tick the box above. It goes to the team by mail
       {#if !restricted}
-        and, on a public release, as a public GitHub issue in <code>oceanmetrics/atlas</code>
+        and, on a public release, as a public GitHub issue in <code>{REPO}</code>
         labelled <code>{kind}</code> — filed either way, whether or not you give an email. Your email,
         if you give one, never appears in the issue; it stays in the team's own mail and sheet, with a
         copy sent back to you.
       {:else if publicIssue}
-        and as a public GitHub issue in <code>oceanmetrics/atlas</code> labelled
+        and as a public GitHub issue in <code>{REPO}</code> labelled
         <code>{kind}</code>. This collection is under review: the issue shows your text and the
         screenshot (untick it to leave it out) but never the link this collection was shared by.
         Your email, if you give one, never appears in the issue.

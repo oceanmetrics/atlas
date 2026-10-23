@@ -1,5 +1,74 @@
 <script lang="ts" module>
-  /** "Sphere": the bottom row of the whole panel (every lens shares ONE projection, `Sel.proj`). */
+  import type { SegmentedOption } from "./Segmented.svelte";
+  import type { SelectOptionGroup } from "./Select.svelte";
+  import type { Outline } from "../state/types";
+
+  /** P round deliverable 1 (Ben, live-review 2026-09-24): "emphasize Raster Cells vs Program Areas
+   * as a toggle similar to Scores vs Species at top, but this only applies to Scores (so grayed out
+   * for Species)" — the spatial-unit choice (cell raster vs zone fill), promoted from a `<Select>`
+   * buried inside the Data row's own body (`lens/scores/LayersPanel.svelte`'s old "Spatial units"
+   * field, now removed — this toggle replaces it, not a second control setting the same thing) to
+   * ONE segmented control at the very top of this shared panel, styled like the top bar's own
+   * Scores|Species `Segmented`.
+   *
+   * R3 (Ben, live-review 2026-09-25): "prettify this pill so [it] doesn't look like [a] 3rd missing
+   * option on right that is not colored when 'Program areas' is selected" -- rendered with
+   * `Segmented`'s new `fit` prop (content-sized, left-aligned) instead of the P-round's row-stretch
+   * layout, the same shape the top bar's own Scores|Species switch already uses.
+   *
+   * Orchestrator hand-off (Opus UI review of main, 2026-09-25): "in the Species lens HIDE the
+   * toggle instead of showing it disabled with a reason" -- species has no spatial-unit CHOICE to
+   * make at all (unlike scores' zone choropleth), so `SpeciesLens.svelte` now omits this prop
+   * entirely (this whole panel section is `{#if unitToggle}`) rather than passing a disabled one.
+   * The disabled/reason path this type used to carry for that case is gone with it -- `onChange`
+   * is required now, matching the one real caller left (scores, always enabled). */
+  export interface LayersUnitToggle {
+    /** `lens/scores/boot.ts#unitOptions(boot)` — "Raster cells" always first (R3: the "(0.05°)"
+     * resolution note was dropped, Ben 2026-09-25), then the release's one drawable unit (e.g.
+     * "Program areas") when it publishes one. */
+    options: SegmentedOption[];
+    value: string;
+    onChange: (value: string) => void;
+  }
+
+  /** R3 deliverable 3: the Layer (metric) picker, promoted from inside the Data row's own body
+   * (`lens/scores/LayersPanel.svelte`'s old bespoke native `<select>`) to panel-level, directly
+   * below the unit toggle — full width (W6, 2026-09-25: the field it used to sit beside, "Zoom to
+   * region", moved into the Search bar's Regions group — `search.ts#matchRegions`/`selectRegion`
+   * — since the search field was already "a zoom to this place"). `groups` is `Select.svelte`'s new
+   * `<optgroup>` support (R3-B2) — this component no longer hand-rolls its own grouped `<select>`.
+   * Species has no metric-layer choice of its own (it
+   * picks a SPECIES, a different mechanism entirely, via its own `LayerBarView` inside
+   * `dataControls`) — `SpeciesLens.svelte` omits this prop and that row simply does not render. */
+  export interface LayersLayerField {
+    label: string;
+    value: string;
+    groups: SelectOptionGroup[];
+    onChange: (value: string) => void;
+    /** the current layer's own one-line description — rendered under the field,
+     * `data-testid="layer-description"`, unchanged from where it lived before this move. */
+    description?: string | null;
+  }
+
+  /** R3 deliverable 6, reshaped by the fix round (Opus 5.5 review, D7): the "Outlines" row's
+   * expander body — bound to `Sel.out`, but no longer a two-option RADIO. Read from
+   * `Shell.svelte`/`boot.ts` (not guessed): `Sel.out` gates exactly ONE real outline (the
+   * Program-Area selectable unit's own line, `zoneUnitsWithOutline()`); the ecoregion boundary is
+   * a separate, always-on decoration `boot.ts#ecoregionZoneUnitFromManifest` appends independent
+   * of `sel.out`/`sel.unit` — `boot.units[]` never publishes ecoregion as a selectable unit at all
+   * (D17). So there is one real ON/OFF toggle here, not a choice between two outlines; the panel
+   * now renders two independent checkboxes (Program Areas, live; Ecoregions, permanently
+   * checked+disabled, an honest "this is always on" rather than a dead radio option). `onChange`
+   * takes the WIDER `Outline` type (not just `"programarea" | "ecoregion"`) because unchecking
+   * Program Areas now writes `"none"` directly, the same value the row's own visible checkbox
+   * above already reaches by hiding the whole `data-zones` group. */
+  export interface LayersOutlineChoice {
+    value: Outline;
+    onChange: (value: Outline) => void;
+  }
+
+  /** R3 deliverable 7: "Sphere" moved out of the Data row's body to the bottom of the whole panel
+   * (both lenses share ONE projection, `Sel.proj` — this is not scores-specific). */
   export interface LayersProjectionControl {
     checked: boolean;
     onChange: (checked: boolean) => void;
@@ -30,22 +99,29 @@
 </script>
 
 <script lang="ts">
-  // One Layers panel that IS the stack, the data row expanding into the lens's own controls, PLUS the
-  // ability to change the stacking of the data layer relative to map layers (place names). Lens-
-  // independent (the species and collection lenses mount this the same way): it owns the STACK rows
-  // (name, visible checkbox, opacity popover, ▲▼ move) and hands the lens's own controls to the
-  // `dataControls` snippet, unmodified.
+  // R3 (round-2 plan §5 U4, `docs/usability.md` §7 R3, Ben's decision 2026-09-24): "one Layers panel
+  // that IS the stack, the data row expanding into today's controls — PLUS the ability to change
+  // the stacking of data layers (Program Areas, the score raster) relative to map layers (place
+  // names, bathymetry)." Lens-independent (both `ScoresLens.svelte` and `SpeciesLens.svelte` mount
+  // this the same way, per this task's own Deliverable 3): it owns the STACK rows (name, visible
+  // checkbox, opacity popover, ▲▼ move) and hands the lens's own controls to the `dataControls`
+  // snippet, unmodified.
   //
   // This component never touches MapLibre or `composeStyle` — it only reads/writes
   // `LayerStackEntry[]` (`../map/layerStack.ts`, the pure model `style.ts#composeStyle` consumes via
   // its `layerStack` input). `Shell.svelte` owns turning a change here into `selStore.set({layers})`
   // (URL-is-the-view, CLAUDE.md) — this component only calls `onChange`.
   //
-  // Three basemap rows (Land & water, Boundaries, Roads & buildings) are hidden from the list (still
-  // full model citizens -- `layerStack.ts#LAYER_GROUP_IN_PANEL`'s own header); "Sphere" sits at the
-  // very bottom.
+  // R3 (Ben, live-review 2026-09-25) reshaped this panel top to bottom: the unit toggle stays at
+  // top (now `fit`-sized); the Layer + Zoom-to-region fields moved here from inside the Data row's
+  // body; every stack row's `Switch` became a plain checkbox; the inline opacity slider moved into
+  // a per-row popover; three basemap rows (Land & water, Boundaries, Roads & buildings) are hidden
+  // from the list (still full model citizens -- `layerStack.ts#LAYER_GROUP_IN_PANEL`'s own header);
+  // "Outlines" gained an expander for the `Sel.out` choice; "Sphere" moved to the very bottom.
   import { tick, type Snippet } from "svelte";
   import Icon from "./Icon.svelte";
+  import Segmented from "./Segmented.svelte";
+  import Select from "./Select.svelte";
   import Popover from "./Popover.svelte";
   import Switch from "./Switch.svelte";
   // P5 fix (post-merge finding, e2e/shell.a11y.spec.ts "exactly one live region"): `move()`/
@@ -77,10 +153,26 @@
      * lens that has not resolved yet (boot still loading) can omit it and the row just shows
      * nothing below its header — never a placeholder that looks like a bug. */
     dataControls?: Snippet;
-    /** the lens' own main data selection, promoted above the stack (the species lens' "Model input"
-     * picker; the collection lens' collection and dimension selectors). A snippet, because each is
-     * a whole component the lens already owns. */
+    /** the panel's own primary control (see {@link LayersUnitToggle}'s header) — optional so a lens
+     * that has not resolved `boot` yet renders the rest of the panel with no toggle at all, never a
+     * disabled-looking placeholder for data that just has not arrived. */
+    unitToggle?: LayersUnitToggle;
+    /** R3 deliverable 3 — see {@link LayersLayerField}. Omitted by the species lens (no metric
+     * layer choice there). */
+    layerField?: LayersLayerField;
+    /** R3-W8 item 1 (Ben, 2026-09-25: "promote the main data selection up"): the species lens' own
+     * equivalent of `layerField` — its "Model input" picker (the layer-bar pills + representation
+     * toggle, `LayerBarView.svelte`), moved out of the Data row's body to this same panel-level
+     * slot. A snippet, not a typed field-value shape like `layerField`, because the species picker
+     * is not a single `<select>` — it is a whole existing component the species lens already owns.
+     * Mutually exclusive with `layerField` in practice (never both true at once — scores passes
+     * one, species the other) but each renders independently so neither lens has to know the other
+     * exists. */
     speciesField?: Snippet;
+    /** R3 deliverable 6 — see {@link LayersOutlineChoice}. Omitted while a lens has not resolved
+     * `sel`/`boot` yet; the "Outlines" row then still expands but shows no radio body,
+     * matching `dataControls`' own "nothing to render yet" convention. */
+    outline?: LayersOutlineChoice;
     /** R3 deliverable 7 — see {@link LayersProjectionControl}. */
     projection?: LayersProjectionControl;
     /** Fix round — see {@link LayersRowState}. Omitted groups render normally (never dimmed);
@@ -107,7 +199,10 @@
     stack,
     onChange,
     dataControls,
+    unitToggle,
+    layerField,
     speciesField,
+    outline,
     projection,
     rowState,
     expandedRow,
@@ -116,14 +211,23 @@
     zoom,
   }: Props = $props();
 
-  /** the one row this panel EXPANDS -- "Data" (the lens's own layer). Every other group is
-   * visible/opacity/reorder only. */
+  function onUnitToggleChange(value: string) {
+    // `unitToggle` itself is optional (a lens that has not resolved `boot` yet, or -- species --
+    // has no toggle at all now the disabled path is gone); the `?.` guards ONLY that, never a
+    // missing `onChange` (required on the type now there is exactly one real caller).
+    unitToggle?.onChange(value);
+  }
+
+  /** the two rows this panel EXPANDS — "Data" (the lens's own layer) and "Outlines" (the
+   * outline choice, R3 deliverable 6). Every other group is visible/opacity/reorder only. */
   const DATA_ROW_ID: LayerGroupId = "data-raster";
-  const EXPANDABLE_ROW_IDS: readonly LayerGroupId[] = [DATA_ROW_ID];
+  const ZONES_ROW_ID: LayerGroupId = "data-zones";
+  const EXPANDABLE_ROW_IDS: readonly LayerGroupId[] = [DATA_ROW_ID, ZONES_ROW_ID];
 
   /** m6 (review round 1): `aria-controls` target for an expander button — only one `LayersPanel`
    * is ever mounted at a time (the active lens owns the rail), so static ids are safe. */
   const DATA_ROW_BODY_ID = "layers-data-row-body";
+  const ZONES_ROW_BODY_ID = "layers-zones-row-body";
 
   // "the stack in draw order (top of the list = top of the map)" (Deliverable 3) -- the MODEL's own
   // array is bottom-to-top (style.ts#LAYER_ORDER's convention: index 0 paints first, i.e. lowest),
@@ -211,6 +315,38 @@
 </script>
 
 <div class="layers-stack" bind:this={panelEl}>
+  {#if unitToggle}
+    <!-- P round deliverable 1: the panel's own primary control, ABOVE the stack list -- styled
+         like the top bar's Scores|Species `Segmented` (same component, reused, not re-styled).
+         R3: `fit` (content-sized, left-aligned) instead of the P-round row-stretch. -->
+    <div class="unit-toggle" data-control="layers-unit-toggle">
+      <Segmented
+        options={unitToggle.options}
+        value={unitToggle.value}
+        ariaLabel="Spatial units"
+        onchange={onUnitToggleChange}
+        fit
+      />
+    </div>
+  {/if}
+
+  {#if layerField}
+    <div class="fields-row">
+      <label class="field field-layer">
+        <span class="field-label">{layerField.label}</span>
+        <Select
+          label={layerField.label}
+          value={layerField.value}
+          groups={layerField.groups}
+          onchange={layerField.onChange}
+        />
+      </label>
+    </div>
+    {#if layerField?.description}
+      <p class="note" data-testid="layer-description">{layerField.description}</p>
+    {/if}
+  {/if}
+
   {#if speciesField}
     <!-- R3-W8 item 1: the species lens' promoted "Model input" picker — same panel position as
          `layerField` above (scores' own equivalent), never both at once. -->
@@ -231,7 +367,7 @@
       {@const enabled = LAYER_GROUP_ENABLED[entry.id]}
       {@const label = LAYER_GROUP_LABEL[entry.id]}
       {@const isExpandable = EXPANDABLE_ROW_IDS.includes(entry.id)}
-      {@const bodyId = DATA_ROW_BODY_ID}
+      {@const bodyId = entry.id === DATA_ROW_ID ? DATA_ROW_BODY_ID : ZONES_ROW_BODY_ID}
       {@const rState = rowState?.[entry.id]}
       {@const rowEmpty = rState?.empty ?? false}
       {@const hintId = `${entry.id}-empty-hint`}
@@ -371,6 +507,46 @@
           <div class="row-body" id={DATA_ROW_BODY_ID}>
             {@render dataControls()}
           </div>
+        {:else if entry.id === ZONES_ROW_ID && expandedId === ZONES_ROW_ID && outline}
+          <!-- Fix round (Opus 5.5 eyes-on review, D7): this used to be a RADIO group, which claims
+               a real exclusive choice between two outlines -- it was not. Read (not guessed) from
+               `Shell.svelte`/`boot.ts`: `Sel.out` only ever gates ONE selectable unit's outline
+               (`zoneUnitsWithOutline()`; `boot.units[]` NEVER publishes an "ecoregion" selectable
+               unit, D17 -- see `boot.ts#ecoregionZoneUnitFromManifest`'s own header), and the
+               ecoregion boundary is a SEPARATE, always-on decoration appended after that, entirely
+               independent of `sel.out`/`sel.unit` (`Shell.svelte`'s own "R3 orchestrator audit item
+               2" comment). So there is exactly ONE real toggle here (Program Areas' own outline,
+               on/off) and one fact with nothing to switch (Ecoregions is always drawn) -- two
+               independent checkboxes say that honestly; a radio group does not. "none" is still
+               reached the same way as before (the row's own visible checkbox above). -->
+          <div class="row-body" id={ZONES_ROW_BODY_ID}>
+            <div class="outline-choice" role="group" aria-label="Outlines">
+              <label class="outline-option">
+                <input
+                  type="checkbox"
+                  checked={outline.value === "programarea"}
+                  disabled={!entry.visible}
+                  onchange={(e) =>
+                    outline?.onChange(e.currentTarget.checked ? "programarea" : "none")}
+                />
+                <span class="outline-option-text">
+                  <span class="outline-option-label">Program Areas</span>
+                  <span class="outline-option-note"
+                    >BOEM's 2026 planning units the scores are reported for.</span
+                  >
+                </span>
+              </label>
+              <label class="outline-option outline-option--fixed">
+                <input type="checkbox" checked disabled />
+                <span class="outline-option-text">
+                  <span class="outline-option-label">Ecoregions</span>
+                  <span class="outline-option-note"
+                    >Always shown — the regions each score rescales within (0–100).</span
+                  >
+                </span>
+              </label>
+            </div>
+          </div>
         {/if}
       </li>
     {/each}
@@ -416,12 +592,81 @@
     gap: var(--space-2);
   }
 
-  /* the lens' own main data selection row — a vertical stack (label, pills, representation, the
-     zoom-to-layer checkbox; or the collection and dimension selectors), bottom-bordered, at the top
-     of the pane. */
+  .unit-toggle {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--divider);
+  }
+
+  .fields-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .field-label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  /* R3-W8 item 1: the species picker's own row — a vertical stack (label, pills, representation,
+     the zoom-to-layer checkbox), unlike `.fields-row`'s wrapping horizontal layout, and bottom-
+     bordered the same way `.unit-toggle` is (this sits directly below it, at the top of the pane). */
   .species-field-row {
     padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--divider);
+  }
+
+  /* phone, "half" detent (Deliverable 3's own requirement: "the toggle, Layer, Zoom to region and
+     the first [two] rows visible without scrolling"): eyes-on first found the layer DESCRIPTION
+     alone eating enough height that the stack's first row never came into view -- clamped to 2
+     lines as a first pass. Fix round (orchestrator, 2026-09-25): line-clamping still left the
+     first two rows below the fold, and the description is no longer the only copy of this text on
+     phone anyway -- the Legend modal (W3's B5, merged from main) now shows the SAME layer
+     description there. Omitted entirely on phone (never rendered short-but-clamped); unchanged on
+     desktop, where there is no Legend-modal duplicate and no space pressure. Paired with a
+     tighter panel-wide gap on the same viewport (below) to free the rest of the room.
+
+     Fix round 2 (Ben, 2026-09-25): measured against a real 46svh sheet (`--size-sheet-half`,
+     `lib/brand/tokens.css`) this STILL only clears the first row plus the next row's own top
+     border -- every remaining gap tightened here (unit-toggle's own bottom padding, the stacked
+     Layer/Zoom fields' gap, the "Layers on the map" heading's margin) buys real but modest room;
+     closing the rest would mean shrinking a touch target (every row is >= 44px on a coarse
+     pointer, `.opacity-btn`'s own rule below) or raising `--size-sheet-half` itself, a SHARED
+     token `chromePadding.ts`/`FlowerPanel.svelte`/`tests/map/chromePadding.test.ts` all key off --
+     out of this slice's own scope, left for whoever owns the sheet chrome next. */
+  @media (max-width: 480px) {
+    .note {
+      display: none;
+    }
+
+    .layers-stack {
+      gap: var(--space-1);
+    }
+
+    .unit-toggle {
+      padding-bottom: var(--space-1);
+    }
+
+    .fields-row {
+      gap: var(--space-1);
+    }
   }
 
   .layers-control h3 {
@@ -690,11 +935,54 @@
     padding-top: var(--space-2);
   }
 
+  .outline-choice {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .outline-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    cursor: pointer;
+  }
+
   /* fix round (D7): now a real checkbox toggle among others in this pane (not a single-choice
      radio pair any more) -- moved to the SAME muted token every other stack checkbox uses. */
+  .outline-option input {
+    margin-top: 3px;
+    accent-color: var(--border-control);
+    cursor: pointer;
+  }
+
+  .outline-option input:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
 
   /* the "Ecoregions" row: permanently checked+disabled (it cannot be turned off from here) --
      dimmed as a whole so it reads as "always on," not as a broken/unclickable live control. */
+  .outline-option--fixed {
+    cursor: default;
+    opacity: 0.75;
+  }
+
+  .outline-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .outline-option-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .outline-option-note {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
 
   .sphere-row {
     padding-top: var(--space-1);
@@ -751,5 +1039,20 @@
   .reset-btn:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* phone: `.field`'s own `flex: 1 1 160px` still applies inside `.fields-row` (now one field, the
+     Layer select, full width since W6 moved "Zoom to region" into the Search bar) -- kept `flex:
+     none` here so a future SECOND field added to this row cannot silently reproduce the ~200px
+     blank-gap bug eyes-on once caught (phone-04-layers-full): a 160px flex-BASIS applying along a
+     column `flex-direction`'s now-vertical main axis. */
+  @media (max-width: 480px) {
+    .fields-row {
+      flex-direction: column;
+    }
+
+    .field {
+      flex: none;
+    }
   }
 </style>

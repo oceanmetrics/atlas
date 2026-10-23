@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { INSTANCE } from "../../src/lib/brand/instance";
 import {
   buildFeedbackPayload,
   FEEDBACK_KINDS,
@@ -139,8 +140,8 @@ describe("buildFeedbackPayload — size caps", () => {
 });
 
 describe("buildFeedbackPayload — the fixed fields every payload carries", () => {
-  it('app is always the literal "oceanmetrics-atlas" (the shared Apps Script APPS key; "atlas" is refused as unknown)', () => {
-    expect(buildFeedbackPayload(BASE).app).toBe("oceanmetrics-atlas");
+  it('app is always the instance\'s feedback key (the shared Apps Script APPS key: "oceanmetrics-atlas", or "atlas" for the MarineSensitivity Atlas)', () => {
+    expect(buildFeedbackPayload(BASE).app).toBe(INSTANCE.feedback.app);
   });
 
   it("release/version/sha/lens/viewport/theme/user_agent map 1:1 from the input", () => {

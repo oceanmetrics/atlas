@@ -21,6 +21,62 @@ export interface BasemapSpec {
   attribution: string;
 }
 
+/** one zone unit's choropleth, built by the lens from `boot.zones[unit]` values (atlas-4 §6.4).
+ * Zones are a release capability (an instance with `release`); `layers/zones.ts`, reached only through
+ * the instance module table, turns them into style layers. */
+export interface ZoneFillSpec {
+  /** the tile property a stop's `key` is matched against, e.g. `programarea_key`. */
+  keyProperty: string;
+  /** one `{key, color}` per zone; a key absent here paints `defaultColor`. */
+  stops: ReadonlyArray<{ key: string; color: string }>;
+  /** `lightgrey` in the Shiny app (`app.R:2318`) — a zone with no value is drawn, not dropped. */
+  defaultColor: string;
+  opacity: number;
+  outlineColor: string;
+}
+
+/** label points for one unit — `boot.zones[unit][*].label_pt` (atlas-4 §6.2 step 3). */
+export interface ZoneLabelSpec {
+  /** GeoJSON FeatureCollection of points carrying `key` and `name` properties. */
+  points: FeatureCollection;
+  /** which property the symbol layer renders; `"key"` matches the Shiny app's `text_field`. */
+  textProperty: string;
+}
+
+/** one drawable zone unit — a `boot.units[]` row plus whatever the lens adds on top. */
+export interface ZoneUnitSpec {
+  /** the unit *type*: `programarea`, `ecoregion`, `subregion`, `planarea`, … (`fld` minus `_key`). */
+  unit: string;
+  /** absolute https URL of the PMTiles archive (`boot.units[].pmtiles`). */
+  pmtiles: string;
+  /** the vector layer inside the archive (`boot.units[].source_layer`). */
+  sourceLayer: string;
+  /** human label (`boot.units[].label`), for the layers control; never used in a URL. */
+  label?: string;
+  /** omit for an outline-only unit (the default: atlas-4 draws a fill only for the selected unit). */
+  fill?: ZoneFillSpec;
+  /** omit for no labels; `layers/zones.ts` already refuses labels for `subregion` (zone_style). */
+  labels?: ZoneLabelSpec;
+  /** `false` hides the line layer without removing it (the layers control's switch). */
+  lineVisible?: boolean;
+  /** the key of ONE zone to outline in the selection colour (atlas-4 §6.6: a clicked zone's
+   * highlight, `colors.ts`'s `SELECTION_COLOR`, 4 px) — filtered against the SAME vector
+   * source/layer, so no separate geometry fetch is needed. `layers/zones.ts`'s
+   * `zoneHighlightLayer()` builds it. */
+  highlightKey?: string;
+}
+
+/** a release's zone units as style parts (`layers/zones.ts#composeZoneStyle`): the sources and the
+ * roled layers `style.ts#composeStyle` places by role, and whether a zone label needs glyphs. */
+export interface ZoneStyleParts {
+  sources: Record<string, SourceSpecification>;
+  layers: ReadonlyArray<{
+    role: "choropleth" | "zone-fill" | "zone-line" | "zone-label" | "selection-line";
+    layer: LayerSpecification;
+  }>;
+  glyphs: boolean;
+}
+
 /** a raster: the score COG, or an overlay such as `_outside_pra` (atlas-4 §6.2), drawn from titiler tiles or,
  * for an item with an EPSG:3857 COG asset, from `cog://` tiles (`raster/cog.ts`). */
 export interface RasterLayerSpec {

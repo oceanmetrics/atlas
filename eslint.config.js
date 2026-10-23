@@ -43,10 +43,29 @@ export default ts.config(
     // `vite.config.ts`'s `define` (atlas-5: Analytics["appVersion"], inlined at build time — see
     // that file's own comment for why not a runtime `import` of package.json). `__APP_SHA__` is the
     // same file's atlas-8 Deliverable 4 addition (git SHA, for the "Report a problem" issue body).
+    // `__APP_SOURCE__` (the code's repository) and the instance's build-time flags (`__LENS_SCORES__`,
+    // ..., scripts/instance-modules.mjs `instanceFlags`) are the same `define` (build week 4).
     files: ["src/**/*.ts", "src/**/*.svelte", "tests/fixtures/**/*.ts"],
     languageOptions: {
-      globals: { ...globals.browser, __APP_VERSION__: "readonly", __APP_SHA__: "readonly" },
+      globals: {
+        ...globals.browser,
+        __APP_VERSION__: "readonly",
+        __APP_SHA__: "readonly",
+        __APP_SOURCE__: "readonly",
+        __LENS_SCORES__: "readonly",
+        __LENS_COLLECTION__: "readonly",
+        __TOOL_REPORT__: "readonly",
+        __RELEASE__: "readonly",
+        __SEAL__: "readonly",
+      },
     },
+  },
+  {
+    // the inline early-fetch script (written into the pages' <head> before any bundle parses): plain
+    // ES5 in the browser, its error bindings kept for the old-engine `catch (e)` syntax
+    files: ["src/lib/release/earlyFetch.inline.js"],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: { "@typescript-eslint/no-unused-vars": ["error", { caughtErrors: "none" }] },
   },
   {
     // Node-run tooling: build scripts and *.config.ts files. scripts/verify.mjs also drives

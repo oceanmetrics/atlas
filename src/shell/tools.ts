@@ -14,10 +14,13 @@
 import { INSTANCE } from "../lib/brand/instance";
 import type { IconName } from "../lib/ui/icon-paths";
 
-export type ToolName = "layers" | "details" | "table" | "places";
+/** every rail tool this codebase can build. `report` is the Places flow plus the report actions
+ * (ReportPane.svelte), the rail entry of an instance whose `tools` name it; `places` is the same flow
+ * without them. An instance names one or the other. */
+export type ToolName = "layers" | "details" | "table" | "places" | "report";
 
 /** every tool this build has, the run-time twin of {@link ToolName}; an instance enables a subset. */
-export const ALL_TOOLS: readonly ToolName[] = ["layers", "details", "table", "places"];
+export const ALL_TOOLS: readonly ToolName[] = ["layers", "details", "table", "places", "report"];
 
 /** structurally identical to src/lib/ui/Rail.svelte's exported `RailItem` -- Svelte's prop typing
  * accepts this by shape, not by declaration identity. */
@@ -39,6 +42,7 @@ export const TOOL_LABEL: Record<ToolName, string> = {
   details: "Details",
   table: "Table",
   places: "Places",
+  report: "Report",
 };
 
 /** one icon per tool, the same in both lenses. Only `layers`/`table`/`places` share their tool's
@@ -48,6 +52,7 @@ export const TOOL_ICON: Record<ToolName, IconName> = {
   details: "info",
   table: "table",
   places: "places",
+  report: "report",
 };
 
 // This exact sentence, for "layers" only, is duplicated in index.html's static skeleton body (a
@@ -59,6 +64,7 @@ export const TOOL_BODY: Record<ToolName, string> = {
   details: "Select a cell or an area on the map to see its details.",
   table: "The tables arrive in a later phase.",
   places: "Draw, upload or pick a place.",
+  report: "Draw, upload or pick a place, then open its report.",
 };
 
 /** every tool is always active, in both lenses, on every viewport. */
@@ -105,7 +111,8 @@ export function panelHeaderTitle(tool: ToolName, ctx: PanelContext): string {
     case "table":
       return ctx.tableSubject ?? TOOL_LABEL.table;
     case "places":
+    case "report":
       if (ctx.placeCount > 0) return ctx.placeCount === 1 ? "1 place" : `${ctx.placeCount} places`;
-      return ctx.lastClicked ? "Last clicked place" : TOOL_LABEL.places;
+      return ctx.lastClicked ? "Last clicked place" : TOOL_LABEL[tool];
   }
 }

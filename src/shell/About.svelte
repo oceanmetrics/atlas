@@ -13,7 +13,11 @@
     CATALOG_PAGE_HREF,
     CITE_ATLAS,
     CITE_COLLECTION_NOTE,
+    INSTANCE,
+    SEAL,
   } from "../lib/brand/instance";
+  import { agencyDisplayName, SEAL_MIN_PX, shouldShowSeal } from "../lib/ui/sealVisibility";
+  import { appLine, releaseLine, type AboutRelease } from "./aboutRelease";
 
   interface Props {
     open: boolean;
@@ -21,10 +25,30 @@
     appVersion: string;
     /** the Help menu's Docs destination (Shell.svelte's `docsHref`). */
     helpDocsHref: string;
-    /** the app's CHANGELOG. */
+    /** the app's CHANGELOG, or (an instance with a release) that release's notes. */
     changelogHref: string;
+    /** an instance with a release registry: the resolved release; `null` otherwise. */
+    release?: AboutRelease | null;
+    /** the seal build flag (`VITE_SEAL`, exactly "1" or no seal: fail closed); a prop for tests. */
+    sealFlag?: string;
   }
-  let { open, onclose, appVersion, helpDocsHref, changelogHref }: Props = $props();
+  let {
+    open,
+    onclose,
+    appVersion,
+    helpDocsHref,
+    changelogHref,
+    release = null,
+    sealFlag = import.meta.env.VITE_SEAL,
+  }: Props = $props();
+
+  // the agency seal (instance.json `seal`): only on a build with VITE_SEAL=1 whose agency resolves
+  // (ui/sealVisibility.ts), never below its minimum size, on a plain plate whose padding is the
+  // guide's clear space; a seal image that fails to load is dropped, never a broken image
+  let sealFailed = $state(false);
+  const showSeal = $derived(!!SEAL && shouldShowSeal(sealFlag, SEAL.agency) && !sealFailed);
+  const agencyName = $derived(SEAL ? agencyDisplayName(SEAL.agency) : null);
+  const hasCatalogPage = INSTANCE.pages.includes("catalog");
 </script>
 
 <Modal {open} title="About {BRAND_NAME}" {onclose}>
@@ -40,24 +64,54 @@
     {#each ABOUT_LINKS as l (l.href)}
       <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>
     {/each}
-    <li>
-      <a href={CATALOG_PAGE_HREF} data-testid="about-catalog-link"
-        >Catalog of collections and credits</a
-      >
-    </li>
+    {#if hasCatalogPage}
+      <li>
+        <a href={CATALOG_PAGE_HREF} data-testid="about-catalog-link"
+          >Catalog of collections and credits</a
+        >
+      </li>
+    {/if}
   </ul>
 
   <h3>How to cite this atlas</h3>
-  <p class="cite">{CITE_ATLAS}. {CITE_COLLECTION_NOTE}</p>
+  <!-- the per-collection note belongs to an instance with a catalog of collections -->
+  <p class="cite">{CITE_ATLAS}.{hasCatalogPage ? ` ${CITE_COLLECTION_NOTE}` : ""}</p>
 
   <dl class="meta">
+    {#if release}
+      <dt>Release</dt>
+      <dd data-testid="about-release">{releaseLine(release)}</dd>
+    {/if}
     <dt>App</dt>
-    <dd>{BRAND_NAME} {appVersion}</dd>
+    <dd data-testid="about-app">{appLine(__APP_SOURCE__, appVersion, INSTANCE.id)}</dd>
   </dl>
+  {#if release?.restricted}
+    <p class="restricted-note">
+      This is a pre-release under review, not the public release — see the version chip to switch.
+    </p>
+  {/if}
   <p class="more">
     <a href={helpDocsHref} target="_blank" rel="noopener">Documentation</a>
     <a href={changelogHref} target="_blank" rel="noopener">What changed</a>
   </p>
+  {#if INSTANCE.about.credits}
+    <p class="credits">{INSTANCE.about.credits}</p>
+  {/if}
+  {#if __SEAL__ && showSeal && SEAL}
+    <div class="seal-row">
+      <span class="seal-plate">
+        <img
+          src={SEAL.src}
+          alt="Seal of the {agencyName}"
+          width={SEAL_MIN_PX}
+          height={SEAL_MIN_PX}
+          loading="lazy"
+          onerror={() => (sealFailed = true)}
+        />
+      </span>
+      <span>Prepared for the <b>{agencyName}</b>.</span>
+    </div>
+  {/if}
 </Modal>
 
 <style>
@@ -121,5 +175,38 @@
     gap: var(--space-1) var(--space-3);
     margin: 0;
     font-size: var(--text-sm);
+  }
+  .restricted-note {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .credits {
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .seal-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+  /* the seal at >= 72 px, unmodified, on a plain plate whose padding IS the clear space (a quarter
+     of the seal's own height, the MMA guide p. 4) */
+  .seal-plate {
+    flex: none;
+    display: block;
+    box-sizing: content-box;
+    padding: 18px;
+    background: var(--surface-seal-plate);
+    border-radius: var(--radius-card);
+  }
+  .seal-plate img {
+    display: block;
   }
 </style>

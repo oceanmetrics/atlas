@@ -25,7 +25,27 @@ const TABLE = JSON.parse(readFileSync("tests/fixtures/obis_redirect_cases.json",
 };
 
 // every key obis-hex writes (src/lib/state/url.ts) and every query switch it reads
-const OBIS_HEX_KEYS = ["i", "l", "p", "r", "o", "t", "d", "g", "c", "k", "cc", "tc", "x", "xo", "b", "pl", "pc", "f", "v"];
+const OBIS_HEX_KEYS = [
+  "i",
+  "l",
+  "p",
+  "r",
+  "o",
+  "t",
+  "d",
+  "g",
+  "c",
+  "k",
+  "cc",
+  "tc",
+  "x",
+  "xo",
+  "b",
+  "pl",
+  "pc",
+  "f",
+  "v",
+];
 const OBIS_HEX_SWITCHES = ["?tour", "?modal", "?theme", "?data", "?h3t", "?legacy"];
 
 describe("the obis-hex -> atlas case table", () => {
@@ -107,9 +127,11 @@ describe("the atlas reads what the table writes", () => {
     const u = new URL(TABLE.cases.find((c) => c.atlas.includes("taxon=genus:Foo:bar"))!.atlas);
     const t = u.searchParams.get("taxon")!;
     expect([t.slice(0, t.indexOf(":")), t.slice(t.indexOf(":") + 1)]).toEqual(["genus", "Foo:bar"]);
-    expect(new URL(TABLE.cases.find((c) => c.atlas.includes("Incertae"))!.atlas).searchParams.get("taxon")).toBe(
-      "family:Incertae sedis",
-    );
+    expect(
+      new URL(TABLE.cases.find((c) => c.atlas.includes("Incertae"))!.atlas).searchParams.get(
+        "taxon",
+      ),
+    ).toBe("family:Incertae sedis");
   });
 });
 
@@ -121,7 +143,15 @@ describe("obisHexRedirect beyond the table", () => {
     expect(obisHexToAtlas(`https://marinebon.github.io/obis-hex/${h}`)).toBe(want);
   });
   it("never throws on junk", () => {
-    for (const s of ["", "#", "#=&=&", "#l=taxon:class:%E0%A4%A", "#pl=%ZZ", "?tour=%#c=a,b,c", null as unknown as string])
+    for (const s of [
+      "",
+      "#",
+      "#=&=&",
+      "#l=taxon:class:%E0%A4%A",
+      "#pl=%ZZ",
+      "?tour=%#c=a,b,c",
+      null as unknown as string,
+    ])
       expect(() => obisHexRedirect(s)).not.toThrow();
   });
   it("drops a place id outside the gazetteer alphabet", () => {

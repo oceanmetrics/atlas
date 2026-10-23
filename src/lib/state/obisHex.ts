@@ -72,12 +72,20 @@ function parseLayer(raw: string | undefined): Layer {
   if (!raw || raw === "all") return { kind: "all" };
   const parts = raw.split(":");
   try {
-    if (parts[0] === "eov" && parts.length === 2 && (OBIS_EOVS as readonly string[]).includes(parts[1]))
+    if (
+      parts[0] === "eov" &&
+      parts.length === 2 &&
+      (OBIS_EOVS as readonly string[]).includes(parts[1])
+    )
       return { kind: "eov", eov: parts[1] };
     if (parts[0] === "aphia" && parts.length === 2 && /^[1-9][0-9]{0,9}$/.test(parts[1]))
       return { kind: "aphia", id: Number(parts[1]) };
     if (parts[0] === "taxon" && parts.length === 3 && parts[1] && parts[2])
-      return { kind: "taxon", rank: decodeURIComponent(parts[1]), name: decodeURIComponent(parts[2]) };
+      return {
+        kind: "taxon",
+        rank: decodeURIComponent(parts[1]),
+        name: decodeURIComponent(parts[2]),
+      };
   } catch {
     /* malformed percent-encoding: all taxa, as obis-hex */
   }
@@ -131,14 +139,19 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
 
   // ---- the obis-hex view, by obis-hex's own parse rules ----
   const i = p.get("i");
-  const indicator: ObisIndicator = (INDICATORS as readonly string[]).includes(i ?? "") ? (i as ObisIndicator) : "es";
+  const indicator: ObisIndicator = (INDICATORS as readonly string[]).includes(i ?? "")
+    ? (i as ObisIndicator)
+    : "es";
   const layer = parseLayer(p.get("l"));
   const per = p.get("p");
   let decade: number | null =
-    per && per !== "all" && (OBIS_DECADES as readonly number[]).includes(Number(per)) ? Number(per) : null;
+    per && per !== "all" && (OBIS_DECADES as readonly number[]).includes(Number(per))
+      ? Number(per)
+      : null;
   const r = p.get("r");
   const rn = Number(r);
-  let res: number | "auto" = r && r !== "auto" && Number.isInteger(rn) && rn >= 1 && rn <= RES_MAX ? rn : "auto";
+  let res: number | "auto" =
+    r && r !== "auto" && Number.isInteger(rn) && rn >= 1 && rn <= RES_MAX ? rn : "auto";
   const proj = p.get("g") === "flat" ? "mercator" : "globe";
   const cam = (p.get("c") ?? "").split(",").map(Number);
   const camOk =
@@ -150,25 +163,35 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
     cam[1] <= 90 &&
     cam[2] >= 0 &&
     cam[2] <= 22;
-  const [lon, lat, zoom] = camOk ? cam : [OBIS_DEFAULT_CAMERA.lon, OBIS_DEFAULT_CAMERA.lat, OBIS_DEFAULT_CAMERA.zoom];
+  const [lon, lat, zoom] = camOk
+    ? cam
+    : [OBIS_DEFAULT_CAMERA.lon, OBIS_DEFAULT_CAMERA.lat, OBIS_DEFAULT_CAMERA.zoom];
   const plRaw = (p.get("pl") ?? "").trim();
   const place = PLACE_ID_RE.test(plRaw) ? plRaw : null;
   const placeColl = place && PLACE_COLL_RE.test(p.get("pc") ?? "") ? p.get("pc")! : null;
 
   const present = [...p.keys(), ...[...q.keys()].map((k) => `?${k}`)];
-  const dropOf = (carried: Set<string>) => [...new Set(present.filter((k) => !carried.has(k)))].sort();
+  const dropOf = (carried: Set<string>) =>
+    [...new Set(present.filter((k) => !carried.has(k)))].sort();
 
   // ---- a place outlined and no layer view chosen: the Place page (exact values, not hexagon statistics) ----
   const realView = layer.kind !== "all" || indicator !== "es" || decade !== null || res !== "auto";
   if (place && !realView) {
-    return { url: `${base}/places/p/${placesPath(place)}`, exact: true, dropped: dropOf(new Set(["pl"])), notes };
+    return {
+      url: `${base}/places/p/${placesPath(place)}`,
+      exact: true,
+      dropped: dropOf(new Set(["pl"])),
+      notes,
+    };
   }
 
   // ---- the atlas OBIS layer ----
   if (layer.kind === "taxon" && decade !== null) {
     decade = null;
     exact = false;
-    notes.push("a taxon group has no decade layers in the release (obis-hex loaded nothing): the period is all");
+    notes.push(
+      "a taxon group has no decade layers in the release (obis-hex loaded nothing): the period is all",
+    );
   }
   const cap =
     layer.kind === "aphia"
@@ -187,7 +210,9 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
     res = cap;
   } else if (res === "auto" && layer.kind === "aphia" && Math.min(zoomToRes(zoom), RES_MAX) > cap) {
     exact = false;
-    notes.push(`at zoom ${zoom} obis-hex drew a WoRMS subtree at res ${Math.min(zoomToRes(zoom), RES_MAX)}; the atlas serves up to res ${cap}`);
+    notes.push(
+      `at zoom ${zoom} obis-hex drew a WoRMS subtree at res ${Math.min(zoomToRes(zoom), RES_MAX)}; the atlas serves up to res ${cap}`,
+    );
   }
 
   const params = new URLSearchParams();
@@ -220,7 +245,9 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
     carried.add("pl");
     if (placeColl) {
       exact = false;
-      notes.push("the place's collection (pc) is not carried: the atlas resolves the id through the gazetteer index");
+      notes.push(
+        "the place's collection (pc) is not carried: the atlas resolves the id through the gazetteer index",
+      );
     }
   }
   if (p.has("x")) {
@@ -229,13 +256,22 @@ export function obisHexRedirect(url: string, origin: string = OM_ORIGIN): ObisHe
   }
   if (p.has("f") || p.get("v") === "places") {
     exact = false;
-    notes.push("the place filter (f) and the view as places (v) are not carried; the Place page has the exact values");
+    notes.push(
+      "the place filter (f) and the view as places (v) are not carried; the Place page has the exact values",
+    );
   }
   if (q.has("data")) {
     exact = false;
-    notes.push("the pinned release (?data=) is not carried: the atlas reads the current obis-h3 collection");
+    notes.push(
+      "the pinned release (?data=) is not carried: the atlas reads the current obis-h3 collection",
+    );
   }
-  return { url: `${base}/atlas/?${prettyEncode(params)}${hashOut}`, exact, dropped: dropOf(carried), notes };
+  return {
+    url: `${base}/atlas/?${prettyEncode(params)}${hashOut}`,
+    exact,
+    dropped: dropOf(carried),
+    notes,
+  };
 }
 
 /** the atlas (or Place page) URL of an obis-hex link */

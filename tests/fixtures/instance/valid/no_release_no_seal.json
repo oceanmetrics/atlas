@@ -1,11 +1,7 @@
 {
   "id": "example-stac",
   "name": "OceanMetrics Atlas",
-  "wordmark": [
-    "Ocean",
-    "Metrics",
-    "Atlas"
-  ],
+  "wordmark": ["Ocean", "Metrics", "Atlas"],
   "title": "OceanMetrics Atlas",
   "description": "OceanMetrics Atlas: a catalog of species distribution model products with explicit credits, plus places, for U.S. marine areas. Supported by MMA and MBON.",
   "og": {
@@ -83,25 +79,18 @@
       }
     ]
   },
-  "lenses": [
-    "collection",
-    "species"
-  ],
+  "lenses": ["collection", "species"],
   "defaults": {
     "lens": "collection",
     "theme": "dark",
     "tour": "on"
   },
-  "tools": [
-    "layers",
-    "details",
-    "table",
-    "places"
-  ],
-  "pages": [
-    "index",
-    "catalog"
-  ],
+  "tools": ["layers", "details", "table", "places"],
+  "pages": ["index", "catalog"],
+  "repo": "oceanmetrics/atlas",
+  "download": {
+    "prefix": "example-atlas"
+  },
   "feedback": {
     "app": "oceanmetrics-atlas"
   },

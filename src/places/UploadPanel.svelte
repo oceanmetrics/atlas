@@ -19,9 +19,14 @@
     onAdd: (places: NormalizedPlace[]) => void;
     /** Deliverable 7: counts and buckets only -- see analytics.ts's own header. */
     track?: Track;
+    /** an instance with a release: the release's study-area check (`places/studyArea.ts`
+     * `checkTouchesStudyArea`, a network round trip through its cell tiles), run after a parse
+     * succeeds; a refusal is shown verbatim, and a check that fails to run never blocks the place.
+     * Absent: no check (the caller owns which release, if any, applies). */
+    studyAreaCheck?: (places: NormalizedPlace[]) => Promise<Refusal | null>;
   }
 
-  let { mapHandle, getEngine, onAdd, track = noopTrack }: Props = $props();
+  let { mapHandle, getEngine, onAdd, track = noopTrack, studyAreaCheck }: Props = $props();
 
   let refusal = $state<Refusal | null>(null);
   let busy = $state(false);
@@ -59,6 +64,19 @@
   // `onAdd` (Places.svelte's `addEnteredPlaces`) already announces success once the place is
   // actually added to `#pl=` -- this only announces the FAILURE paths that end here instead.
   async function finalize(places: NormalizedPlace[]) {
+    if (studyAreaCheck) {
+      try {
+        const outside = await studyAreaCheck(places);
+        if (outside) {
+          refusal = outside;
+          trackOutcome(places.length, "refused");
+          return;
+        }
+      } catch {
+        // the release grid/engine failing to boot never blocks an otherwise-valid upload (the
+        // study-area clip refines a geometrically valid place, it is not a precondition)
+      }
+    }
     onAdd(places);
     trackOutcome(places.length, "ok");
   }

@@ -30,6 +30,8 @@
 import type { Dock } from "../lib/ui/panelGeometry";
 import { PANEL_SIZE_MAX, PANEL_SIZE_MIN, clampPanelSize } from "../lib/ui/panelGeometry";
 import type { SheetDetent } from "../lib/ui/sheetGeometry";
+import { PLACES_FLOW_TOOL } from "../lib/state/legacy";
+import { RELEASE_KEYS } from "../lib/state/types";
 import type { ToolName } from "./tools";
 
 export const UI_TOKEN_VERSION = "4";
@@ -38,7 +40,7 @@ export const UI_TOKEN_VERSION = "4";
  * string literals, duplicated here rather than imported -- importing a `.svelte` file's module
  * script from a plain `.ts` file is the same friction `shell/tools.ts`'s own header documents).
  * `null` = neither row expanded. */
-export type UiExpandedRow = "data-raster" | null;
+export type UiExpandedRow = "data-raster" | "data-zones" | null;
 
 export interface UiState {
   tool: ToolName;
@@ -58,10 +60,15 @@ const TOOL_CODE: Record<ToolName, string> = {
   details: "d",
   table: "t",
   places: "p",
+  report: "r",
 };
+// `p` and `r` both name the Places flow: each reads as the one this instance's rail carries (the
+// Report tool on an instance whose `tools` name it, else Places), so a link shared from one atlas
+// opens the same flow on the other
 const CODE_TOOL: Partial<Record<string, ToolName>> = {
   ...Object.fromEntries(Object.entries(TOOL_CODE).map(([tool, code]) => [code, tool as ToolName])),
-  r: "places", // the MarineSensitivity atlas' retired Report tool (its body was the Places flow)
+  p: PLACES_FLOW_TOOL,
+  r: PLACES_FLOW_TOOL,
 };
 
 const DOCK_CODE: Record<Dock, string> = { left: "l", right: "r" };
@@ -74,10 +81,12 @@ const CODE_DETENT: Partial<Record<string, SheetDetent>> = { p: "peek", h: "half"
 
 const ROW_CODE: Record<Exclude<UiExpandedRow, null>, string> = {
   "data-raster": "d",
+  "data-zones": "z",
 };
 const CODE_ROW: Partial<Record<string, UiExpandedRow>> = {
   d: "data-raster",
-  z: null, // the retired Outlines row (older links) reads as "nothing expanded"
+  // the Outlines row exists only where the release draws zones; elsewhere it reads as "nothing expanded"
+  z: RELEASE_KEYS ? "data-zones" : null,
   n: null,
 };
 
@@ -127,7 +136,7 @@ function parseUiV4(parts: string[]): UiState | null {
  * `l` with the retired `info` tab -> `details`. `tabCode` is undefined for v1 (no tab field). */
 function legacyTool(toolCode: string, tabCode: string | undefined): ToolName | null {
   if (toolCode === "f") return "details";
-  if (toolCode === "p" || toolCode === "r") return "places";
+  if (toolCode === "p" || toolCode === "r") return PLACES_FLOW_TOOL;
   const tool = CODE_TOOL[toolCode];
   if (!tool) return null;
   return tool === "layers" && tabCode === "i" ? "details" : tool;

@@ -24,6 +24,8 @@
  * No hex literal: every color is `var(--token)` (scripts/check-hex-literals.mjs scans this file).
  */
 @import "@instance/tokens.css";
+/* the instance's web fonts (@font-face; the instance's `fonts.css`, empty for system fonts) */
+@import "@instance/fonts.css";
 /* atlas-3 step 4 fix round 1 (SC 2.5.8): the shared coarse-pointer touch-target floor, imported
    once at the app root as that step's own report asks -- it targets several src/lib/ui/*
    selectors (`.seg button`, `button.chip`, ...) that the shell's own hand-built version chip and

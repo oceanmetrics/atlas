@@ -8,11 +8,13 @@ import {
   notFoundReasons,
   resolveDeepLink,
   resolveFromAlias,
+  settleUs,
   targetOf,
   type DeepLinkEvent,
 } from "../../../src/lens/species/data/resolve";
 import { createShardCache } from "../../../src/lens/species/data/shards";
 import { parseSel } from "../../../src/lib/state/codec";
+import { RELEASE_KEYS, SCORES_KEYS } from "../../../src/lib/state/types";
 import type { EventParamsMap } from "../../../src/lib/analytics/events";
 import { fixtureFetch, taxaIndexFor } from "./fixtures";
 
@@ -122,10 +124,49 @@ describe("a non-US target turns the US-only box off", () => {
     expect([r.sp, r.in, r.clearUs]).toEqual([WRYBILL, "bl", true]);
   });
 
-  it("without the index loaded yet, an unknown validity clears the box rather than hiding the taxon", () => {
+  it("without the index loaded yet, validity is UNDECIDED (null), never 'clear US-only' (regression: legacy link wrote us=0)", () => {
     const r = resolveFromAlias("k", { mergedKey: "m", dsKey: "am" }, null);
     if (r.kind !== "species") throw new Error(r.kind);
-    expect(r.clearUs).toBe(true);
+    expect(r.clearUs).toBeNull();
+    const cur = parseSel({ search: "", hash: "" });
+    // undecided keeps the URL's own `us` (default true), exactly as a searched species does
+    expect(targetOf(r, cur)?.us).toBe(true);
+    expect(targetOf(r, { ...cur, us: false })?.us).toBe(false);
+  });
+
+  it("settleUs decides once the index is in: US-valid keeps the box, non-US clears it, unknown-to-index clears it", () => {
+    const un = resolveFromAlias("k", { mergedKey: LEATHERBACK, dsKey: "ms_merge" }, null);
+    const us = settleUs(un, taxaIndexFor("v9"));
+    if (us.kind !== "species") throw new Error(us.kind);
+    expect(us.clearUs).toBe(false);
+    const non = settleUs(
+      resolveFromAlias("k", { mergedKey: WRYBILL, dsKey: "ms_merge" }, null),
+      taxaIndexFor("v9"),
+    );
+    if (non.kind !== "species") throw new Error(non.kind);
+    expect(non.clearUs).toBe(true);
+    const gone = settleUs(
+      resolveFromAlias("k", { mergedKey: "ms_merge|nope", dsKey: "ms_merge" }, null),
+      taxaIndexFor("v9"),
+    );
+    if (gone.kind !== "species") throw new Error(gone.kind);
+    expect(gone.clearUs).toBe(true);
+    // index still unavailable (load failed): stays undecided
+    expect(settleUs(un, null)).toMatchObject({ clearUs: null });
+  });
+
+  it("a legacy mdl_seq link's canonical URL never contains 'undefined' and never us=0 for a US species", async () => {
+    const r = await resolveDeepLink("v9", new URLSearchParams(`mdl_key=${LEATHERBACK}`), {
+      ...opts(),
+      index: null,
+    });
+    if (r.kind !== "species") throw new Error(r.kind);
+    const loc = { search: "?ver=v9&lens=species&mdl_seq=54247&splash=false", hash: "" };
+    const t = targetOf(settleUs(r, taxaIndexFor("v9")), parseSel(loc))!;
+    const { search } = canonicalUrl(loc, t);
+    expect(search).not.toContain("undefined");
+    expect(search).not.toContain("us=0");
+    expect(search).not.toContain("rep=");
   });
 });
 
@@ -172,14 +213,34 @@ describe("the canonical URL", () => {
     expect(search).not.toContain("mdl_key");
   });
 
-  it("never writes a retired scores-era key (out, ver) into the link", () => {
-    const { search } = canonicalUrl(
-      { search: "?mdl_seq=54383&out=ecoregion&ver=v9", hash: "" },
-      { sp: "54383", in: MERGED_IN },
-    );
-    expect(search).not.toContain("out=");
-    expect(search).not.toContain("ver=");
+  it("keeps the lens's own `out` default rather than writing the scores one into the link", () => {
+    expect(
+      canonicalUrl({ search: "?mdl_seq=54383", hash: "" }, { sp: "54383", in: MERGED_IN }).search,
+    ).not.toContain("out=");
   });
+
+  // `out` and `ver` belong to an instance that draws zones from a release registry (the
+  // MarineSensitivity instance): there an explicit `out` survives; elsewhere both are never written
+  it.runIf(SCORES_KEYS)("an explicit `out` survives the rewrite (an instance with zones)", () => {
+    expect(
+      canonicalUrl(
+        { search: "?mdl_seq=54383&out=ecoregion", hash: "" },
+        { sp: "54383", in: MERGED_IN },
+      ).search,
+    ).toContain("out=ecoregion");
+  });
+
+  it.runIf(!SCORES_KEYS && !RELEASE_KEYS)(
+    "never writes a retired scores-era key (out, ver) into the link (an instance without them)",
+    () => {
+      const { search } = canonicalUrl(
+        { search: "?mdl_seq=54383&out=ecoregion&ver=v9", hash: "" },
+        { sp: "54383", in: MERGED_IN },
+      );
+      expect(search).not.toContain("out=");
+      expect(search).not.toContain("ver=");
+    },
+  );
 
   it("omits in= for the merged model and rep= for the default representation", () => {
     const { search } = canonicalUrl(

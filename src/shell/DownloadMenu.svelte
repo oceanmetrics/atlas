@@ -29,6 +29,7 @@
   import type { MapHandle } from "../lib/map/map";
   import type { Place } from "../lib/geo/placeCodec";
   import { placesToGeoJson, downloadGeoJson } from "../places/download";
+  import type { FeatureCollection, Geometry } from "geojson";
   import {
     buildDownloadItems,
     type DownloadItemKind,
@@ -63,6 +64,10 @@
     legendStops?: readonly LegendStop[];
     formatValue?: (v: number) => string;
     places: readonly Place[];
+    /** the "Selected places · GeoJSON" builder when the caller resolves more than the generic one (an
+     * instance with a release: zone places named in full, with their polygons,
+     * `places/zoneDownload.ts`); absent, `places/download.ts#placesToGeoJson`. */
+    placesGeoJson?: (places: readonly Place[]) => FeatureCollection<Geometry | null>;
     track: (name: "download_export", params: { kind: string; lens: string }) => void;
     /** `"right"` on desktop (the top bar's rightmost icon group) -- the phone Modal ignores this. */
     align?: "left" | "right";
@@ -94,6 +99,7 @@
     legendStops = [],
     formatValue = legendValueFormatter(lens),
     places,
+    placesGeoJson,
     track,
     align = "right",
     autoOpen,
@@ -170,7 +176,7 @@
   }
 
   function downloadPlacesGeojson() {
-    const fc = placesToGeoJson(places);
+    const fc = placesGeoJson ? placesGeoJson(places) : placesToGeoJson(places);
     downloadGeoJson(fc, placesFileName(ver ?? "unknown"));
   }
 

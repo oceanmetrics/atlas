@@ -53,6 +53,8 @@
   "defaults": { "lens": "collection", "theme": "dark", "tour": "on" },
   "tools": ["layers", "details", "table", "places"],
   "pages": ["index", "catalog"],
+  "repo": "oceanmetrics/atlas",
+  "download": { "prefix": "oceanmetrics-atlas" },
   "feedback": { "app": "oceanmetrics-atlas" },
   "places": {
     "site": "https://oceanmetrics.io/places/",

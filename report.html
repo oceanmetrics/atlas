@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- always the `paper` (light) theme -- this is a document, print-first, never the app's navy
+     chrome (instances/<id>/tokens.css: ":root, :root[data-theme='navy']" is the default, so this
+     must be set explicitly or every token resolves to the dark theme's pairing instead). -->
+<html lang="en" data-theme="paper">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- the names and the favicon come from the instance (vite.config.ts's atlas-instance plugin) -->
+    <title>%instance.name% — Report</title>
+    <meta name="description" content="Print-first report for a %instance.name% place." />
+    <link rel="icon" type="image/svg+xml" href="%instance.favicon%" />
+
+    <!--
+      atlas-7 step 2: the SAME access gate as index.html ("report.html must refuse a restricted ver on
+      the public host exactly as index.html does"): the build writes the ONE early-fetch script
+      (src/lib/release/earlyFetch.inline.js) into both pages for an instance with a release
+      registry. tests/release/inline-early-fetch.test.ts runs both pages' copies through the same
+      case table.
+    -->
+    <!--instance:early-fetch-->
+  </head>
+  <body>
+    <!--
+      the print-first report document (plan D2, D9): a second, standalone HTML entry so the same
+      build runs under both /atlas/ and /v9/atlas/ with no client router. atlas-7 steps 2-4: the
+      document + progressive rendering, the print stylesheet + exporters, and the entry points
+      from index.html's Places panel / zones table.
+    -->
+    <main id="report-root">
+      <p>Loading…</p>
+    </main>
+    <noscript>This report needs JavaScript to compute and render.</noscript>
+    <script type="module" src="/src/report-main.ts"></script>
+  </body>
+</html>

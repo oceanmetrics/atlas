@@ -1,0 +1,13 @@
+diff --git a/src/lib/report/model.ts b/src/lib/report/model.ts
+index 0000000..0000000 100644
+--- a/src/lib/report/model.ts
++++ b/src/lib/report/model.ts
+@@ -571,7 +571,7 @@
+     "zero inside the study area and land and foreign waters excluded entirely.",
+   // P3 fix (Opus eyes-on review, 2026-09-24): "modelled" -> "modeled" -- this app's own copy is
+   // US spelling throughout (CLAUDE.md/docs convention), this line was the one holdout.
+-  "Species rows are every distribution model whose range overlaps the area, weighted by modeled " +
++  "Species rows are every distribution model whose range overlaps the area, weighted by modelled " +
+     "habitat suitability, the governing extinction-risk score and the overlapping area.",
+ ];
+ 

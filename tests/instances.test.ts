@@ -21,9 +21,12 @@ import {
 } from "../scripts/instance.mjs";
 import { INSTANCE, WORDMARK } from "../src/lib/brand/instance";
 import { CATALOG_GROUPS, GROUP_LABEL, GROUP_ORDER } from "../src/lib/catalog/load";
-import { DEFAULT_SEL, LENSES, THEMES } from "../src/lib/state/types";
+import { ALL_LENSES, DEFAULT_SEL, LENSES, THEMES } from "../src/lib/state/types";
 import { ALL_TOOLS, TOOL_ORDER } from "../src/shell/tools";
-import { CRITICAL_BUDGET_BYTES, RUNTIME_WORKER_BUDGET_BYTES } from "../scripts/size-budget-core.mjs";
+import {
+  CRITICAL_BUDGET_BYTES,
+  RUNTIME_WORKER_BUDGET_BYTES,
+} from "../scripts/size-budget-core.mjs";
 
 const SCHEMA = JSON.parse(readFileSync(SCHEMA_FILE, "utf8"));
 const OM = readInstance("oceanmetrics");
@@ -51,7 +54,8 @@ const jsonFiles = (dir: string) =>
   readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort();
-const readFix = (kind: string, f: string) => JSON.parse(readFileSync(`${FIX}/${kind}/${f}`, "utf8"));
+const readFix = (kind: string, f: string) =>
+  JSON.parse(readFileSync(`${FIX}/${kind}/${f}`, "utf8"));
 const EXPECTED: Record<string, string> = JSON.parse(readFileSync(`${FIX}/invalid.json`, "utf8"));
 
 describe("instance.schema.json 1.1 fixtures", () => {
@@ -62,17 +66,24 @@ describe("instance.schema.json 1.1 fixtures", () => {
   it.each(jsonFiles(`${FIX}/valid`))("valid/%s passes", (f) => {
     expect(validateInstance(readFix("valid", f), SCHEMA)).toEqual([]);
   });
-  it.each(jsonFiles(`${FIX}/invalid`))("invalid/%s breaks exactly one rule, its expected one", (f) => {
-    const errors = validateInstance(readFix("invalid", f), SCHEMA);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain(EXPECTED[f]);
-  });
+  it.each(jsonFiles(`${FIX}/invalid`))(
+    "invalid/%s breaks exactly one rule, its expected one",
+    (f) => {
+      const errors = validateInstance(readFix("invalid", f), SCHEMA);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain(EXPECTED[f]);
+    },
+  );
   it("every lens has its defaults.lens-in-lenses rule, so a new lens cannot skip it", () => {
-    const ruled = SCHEMA.allOf.map(
+    // the lens rules (the other allOf rules, such as report-needs-report-strings, say something else)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the schema JSON, read untyped
+    const lensRules = SCHEMA.allOf.filter((r: any) => r.if.properties.defaults);
+    const ruled = lensRules.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above
       (r: any) => r.if.properties.defaults.properties.lens.const as string,
     );
     expect(ruled).toEqual(SCHEMA.$defs.lens.enum);
-    for (const r of SCHEMA.allOf) {
+    for (const r of lensRules) {
       const lens = r.if.properties.defaults.properties.lens.const;
       expect(r.then.properties.lenses.contains.const).toBe(lens);
     }
@@ -113,21 +124,33 @@ describe("validateInstance: one seeded fault per rule", () => {
       '$.lenses: has no "collection"',
       "$.lenses: fewer than 1 items",
     ]);
-    expect(errs((i) => (i.lenses = ["collection", "lens"]))[0]).toMatch(/^\$\.lenses\[1\]: "lens" not one of/);
+    expect(errs((i) => (i.lenses = ["collection", "lens"]))[0]).toMatch(
+      /^\$\.lenses\[1\]: "lens" not one of/,
+    );
     expect(errs((i) => (i.defaults.lens = "species"))).toEqual([]);
     expect(errs((i) => (i.defaults.lens = "scores"))).toEqual(['$.lenses: has no "scores"']);
     expect(errs((i) => (i.tools = [...i.tools, "report"]))).toEqual([]);
-    expect(errs((i) => (i.pages = ["index", "gallery"]))[0]).toMatch(/^\$\.pages\[1\]: "gallery" not one of/);
+    expect(errs((i) => (i.pages = ["index", "gallery"]))[0]).toMatch(
+      /^\$\.pages\[1\]: "gallery" not one of/,
+    );
     expect(errs((i) => (i.pages = ["catalog"]))).toEqual(['$.pages: has no "index"']);
     expect(errs((i) => delete i.pages)).toEqual(['$: missing "pages"']);
     const registry = "https://example.org/registry/";
     expect(errs((i) => (i.release = { registry }))).toEqual([]);
-    expect(errs((i) => (i.release = { registry: "https://example.org/registry" }))[0]).toMatch(/release\.registry/);
+    expect(errs((i) => (i.release = { registry: "https://example.org/registry" }))[0]).toMatch(
+      /release\.registry/,
+    );
     expect(errs((i) => (i.release = { registry, access: "open" }))[0]).toMatch(/release\.access/);
-    expect(errs((i) => (i.release = { registry, preview: "https://p.example.org/" }))[0]).toMatch(/release\.preview/);
+    expect(errs((i) => (i.release = { registry, preview: "https://p.example.org/" }))[0]).toMatch(
+      /release\.preview/,
+    );
     expect(errs((i) => (i.seal = { agency: "MMA", src: "./seal.svg" }))).toEqual([]);
-    expect(errs((i) => (i.seal = { agency: "NOAA", src: "./seal.svg" }))[0]).toMatch(/seal\.agency/);
-    expect(errs((i) => (i.seal = { agency: "MMA", src: "/seal.svg" }))[0]).toMatch(/seal\.src: matches 0 of oneOf/);
+    expect(errs((i) => (i.seal = { agency: "NOAA", src: "./seal.svg" }))[0]).toMatch(
+      /seal\.agency/,
+    );
+    expect(errs((i) => (i.seal = { agency: "MMA", src: "/seal.svg" }))[0]).toMatch(
+      /seal\.src: matches 0 of oneOf/,
+    );
     expect(errs((i) => (i.budget.static_kb = 0))).toEqual(["$.budget.static_kb: less than 1"]);
     expect(errs((i) => (i.budget.worker_kb = 1.5))).toEqual(["$.budget.worker_kb: not a integer"]);
     expect(errs((i) => delete i.budget)).toEqual(['$: missing "budget"']);
@@ -162,7 +185,7 @@ describe("the built instance chooses among what the build knows", () => {
   });
 
   it("the oceanmetrics instance's defaults are Lens / Theme members, and DEFAULT_SEL uses them", () => {
-    expect(LENSES).toContain(OM.defaults.lens);
+    expect(ALL_LENSES).toContain(OM.defaults.lens);
     expect(THEMES).toContain(OM.defaults.theme);
     if (instanceId() === "oceanmetrics") {
       expect(DEFAULT_SEL.lens).toBe(OM.defaults.lens);
@@ -180,8 +203,12 @@ describe("the built instance chooses among what the build knows", () => {
     }
   });
 
+  it("the selected instance's build carries exactly its lenses, in its order", () => {
+    expect(LENSES).toEqual(INSTANCE.lenses);
+  });
+
   it("the oceanmetrics instance builds lenses this build knows, publishes pages that exist, and its budget is the size gate's", () => {
-    for (const l of OM.lenses) expect(LENSES).toContain(l);
+    for (const l of OM.lenses) expect(ALL_LENSES).toContain(l);
     for (const p of OM.pages) expect(existsSync(`${p}.html`)).toBe(true);
     expect(OM.budget).toEqual({
       static_kb: CRITICAL_BUDGET_BYTES / 1024,
@@ -191,19 +218,23 @@ describe("the built instance chooses among what the build knows", () => {
     expect(OM.seal).toBeUndefined();
   });
 
-  it("the marinesensitivity instance names values of its own week-4 build (not this build's unions)", () => {
+  it("the marinesensitivity instance builds the 0.10.93 atlas: Scores and Species, the Report rail and page, the registry, the seal", () => {
     const mst = readInstance("marinesensitivity");
-    expect(mst.tools).toContain("report");
-    expect(ALL_TOOLS).not.toContain("report");
+    expect(mst.tools).toEqual(["layers", "details", "table", "report"]);
+    expect(ALL_TOOLS).toContain("report");
     expect(mst.defaults.lens).toBe("scores");
     expect(mst.lenses).toEqual(["scores", "species"]);
-    expect(LENSES).not.toContain("scores");
+    expect(ALL_LENSES).toContain("scores");
     expect(mst.pages).toEqual(["index", "report"]);
-    expect(existsSync("report.html")).toBe(false);
+    expect(existsSync("report.html")).toBe(true);
     expect(mst.release.registry).toBe(mst.catalog.base);
+    expect(mst.release.docs).toBe("https://marinesensitivity.org/docs/");
     expect(mst.seal.agency).toBe("MMA");
-    expect(mst.budget).toEqual({ static_kb: 460, worker_kb: 150 });
+    expect(mst.report.stem).toBe("MarineSensitivity");
+    expect(mst.repo).toBe("MarineSensitivity/atlas");
     expect(existsSync(`${instanceDir("marinesensitivity")}/README.md`)).toBe(true);
+    // the build carries exactly the instance's lenses (state/types.ts LENSES, the module table)
+    if (instanceId() === "marinesensitivity") expect(LENSES).toEqual(["scores", "species"]);
   });
 });
 
@@ -282,7 +313,7 @@ describe("renderInstanceHtml fills index.html and catalog.html", () => {
     const out = renderInstanceHtml(index, mst, readMark(mst));
     expect(out).not.toContain(`property="og:image`);
     expect(out).toContain("<title>Scores · MarineSensitivity Atlas</title>");
-    expect(out).toContain('<span class="wm-0">MarineSensitivity Atlas</span>');
+    expect(out).toContain('<span class="wm-0">Marine Sensitivity Atlas</span>');
   });
 
   it("an unknown placeholder throws instead of shipping as text", () => {

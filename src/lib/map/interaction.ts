@@ -12,6 +12,8 @@
 //     67.5° span reads as 360°. `tests/map/no-fitbounds.test.ts` scans `src/lib/map` and `src/lens`
 //     for the call and fails on it.
 import { cellFromLonLat, gridFromBoot, type GridSpec } from "../grid/grid";
+import { zoneKeyProperty, zoneNameProperty, zoneQueryLayerIds } from "./layers/zones";
+import type { ZoneUnitSpec } from "./types";
 
 export interface LngLat {
   lng: number;
@@ -106,7 +108,7 @@ export interface FlyTarget {
 export const PROGRAMMATIC_EVENT_DATA = { atlasProgrammatic: true } as const;
 
 /**
- * Fly to a study area — centre + zoom, NEVER `fitBounds` (see the module header).
+ * Fly to a study area — centre + zoom, NEVER `fitBounds` over a zone set (see the module header).
  * Takes the row itself (`boot.study_areas[key]`), so the caller cannot accidentally pass a key that
  * this module would then have to resolve against a boot it does not hold.
  */
@@ -116,7 +118,7 @@ export function flyToStudyArea(map: FlyTarget, area: StudyArea): void {
 
 // --- clicks and hovers -------------------------------------------------------------------------
 
-/** the shape `queryRenderedFeatures` returns, narrowed to what a feature hit needs. */
+/** the shape `queryRenderedFeatures` returns, narrowed to what a zone hit needs. */
 export interface QueriedFeature {
   layer: { id: string };
   properties?: Record<string, unknown> | null;
@@ -130,32 +132,82 @@ export interface QueryableMap {
   project(lngLat: [number, number]): { x: number; y: number };
 }
 
+export interface ZoneHit {
+  unit: string;
+  key: string;
+  name: string;
+}
+
+/**
+ * The first zone the query hit, resolved against the unit list (a layer id alone is not enough:
+ * the key PROPERTY differs per unit). Features come back topmost-first, and `zoneQueryLayerIds`
+ * already orders fills before lines, so "the first one" is the intended answer.
+ */
+export function zoneHitFromFeatures(
+  features: readonly QueriedFeature[],
+  units: readonly ZoneUnitSpec[],
+): ZoneHit | null {
+  const byLayer = new Map<string, string>();
+  for (const u of units) {
+    byLayer.set(`${u.unit}_fill`, u.unit);
+    byLayer.set(`${u.unit}_ln`, u.unit);
+  }
+  for (const f of features) {
+    const unit = byLayer.get(f.layer?.id ?? "");
+    if (!unit) continue;
+    const props = f.properties ?? {};
+    const key = props[zoneKeyProperty(unit)];
+    if (typeof key !== "string" && typeof key !== "number") continue;
+    const name = props[zoneNameProperty(unit)];
+    return {
+      unit,
+      key: String(key),
+      name: typeof name === "string" && name ? name : String(key),
+    };
+  }
+  return null;
+}
+
+/** the zone under a screen point, or `null`. Used by both click and hover. */
+export function zoneAtPoint(
+  map: QueryableMap,
+  point: { x: number; y: number },
+  units: readonly ZoneUnitSpec[],
+): ZoneHit | null {
+  const layers = zoneQueryLayerIds(units);
+  if (!layers.length) return null;
+  return zoneHitFromFeatures(map.queryRenderedFeatures(point, { layers }), units);
+}
+
 export interface MapClick {
   lngLat: LngLat;
   /** `null` when the click is outside this release's grid — a fact about the COORDINATES, never a
    * clamped index (grid.ts). */
   cellId: number | null;
+  zone: ZoneHit | null;
 }
 
 export interface ClickContext {
   /** the release's grid, from `gridFromBoot(boot)`. Required: there is no default grid. */
   grid: GridSpec;
+  units: readonly ZoneUnitSpec[];
 }
 
 /**
- * Resolve a click into `{lngLat, cellId}`. The cell id is arithmetic on the RELEASE's grid
+ * Resolve a click into `{lngLat, cellId, zone}`. The cell id is arithmetic on the RELEASE's grid
  * — no `/cog/point`, no `cellid.tif` round trip (atlas-4 §6.6 fixes the Shiny app's order of
  * preference; plan D4 keeps `/cog/point` for species values only).
  */
 export function mapClick(
-  _map: QueryableMap,
+  map: QueryableMap,
   lngLat: LngLat,
-  _point: { x: number; y: number },
+  point: { x: number; y: number },
   ctx: ClickContext,
 ): MapClick {
   return {
     lngLat,
     cellId: cellFromLonLat(lngLat.lng, lngLat.lat, ctx.grid),
+    zone: zoneAtPoint(map, point, ctx.units),
   };
 }
 

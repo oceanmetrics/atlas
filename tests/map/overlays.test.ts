@@ -1,6 +1,7 @@
 // The "Place layers" overlays: their style objects, how composeStyle folds them in (sources, roles,
 // draw order, the group's visibility and opacity) and that no input means no trace of them.
 import { describe, expect, it } from "vitest";
+import { RELEASE_KEYS } from "../../src/lib/state/types";
 import {
   OVERLAY_FILL_OPACITY,
   overlayHitLayerIds,
@@ -145,7 +146,8 @@ describe("composeStyle with place overlays", () => {
 describe("the 'Place layers' stack group", () => {
   it("sits between the data and the selection in the default stack, is listed in the panel, and is not named 'Places'", () => {
     const i = DEFAULT_LAYER_STACK.indexOf("data-overlays");
-    expect(DEFAULT_LAYER_STACK[i - 1]).toBe("data-raster");
+    // just above the data (and above a release's Outlines, `data-zones`, where the instance has one)
+    expect(DEFAULT_LAYER_STACK[i - 1]).toBe(RELEASE_KEYS ? "data-zones" : "data-raster");
     expect(DEFAULT_LAYER_STACK[i + 1]).toBe("data-places");
     expect(LAYER_GROUP_IN_PANEL["data-overlays"]).toBe(true);
     // the rail's tool button is named "Places"; a row label containing it breaks that locator

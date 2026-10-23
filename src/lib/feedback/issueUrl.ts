@@ -12,6 +12,7 @@
 // compile-time guarantee `pageLocation.ts`'s own `LocationLike` uses, for the identical reason.
 // `tests/feedback/noHash.test.ts` is this directory's own copy of
 // `tests/analytics/noRawLocation.wiring.test.ts`'s source-scan gate.
+import { REPO } from "../brand/instance";
 
 export interface PageLocationLike {
   origin: string;
@@ -46,7 +47,7 @@ export interface FeedbackContext {
   theme: string;
 }
 
-const ISSUE_BASE = "https://github.com/oceanmetrics/atlas/issues/new";
+const ISSUE_BASE = `https://github.com/${REPO}/issues/new`;
 const LABELS = "beta-feedback";
 // GitHub silently truncates a `new/…` issue URL somewhere around 8 KB; staying comfortably under
 // that keeps every identifier intact even on a browser whose user agent string runs long.

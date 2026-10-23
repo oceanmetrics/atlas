@@ -1,13 +1,13 @@
 diff --git a/instances/oceanmetrics/instance.json b/instances/oceanmetrics/instance.json
-index 05d21f9..277ef34 100644
+index 0204ef2..05ee01f 100644
 --- a/instances/oceanmetrics/instance.json
 +++ b/instances/oceanmetrics/instance.json
-@@ -49,7 +49,7 @@
-       { "id": "unlisted", "label": "Unlisted (shared by link)" }
+@@ -50,7 +50,7 @@
      ]
    },
+   "lenses": ["collection", "species"],
 -  "defaults": { "lens": "collection", "theme": "dark", "tour": "on" },
 +  "defaults": { "lens": "collection", "theme": "auto", "tour": "on" },
    "tools": ["layers", "details", "table", "places"],
-   "feedback": { "app": "oceanmetrics-atlas" },
-   "places": {
+   "pages": ["index", "catalog"],
+   "repo": "oceanmetrics/atlas",

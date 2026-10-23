@@ -1,0 +1,18 @@
+diff --git a/src/lib/ui/flowerGeometry.ts b/src/lib/ui/flowerGeometry.ts
+index bb3fbf5..60734cf 100644
+--- a/src/lib/ui/flowerGeometry.ts
++++ b/src/lib/ui/flowerGeometry.ts
+@@ -225,9 +225,10 @@ export function computeFlowerReferenceRing(
+ ): FlowerReferenceRing {
+   const outerRadius = options.outerRadius ?? 100;
+   const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+-  const isFallback =
+-    maxScore === null || maxScore === undefined || !Number.isFinite(maxScore) || maxScore <= 0;
+-  const value = isFallback ? FLOWER_MAX_FALLBACK : signif3(clamp(maxScore as number, 0, 100));
++  // SEEDED FAULT (flower-ring-fixed-at-100): `maxScore` ignored -- always the fallback.
++  void maxScore;
++  const isFallback = true;
++  const value = FLOWER_MAX_FALLBACK;
+   const radius = innerRadius + (value / 100) * (outerRadius - innerRadius);
+   return { value, isFallback, radius };
+ }

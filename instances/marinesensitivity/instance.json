@@ -1,7 +1,7 @@
 {
   "id": "marinesensitivity",
   "name": "MarineSensitivity Atlas",
-  "wordmark": "MarineSensitivity Atlas",
+  "wordmark": "Marine Sensitivity Atlas",
   "title": "Scores · MarineSensitivity Atlas",
   "description": "Scores, species, places and reports for U.S. marine areas.",
   "og": {
@@ -17,8 +17,10 @@
     "description": "MarineSensitivity Atlas: one static web app for scores, species, places and reports over U.S. marine areas.",
     "links": [
       { "label": "OceanMetrics gazetteer (places)", "href": "https://oceanmetrics.io/places/" },
-      { "label": "Code on GitHub", "href": "https://github.com/MarineSensitivity/atlas" }
-    ]
+      { "label": "Code on GitHub", "href": "https://github.com/MarineSensitivity/atlas" },
+      { "label": "Ocean Metrics LLC", "href": "https://oceanmetrics.io" }
+    ],
+    "credits": "Prepared by Ben Best of Ocean Metrics LLC and Timothy White of MMA."
   },
   "catalog": {
     "base": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
@@ -34,6 +36,8 @@
   "defaults": { "lens": "scores", "theme": "dark", "tour": "on" },
   "tools": ["layers", "details", "table", "report"],
   "pages": ["index", "report"],
+  "repo": "MarineSensitivity/atlas",
+  "download": { "prefix": "marine-atlas" },
   "feedback": { "app": "atlas" },
   "places": {
     "site": "https://oceanmetrics.io/places/",
@@ -43,8 +47,10 @@
   "release": {
     "registry": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/marine-atlas/",
     "preview": "https://preview.marinesensitivity.org",
-    "access": "gate"
+    "access": "gate",
+    "docs": "https://marinesensitivity.org/docs/"
   },
   "seal": { "agency": "MMA", "src": "https://marinesensitivity.org/branding/mma-seal.svg" },
-  "budget": { "static_kb": 460, "worker_kb": 150 }
+  "report": { "title": "Marine Sensitivity Report", "stem": "MarineSensitivity" },
+  "budget": { "static_kb": 470, "worker_kb": 150 }
 }

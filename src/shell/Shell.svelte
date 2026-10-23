@@ -22,7 +22,7 @@
     type PanelContext,
     type ToolName,
   } from "./tools";
-  import { legacyToolFromParams } from "../lib/state/legacy";
+  import { PLACES_FLOW_TOOL, legacyToolFromParams } from "../lib/state/legacy";
   import { DETAILS_LINK_ATTR } from "../lib/map/popup";
   // R3-W8 item 3: the `ui=` token's parse/format core — see that module's own header for what it
   // carries and why it is a separate token from Sel's own query keys.
@@ -63,7 +63,14 @@
   } from "../lib/ui/sheetGeometry";
   import { createSelStore } from "../lib/state/sel.svelte";
   import { formatSel } from "../lib/state/codec";
-  import { resolveTheme, type LayerStackEntry } from "../lib/state/types";
+  import {
+    DEFAULT_SEL,
+    INSTANCE_LENS,
+    LENSES,
+    defaultOut,
+    resolveTheme,
+    type LayerStackEntry,
+  } from "../lib/state/types";
   import { createMap, type MapHandle } from "../lib/map/map";
   import { composeStyle, BASEMAP_LAYER_PREFIX } from "../lib/map/style";
   // R3 (round-2 plan §5 U4): the layer stack — resolved here (the SAME resolved object both
@@ -75,7 +82,19 @@
     BASEMAP_ATTRIBUTION,
     type CartoStyleLike,
   } from "../lib/map/layers/basemap";
-  import { BRAND_CREDIT, BRAND_NAME } from "../lib/brand/instance";
+  import { BRAND_CREDIT, BRAND_NAME, RELEASE, REPO } from "../lib/brand/instance";
+  // build week 4: the instance module table (scripts/instance-modules.mjs). Each export is the module
+  // this instance builds, a loader for it, or `null`: the Collections lens and its place summaries are
+  // eager (their map inputs exist before any panel mounts); the Scores lens, the Report tool and the
+  // release registry are lazy. A `null` module is never bundled.
+  import {
+    createCollectionLens,
+    createPlaceSummaries,
+    loadCollection,
+    loadRelease,
+    loadReport,
+    loadScores,
+  } from "virtual:instance-modules";
   import {
     FALLBACK_FULL_STUDY_AREA,
     studyAreaFromBoot,
@@ -83,8 +102,11 @@
   } from "../lib/map/interaction";
   import { MST_SPECIES_VER, loadMstBoot } from "../lib/release/mst";
   import {
+    INITIAL_AREA_CAMERA_STATE,
     phoneDefaultCamera,
+    shouldFlyToArea,
     symmetricPadding,
+    type AreaCameraState,
     type ChromePadding,
     type Viewport,
   } from "../lib/map/camera";
@@ -112,10 +134,10 @@
   // it") -- it never imports a `.svelte` file itself, so it stays a static import even though every
   // lens PANEL component below is now lazy (see "lazy lens/panel chunks" below).
   import { createSpeciesLens } from "../lens/species/state.svelte";
-  // the Collections lens' reactive core (catalog -> collection -> item -> hex feature state). Static for
-  // the same reason as the species lens: its map inputs must exist whether or not its panel (a lazy
-  // chunk below) has ever mounted. hyparquet stays a lazy chunk INSIDE it (lib/catalog/values.ts).
-  import { createCollectionLens } from "../lens/collection/state.svelte";
+  // the Collections lens' reactive core (catalog -> collection -> item -> hex feature state) comes from
+  // the instance module table above (eager, for the same reason as the species lens: its map inputs
+  // must exist whether or not its panel, a lazy chunk below, has ever mounted). hyparquet stays a lazy
+  // chunk INSIDE it (lib/catalog/values.ts).
   import { searchForAccess, viewAccess } from "../lib/catalog/access";
   // atlas-6 step 1: the Places panel mounts here (the shell's one reserved panel slot); it never
   // touches MapLibre directly -- `placesMap` is the reactive bridge this file's own composeStyle
@@ -125,9 +147,9 @@
   // even when the Places PANEL itself (`../places/Places.svelte`, lazy) has never been opened.
   import { createPlacesMapStore } from "../places/placesMap.svelte";
   // WP4: summaries of the current item over the places, and the "Only inside places" filter (the lens
-  // below reads `summaries.insideFids`). Static: a `?filter=places` link has to dim the map without
-  // any panel open; every heavy part (hyparquet, the g1 codec, the place index) stays lazy inside it.
-  import { createPlaceSummaries } from "../places/summary.svelte";
+  // below reads `summaries.insideFids`): `createPlaceSummaries`, eager with the Collections lens in the
+  // module table (a `?filter=places` link has to dim the map without any panel open); every heavy part
+  // (hyparquet, the g1 codec, the place index) stays lazy inside it.
   // The Download menu -- `places/model.ts#placesFromHash` (never a second parser of `sel.pl`)
   // gives it the current places list for "Selected places · GeoJSON"'s enabled/disabled state, and
   // the Places tab's header its count.
@@ -150,11 +172,12 @@
   // when statically imported (measured) -- a download is never needed before first interaction,
   // the exact case `scripts/size-budget.mjs`'s rule exists for.
   import type DownloadMenu from "./DownloadMenu.svelte";
-  import type { ResolvedTheme } from "../lib/map/types";
+  import type { ResolvedTheme, ZoneUnitSpec } from "../lib/map/types";
   // the tour's step DATA (tour.ts, no driver.js) is small and dependency-free, so it stays an
   // ordinary static import; only the TOUR RUNTIME (tourRuntime.ts, which imports driver.js) is a
   // dynamic import() -- see `beginTour()` below and that file's own header.
   import { tourStepsForLens, type TourActions } from "./tour";
+  import { LENS_LABEL } from "./lenses";
   import type { Lens } from "../lib/state/types";
 
   const selStore = createSelStore(location);
@@ -331,9 +354,14 @@
   }
 
   // --- top bar: lens switch, search, Share / Help / theme --------------------------------------
+  // the lens switch shows the lenses this instance builds (`LENSES`, instance.json `lenses`), in order,
+  // labelled by `LENS_LABEL` (./lenses.ts)
   function onLensChange(value: string) {
-    const lens = value === "species" ? "species" : "collection";
-    selStore.set({ lens });
+    const lens = (LENSES as readonly string[]).includes(value) ? (value as Lens) : INSTANCE_LENS;
+    // `out`'s default is per lens (state/types.ts `defaultOut`): an explicit lens switch also resets
+    // it to the new lens' default, or the previous lens' default would linger and be written to the
+    // link as if chosen (MarineSensitivity/atlas; a no-op where the instance draws no zones)
+    selStore.set({ lens, out: defaultOut(lens) });
   }
 
   // R3-W8 item 3 (Ben, 2026-09-25): "when clicking Share, the link should include all the same UI
@@ -501,20 +529,99 @@
     return () => clearTimeout(t);
   });
 
-  // --- the pinned MST release the Species lens reads ----------------------------------------------
-  // OceanMetrics Atlas has no release registry (no latest.txt / versions.json / session.json); the
-  // Species lens still reads one fixed MarineSensitivity release (`lib/release/mst.ts`) until the MST
+  // --- the release: the instance's registry, or the pinned MST release the Species lens reads -----
+  // An instance with `release` (instance.json) resolves its release before any bundle parses: the
+  // build writes the inline early-fetch script into index.html (`<!--instance:early-fetch-->`,
+  // scripts/instance.mjs), which leaves its results on `window.__early` as promises -- the version
+  // this host may render (the access gate, fail closed), its data base, versions.json, session.json,
+  // the manifest and app/boot.json. The shell only ever READS those, never re-derives them.
+  // An instance without one (OceanMetrics Atlas: no latest.txt / versions.json / session.json) has
+  // the Species lens read one fixed MarineSensitivity release (`lib/release/mst.ts`) until the MST
   // collections are read through the STAC catalog.
-  const earlyVersion: string = MST_SPECIES_VER;
+  interface Early {
+    version: Promise<string | null>;
+    base?: Promise<string | null>;
+    boot?: Promise<unknown>;
+    manifest?: Promise<unknown>;
+    versions?: Promise<EarlyVersionRow[] | null>;
+    denied?: Promise<{ ver: string; reason: string } | null>;
+    session?: Promise<{ preview: boolean }>;
+  }
+  // structurally the `versions.json` row `lib/release/access.ts` reads (`VersionRow`)
+  interface EarlyVersionRow {
+    ver?: string;
+    status?: string;
+    access?: string;
+    released?: string;
+  }
+  let earlyVersion = $state<string | null>(RELEASE ? null : MST_SPECIES_VER);
   let boot = $state<unknown>(null);
+  let manifest = $state<unknown>(null);
+  let versions = $state<EarlyVersionRow[] | null>(null);
+  let denied = $state<{ ver: string; reason: string } | null>(null);
+  let versionPickerOpen = $state(false);
+  function onVersionClick() {
+    versionPickerOpen = true;
+  }
   onMount(() => {
     // V3 trigger (a): the tiler origin is a fixed constant -- no need to wait on anything resolving
-    // first; the data origin is probed once the pinned release is known.
+    // first; the data origin is probed once the release is known.
     health.probeTiler();
-    health.probeData(earlyVersion);
-    // boot.json carries the species lens' dataset index and palettes; a missing/404 boot leaves
-    // `boot` null and the species lens degrades (never an error).
-    void loadMstBoot(earlyVersion).then((b) => (boot = b));
+    if (!__RELEASE__) {
+      health.probeData(MST_SPECIES_VER);
+      // boot.json carries the species lens' dataset index and palettes; a missing/404 boot leaves
+      // `boot` null and the species lens degrades (never an error).
+      void loadMstBoot(MST_SPECIES_VER).then((b) => (boot = b));
+      return;
+    }
+    const early = (window as unknown as { __early?: Early }).__early;
+    early?.version
+      .then((v) => {
+        earlyVersion = v;
+        // probe the SAME resolved base index.html's own fetch of app/boot.json used
+        if (v) {
+          const base = early.base ?? Promise.resolve(null);
+          base.then((b) => health.probeData(v, b ?? undefined)).catch(() => health.probeData(v));
+        }
+      })
+      .catch(() => {});
+    early?.boot?.then((b) => (boot = b)).catch(() => {});
+    early?.manifest?.then((m) => (manifest = m)).catch(() => {});
+    early?.versions?.then((v) => (versions = v)).catch(() => {});
+    // a denied version (the public host + ?ver=v9) opens the picker so the "why" is visible
+    early?.denied
+      ?.then((d) => {
+        denied = d;
+        if (d) versionPickerOpen = true;
+      })
+      .catch(() => {});
+    // `analytics` was built with `preview: false` before the session answered: correct it now
+    early?.session?.then((s) => analytics.updatePreview(s.preview === true)).catch(() => {});
+  });
+
+  // the lazy instance modules (the module table): each loads once, right after mount, when this
+  // instance builds it; `null` until then (and always, for an instance that does not)
+  type CollectionModule = Awaited<ReturnType<NonNullable<typeof loadCollection>>>;
+  type ScoresModule = Awaited<ReturnType<NonNullable<typeof loadScores>>>;
+  type ReportModule = Awaited<ReturnType<NonNullable<typeof loadReport>>>;
+  type ReleaseModule = Awaited<ReturnType<NonNullable<typeof loadRelease>>>;
+  let collectionMod = $state<CollectionModule | null>(null);
+  let scoresMod = $state<ScoresModule | null>(null);
+  let reportMod = $state<ReportModule | null>(null);
+  let releaseMod = $state<ReleaseModule | null>(null);
+  onMount(() => {
+    loadCollection?.()
+      .then((m) => (collectionMod = m))
+      .catch(() => announceChunkFailure("the collections lens"));
+    loadScores?.()
+      .then((m) => (scoresMod = m))
+      .catch(() => announceChunkFailure("the scores lens"));
+    loadReport?.()
+      .then((m) => (reportMod = m))
+      .catch(() => announceChunkFailure("the report tool"));
+    loadRelease?.()
+      .then((m) => (releaseMod = m))
+      .catch(() => announceChunkFailure("the release"));
   });
 
   // --- the map (atlas-map): mounted under the panels, one MapLibre instance ---------------------
@@ -565,26 +672,52 @@
     isPhone: () => isPhone,
   });
 
-  // the Collections lens: a plain call like the species lens above. A place pick/draw session owns map
-  // clicks while it is active (`placesMap.interactionOwned`), so a hex click never fights it.
-  const collectionLens = createCollectionLens({
-    selStore,
-    mapHandle: () => mapHandle,
-    isOwned: () => placesMap.interactionOwned,
-    chromePadding: () => currentChromePadding(),
-    insideFids: () => summaries.insideFids,
-  });
+  // the Collections lens: a plain call like the species lens above, when this instance builds it (the
+  // module table's `createCollectionLens`; `null` otherwise, and every read below is null-safe). A
+  // place pick/draw session owns map clicks while it is active (`placesMap.interactionOwned`), so a
+  // hex click never fights it.
+  type CollectionLens = ReturnType<NonNullable<typeof createCollectionLens>>;
+  type PlaceSummaries = ReturnType<NonNullable<typeof createPlaceSummaries>>;
+  const collectionLens: CollectionLens | null = createCollectionLens
+    ? createCollectionLens({
+        selStore,
+        mapHandle: () => mapHandle,
+        isOwned: () => placesMap.interactionOwned,
+        chromePadding: () => currentChromePadding(),
+        insideFids: (): ReadonlySet<number> | null => summaries?.insideFids ?? null,
+      })
+    : null;
   // WP4: one row per place for the CURRENT item (Places pane, Table tool) + the inside-places set
-  const summaries = createPlaceSummaries({ selStore, lens: collectionLens, placesMap });
+  const summaries: PlaceSummaries | null =
+    createPlaceSummaries && collectionLens
+      ? createPlaceSummaries({ selStore, lens: collectionLens, placesMap })
+      : null;
+
+  // the Scores lens' map-input store (raster, overlays, zone fills, selection, the floating legend),
+  // instantiated whenever `(__LENS_SCORES__ && sel.lens === "scores")`, regardless of whether its panel ever mounts (the
+  // MarineSensitivity/atlas 0.10.21 rule: map inputs belong to a lens-level store, the panel renders
+  // UI only). `null` until the lazy module resolves; every read below is null-safe.
+  let scoresLens = $state<ReturnType<ScoresModule["createScoresLens"]> | null>(null);
+  $effect(() => {
+    if (!__LENS_SCORES__ || sel.lens !== "scores" || scoresLens || !scoresMod) return;
+    scoresLens = scoresMod.createScoresLens({
+      selStore,
+      boot: () => boot,
+      manifest: () => manifest,
+      ver: () => earlyVersion,
+      mapHandle: () => mapHandle,
+      chromePadding: () => currentChromePadding(),
+    });
+  });
 
   // --- page title: the ONE writer (tests/shell/documentTitle.test.ts's source scan pins that) -------
   $effect(() => {
     document.title =
       sel.lens === "species" && speciesLens.docTitle
         ? speciesLens.docTitle
-        : sel.lens === "collection" && collectionLens.itemTitle
+        : __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens?.itemTitle
           ? `${collectionLens.itemTitle} · ${BRAND_NAME}`
-          : `${sel.lens === "species" ? "Species" : "Collections"} · ${BRAND_NAME}`;
+          : `${LENS_LABEL[sel.lens]} · ${BRAND_NAME}`;
   });
 
   // 0.10.79 size-budget fix round: the RUNTIME `places/model.ts` module (see the type-only import
@@ -616,6 +749,71 @@
   // `places/model.ts` module resolves.
   const places = $derived(placesModel ? placesModel.placesFromHash(sel.pl) : []);
 
+  // --- the Report tool's subject and the Scores lens' last click (an instance that builds them) -----
+  // ONE `reportSubjects()` result the Report tool's Last-clicked row and sentence and the Table's
+  // subject line all read (MarineSensitivity/atlas R3-W8 item 5); `null` without the Report tool.
+  const reportSubject = $derived(reportMod ? reportMod.reportSubjects(sel, places) : null);
+  // the Last-clicked slot is a SCORES-lens concept only (a clicked cell/Program Area); the Species
+  // lens' own map click sets a different kind of selection entirely
+  const lastClickedSelection = $derived(
+    __LENS_SCORES__ && sel.lens === "scores" ? (scoresLens?.selection ?? null) : null,
+  );
+  const lastClickedRowLabel = $derived(
+    scoresMod ? scoresMod.lastClickedLabel(lastClickedSelection, boot) : null,
+  );
+  // the Report tool's Last-clicked row shows only a click that is not already in the list
+  const reportLastClickedLabel = $derived(
+    reportMod && reportMod.lastClickedInPlaces(lastClickedSelection, places)
+      ? null
+      : lastClickedRowLabel,
+  );
+
+  // #10 (MarineSensitivity/atlas 0.10.93): a clicked CELL encoded as a one-place `#pl=` token -- the
+  // same `Cell <id>` square "Add to places" appends -- so the Report pane's Open report can report on
+  // it without the user adding it first. Read from `sel.sel` itself (either lens), not the
+  // Scores-only `lastClickedSelection`.
+  let lastClickedCellPl = $state<string | null>(null);
+  $effect(() => {
+    const mod = scoresMod;
+    const selection = mod ? mod.parseScoresSelection(sel.sel) : null;
+    const bootNow = boot;
+    if (!mod || selection?.kind !== "cell" || !bootNow) {
+      lastClickedCellPl = null;
+      return;
+    }
+    let stale = false;
+    void loadPlacesModel().then((model) => {
+      if (stale) return;
+      const place = mod.placeFromLastClicked(selection, bootNow);
+      lastClickedCellPl = place ? (model.hashFromPlaces([place]) ?? null) : null;
+    });
+    return () => {
+      stale = true;
+    };
+  });
+
+  async function onAddLastClicked() {
+    const selection = lastClickedSelection;
+    if (!selection || !scoresMod) return;
+    const model = await loadPlacesModel();
+    const place = scoresMod.placeFromLastClicked(selection, boot);
+    if (!place) return;
+    // appends through the SAME generic `addPlace()` every other place goes through; writes ONLY
+    // `pl` (never `sel`), so the Last-clicked row keeps showing the same subject afterwards
+    const result = model.addPlace(places, place);
+    if (!result.ok) {
+      notify(result.reason ?? "Couldn't add that to places.", { tone: "error" });
+      return;
+    }
+    selStore.set({ pl: model.hashFromPlaces(result.places) || undefined });
+    notify("Added to places.");
+  }
+
+  // the Table's "open the places" button: the Places flow's own rail entry (Report, or Places)
+  function openPlacesFlow() {
+    selectTool(PLACES_FLOW_TOOL);
+  }
+
   // R4-B: the popup's "Details" link opens the Details tool. The popup is a MapLibre-owned div
   // outside Svelte, so ONE delegated click handler on `document` covers every popup of either lens.
   onMount(() => {
@@ -635,26 +833,39 @@
   const phoneLegend = $derived(
     sel.lens === "species"
       ? speciesLens.mapInputs.legend
-      : sel.lens === "collection"
-        ? collectionLens.mapInputs.legend
-        : null,
+      : __LENS_COLLECTION__ && sel.lens === "collection"
+        ? (collectionLens?.mapInputs.legend ?? null)
+        : __LENS_SCORES__ && sel.lens === "scores"
+          ? (scoresLens?.mapExtra.legend ?? null)
+          : null,
   );
 
   // the header context (`panelHeaderTitle`, tools.ts): the panel/sheet header says what is being
   // SHOWN, not the spine entry's name. Species: the model's legend title alone.
+  // Scores: the layer's short legend title and the spatial unit's label ("Score · Raster cells"),
+  // the last click for Details, the Table's own subject line, the last click for Report.
   const panelContext = $derived<PanelContext>({
     layer: phoneLegend?.title ?? null,
-    unit: null,
+    unit:
+      __LENS_SCORES__ && sel.lens === "scores" && scoresLens && scoresMod
+        ? (scoresMod.unitOptions(boot).find((o) => o.value === scoresLens?.unit)?.label ?? null)
+        : null,
     subject:
       sel.lens === "species"
         ? speciesLens.card?.common || speciesLens.card?.sci || null
-        : collectionLens.itemTitle,
+        : __LENS_SCORES__ && sel.lens === "scores"
+          ? lastClickedRowLabel
+          : (collectionLens?.itemTitle ?? null),
     tableSubject:
       sel.lens === "species"
         ? speciesLens.card?.common || speciesLens.card?.sci || null
-        : collectionLens.itemTitle,
+        : __LENS_SCORES__ && sel.lens === "scores"
+          ? reportSubject?.kind === "places" && scoresMod
+            ? scoresMod.placesSubjectHeader(reportSubject.items.length)
+            : lastClickedRowLabel
+          : (collectionLens?.itemTitle ?? null),
     placeCount: places.length,
-    lastClicked: null,
+    lastClicked: lastClickedRowLabel,
   });
   const panelTitle = $derived(panelHeaderTitle(activeTool, panelContext));
 
@@ -675,31 +886,52 @@
   // species pill/asset), never a second read of the state against a different rule than the one
   // that actually painted the map. `phoneLegend.title` is the SAME short label the legend chip
   // already shows, reused here so the download title can never drift from what the app displays.
+  // Scores: `effectiveLyr` (never raw `sel.lyr`) is the SAME fallback the lens' own `lyr` applies, so
+  // the download names what the raster actually paints
+  const downloadLyr = $derived(scoresMod ? scoresMod.effectiveLyr(sel.lyr, boot) : null);
   const downloadTitle = $derived(
-    sel.lens === "species" ? (speciesLens.card?.sci ?? "Species") : (phoneLegend?.title ?? "Layer"),
+    sel.lens === "species"
+      ? (speciesLens.card?.sci ?? "Species")
+      : __LENS_SCORES__ && sel.lens === "scores"
+        ? (phoneLegend?.title ?? downloadLyr ?? "Score")
+        : (phoneLegend?.title ?? "Layer"),
   );
   const downloadLegendStops = $derived(
     phoneLegend && "stops" in phoneLegend ? phoneLegend.stops : [],
   );
   const downloadUnit = $derived(
-    phoneLegend && "unit" in phoneLegend ? phoneLegend.unit : undefined,
+    __LENS_SCORES__ && sel.lens === "scores"
+      ? "score"
+      : phoneLegend && "unit" in phoneLegend
+        ? phoneLegend.unit
+        : undefined,
   );
   const downloadCogUrl = $derived.by(() => {
     if (sel.lens === "species") {
       const asset = speciesLens.mapInputs.asset;
       return asset?.type === "cog" ? asset.url : null;
     }
-    return collectionLens.mapInputs.cogUrl;
+    if (__LENS_SCORES__ && sel.lens === "scores") {
+      const layer = scoresMod?.layerByKey(boot, downloadLyr) ?? null;
+      return layer ? (scoresMod?.fullSubregion(layer)?.cog ?? null) : null;
+    }
+    return collectionLens?.mapInputs.cogUrl ?? null;
   });
   const downloadCogDisabledReason = $derived(
     downloadCogUrl
       ? undefined
       : sel.lens === "species"
         ? (speciesLens.mapInputs.notice ?? "no surface selected for this input")
-        : "no COG published for this layer",
+        : __LENS_SCORES__ && sel.lens === "scores"
+          ? "no COG published for this metric/subregion"
+          : "no COG published for this layer",
   );
   const downloadMetricOrMdlKey = $derived(
-    sel.lens === "species" ? (speciesLens.bar?.pills.find((p) => p.active)?.mdlKey ?? null) : null,
+    sel.lens === "species"
+      ? (speciesLens.bar?.pills.find((p) => p.active)?.mdlKey ?? null)
+      : __LENS_SCORES__ && sel.lens === "scores"
+        ? downloadLyr
+        : null,
   );
   const downloadPlaces = $derived(placesModel ? placesModel.placesFromHash(sel.pl) : []);
   // `typeof DownloadMenu` (not `Component<any>`, unlike the other lazy chunks below) -- this is the
@@ -729,9 +961,16 @@
   }
   // the long description of the current layer, when it says something the legend title does not:
   // `null` for species (no per-model description published); the collection lens supplies its own.
-  const phoneLegendDescription = $derived<string | null>(
-    sel.lens === "collection" ? collectionLens.itemDescription : null,
-  );
+  // Scores: the layer's own long description (`boot.layers[].label`) when it says something the
+  // legend title does not (MarineSensitivity/atlas R3-B5)
+  const phoneLegendDescription = $derived.by<string | null>(() => {
+    if (__LENS_COLLECTION__ && sel.lens === "collection")
+      return collectionLens?.itemDescription ?? null;
+    if (sel.lens !== "scores" || !scoresLens || !scoresMod) return null;
+    const desc = scoresMod.layerByKey(boot, scoresLens.lyr)?.label ?? null;
+    if (desc === null) return null;
+    return desc === (phoneLegend?.title ?? null) ? null : desc;
+  });
   const downloadDescription = $derived(phoneLegendDescription);
 
   // usability M4: "the default camera frames Canada; panel/sheet cover the study area" -- the
@@ -782,7 +1021,7 @@
       // legend is known (measured: the extent landed 5-12 px under the chip), so a collection fit
       // reserves the chip band from the start
       const chipShowing =
-        (!!phoneLegend || sel.lens === "collection") &&
+        (!!phoneLegend || (__LENS_COLLECTION__ && sel.lens === "collection")) &&
         legendChipMode(sheetGeom.detent) === "floating";
       return phoneLiveChromePadding(
         sheetGeom.height,
@@ -913,6 +1152,8 @@
       // later effect corrects an EXPLICIT `?area=` to its real, unpadded boot-resolved camera once
       // boot arrives -- the merged precedence this round's own CHANGELOG entry documents: an
       // explicit `area=` always wins over this padded default fit).
+      // a release's `?area=` resolves against its boot.json once that arrives (the study-area effect
+      // below); before then, and on an instance without a release, the fallback study area
       area: initialStudyArea(FALLBACK_FULL_STUDY_AREA),
       padding: initialLivePadding(),
       projection: sel.proj,
@@ -965,11 +1206,16 @@
     // `handleMapClick` itself (checks `sel.lens` first). The collection lens' hex layer owns its own
     // click (`lib/map/layers/hex.ts`), which only fires while no place pick/draw session has
     // claimed clicks (`placesMap.interactionOwned`).
+    // the Scores lens' click (MarineSensitivity/atlas item M1) wires here too, the SAME shape (each
+    // self-guards on `sel.lens`), skipped while a Places pick/draw session owns map clicks.
     const onMapClick = (e: {
       lngLat: { lng: number; lat: number };
       point: { x: number; y: number };
     }) => {
       void speciesLens.handleMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat }, e.point);
+      if (!placesMap.interactionOwned) {
+        void scoresLens?.handleMapClick({ lng: e.lngLat.lng, lat: e.lngLat.lat }, e.point);
+      }
     };
     handle.map.on("click", onMapClick);
     // the map's public test/automation seam (docs/map.md): the handle plus the CURRENT composeStyle
@@ -1049,15 +1295,31 @@
   // D5 fix: this refit uses the SHEET's own measured height AND the floating legend chip's --
   // `currentChromePadding()` computes the SAME `chipShowing` boolean for every LATER (post-load)
   // re-fit.
+  // --- the study-area camera (a release's `?area=`): `sel.area` drives it on load and on change,
+  // never the panel body (MarineSensitivity/atlas 2026-09-24: `?area=AK` rendered the default camera,
+  // because the map's first camera cannot see the release's `study_areas` before boot.json arrives).
+  // The fly/no-fly decision is `camera.ts#shouldFlyToArea`. Only an instance with a release reads
+  // `area` (state/types.ts `RELEASE_KEYS`).
+  let areaCameraState: AreaCameraState = INITIAL_AREA_CAMERA_STATE;
+  $effect(() => {
+    if (!__RELEASE__ || !mapHandle || !boot) return; // nothing to resolve `sel.area` against yet
+    if (sel.map) return; // an explicit camera (a user's pan, or a pasted `?map=` link) always wins
+    const area = studyAreaFromBoot(boot, sel.area);
+    const decision = shouldFlyToArea(area.key, DEFAULT_SEL.area, areaCameraState);
+    areaCameraState = decision.next;
+    if (decision.fly) mapHandle.flyTo(area);
+  });
+
   let refitOnceForMeasuredSheet = false;
   $effect(() => {
     if (refitOnceForMeasuredSheet) return;
     if (!isPhone || !mapHandle || !boot) return;
     if (sheetGeom.height <= 0) return; // Sheet.svelte has not reported a real measurement yet
-    if (sel.map) return; // not the default padded first view
-    if (sel.lens === "collection") return; // the collection lens fits its own extent (WP3)
+    if (sel.map || sel.area !== DEFAULT_SEL.area) return; // not the default padded first view
+    if (__LENS_COLLECTION__ && sel.lens === "collection") return; // the collection lens fits its own extent (WP3)
+    if (__LENS_SCORES__ && sel.lens === "scores" && !scoresLens) return; // the legend chip's own source not loaded yet
     refitOnceForMeasuredSheet = true;
-    const area = studyAreaFromBoot(boot, "FULL");
+    const area = studyAreaFromBoot(boot, sel.area);
     const viewport: Viewport = { width: window.innerWidth, height: window.innerHeight };
     const chipShowing = !!phoneLegend && legendChipMode(sheetGeom.detent) === "floating";
     // WP13: symmetric, as in `initialStudyArea` -- the live padding does the shifting
@@ -1144,31 +1406,78 @@
     selStore.set({ layers: isDefaultLayerStack(next) ? undefined : next });
   }
 
+  // --- the release's zone units (an instance with a release: `releaseMod`) ------------------------
+  // the release's drawable units from boot.json (outline only), the Scores lens' richer copy (its
+  // choropleth fills and the clicked zone's highlight) on a scores view, and `Sel.out`'s ONE effect on
+  // the map (`zoneUnitsWithOutline`). The Places pick mode reads `zoneUnits` too. Empty without a
+  // release, so nothing here draws on such an instance.
+  const zoneUnits = $derived<ZoneUnitSpec[]>(releaseMod ? releaseMod.zoneUnitsFromBoot(boot) : []);
+  const zonesForStyle = $derived<ZoneUnitSpec[]>(
+    releaseMod
+      ? releaseMod.zoneUnitsWithOutline(
+          __LENS_SCORES__ && sel.lens === "scores"
+            ? (scoresLens?.mapExtra.zones ?? zoneUnits)
+            : zoneUnits,
+          sel.out,
+        )
+      : [],
+  );
+  // the standalone ecoregion outline the release's MANIFEST publishes, drawn on every scores view
+  // (decoration, not a selectable unit: `sel.out` never hides it); never twice when boot already
+  // carries an "ecoregion" unit (the layer ids would collide)
+  const ecoregionUnit = $derived(
+    __LENS_SCORES__ &&
+      sel.lens === "scores" &&
+      scoresMod &&
+      !zonesForStyle.some((u) => u.unit === "ecoregion")
+      ? scoresMod.ecoregionZoneUnitFromManifest(manifest)
+      : null,
+  );
+  const zoneStyle = $derived(
+    releaseMod
+      ? releaseMod.composeZoneStyle(
+          ecoregionUnit ? [...zonesForStyle, ecoregionUnit] : zonesForStyle,
+          resolvedTheme,
+        )
+      : null,
+  );
+
   const composeStyleInput = $derived({
     theme: resolvedTheme,
     // the reactive half of the 0.10.20 basemap fix: reading this is what makes the effect below
     // re-run (and the basemap actually appear) when the CARTO fetch resolves late.
     basemapStyle: basemapStyles[resolvedTheme],
     projection: sel.proj,
-    hex: sel.lens === "collection" ? collectionLens.mapInputs.hex : null,
+    hex:
+      __LENS_COLLECTION__ && sel.lens === "collection"
+        ? (collectionLens?.mapInputs.hex ?? null)
+        : null,
+    zoneStyle,
     raster:
       sel.lens === "species"
         ? speciesLens.mapInputs.raster
-        : sel.lens === "collection"
-          ? collectionLens.mapInputs.raster
-          : null,
+        : __LENS_COLLECTION__ && sel.lens === "collection"
+          ? (collectionLens?.mapInputs.raster ?? null)
+          : __LENS_SCORES__ && sel.lens === "scores"
+            ? (scoresLens?.mapExtra.raster ?? null)
+            : null,
     range:
       sel.lens === "species"
         ? speciesLens.mapInputs.range
-        : sel.lens === "collection"
-          ? collectionLens.mapInputs.range
+        : __LENS_COLLECTION__ && sel.lens === "collection"
+          ? (collectionLens?.mapInputs.range ?? null)
           : null,
-    overlays: [],
+    overlays: __LENS_SCORES__ && sel.lens === "scores" ? (scoresLens?.mapExtra.overlays ?? []) : [],
     // WP4: the gazetteer collections toggled in the "Place layers" group
     placeOverlays: placesMap.overlays.specs,
-    selection: placesSelection,
+    selection:
+      placesSelection ??
+      (__LENS_SCORES__ && sel.lens === "scores" ? (scoresLens?.mapExtra.selection ?? null) : null),
     // the Collections lens' clicked raster position (ring + the cell's square), above every layer
-    highlight: sel.lens === "collection" ? collectionLens.mapInputs.highlight : null,
+    highlight:
+      __LENS_COLLECTION__ && sel.lens === "collection"
+        ? (collectionLens?.mapInputs.highlight ?? null)
+        : null,
     // gazetteer-places: the "Pick from gazetteer" tile polygons, only while that picker is on
     gazetteer: placesMap.gazetteer,
     layerStack,
@@ -1178,9 +1487,26 @@
     mapHandle?.applyStyle(composeStyle(composeStyleInput));
   });
 
-  // the Help menu's Docs link and the About modal's changelog: this repo's own README / CHANGELOG.
-  const docsHref = "https://github.com/oceanmetrics/atlas#readme";
-  const changelogHref = "https://github.com/oceanmetrics/atlas/blob/main/CHANGELOG.md";
+  // the Help menu's Docs link and the About modal's "What changed": with a release, that release's own
+  // Atlas chapter and release notes in the docs book (public, or on the preview host for a restricted
+  // one; the book root while the release is unknown, `lib/release/docsUrl.ts`); otherwise the
+  // instance repository's README and CHANGELOG.
+  const currentVersionRow = $derived(versions?.find((v) => v.ver === earlyVersion) ?? null);
+  // fail closed: no row, or anything but the literal "public", reads as restricted (access.ts#accessOf)
+  const releaseRestricted = $derived(!!RELEASE && currentVersionRow?.access !== "public");
+  const releaseAccess = $derived<"public" | "restricted" | "unknown">(
+    !earlyVersion || !currentVersionRow ? "unknown" : releaseRestricted ? "restricted" : "public",
+  );
+  const docsHref = $derived(
+    RELEASE
+      ? (releaseMod?.atlasDocsUrl(earlyVersion, releaseAccess) ?? (RELEASE.docs || "#"))
+      : `https://github.com/${REPO}#readme`,
+  );
+  const changelogHref = $derived(
+    RELEASE
+      ? (releaseMod?.releaseNotesUrl(earlyVersion, releaseAccess) ?? (RELEASE.docs || "#"))
+      : `https://github.com/${REPO}/blob/main/CHANGELOG.md`,
+  );
 
   // --- "Report a problem" -> a prefilled GitHub issue, zero backend -------------------------------
   // `viewport` is the one field with no existing reactive source (unlike lens/ver/theme, all read
@@ -1207,18 +1533,29 @@
   // `atlas:access: "restricted"` collection, or a `?catalog=` override) is RESTRICTED -- the dialog
   // then posts nothing that could become a public issue, and the page link (the zero-backend issue
   // link's `URL:` line too) never carries the share link (`catalog/access.ts`).
+  // a release instance's restricted release (a pre-release under review) is restricted too
   const feedbackAccess = $derived(
-    viewAccess({
-      lens: sel.lens,
-      collectionParam: sel.collection,
-      catalogParam: sel.catalog,
-      entry: sel.lens === "collection" ? collectionLens.entry : null,
-    }),
+    releaseRestricted && currentVersionRow
+      ? "restricted"
+      : viewAccess({
+          lens: sel.lens,
+          collectionParam: sel.collection,
+          catalogParam: sel.catalog,
+          entry:
+            __LENS_COLLECTION__ && sel.lens === "collection"
+              ? (collectionLens?.entry ?? null)
+              : null,
+        }),
+  );
+  // the release the view is drawn from: the instance's resolved release, or the pinned one the
+  // Species lens reads (a collection names its own sources)
+  const feedbackVer = $derived(
+    RELEASE ? earlyVersion : sel.lens === "species" ? earlyVersion : null,
   );
   const feedbackCtx = $derived<FeedbackContext>({
     appVersion: __APP_VERSION__,
     appSha: __APP_SHA__,
-    ver: sel.lens === "species" ? earlyVersion : null,
+    ver: feedbackVer,
     lens: sel.lens,
     pageUrl: pageUrlFromLocation({
       origin: location.origin,
@@ -1338,16 +1675,94 @@
     phoneSearchOpen = false;
   }
 
+  // the Scores lens' panel, legend and search chunks, through its module (the module table's
+  // `loadScores`), together the moment the lens is selected; the welcome modal is app-wide chrome
+  // of that instance and loads right after mount
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ScoresLensComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ScoresLegendComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ScoresSearchComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let WelcomeModalComp = $state<Component<any> | null>(null);
+  $effect(() => {
+    const c = scoresMod?.components;
+    if (!__LENS_SCORES__ || !c) return;
+    if (!WelcomeModalComp) {
+      c.Welcome()
+        .then((mod) => (WelcomeModalComp = mod.default))
+        .catch(() => announceChunkFailure("the welcome dialog"));
+    }
+    if (sel.lens !== "scores") return;
+    if (!ScoresLensComp) {
+      c.Lens()
+        .then((mod) => (ScoresLensComp = mod.default))
+        .catch(() => announceChunkFailure("the scores panel"));
+    }
+    if (!ScoresLegendComp) {
+      c.Legend()
+        .then((mod) => (ScoresLegendComp = mod.default))
+        .catch(() => announceChunkFailure("the scores legend"));
+    }
+    if (!ScoresSearchComp) {
+      c.Search()
+        .then((mod) => (ScoresSearchComp = mod.default))
+        .catch(() => announceChunkFailure("the scores search"));
+    }
+  });
+
+  // the release's version chip and picker (an instance with a release), right after mount
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let VersionBadgeComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let VersionPickerModalComp = $state<Component<any> | null>(null);
+  $effect(() => {
+    const c = releaseMod?.components;
+    if (!__RELEASE__ || !c) return;
+    if (!VersionBadgeComp) {
+      c.VersionBadge()
+        .then((mod) => (VersionBadgeComp = mod.default))
+        .catch(() => announceChunkFailure("the release chip"));
+    }
+    if (!VersionPickerModalComp) {
+      c.VersionPicker()
+        .then((mod) => (VersionPickerModalComp = mod.default))
+        .catch(() => announceChunkFailure("the release picker"));
+    }
+  });
+
+  // the Report tool's pane and its Places flow (an instance whose rail has Report), when it opens
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ReportPaneComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ReportPlacesComp = $state<Component<any> | null>(null);
+  $effect(() => {
+    const c = reportMod?.components;
+    if (!__TOOL_REPORT__ || !c || activeTool !== "report") return;
+    if (!ReportPaneComp) {
+      c.Pane()
+        .then((mod) => (ReportPaneComp = mod.default))
+        .catch(() => announceChunkFailure("the report tool"));
+    }
+    if (!ReportPlacesComp) {
+      c.Places()
+        .then((mod) => (ReportPlacesComp = mod.default))
+        .catch(() => announceChunkFailure("the Places panel"));
+    }
+  });
+
   // the Collections lens' panel and legend chunks start together the moment the lens is selected
   $effect(() => {
-    if (sel.lens !== "collection") return;
+    const c = collectionMod?.components;
+    if (!__LENS_COLLECTION__ || sel.lens !== "collection" || !c) return;
     if (!CollectionLensPanelComp) {
-      import("../lens/collection/CollectionLens.svelte")
+      c.Lens()
         .then((mod) => (CollectionLensPanelComp = mod.default))
         .catch(() => announceChunkFailure("the collections panel"));
     }
     if (!CollectionLegendComp) {
-      import("../lens/collection/CollectionLegend.svelte")
+      c.Legend()
         .then((mod) => (CollectionLegendComp = mod.default))
         .catch(() => announceChunkFailure("the collection legend"));
     }
@@ -1392,8 +1807,16 @@
   });
 
   $effect(() => {
-    if (sel.lens === "collection" && activeTool === "table" && !PlaceSummaryTableComp) {
-      import("../places/PlaceSummaryTable.svelte")
+    const c = collectionMod?.components;
+    if (
+      __LENS_COLLECTION__ &&
+      sel.lens === "collection" &&
+      c &&
+      summaries &&
+      activeTool === "table" &&
+      !PlaceSummaryTableComp
+    ) {
+      c.SummaryTable()
         .then((mod) => (PlaceSummaryTableComp = mod.default))
         .catch(() => announceChunkFailure("the places summary table"));
     }
@@ -1441,12 +1864,29 @@
     </h1>
   </span>
 
+  <!-- an instance with a release: the version chip (the release picker); its skeleton twin is the
+       empty `#sk-version-chip` the build writes into index.html for the same instance -->
+  {#if __RELEASE__}
+    <button
+      type="button"
+      class="chip"
+      data-tour="version-chip"
+      data-control="version-chip"
+      aria-haspopup="dialog"
+      onclick={onVersionClick}
+    >
+      {#if VersionBadgeComp}
+        {@const Comp = VersionBadgeComp}
+        <Comp />
+      {/if}
+      <Icon name="version" size={14} />
+      <span class="visually-hidden">Change release version</span>
+    </button>
+  {/if}
+
   <div data-tour="lens-switch" data-control="lens-switch">
     <Segmented
-      options={[
-        { value: "collection", label: "Collections" },
-        { value: "species", label: "Species" },
-      ]}
+      options={LENSES.map((l) => ({ value: l, label: LENS_LABEL[l] }))}
       value={sel.lens}
       ariaLabel="Lens"
       onchange={onLensChange}
@@ -1465,6 +1905,16 @@
         onSetUsOnly={(enabled: boolean) => speciesLens.setUsOnly(enabled)}
         onSearchLogged={(query: string) => analytics.track("search_species", { query })}
         onFocusIndex={() => speciesLens.ensureTaxaIndex()}
+      />
+    {:else if __LENS_SCORES__ && sel.lens === "scores" && ScoresSearchComp && scoresLens}
+      <!-- the Scores lens' Program Area / coordinate / region search: resolves a match into the
+           lens' own selectZone / selectCoordinate / selectRegion -->
+      {@const SearchComp = ScoresSearchComp}
+      <SearchComp
+        {boot}
+        onSelectZone={(unit: string, key: string) => scoresLens?.selectZone(unit, key)}
+        onSelectCoord={(lon: number, lat: number) => void scoresLens?.selectCoordinate(lon, lat)}
+        onSelectRegion={(key: string) => scoresLens?.selectRegion(key)}
       />
     {:else}
       <input
@@ -1514,7 +1964,7 @@
       bind:this={downloadMenuRef}
       autoOpen={downloadAutoOpen}
       lens={sel.lens}
-      ver={sel.lens === "species" ? earlyVersion : null}
+      ver={feedbackVer}
       {mapHandle}
       title={downloadTitle}
       description={downloadDescription}
@@ -1524,6 +1974,14 @@
       cogDisabledReason={downloadCogDisabledReason}
       legendStops={downloadLegendStops}
       places={downloadPlaces}
+      placesGeoJson={releaseMod
+        ? (ps: readonly import("../lib/geo/placeCodec").Place[]) =>
+            releaseMod!.zonePlacesToGeoJson(
+              ps,
+              boot,
+              releaseMod!.zonePolygonSourceFromMap(mapHandle, boot),
+            )
+        : undefined}
       track={(name, params) => analytics.track(name as never, params as never)}
     />
   {:else}
@@ -1634,6 +2092,14 @@
        is a no-op when the desktop disclosure was never open, so this reuses that one function
        unchanged rather than wrapping it. -->
   <TopBarActions
+    release={__RELEASE__
+      ? {
+          ver: earlyVersion,
+          restricted: releaseRestricted,
+          status: currentVersionRow?.status ?? null,
+          released: currentVersionRow?.released ?? null,
+        }
+      : null}
     appVersion={__APP_VERSION__}
     {feedbackHref}
     onFeedbackClick={openFeedback}
@@ -1765,7 +2231,7 @@
     {/if}
     <!-- WP7: a layer with terms of its own (AquaMaps native, CC BY-NC) is credited here while it is on
          the map; `collectionLens.attribution` is null for every other layer. -->
-    {#if sel.lens === "collection" && collectionLens.attribution}
+    {#if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens?.attribution}
       <span aria-hidden="true">|</span>
       <span data-testid="map-attribution-layer">{collectionLens.attribution}</span>
     {/if}
@@ -1817,7 +2283,7 @@
         {#if sel.lens === "species" && SpeciesLegendComp}
           {@const Comp = SpeciesLegendComp}
           <Comp legend={phoneLegend} tilesDown={health.isDown("tiler")} />
-        {:else if sel.lens === "collection" && CollectionLegendComp}
+        {:else if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens && CollectionLegendComp}
           {@const Comp = CollectionLegendComp}
           <Comp
             legend={phoneLegend}
@@ -1826,6 +2292,9 @@
             onZoom={() => collectionLens.zoomToLayer()}
             zoomDisabled={!collectionLens.canZoomToLayer}
           />
+        {:else if __LENS_SCORES__ && sel.lens === "scores" && ScoresLegendComp}
+          {@const Comp = ScoresLegendComp}
+          <Comp legend={phoneLegend} tilesDown={health.isDown("tiler")} />
         {/if}
       </LegendChip>
     {/if}
@@ -1844,14 +2313,92 @@
          what the tool's panel shows (the species lens takes "layers" and "details", plus its own
          "table"). -->
     {#snippet panelBody()}
-      {#if activeTool === "places"}
-        {#if PlacesComp}
-          {@const Comp = PlacesComp}
-          <Comp {sel} {selStore} {mapHandle} mapStore={placesMap} {summaries} />
+      {#if __TOOL_REPORT__ && activeTool === "report"}
+        <!-- the Report tool (an instance whose rail has it, MarineSensitivity/atlas R4-D): ONE flow
+             on either lens -- the Places flow, Add a place, and a pinned footer (the subject
+             sentence, Open report, Share, Download places). `ReportPane` hands the Places flow the
+             footer lead and the recent reports as snippets. -->
+        {#snippet placesContent(slots: {
+          lastClickedLabel: string | null;
+          onAddLastClicked: () => void;
+          footerLead: import("svelte").Snippet;
+          recentsExtra: import("svelte").Snippet;
+        })}
+          {#if ReportPlacesComp}
+            {@const Comp = ReportPlacesComp}
+            <Comp
+              {sel}
+              {selStore}
+              {boot}
+              {manifest}
+              {mapHandle}
+              {zoneUnits}
+              mapStore={placesMap}
+              lastClickedLabel={slots.lastClickedLabel}
+              onAddLastClicked={slots.onAddLastClicked}
+              footerLead={slots.footerLead}
+              recentsExtra={slots.recentsExtra}
+            />
+          {:else}
+            <p>{TOOL_BODY[activeTool]}</p>
+          {/if}
+        {/snippet}
+        {#if ReportPaneComp && reportSubject}
+          {@const Pane = ReportPaneComp}
+          <Pane
+            {sel}
+            ver={earlyVersion}
+            places={placesContent}
+            subject={reportSubject}
+            lastClickedLabel={reportLastClickedLabel}
+            onAddLastClicked={() => void onAddLastClicked()}
+            lastClickedPl={lastClickedCellPl}
+          />
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
         {/if}
-      {:else if sel.lens === "collection" && (activeTool === "layers" || activeTool === "details")}
+      {:else if activeTool === "places"}
+        {#if PlacesComp}
+          {@const Comp = PlacesComp}
+          <Comp
+            {sel}
+            {selStore}
+            {mapHandle}
+            mapStore={placesMap}
+            summaries={summaries ?? undefined}
+          />
+        {:else}
+          <p>{TOOL_BODY[activeTool]}</p>
+        {/if}
+      {:else if __LENS_SCORES__ && sel.lens === "scores"}
+        <!-- the Scores lens takes every other tool (Layers, Details with the flower, Table with the
+             zones and species tables) and falls back to the tool's own text -->
+        {#if ScoresLensComp && scoresLens}
+          {@const Comp = ScoresLensComp}
+          <Comp
+            {sel}
+            {selStore}
+            {boot}
+            {manifest}
+            ver={earlyVersion}
+            {mapHandle}
+            {activeTool}
+            fallbackBody={TOOL_BODY[activeTool]}
+            lens={scoresLens}
+            {layerStack}
+            {onLayerStackChange}
+            compactFlower={isPhone && sheetGeom.detent === "half"}
+            {expandedRow}
+            onExpandedRowChange={(id: LayerGroupId | null) => (expandedRow = id)}
+            lastClickedLabel={lastClickedRowLabel}
+            onAddLastClicked={() => void onAddLastClicked()}
+            onOpenTable={() => selectTool("table")}
+            onOpenPlaces={openPlacesFlow}
+          />
+        {:else}
+          <p>{TOOL_BODY[activeTool]}</p>
+        {/if}
+      {:else if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens && (activeTool === "layers" || activeTool === "details")}
         {#if CollectionLensPanelComp}
           {@const Comp = CollectionLensPanelComp}
           <Comp
@@ -1869,9 +2416,9 @@
         {:else}
           <p>{TOOL_BODY[activeTool]}</p>
         {/if}
-      {:else if sel.lens === "collection" && activeTool === "table"}
+      {:else if __LENS_COLLECTION__ && sel.lens === "collection" && activeTool === "table"}
         <!-- WP4: the places summary of the current item (one row per place), with CSV download -->
-        {#if PlaceSummaryTableComp}
+        {#if PlaceSummaryTableComp && summaries}
           {@const Comp = PlaceSummaryTableComp}
           <Comp {summaries} />
         {:else}
@@ -1979,7 +2526,12 @@
     <div class="lens-legend-region">
       <Comp legend={speciesLens.mapInputs.legend} tilesDown={health.isDown("tiler")} />
     </div>
-  {:else if sel.lens === "collection" && CollectionLegendComp && collectionLens.mapInputs.legend}
+  {:else if __LENS_SCORES__ && sel.lens === "scores" && ScoresLegendComp}
+    {@const Comp = ScoresLegendComp}
+    <div class="lens-legend-region">
+      <Comp legend={scoresLens?.mapExtra.legend ?? null} tilesDown={health.isDown("tiler")} />
+    </div>
+  {:else if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens && CollectionLegendComp && collectionLens.mapInputs.legend}
     {@const Comp = CollectionLegendComp}
     <div class="lens-legend-region">
       <Comp
@@ -2022,6 +2574,31 @@
   />
 {/if}
 
+<!-- an instance with a release: the release picker; with the Scores lens: the first-visit welcome.
+     App-wide chrome (either lens), each its own lazy chunk; a closed modal has no visible box, so
+     the skeleton/hydrated geometry gate has nothing to compare here. -->
+{#if __RELEASE__ && VersionPickerModalComp}
+  {@const Comp = VersionPickerModalComp}
+  <Comp
+    open={versionPickerOpen}
+    onclose={() => (versionPickerOpen = false)}
+    {versions}
+    {denied}
+    currentVer={earlyVersion}
+    loc={{ search: location.search, hash: location.hash }}
+  />
+{/if}
+{#if __LENS_SCORES__ && WelcomeModalComp}
+  {@const Comp = WelcomeModalComp}
+  <Comp
+    tour={sel.tour}
+    onTakeTour={() => void beginTour()}
+    onSwitchToSpecies={() => onLensChange("species")}
+    {docsHref}
+    ver={earlyVersion}
+  />
+{/if}
+
 <!-- P1 (Opus eyes-on assessment, 2026-09-24): the phone-only search modal -- see
      `openPhoneSearch`'s own header comment above. Content mirrors the desktop `.search-field`
      exactly (same SpeciesPickerComp instance/props in the species lens, the same plain stub input
@@ -2043,6 +2620,7 @@
     <div
       class="search-field-phone"
       class:search-field-phone--species={sel.lens === "species"}
+      class:search-field-phone--scores={__LENS_SCORES__ && sel.lens === "scores"}
       bind:this={phoneSearchBodyEl}
     >
       <Icon name="search" size={16} />
@@ -2060,6 +2638,24 @@
             onSetUsOnly={(enabled: boolean) => speciesLens.setUsOnly(enabled)}
             onSearchLogged={(query: string) => analytics.track("search_species", { query })}
             onFocusIndex={() => speciesLens.ensureTaxaIndex()}
+          />
+        {:else if __LENS_SCORES__ && sel.lens === "scores" && ScoresSearchComp && scoresLens}
+          <!-- the SAME content as the desktop field, closing the modal once a result is picked -->
+          {@const SearchComp = ScoresSearchComp}
+          <SearchComp
+            {boot}
+            onSelectZone={(unit: string, key: string) => {
+              scoresLens?.selectZone(unit, key);
+              closePhoneSearch();
+            }}
+            onSelectCoord={(lon: number, lat: number) => {
+              void scoresLens?.selectCoordinate(lon, lat);
+              closePhoneSearch();
+            }}
+            onSelectRegion={(key: string) => {
+              scoresLens?.selectRegion(key);
+              closePhoneSearch();
+            }}
           />
         {:else}
           <input

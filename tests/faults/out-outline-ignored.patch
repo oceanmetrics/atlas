@@ -1,0 +1,17 @@
+diff --git a/src/lib/map/layers/zones.ts b/src/lib/map/layers/zones.ts
+index ebc1135..1bf5c48 100644
+--- a/src/lib/map/layers/zones.ts
++++ b/src/lib/map/layers/zones.ts
+@@ -294,7 +294,11 @@ export function zoneUnitsFromBoot(boot: unknown): ZoneUnitSpec[] {
+  * view" rule exists to prevent.
+  */
+ export function zoneUnitsWithOutline(units: readonly ZoneUnitSpec[], out: Outline): ZoneUnitSpec[] {
+-  return units.map((u) => ({ ...u, lineVisible: out !== "none" && u.unit === out }));
++  // SEEDED FAULT (tests/faults/out-outline-ignored.patch): `out` is accepted but never consulted
++  // again -- G-25's exact regression, replayed. Every unit keeps whatever `lineVisible` it already
++  // had (undefined -> "visible"), so `out=none` stops hiding anything.
++  void out;
++  return units.map((u) => ({ ...u }));
+ }
+ 
+ interface BootZoneRow {

@@ -51,7 +51,7 @@ describe("summarizeShare", () => {
 
   it("layer is null and hasCamera is false when absent", () => {
     expect(summarizeShare(DEFAULT_SEL, [])).toEqual({
-      lens: "collection",
+      lens: DEFAULT_SEL.lens,
       layer: null,
       hasCamera: false,
       nPlaces: 0,

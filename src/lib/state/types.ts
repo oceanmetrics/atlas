@@ -19,7 +19,8 @@ import type { LayerStackEntry } from "../map/layerStack";
 import { INSTANCE } from "../brand/instance";
 export type { LayerStackEntry } from "../map/layerStack";
 
-export type Lens = "collection" | "species";
+/** every lens this codebase can build; an instance builds the subset its `lenses` names (`LENSES`). */
+export type Lens = "collection" | "species" | "scores";
 export type Palette = "spectral_r" | "viridis" | "cividis" | "magma";
 export type Projection = "globe" | "mercator";
 /** `native` / `model` are the species lens' representations; `005` is the registry collections' (AquaMaps
@@ -33,6 +34,9 @@ export type Representation = "native" | "model" | "005";
  * view and the recipient saw dark). */
 export type Theme = "light" | "dark" | "auto";
 export type Tour = "on" | "off";
+/** the zone outline drawn over the map (`out=`): a release capability, read only by an instance that
+ * declares `release` (its `boot.units`); `none` everywhere else. */
+export type Outline = "programarea" | "ecoregion" | "none";
 /** the resolved, renderable theme — plan atlas-3's two brand themes. */
 export type ResolvedTheme = "navy" | "paper";
 
@@ -48,8 +52,18 @@ export interface MapView {
 }
 
 export interface Sel {
+  /** release version (`ver=`), read only by an instance with a release registry (`instance.release`);
+   * public-host-only (see the module header). `undefined` = "unset here". */
+  ver?: string;
   lens: Lens;
+  /** score layer `metric_key` (the Scores lens' `lyr=`); opaque string, no default written. */
+  lyr?: string;
   pal: Palette;
+  /** the Scores lens' spatial unit (`unit=`): `"cell"` or a drawable unit key from `boot.units`. */
+  unit: string;
+  /** study-area camera preset key (`area=`, a release's `boot.study_areas`), applied only when `map`
+   * is absent. */
+  area: string;
   map?: MapView;
   proj: Projection;
   /** species key. */
@@ -59,8 +73,11 @@ export interface Sel {
   rep: Representation;
   /** `true` = US-only (default, `us` key omitted); `false` = include non-US (`us=0` written). */
   us: boolean;
+  /** the zone outline (`out=`); its default is per lens (`defaultOut`). */
+  out: Outline;
   obis: boolean;
-  /** `place:<n>`: the place list entry highlighted on the map. */
+  /** `place:<n>`: the place list entry highlighted on the map; with the Scores lens also
+   * `cell:<id>` | `zone:<unit>:<key>` (a clicked cell or zone). */
   sel?: string;
   /** panel-visibility deltas against the shipped default (plan: "deltas", not an absolute list). */
   show: string[];
@@ -102,14 +119,19 @@ export interface Sel {
 /** query keys `formatSel`/`parseSel` know about, in the order they are written (stable, readable
  * URLs — not load-bearing for parsing, which is key-based via URLSearchParams). */
 export const QUERY_KEYS = [
+  "ver",
   "lens",
+  "lyr",
   "pal",
+  "unit",
+  "area",
   "map",
   "proj",
   "sp",
   "in",
   "rep",
   "us",
+  "out",
   "obis",
   "sel",
   "show",
@@ -136,7 +158,21 @@ export const REPRESENTATIONS: readonly Representation[] = ["native", "model", "0
 /** every value `theme=` may parse from, including `"auto"` (the default, read back identically to
  * an absent key — see `parseSel`). */
 export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
-export const LENSES: readonly Lens[] = ["collection", "species"];
+export const OUTLINES: readonly Outline[] = ["programarea", "ecoregion", "none"];
+/** every lens this codebase knows, in the lens switch's order. */
+export const ALL_LENSES: readonly Lens[] = ["collection", "scores", "species"];
+/** the lenses this build carries: the instance's `lenses` (instances/<id>/instance.json), in its
+ * order, narrowed to the ones the codebase knows. A `?lens=` outside it falls back to the default. */
+export const LENSES: readonly Lens[] = INSTANCE.lenses.filter((l): l is Lens =>
+  (ALL_LENSES as readonly string[]).includes(l),
+);
+
+/** the URL keys that belong to a capability the instance may not build: the Scores lens' (`lyr`,
+ * `unit`, `out`, the `cell:`/`zone:` selections) and the release registry's (`ver`, `area`). An
+ * instance without the capability never reads or writes them (`?ver=v9` on such an atlas is
+ * ignored, as before the MarineSensitivity instance moved in). */
+export const SCORES_KEYS = LENSES.includes("scores");
+export const RELEASE_KEYS = INSTANCE.release !== undefined;
 
 /** the instance's own default for a key (`defaults` in instances/<id>/instance.json) when it is a
  * member of `allowed`, else `fallback`: an instance can choose among the values this build knows,
@@ -146,7 +182,11 @@ function instanceDefault<T extends string>(value: string, allowed: readonly T[],
 }
 
 /** the lens a fresh view opens on (the instance's `defaults.lens`). */
-export const INSTANCE_LENS: Lens = instanceDefault(INSTANCE.defaults.lens, LENSES, "collection");
+export const INSTANCE_LENS: Lens = instanceDefault(
+  INSTANCE.defaults.lens,
+  LENSES,
+  LENSES[0] ?? "collection",
+);
 
 /**
  * `lens`'s context-dependent default: `"species"` when a species key is present in the URL and no
@@ -158,6 +198,21 @@ export const INSTANCE_LENS: Lens = instanceDefault(INSTANCE.defaults.lens, LENSE
  */
 export function defaultLens(sp: string | undefined, c?: string): Lens {
   return sp && !c ? "species" : INSTANCE_LENS;
+}
+
+/**
+ * `out`'s context-dependent default, per lens: the Scores lens' primary unit is the Program Area, so
+ * outlines default on there; every other lens defaults to none. ONE table: `parseSel` (the default
+ * when `out` is absent) and `formatSel` (the "is this a default?" comparison) both read it.
+ */
+export const DEFAULT_OUT_BY_LENS: Record<Lens, Outline> = {
+  collection: "none",
+  scores: "programarea",
+  species: "none",
+};
+
+export function defaultOut(lens: Lens): Outline {
+  return DEFAULT_OUT_BY_LENS[lens];
 }
 
 /**
@@ -196,14 +251,19 @@ export function isPlacesSelectionEmpty(sel: string | undefined, placeCount = 0):
  * every other field when formatting. */
 export const DEFAULT_SEL: Sel = {
   // the instance's defaults (lens, theme, tour; instances/<id>/instance.json `defaults`)
+  ver: undefined,
   lens: INSTANCE_LENS,
+  lyr: undefined,
   pal: "spectral_r",
+  unit: "cell",
+  area: "FULL",
   map: undefined,
   proj: "globe",
   sp: undefined,
   in: "merged",
   rep: "native",
   us: true,
+  out: defaultOut(INSTANCE_LENS),
   obis: false,
   sel: undefined,
   show: [],

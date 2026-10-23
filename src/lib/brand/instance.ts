@@ -36,7 +36,8 @@ export interface Instance {
   supporters: readonly Supporter[];
   credit: string;
   cite: string;
-  about: { description: string; links: readonly BrandLink[] };
+  /** `credits`: an optional "prepared by" line under the links. */
+  about: { description: string; links: readonly BrandLink[]; credits?: string };
   catalog: { base: string; groups: readonly { id: string; label: string }[] };
   /** the lenses this instance builds (1.1); `defaults.lens` is one of them. */
   lenses: readonly string[];
@@ -44,13 +45,19 @@ export interface Instance {
   tools: readonly string[];
   /** the HTML entries this instance publishes (1.1), always `index`. */
   pages: readonly string[];
+  /** the GitHub repository (owner/name) feedback issues go to and the Docs/changelog links name. */
+  repo: string;
+  /** the first part of every downloaded figure's file name. */
+  download: { prefix: string };
   feedback: { app: string };
   places: { site: string; attribution: string };
   titiler: { host: string };
-  /** the release registry, only for an instance that reads one (1.1; read from build week 4 step 2). */
-  release?: { registry: string; preview?: string; access?: "gate" };
-  /** the agency seal, only for an instance that may show it (1.1; read from build week 4 step 2). */
+  /** the release registry, only for an instance that reads one (1.1). */
+  release?: { registry: string; preview?: string; access?: "gate"; docs?: string };
+  /** the agency seal, only for an instance that may show it (1.1). */
   seal?: { agency: string; src: string };
+  /** the report page's strings, for an instance whose `pages` name `report`. */
+  report?: { title: string; stem: string };
   /** the gzip budgets scripts/size-budget.mjs holds the build to, in KB (1.1). */
   budget: { static_kb: number; worker_kb: number };
 }
@@ -74,9 +81,33 @@ export const ABOUT_LINKS: readonly BrandLink[] = INSTANCE.about.links;
 /** how to cite the atlas itself. */
 export const CITE_ATLAS = INSTANCE.cite;
 
+/** the release registry block (`release`), or `null` for an instance without one. The registry base
+ * itself is a data origin and is read through `catalog/base.ts`; this is for the preview origin and
+ * the docs book. */
+export const RELEASE = INSTANCE.release ?? null;
+
+/** the agency seal (`seal`), or `null` for an instance that never shows one. Whether it renders is
+ * `ui/sealVisibility.ts#shouldShowSeal` (the `VITE_SEAL` build flag too, fail closed). */
+export const SEAL = INSTANCE.seal ?? null;
+
+/** the report page's strings (`report`), or `null`. */
+export const REPORT = INSTANCE.report ?? null;
+
+/** the GitHub repository (owner/name) feedback issues are filed in. */
+export const REPO = INSTANCE.repo;
+
+/** the first part of every downloaded figure's file name. */
+export const DOWNLOAD_PREFIX = INSTANCE.download.prefix;
+
 /** the wordmark's parts (one string is one part). */
 export const WORDMARK: readonly string[] =
   typeof INSTANCE.wordmark === "string" ? [INSTANCE.wordmark] : INSTANCE.wordmark;
+
+/** the wordmark as plain text, the way it reads in the top bar: three parts are the first two run
+ * together, a space, then the third ("OceanMetrics Atlas"); one part as is ("Marine Sensitivity
+ * Atlas"). For prose that names the atlas the way its heading does (the Scores lens' welcome). */
+export const WORDMARK_TEXT =
+  WORDMARK.length === 3 ? `${WORDMARK[0]}${WORDMARK[1]} ${WORDMARK[2]}` : WORDMARK.join(" ");
 
 // --- the same for every instance ------------------------------------------------------------------
 

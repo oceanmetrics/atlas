@@ -61,6 +61,7 @@ import type {
   SelectionSpec,
   SourceSpecification,
   StyleSpecification,
+  ZoneStyleParts,
 } from "./types";
 
 /** every merged CARTO source/layer id gets this prefix — CARTO's own style.json literally has a
@@ -169,6 +170,13 @@ export const LAYER_ORDER = [
   "raster",
   "range",
   "overlay",
+  // a release's zone units (`layers/zones.ts#composeZoneStyle`, an instance with `release`): a zone's
+  // CHOROPLETH fill (real computed values) is "the lens's data" (`data-raster`); the invisible query
+  // fill every unit carries (pick-mode's hit-test), the outline and the labels are `data-zones`
+  "choropleth",
+  "zone-fill",
+  "zone-line",
+  "zone-label",
   // WP4: the gazetteer collections toggled in the Layers panel's "Place layers" group (fill under line
   // under circle), above the data and under the picker + the selection highlight.
   "place-overlay-fill",
@@ -207,6 +215,10 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   overlay: "data-raster",
   hex: "data-raster",
   "hex-selected": "data-raster",
+  choropleth: "data-raster",
+  "zone-fill": "data-zones",
+  "zone-line": "data-zones",
+  "zone-label": "data-zones",
   "place-overlay-fill": "data-overlays",
   "place-overlay-line": "data-overlays",
   "place-overlay-circle": "data-overlays",
@@ -227,7 +239,8 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-boundaries": ["basemap-boundaries"],
   "basemap-roads": ["basemap-roads"],
   "basemap-labels": ["basemap-labels"],
-  "data-raster": ["hex", "hex-selected", "raster", "range", "overlay"],
+  "data-raster": ["hex", "hex-selected", "raster", "range", "overlay", "choropleth"],
+  "data-zones": ["zone-fill", "zone-line", "zone-label"],
   "data-overlays": ["place-overlay-fill", "place-overlay-line", "place-overlay-circle"],
   "data-places": [
     "gazetteer-fill",
@@ -304,6 +317,10 @@ export interface ComposeStyleInput {
   range?: RangeLayerSpec | null;
   /** extra rasters above the main one, e.g. "cells outside Program Areas". */
   overlays?: readonly RasterLayerSpec[];
+  /** a release's zone units, already turned into sources and roled layers by
+   * `layers/zones.ts#composeZoneStyle` (reached only through the instance module table, so an
+   * instance without a release carries none of that module); absent/`null` for none. */
+  zoneStyle?: ZoneStyleParts | null;
   selection?: SelectionSpec | null;
   /** the clicked raster position and its cell (Collections lens), above every other layer. */
   highlight?: HighlightSpec | null;
@@ -465,6 +482,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     roled.push({ role: "overlay", layer: rasterLayer(overlay) });
   }
 
+  if (input.zoneStyle) {
+    Object.assign(sources, input.zoneStyle.sources);
+    roled.push(...input.zoneStyle.layers);
+  }
+
   for (const spec of input.placeOverlays ?? []) {
     sources[overlaySourceId(spec.slug)] = overlaySource(spec);
     roled.push(...overlayLayers(spec));
@@ -506,7 +528,13 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     const group = ROLE_GROUP[role];
     const entry = group ? groupById.get(group) : undefined;
     if (!entry) return { role, layer };
-    return { role, layer: applyLayerGroupStyling(layer, entry) };
+    // role "zone-fill" is ALWAYS the invisible query-fill placeholder (a real choropleth is role
+    // "choropleth", group `data-raster`): hiding the Outlines row must not make it un-queryable too
+    // (MapLibre leaves `visibility: "none"` layers out of `queryRenderedFeatures`), or zone click
+    // and pick stop working the moment a viewer hides the outlines. `fill-opacity: 0` keeps it
+    // invisible either way. (MarineSensitivity/atlas, review round 2's M5 decision.)
+    const styledEntry = role === "zone-fill" ? { ...entry, visible: true } : entry;
+    return { role, layer: applyLayerGroupStyling(layer, styledEntry) };
   });
 
   const style: StyleSpecification = {
@@ -522,7 +550,7 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   // any time the fetch succeeded); an unused `glyphs` key costs nothing, but keeping it conditional
   // makes "a style with no labels at all fetches no font range" (a failed fetch) an assertable
   // property.
-  if (cartoHasSymbolLayer) {
+  if (cartoHasSymbolLayer || input.zoneStyle?.glyphs) {
     style.glyphs = input.glyphs ?? cartoGlyphs ?? GLYPHS_URL;
   }
   return style;

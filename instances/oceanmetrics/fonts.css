@@ -1,0 +1,3 @@
+/* instances/oceanmetrics/fonts.css: no web fonts -- the OceanMetrics Atlas reads the system font
+   stack (tokens.css `--font-display`, `--font-body`). src/shell/shell.css imports every instance's
+   fonts.css, so this file exists to be empty. */

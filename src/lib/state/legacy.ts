@@ -9,6 +9,8 @@
 // INJECTABLE interface: every caller today gets `NO_ALIAS_LOOKUP` (always "unresolved") until a real
 // implementation exists to inject.
 
+import { INSTANCE } from "../brand/instance";
+
 export interface AliasResolution {
   sp?: string;
   in?: string;
@@ -57,21 +59,28 @@ export function rewriteLegacyParams(
   }
 }
 
-/** the four tools the spine offers (mirrors `src/shell/tools.ts`'s `ToolName`; duplicated as a
- * plain union because `src/lib/` never imports from `src/shell/`). */
-export type LegacyToolName = "layers" | "details" | "table" | "places";
+/** the tools a spine may offer (mirrors `src/shell/tools.ts`'s `ToolName`; duplicated as a plain
+ * union because `src/lib/` never imports from `src/shell/`). */
+export type LegacyToolName = "layers" | "details" | "table" | "places" | "report";
+
+/** the Places flow's own rail entry in this instance: `report` where the instance's `tools` name it
+ * (the Report tool holds the Places flow, as on the MarineSensitivity rail), else `places`. */
+export const PLACES_FLOW_TOOL: "places" | "report" = INSTANCE.tools.includes("report")
+  ? "report"
+  : "places";
 
 /**
  * map a `?tool=` value to today's tool. `tool=flower` (the retired Flower rail tool) -> `details`;
- * `tool=report` (the retired Report tool, whose body was the Places flow) -> `places`; the four
- * current names pass straight through; anything else is `null` (absent -- a malformed value falls
- * through, it is never an error). `tool` is not a `Sel` key, so this is a separate reader the shell
- * calls once at boot, and only when no `ui=` token supplied a tool.
+ * `tool=report` and `tool=places` both name the Places flow, so either maps to the one this instance's
+ * rail carries (`PLACES_FLOW_TOOL`); `layers`, `details` and `table` pass straight through; anything
+ * else is `null` (absent -- a malformed value falls through, it is never an error). `tool` is not a
+ * `Sel` key, so this is a separate reader the shell calls once at boot, and only when no `ui=` token
+ * supplied a tool.
  */
 export function legacyToolFromParams(params: URLSearchParams): LegacyToolName | null {
   const raw = params.get("tool");
   if (raw === "flower") return "details";
-  if (raw === "report") return "places";
-  if (raw === "layers" || raw === "details" || raw === "table" || raw === "places") return raw;
+  if (raw === "report" || raw === "places") return PLACES_FLOW_TOOL;
+  if (raw === "layers" || raw === "details" || raw === "table") return raw;
   return null;
 }

@@ -1,0 +1,13 @@
+diff --git a/src/places/zoneStats.ts b/src/places/zoneStats.ts
+index cbca08b..6d1058b 100644
+--- a/src/places/zoneStats.ts
++++ b/src/places/zoneStats.ts
+@@ -286,7 +286,7 @@ export function ringsFromFeatures(
+ export function zoneBboxFromFeatures(
+   features: readonly { geometry: { type: string; coordinates: unknown } }[],
+ ): [[number, number], [number, number]] | null {
+-  const polygons = ringsFromFeatures(features);
++  const polygons: Ring[][] = [];
+   if (polygons.length === 0) return null;
+   const [x0, y0, x1, y1] = bboxOf({ type: "MultiPolygon", coordinates: polygons });
+   return [

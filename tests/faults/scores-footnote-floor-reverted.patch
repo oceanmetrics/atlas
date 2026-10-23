@@ -1,0 +1,13 @@
+diff --git a/src/lib/report/scores.ts b/src/lib/report/scores.ts
+index de6cb11..449581b 100644
+--- a/src/lib/report/scores.ts
++++ b/src/lib/report/scores.ts
+@@ -132,7 +132,7 @@ const TABLE_NARRATIVE =
+  * place -- see this module's own header). Compared against the FLOORED, 1-dp percent the footnote
+  * sentence itself prints (`formatCoveragePctFloor`), so "99.0 %" is the exact boundary: 99.0 % and
+  * above never footnotes, 98.9 % (and 88.3 %) does. */
+-const COVERAGE_FOOTNOTE_FLOOR_PCT = 99;
++const COVERAGE_FOOTNOTE_FLOOR_PCT = 100;
+ 
+ /** the workflow's own wording for an absent component (P4): a Program-Area component whose scored
+  * cells cover less than the workflow's 5 % coverage floor has its `_ecoregion_rescaled` row

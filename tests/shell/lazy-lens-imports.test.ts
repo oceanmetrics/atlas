@@ -12,6 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { MODULE_TABLE } from "../../scripts/instance-modules.mjs";
 
 const SHELL_PATH = "src/shell/Shell.svelte";
 const SHELL_SVELTE = readFileSync(SHELL_PATH, "utf8");
@@ -53,9 +54,33 @@ describe("Shell.svelte never statically imports a lens/places .svelte panel comp
 
   it("every lens/places panel component IS reached, but only dynamically", () => {
     const dynamic = dynamicImportsOf(SHELL_SVELTE);
+    // an instance-only lens' components come through its lazy module in the instance module table
+    // (scripts/instance-modules.mjs): the Collections lens' `shell.ts`, the Scores lens' `shell.ts`,
+    // the Report tool's `reportTool.ts`, each loading its components with a dynamic import()
+    const bridges: Record<string, string[]> = {
+      "src/lens/collection/shell.ts": [
+        "./CollectionLens.svelte",
+        "./CollectionLegend.svelte",
+        "../../places/PlaceSummaryTable.svelte",
+      ],
+      "src/lens/scores/shell.ts": [
+        "./ScoresLens.svelte",
+        "./ScoresLegend.svelte",
+        "./ScoresSearch.svelte",
+        "./WelcomeModal.svelte",
+      ],
+      "src/shell/reportTool.ts": ["./ReportPane.svelte", "../places/ReportPlaces.svelte"],
+      "src/lib/release/shell.ts": [
+        "../ui/VersionBadge.svelte",
+        "../../lens/scores/VersionPickerModal.svelte",
+      ],
+    };
+    for (const [file, mods] of Object.entries(bridges)) {
+      const src = readFileSync(file, "utf8");
+      expect(staticImportsOf(src).filter((s) => s.endsWith(".svelte"))).toEqual([]);
+      for (const mod of mods) expect(dynamicImportsOf(src), `${file} -> ${mod}`).toContain(mod);
+    }
     for (const mod of [
-      "../lens/collection/CollectionLens.svelte",
-      "../lens/collection/CollectionLegend.svelte",
       "../lens/species/SpeciesLens.svelte",
       "../lens/species/SpeciesPicker.svelte",
       "../lens/species/SpeciesLegend.svelte",
@@ -71,8 +96,13 @@ describe("Shell.svelte never statically imports a lens/places .svelte panel comp
   it("the species/places data-layer modules stay static (not svelte files, so not gated here)", () => {
     const statics = staticImportsOf(SHELL_SVELTE);
     expect(statics).toContain("../lens/species/state.svelte");
-    expect(statics).toContain("../lens/collection/state.svelte");
     expect(statics).toContain("../places/placesMap.svelte");
+    // the Collections lens' reactive core is static too, as an EAGER export of the instance module
+    // table (`virtual:instance-modules`), so an instance without the lens carries none of it
+    expect(statics).toContain("virtual:instance-modules");
+    expect(MODULE_TABLE.lenses.collection.eager.createCollectionLens).toBe(
+      "src/lens/collection/state.svelte.ts",
+    );
   });
 
   it("SEEDED FAULT: the same scan flags a reintroduced static import of SpeciesLens.svelte", () => {

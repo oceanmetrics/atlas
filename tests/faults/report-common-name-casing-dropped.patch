@@ -1,0 +1,15 @@
+diff --git a/src/lib/report/format.ts b/src/lib/report/format.ts
+index cddb7fe..867bb58 100644
+--- a/src/lib/report/format.ts
++++ b/src/lib/report/format.ts
+@@ -86,8 +86,8 @@ export function utcStamp(now: Date): string {
+  * "hammerhead"/"shark"/"devil"/"ray"). `sp_common` itself, and every href built from `mdl_key`,
+  * stay the release's raw string; only the rendered table cell goes through this. */
+ export function formatCommonName(name: string): string {
+-  const trimmed = name.trim();
+-  return trimmed ? trimmed[0].toUpperCase() + trimmed.slice(1) : trimmed;
++  // fault: no longer sentence-cases -- back to printing the source common name verbatim
++  return name.trim();
+ }
+
+ /** `MarineSensitivity_{slug}_{ver}_{YYYY-MM-DD}` -- the export file stem (atlas-7 export 2). */

@@ -8,6 +8,7 @@
 // asks for the metric/model id specifically, not the human label `key()` sanitizes for the other
 // two -- a `mdl_key` (`am|Fis-29291`) is already opaque/safe and is kept byte-for-byte so a
 // downloaded file's name matches the id printed everywhere else in the app (deep links, STAC).
+import { DOWNLOAD_PREFIX } from "../brand/instance";
 
 /** `YYYYMMDD`, UTC (matches `dataBase.ts`'s own convention of not depending on the visitor's
  * timezone for anything that becomes a filename or a cache key). */
@@ -25,7 +26,7 @@ export function slugKey(label: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export type DownloadLens = "collection" | "species";
+export type DownloadLens = "collection" | "scores" | "species";
 
 /** `oceanmetrics-atlas_{lens}_{layer-or-species-key}_{ver}_{yyyymmdd}.{ext}` -- `key` is
  * {@link slugKey}'d here (callers pass the raw human label, e.g. a metric's `label` or a species'
@@ -40,7 +41,7 @@ export function mapFigureName(
   clock?: () => Date,
 ): string {
   const slug = slugKey(key) || (lens === "species" ? "species" : "layer");
-  return `oceanmetrics-atlas_${lens}_${slug}_${ver}_${yyyymmdd(clock)}.${ext}`;
+  return `${DOWNLOAD_PREFIX}_${lens}_${slug}_${ver}_${yyyymmdd(clock)}.${ext}`;
 }
 
 /** `oceanmetrics-atlas_{lens}_{metric-or-mdl-key}.tif` -- the GeoTIFF item's own name (brief: "name
@@ -52,12 +53,12 @@ export function mapFigureName(
  * are guaranteed to contain that filenames should not. */
 export function cogFileName(lens: DownloadLens, metricOrMdlKey: string): string {
   const safe = metricOrMdlKey.replace(/\|/g, "-");
-  return `oceanmetrics-atlas_${lens}_${safe}.tif`;
+  return `${DOWNLOAD_PREFIX}_${lens}_${safe}.tif`;
 }
 
-/** `oceanmetrics-atlas_places_{ver}_{yyyymmdd}.geojson` -- the "Selected places" export's own name,
+/** `${DOWNLOAD_PREFIX}_places_{ver}_{yyyymmdd}.geojson` -- the "Selected places" export's own name,
  * distinct from `places/download.ts#downloadGeoJson`'s existing default `"places.geojson"` (that
  * function's own default is unchanged; this is only what R3-W2's Download menu passes it). */
 export function placesFileName(ver: string, clock?: () => Date): string {
-  return `oceanmetrics-atlas_places_${ver}_${yyyymmdd(clock)}.geojson`;
+  return `${DOWNLOAD_PREFIX}_places_${ver}_${yyyymmdd(clock)}.geojson`;
 }

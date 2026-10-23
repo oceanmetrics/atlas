@@ -51,25 +51,18 @@
       }
     ]
   },
-  "lenses": [
-    "scores",
-    "species"
-  ],
+  "lenses": ["scores", "species"],
   "defaults": {
     "lens": "scores",
     "theme": "dark",
     "tour": "on"
   },
-  "tools": [
-    "layers",
-    "details",
-    "table",
-    "report"
-  ],
-  "pages": [
-    "index",
-    "report"
-  ],
+  "tools": ["layers", "details", "table", "report"],
+  "pages": ["index", "report"],
+  "repo": "oceanmetrics/atlas",
+  "download": {
+    "prefix": "example-atlas"
+  },
   "feedback": {
     "app": "atlas"
   },
@@ -87,6 +80,10 @@
   "seal": {
     "agency": "MMA",
     "src": "https://marinesensitivity.org/branding/mma-seal.svg"
+  },
+  "report": {
+    "title": "Example Report",
+    "stem": "Example"
   },
   "budget": {
     "static_kb": 460,

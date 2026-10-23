@@ -51,6 +51,7 @@ import { datasetIndex, layerBar, type DatasetIndex, type LayerBar } from "./data
 import {
   deepLinkKey,
   resolveDeepLink,
+  settleUs,
   targetOf,
   MERGED_IN,
   type DeepLinkEvent,
@@ -419,7 +420,7 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
       // `ds_key = "ms_merge"`, so re-running this for a plain `sp=` link would silently clobber an
       // already-correct `?sp=X&in=someInput` link's `in` back to "merged" on every load.
       if (asked?.legacy) {
-        const result = await resolveDeepLink(ver, initialParams, {
+        let result = await resolveDeepLink(ver, initialParams, {
           index: taxaIndex,
           fetchJson,
           session: deps.session?.() ?? null,
@@ -427,10 +428,23 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
         if (result.kind !== "none" && result.event) {
           track(result.event.name, result.event.params satisfies DeepLinkEvent["params"]);
         }
+        // the index was not loaded yet, so US validity is undecided: load it (the picker needs it
+        // anyway) and settle, instead of guessing "not US" and switching US-only off.
+        if (result.kind === "species" && result.clearUs === null) {
+          result = settleUs(result, await ensureTaxaIndex());
+        }
         if (result.kind === "species") {
           const target = targetOf(result, selStore.sel);
-          if (target)
-            selStore.set({ sp: target.sp, in: target.in, us: target.us, rep: target.rep });
+          // `rep` is omitted, not passed as `undefined`: Object.assign copies an explicit undefined
+          // over the field and `rep=undefined` was written into the address bar.
+          if (target) {
+            selStore.set({
+              sp: target.sp,
+              in: target.in,
+              us: target.us,
+              ...(target.rep !== undefined ? { rep: target.rep } : {}),
+            });
+          }
         } else if (result.kind === "not-found") {
           notFound = { key: result.key, reasons: result.reasons };
         }
@@ -736,6 +750,7 @@ export function createSpeciesLens(deps: SpeciesLensDeps): SpeciesLens {
           // runtime — `queryRenderedFeatures`'s stricter `PointLike` param type is TS-only friction.
           cellId = mapClick(handle.map as unknown as QueryableMap, lngLat, point, {
             grid: gridFromBoot(boot),
+            units: [],
           }).cellId;
         } catch {
           cellId = null;

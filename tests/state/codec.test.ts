@@ -64,15 +64,19 @@ describe("lens: default 'collection', or 'species' when sp is present", () => {
 });
 
 describe("retired keys (ver, lyr, unit, area, out): ignored, never round-tripped", () => {
-  it("parse drops them and format never writes them back", () => {
+  // an instance that builds neither the Scores lens nor a release registry (codec.mst.test.ts has them)
+  it("parse leaves them at their defaults and format never writes them back", () => {
     const sel = parseSel({
       search: "?ver=v9&lyr=extrisk_bird&unit=ecoregion&area=GEO&out=ecoregion&pal=viridis",
       hash: "",
     });
     expect(sel.pal).toBe("viridis");
-    for (const k of ["ver", "lyr", "unit", "area", "out"]) {
+    for (const k of ["ver", "lyr"]) {
       expect((sel as unknown as Record<string, unknown>)[k]).toBeUndefined();
     }
+    expect(sel.unit).toBe(DEFAULT_SEL.unit);
+    expect(sel.area).toBe(DEFAULT_SEL.area);
+    expect(sel.out).toBe(DEFAULT_SEL.out);
     expect(formatSel(sel).search).toBe("?pal=viridis");
   });
 });

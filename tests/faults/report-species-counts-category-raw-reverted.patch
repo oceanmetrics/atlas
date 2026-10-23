@@ -1,0 +1,13 @@
+diff --git a/src/lib/report/model.ts b/src/lib/report/model.ts
+index 582900b..52e4848 100644
+--- a/src/lib/report/model.ts
++++ b/src/lib/report/model.ts
+@@ -494,7 +494,7 @@ function describeCounts(name: string, counts: SpeciesCounts): string {
+   // "categories.ts supplies the display label"); this sentence reads it through categoryLabel().
+   const top = byTotal
+     .slice(0, 3)
+-    .map((r) => `${categoryLabel(r.category)} ${formatCount(r.total)}`);
++    .map((r) => `${r.category} ${formatCount(r.total)}`);
+   return (
+     `${name}: ${formatCount(counts.nSpecies)} species across ${counts.rows.length} ` +
+     `categor${counts.rows.length === 1 ? "y" : "ies"} and ${counts.columns.length} ` +

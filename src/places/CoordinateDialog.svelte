@@ -12,9 +12,12 @@
     open: boolean;
     onclose: () => void;
     onAccept: (places: NormalizedPlace[]) => void;
+    /** an instance with a release: the SAME study-area check UploadPanel runs after a parse
+     * (`studyAreaCheck` there); absent, no check. */
+    studyAreaCheck?: (places: NormalizedPlace[]) => Promise<Refusal | null>;
   }
 
-  let { open, onclose, onAccept }: Props = $props();
+  let { open, onclose, onAccept, studyAreaCheck }: Props = $props();
 
   let text = $state("");
   let refusal = $state<Refusal | null>(null);
@@ -31,6 +34,17 @@
       if (!result.ok) {
         refusal = result.refusal;
         return;
+      }
+      if (studyAreaCheck) {
+        try {
+          const outside = await studyAreaCheck(result.places);
+          if (outside) {
+            refusal = outside;
+            return;
+          }
+        } catch {
+          // an engine/grid failure never blocks a geometrically valid place (UploadPanel's rule)
+        }
       }
       onAccept(result.places);
       text = "";
