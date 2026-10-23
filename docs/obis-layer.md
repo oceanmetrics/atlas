@@ -436,10 +436,41 @@ the species table, median of 3) is met at res 3 and finer and not at res 1 and 2
 and 14.6 MB, footers of 68 and 118 KB) keep the 128 KiB tail and are still a tail, then the row groups (res 2: two
 groups of 218, three requests), 0.52 to 0.60 s. The pane's own line stays at 0.6 s or more at every resolution because it
 waits for the names (`species.parquet`, 4.5 MB: 0.25 to 0.40 s to arrive, then its columns are parsed). A way to the
-other two, not built or measured: a res-1 or res-2 hexagon's rows are the sums of its res-3 children's, which lie in
+other two (built next, below): a res-1 or res-2 hexagon's rows are the sums of its res-3 children's, which lie in
 its res-1 parent's split file (`p=<parent>`, one request for 828 of 842 parents), so the pane could read that file and
 sum the children's rows itself, as it does for a `children` scope, instead of the whole-resolution file's footer and
 row groups.
+
+**Res 1 and 2 from the split file** (2026-10-24, atlas `0da87a0`, Pages run 40006548403 after a rerun of the e2e-obis job, whose
+"pan back" case timed out waiting for the map's tiles in its first attempt and passed in the rerun). `cellPlan` sends a res-1
+hexagon to its own split file (`species_flat/res=3/p=<the cell>.parquet`: every res-3 row under it) and a res-2 hexagon to
+its res-1 parent's, where the row groups of its children's cell-id range are read (`childRange`; the same rows as "the rows
+whose res-2 ancestor is the cell", which a test computes row by row with the bit rules of `cellToParent`). The rows are
+summed by species in the browser with `sumBySpecies` (`n` added, `year_min` the least, `year_max` the greatest per aphiaid),
+not in DuckDB-WASM: the Cell pane loads no engine, and a few thousand rows sum in under a millisecond. The whole
+`res=1.parquet` and `res=2.parquet` stay the way for a collection with no `parent_template`, and res 0 (its children lie in
+seven split files). The tests assert the aggregated rows equal `res=1.parquet`'s and `res=2.parquet`'s on the fixture
+(including the name key and the null years), a split file with three res-2 hexagons under one res-1 parent
+(`make_siblings_split.py`: each keeps only its own rows, the siblings' row groups are skipped, and the three lists add up to
+the res-1 list), a file over 256 KiB (the tail, then the row groups), a missing file (empty list) and a failing one (error).
+Measured as above (headless Chromium 1243 on the laptop, the live site, a new context per run, 3 runs each, two batches
+about ten minutes apart; "table" is the species-table files' first request start to last response end):
+
+| Cell pane at                         | table ms, batch 1 (median) | table ms, batch 2 (median) | requests, bytes (every run)                                     | pane's line, ms (runs), batch 1 / batch 2 |
+| ------------------------------------ | -------------------------- | -------------------------- | --------------------------------------------------------------- | ----------------------------------------- |
+| res 1 `81283ffffffffff`              | 219 / 200 / 256, **219**   | 237 / 240 / 734, **240**   | 1 req (`res=3/p=81283ffffffffff`), 199,516 to 199,534 B         | 548 / 500 / 702; 544 / 563 / 770          |
+| res 2 `822837fffffffff`              | 429 / 186 / 451, **429**   | 330 / 553 / 290, **330**   | 1 req (the same file, 7 of 13 row groups), 199,513 to 199,532 B | 718 / 550 / 479; 575 / 588 / 504          |
+| res 3 `832834fffffffff`              | 493 / 317 / 470, **470**   | 248 / 251 / 240, **248**   | 1 req, 199,516 to 199,546 B                                     | 515 / 663 / 492; 832 / 556 / 512          |
+| res 5 `852834c7fffffff` (its parent) | 294 / 202 / 230, **230**   | 543 / 848 / 193, **543**   | 1 req, 199,519 to 199,533 B                                     | 595 / 566 / 483; 571 / 1203 / 617         |
+
+Before (this section's earlier table, `094c4ea`): res 1 517 ms in 2 requests (206,000 B), res 2 598 ms in 3 (264,641 B).
+Now res 1 and 2 are one request of 199.5 KB, the same file and bytes as res 3 and 5 (Monterey's parent; the pane prints
+"Read 194 KB of the species table in 1 request, 13 of 13 row groups" at res 1, "7 of 13" at res 2, "3 of 13" at res 3 and 5).
+**Bytes are met at every resolution (0.2 MB of 0.6 MB). The time bar (0.3 s median of 3) is not met reliably:** the request
+count is one everywhere, and the time is now the storage host's round trip for 200 KB, which was 0.19 to 0.25 s in the
+earlier hour (res 3: 180 / 189 / 197) and 0.19 to 0.85 s in these two batches (the same file: res 3 470 ms in batch 1, 248 ms
+in batch 2). Of the eight medians, four are at or under 0.3 s (res 1 in both, res 3 and res 5 once each) and four are over.
+The pane's own line stays at 0.5 s or more because it waits for the names (`species.parquet`, 4.5 MB, 0.25 to 1.0 s here).
 
 ## Not built yet
 
