@@ -30,6 +30,11 @@ export interface DuckDBConnLike {
 export interface DuckDBHandleLike extends DuckDBFileHandle {
   connect(): Promise<DuckDBConnLike>;
   terminate(): Promise<void>;
+  /** an empty in-memory file a `COPY ... TO` writes into (`AsyncDuckDB.registerEmptyFileBuffer`); optional, so a
+   * stub without it still boots ({@link Engine.exportParquet} then says the engine cannot write) */
+  registerEmptyFileBuffer?(name: string): Promise<void>;
+  /** the bytes of a virtual file (`AsyncDuckDB.copyFileToBuffer`) */
+  copyFileToBuffer?(name: string): Promise<Uint8Array>;
 }
 
 export interface EngineMark {
@@ -265,6 +270,35 @@ export class Engine {
       try {
         await this.#db.dropFile(name);
         endMark({ ok: true });
+      } catch (err) {
+        endMark({ ok: false, error: String(err) });
+        throw err instanceof EngineUnavailableError ? err : new EngineUnavailableError(err);
+      }
+    });
+  }
+
+  /**
+   * The rows of `select` written as one Parquet file and handed back as bytes (the OBIS layer's WoRMS subtree: the
+   * computed hexagons go to the map package's worker as a `blob:` url). `COPY (select) TO` an empty virtual file,
+   * then its bytes, then the file dropped; serialized on the same chain as every `exec()`. `options` are the COPY
+   * options after `FORMAT PARQUET` (`ROW_GROUP_SIZE 10240`).
+   */
+  exportParquet(name: string, select: string, options = ""): Promise<Uint8Array> {
+    return this.#enqueue(async () => {
+      await this.boot();
+      const db = this.#db!;
+      if (!db.registerEmptyFileBuffer || !db.copyFileToBuffer)
+        throw new EngineUnavailableError(new Error("this engine cannot write a file"));
+      const endMark = this.#startMark("engine:exportParquet", { name });
+      try {
+        await db.registerEmptyFileBuffer(name);
+        await this.#conn!.query(
+          `COPY (${select}) TO ${lit(name)} (FORMAT PARQUET${options ? `, ${options}` : ""});`,
+        );
+        const bytes = await db.copyFileToBuffer(name);
+        await db.dropFile(name);
+        endMark({ ok: true, bytes: bytes.byteLength });
+        return bytes;
       } catch (err) {
         endMark({ ok: false, error: String(err) });
         throw err instanceof EngineUnavailableError ? err : new EngineUnavailableError(err);
