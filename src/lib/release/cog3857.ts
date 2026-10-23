@@ -16,15 +16,21 @@
 // store key, it answers `{ kind: "titiler" }` and the lens keeps its titiler path (until titiler retires). It
 // never throws: a side table that cannot be read is the same as none.
 //
+// The shared pool (D8 part 2): the copies are content addressed (the original's hash is its file stem, shared
+// across releases), so one table at the registry root, `{PUBLIC_DATA_BASE}tables/cog_3857.parquet`, covers every
+// release after v7 (v7b, v7c) and the OM aquamaps_native registry: its own copies at `marine-atlas/cog_3857/<hash>_3857.tif`
+// and v7's rows as they are (their keys under `marine-atlas/v7/cog_3857/`). `resolveCog3857` reads it FIRST (its
+// footer once per page, whatever the release) and the release's own table only for a hash it lacks.
+//
 // The table is sorted by `content_hash` in row groups of 512, so a read of one hash (hyparquet's `filter`) skips
 // the other groups by their statistics; the Parquet reader is a dynamic import (scripts/size-budget-core.mjs keeps
 // hyparquet out of the static graph).
 import type { CogAsset } from "@oceanmetrics/map";
 import type { RasterChoice } from "../raster/cog";
 import { onStorage } from "../catalog/storage";
-import { dataBase, dataUrl, type SessionLike } from "./dataBase";
+import { PUBLIC_DATA_BASE, dataBase, dataUrl, registryUrl, type SessionLike } from "./dataBase";
 
-/** the side table's path inside a release. */
+/** the side table's path inside a release, and the shared table's under the registry root. */
 export const COG_3857_TABLE = "tables/cog_3857.parquet";
 /** the asset keys the choice carries, as a published Item's (`cog` the original, `cog_3857` its copy). */
 export const ORIGINAL_KEY = "cog";
@@ -83,6 +89,11 @@ export function copyHref(key: string, base: string): string | null {
 /** the side table's URL for `ver` (on a preview session's data prefix when it offers one). */
 export function sideTableUrl(ver: string, session?: SessionLike | null): string {
   return dataUrl(ver, COG_3857_TABLE, session);
+}
+
+/** the shared table's URL: one for every release, on the public registry root (its copies' keys are public). */
+export function sharedTableUrl(): string {
+  return registryUrl(COG_3857_TABLE);
 }
 
 function num(v: unknown): number | null {
@@ -228,12 +239,14 @@ export function readCog3857Row(source: string | ArrayBuffer, contentHash: string
 
 export interface ResolveOptions {
   session?: SessionLike | null;
-  /** the side table itself (tests), instead of `sideTableUrl(ver)`. */
+  /** the release's side table itself (tests), instead of `sideTableUrl(ver)`. */
   source?: string | ArrayBuffer;
+  /** the shared table itself (tests), instead of `sharedTableUrl()`; `null` skips it. */
+  sharedSource?: string | ArrayBuffer | null;
 }
 
-/** how release `ver` draws the COG at `cogUrl`: its 3857 copy from the side table when the table has it (a `cog`
- * choice), else titiler. Never throws. */
+/** how release `ver` draws the COG at `cogUrl`: its 3857 copy from the shared table when it has the hash, else
+ * from the release's side table (a `cog` choice), else titiler. Never throws. */
 export async function resolveCog3857(
   ver: string,
   cogUrl: string,
@@ -242,6 +255,12 @@ export async function resolveCog3857(
 ): Promise<RasterChoice> {
   const hash = contentHashOf(cogUrl);
   if (!hash) return { kind: "titiler" };
+  const shared = opts.sharedSource === undefined ? sharedTableUrl() : opts.sharedSource;
+  if (shared !== null) {
+    const row = await readCog3857Row(shared, hash);
+    // the shared table's keys (its own and v7's) are on the public root, whatever the session
+    if (row && row.contentHash === hash) return choiceOfRow(row, PUBLIC_DATA_BASE, cogUrl, hints);
+  }
   const row = await readCog3857Row(opts.source ?? sideTableUrl(ver, opts.session), hash);
   if (!row || row.contentHash !== hash) return { kind: "titiler" };
   return choiceOfRow(row, dataBase(ver, opts.session), cogUrl, hints);
