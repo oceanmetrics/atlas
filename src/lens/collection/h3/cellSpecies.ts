@@ -2,11 +2,17 @@
 // a hexagon's records, read from the release's own species table, never a service. The flat copies of the table
 // (`species_flat/`: `cell_id, name_key, aphiaid, n, year_min, year_max`, sorted by cell id in small row groups)
 // hold every species of every cell of their resolution, so (`cellPlan`, from the collection's `obis:species.flat`):
-//   - a hexagon at a flat resolution reads its own rows (one cell id): res 1 and 2 their own file
-//     (`species_flat/res={res}.parquet`, obisindicators 0.12: the res-3 rows summed by parent), res 3 the file of its
-//     res-1 parent (`parent_template` `species_flat/res=3/p={parent}.parquet`, `parent_res` `{"3": 1}`: 842 files,
-//     828 of them whole in the 256 KiB tail, one request), and the whole `res=3.parquet` only when the collection has no split;
-//   - a coarser hexagon (res 0, or res 1 and 2 of a 0.11 release that has res 3 only) reads its children at the
+//   - a hexagon at a flat resolution reads its own rows (one cell id): res 3 the file of its res-1 parent
+//     (`parent_template` `species_flat/res=3/p={parent}.parquet`, `parent_res` `{"3": 1}`: 842 files, 828 of them
+//     whole in the 256 KiB tail, one request), and the whole `res=3.parquet` only when the collection has no split;
+//   - a hexagon coarser than a split table whose children all lie in one split file (res 1 and 2 of a release that
+//     splits res 3 by res 1) reads that file: res 1 its own (`p=<the cell>`, every res-3 row under it), res 2 its
+//     res-1 parent's, the rows under it (one contiguous cell-id range, `childRange`, the row groups by `cell_id`
+//     statistics), summed by species in the browser: `n` added, `year_min` the least, `year_max` the greatest, which is
+//     how obisindicators 0.12 derived `res=1.parquet` and `res=2.parquet` (a test holds the two equal). The
+//     whole-resolution files (`species_flat/res={res}.parquet`: 9.0 and 14.6 MB, a footer then row groups, two or three
+//     requests) stay the way when the collection has no `parent_template`;
+//   - a coarser hexagon (res 0, whose children lie in several split files, or res 1 and 2 of a 0.11 release that has res 3 only) reads its children at the
 //     next flat resolution, one contiguous cell-id range (`childRange`), summed by species: the records add up and
 //     the species are the union, so the list is the hexagon's own, exactly;
 //   - a finer hexagon (res 4 to 7) has no flat copy: the list is its res-3 parent's (in that parent's res-1 file),
@@ -105,7 +111,21 @@ export function cellPlan(h3: string, flat: H3SpeciesFlat | readonly number[]): C
   const id = cellIdOf(h3);
   const res = cellIdRes(id);
   let plan: Omit<CellPlan, "url" | "split">;
-  if (flatRes.includes(res)) plan = { res, tableRes: res, scope: "cell", range: [id, id] };
+  // a hexagon coarser than a split table (res 1 and 2 of the res-3 split by res 1) whose children all lie in ONE
+  // split file reads that file, not its own whole-resolution file: res 1 the file of its own id (every res-3 row
+  // under it), res 2 the file of its res-1 parent (the rows under it, one contiguous cell-id range), the rows
+  // summed by species. The whole files (`res=1`, `res=2`: 9.0 and 14.6 MB, a footer and row groups) stay the way
+  // for a collection with no `parent_template` and for res 0, whose children lie in several split files.
+  const splitRes = f.parentTemplate
+    ? flatRes
+        .filter(
+          (r) => r > res && f.parentRes?.[String(r)] !== undefined && f.parentRes[String(r)] <= res,
+        )
+        .sort((a, b) => a - b)[0]
+    : undefined;
+  if (splitRes !== undefined)
+    plan = { res, tableRes: splitRes, scope: "children", range: childRange(id, splitRes) };
+  else if (flatRes.includes(res)) plan = { res, tableRes: res, scope: "cell", range: [id, id] };
   else {
     const finer = flatRes.filter((r) => r > res).sort((a, b) => a - b)[0];
     if (finer !== undefined)

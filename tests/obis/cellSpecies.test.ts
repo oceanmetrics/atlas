@@ -4,7 +4,7 @@
 // obisindicators 0.12's files made from it (tests/fixtures/obis_h3/scripts/make_v012.py): `res=1`, `res=2` summed by
 // parent, `res=3/p=<res-1 parent>` split by res-1 parent (815afffffffffff, 816abffffffffff), the lookup's `eov`.
 import { describe, expect, it } from "vitest";
-import { ReleaseReader } from "@oceanmetrics/map";
+import { cellIdOf, childRange, h3OfCellId, parentId, ReleaseReader } from "@oceanmetrics/map";
 import {
   cellPlan,
   COLUMN_GAP,
@@ -45,6 +45,15 @@ function spec011(): H3Spec {
   delete sp.eov;
   return parseH3(c as never)!;
 }
+/** the same release with no `parent_template`: the whole-resolution files (`res=1`, `res=2`, `res=3`) are the way */
+function noSplit(): H3Spec {
+  const sp = spec();
+  delete sp.speciesFlat!.parentTemplate;
+  delete sp.speciesFlat!.parentRes;
+  return sp;
+}
+const sorted = (m: Map<number, unknown>) => [...m.entries()].sort((a, b) => a[0] - b[0]);
+const sum = (m: Map<number, { n: number }>) => [...m.values()].reduce((t, v) => t + v.n, 0);
 const reader = (stats = { requests: 0, bytes: 0 }) =>
   new ReleaseReader({ fetch: localFetch(stats) });
 /** the hexagon's own values on the map: the all layer at its resolution */
@@ -77,13 +86,14 @@ describe("the species of a hexagon", () => {
       expect(totalsNote(t, map, false)).toBeNull();
     }
   });
-  it("0.12: a res-2 hexagon reads its own rows of res=2.parquet, the same list as its children's", async () => {
+  it("0.12 without a split: a res-2 hexagon reads its own rows of res=2.parquet, the same list as its children's", async () => {
     const lookup = await readLookup(S, buffer("species/species.parquet"));
     for (const h3 of ["826a8ffffffffff", "825acffffffffff"]) {
-      const got = (await readCellRows(S, h3, reader()))!;
+      const got = (await readCellRows(noSplit(), h3, reader()))!;
       expect(got.plan).toMatchObject({
         scope: "cell",
         tableRes: 2,
+        split: null,
         url: `${REL}species_flat/res=2.parquet`,
       });
       const rows = speciesRows(got.summed, lookup, null);
@@ -92,6 +102,149 @@ describe("the species of a hexagon", () => {
       const kids = (await readCellRows(spec011(), h3, reader()))!;
       expect([...got.summed.entries()].sort()).toEqual([...kids.summed.entries()].sort());
     }
+  });
+  it("0.12: a res-1 hexagon reads its own split file (every res-3 row under it) and the rows sum to res=1.parquet's", async () => {
+    const lookup = await readLookup(S, buffer("species/species.parquet"));
+    for (const h3 of ["816abffffffffff", "815afffffffffff"]) {
+      const stats = { requests: 0, bytes: 0 };
+      const split = new ReleaseReader({ fetch: localFetch(stats), tail: SPLIT_TAIL });
+      const got = (await readCellRows(S, h3, reader(), split))!;
+      expect(got.plan).toMatchObject({
+        res: 1,
+        tableRes: 3,
+        scope: "children",
+        url: `${REL}species_flat/res=3/p=${h3}.parquet`,
+        split: { parentRes: 1, parent: h3 },
+      });
+      // the file is under the 256 KiB tail: one request
+      expect(stats.requests).toBe(1);
+      expect(got.requests).toBe(1);
+      expect(got.summed.size).toBeGreaterThan(0);
+      // the whole res=1.parquet's rows of the cell (obisindicators 0.12 derived them the same way): n summed,
+      // year_min the least and year_max the greatest per aphiaid, and the name key
+      const whole = (await readCellRows(noSplit(), h3, reader()))!;
+      expect(whole.plan).toMatchObject({ scope: "cell", tableRes: 1, split: null });
+      expect(sorted(got.summed)).toEqual(sorted(whole.summed));
+      // and the map's own records and species
+      const rows = speciesRows(got.summed, lookup, null);
+      expect(totalsOf(rows).records).toBe(sum(whole.summed));
+    }
+  });
+  it("0.12: a res-2 hexagon reads its res-1 parent's split file and keeps the rows whose res-2 ancestor it is, the rows res=2.parquet has", async () => {
+    const lookup = await readLookup(S, buffer("species/species.parquet"));
+    for (const h3 of ["826a8ffffffffff", "825acffffffffff"]) {
+      const parent = flatParentOf(h3, 1);
+      const stats = { requests: 0, bytes: 0 };
+      const split = new ReleaseReader({ fetch: localFetch(stats), tail: SPLIT_TAIL });
+      const got = (await readCellRows(S, h3, reader(), split))!;
+      expect(got.plan).toMatchObject({
+        res: 2,
+        tableRes: 3,
+        scope: "children",
+        url: `${REL}species_flat/res=3/p=${parent}.parquet`,
+        split: { parentRes: 1, parent },
+      });
+      expect(stats.requests).toBe(1);
+      const whole = (await readCellRows(noSplit(), h3, reader()))!;
+      expect(whole.plan.url).toBe(`${REL}species_flat/res=2.parquet`);
+      expect(sorted(got.summed)).toEqual(sorted(whole.summed));
+      // the independent way: every row of the split file, each row's res-2 ancestor taken with the bit rules
+      // (the same as h3-js cellToParent), the rows of the hexagon summed
+      const all = (await reader().rows(
+        `${REL}species_flat/res=3/p=${parent}.parquet`,
+        [[0n, (1n << 63n) - 1n]],
+        {
+          id: "cell_id",
+          idType: "int64",
+          columns: ["aphiaid", "n", "name_key", "year_min", "year_max"],
+        },
+      ))!;
+      const keep = all.h3.map((c) => h3OfCellId(parentId(cellIdOf(c), 2)) === h3);
+      expect(keep.filter(Boolean).length).toBeGreaterThan(0);
+      const pick = (c: ArrayLike<number>) => Array.from(c).filter((_, i) => keep[i]);
+      const byAncestor = sumBySpecies({
+        aphiaid: pick(all.columns.aphiaid),
+        n: pick(all.columns.n),
+        name_key: pick(all.columns.name_key),
+        year_min: pick(all.columns.year_min),
+        year_max: pick(all.columns.year_max),
+      });
+      expect(sorted(got.summed)).toEqual(sorted(byAncestor));
+      const map = await own(h3);
+      expect(totalsOf(speciesRows(got.summed, lookup, null))).toEqual({
+        records: map.n,
+        names: map.sp,
+      });
+    }
+  });
+  it("0.12: a res-1 or res-2 hexagon over a split file larger than the tail reads the tail, then the row groups, the same rows", async () => {
+    // 812abffffffffff: 294,507 B, over SPLIT_TAIL; its 6000 species of every res-3 child
+    const h3 = "812abffffffffff";
+    const stats = { requests: 0, bytes: 0 };
+    const split = new ReleaseReader({ fetch: localFetch(stats), tail: SPLIT_TAIL });
+    const got = (await readCellRows(S, h3, reader(), split))!;
+    expect(got.plan).toMatchObject({
+      res: 1,
+      tableRes: 3,
+      scope: "children",
+      split: { parent: h3 },
+    });
+    expect(stats.requests).toBeGreaterThanOrEqual(2);
+    expect(got.summed.size).toBe(6000);
+    // the same however much of the file the first request took
+    const whole = await readCellRows(
+      S,
+      h3,
+      reader(),
+      new ReleaseReader({ fetch: localFetch(), tail: 400_000 }),
+    );
+    expect(sorted(whole!.summed)).toEqual(sorted(got.summed));
+    // a res-2 hexagon under it: the rows of its res-3 children only (a subset of the res-1 list)
+    const res2 = flatParentOf("832a98fffffffff", 2);
+    const r2 = (await readCellRows(S, res2, reader(), split))!;
+    expect(r2.plan).toMatchObject({ res: 2, tableRes: 3, split: { parent: h3 } });
+    // the independent way: all rows of the file, the res-2 ancestors of the cell ids compared with the hexagon
+    const all = (await reader().rows(
+      `${REL}species_flat/res=3/p=${h3}.parquet`,
+      [[0n, (1n << 63n) - 1n]],
+      {
+        id: "cell_id",
+        idType: "int64",
+        columns: ["aphiaid", "n", "name_key", "year_min", "year_max"],
+      },
+    ))!;
+    const keep = all.h3.map((c) => h3OfCellId(parentId(cellIdOf(c), 2)) === res2);
+    expect(keep.filter(Boolean).length).toBeGreaterThan(0);
+    const pick = (c: ArrayLike<number>) => Array.from(c).filter((_, i) => keep[i]);
+    expect(sorted(r2.summed)).toEqual(
+      sorted(
+        sumBySpecies({
+          aphiaid: pick(all.columns.aphiaid),
+          n: pick(all.columns.n),
+          name_key: pick(all.columns.name_key),
+          year_min: pick(all.columns.year_min),
+          year_max: pick(all.columns.year_max),
+        }),
+      ),
+    );
+    expect(r2.summed.size).toBeLessThanOrEqual(got.summed.size);
+    for (const [a, v] of r2.summed) expect(got.summed.get(a)!.n).toBeGreaterThanOrEqual(v.n);
+  });
+  it("0.12: a res-1 or res-2 hexagon with no split file under it is an empty list, a failing file an error", async () => {
+    // 81283ffffffffff (Monterey's res-1 parent) and 822837fffffffff: the fixture release has no file for them
+    for (const h3 of ["81283ffffffffff", "822837fffffffff"]) {
+      const got = (await readCellRows(S, h3, reader(), reader()))!;
+      expect(got.plan.url).toBe(`${REL}species_flat/res=3/p=81283ffffffffff.parquet`);
+      expect(got.summed.size).toBe(0);
+    }
+    const failing = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("/p=")
+        ? new Response("", { status: 503 })
+        : localFetch()(input, init)) as typeof fetch;
+    for (const h3 of ["816abffffffffff", "826a8ffffffffff"])
+      await expect(
+        readCellRows(S, h3, reader(), new ReleaseReader({ fetch: failing, tail: SPLIT_TAIL })),
+      ).rejects.toThrow("503");
   });
   it("0.12: a res-3 hexagon reads its res-1 parent's split file, the rows the whole res=3.parquet has", async () => {
     for (const h3 of ["836a8afffffffff", "835accfffffffff"]) {
@@ -266,13 +419,13 @@ describe("the species of a hexagon", () => {
     const r = new ReleaseReader({ fetch: localFetch(stats), tail: SPECIES_TAIL });
     expect(SPECIES_TAIL).toBe(131_072);
     expect(SPLIT_TAIL).toBe(262_144);
-    const a = (await readCellRows(S, "826a8ffffffffff", r))!;
+    const a = (await readCellRows(noSplit(), "826a8ffffffffff", r))!;
     expect(a.requests).toBe(stats.requests);
     expect(a.bytes).toBe(stats.bytes);
     expect(a.requests).toBeGreaterThanOrEqual(1);
     expect(a.groupsRead).toBeGreaterThanOrEqual(1);
     const before = { ...stats };
-    const b = (await readCellRows(S, "825acffffffffff", r))!;
+    const b = (await readCellRows(noSplit(), "825acffffffffff", r))!;
     // the second call opens nothing again: its requests are the ones counted since, and fewer than the first's
     expect(b.requests).toBe(stats.requests - before.requests);
     expect(b.bytes).toBe(stats.bytes - before.bytes);
@@ -318,7 +471,7 @@ describe("the species of a hexagon", () => {
       rows.length,
     );
   });
-  it("which file for which hexagon (0.12): res 1 and 2 their own file, res 3 its res-1 parent's, res 5 its res-3 parent's", () => {
+  it("which file for which hexagon (0.12): res 1, 2 and 3 the res-1 split file of their ancestor, res 5 its res-3 parent's, the whole files without a split", () => {
     const flat = {
       hrefTemplate: "https://x/species_flat/res={res}.parquet",
       resolutions: [1, 2, 3],
@@ -326,14 +479,36 @@ describe("the species of a hexagon", () => {
       parentRes: { "3": 1 },
     };
     // Monterey: 852834c7fffffff (res 5) -> 832834fffffffff -> 822837fffffffff -> 81283ffffffffff (h3-js cellToParent)
-    expect(cellPlan("81283ffffffffff", flat)).toMatchObject({
+    // res 1: its own split file (every res-3 row under it), summed to the cell
+    const r1 = cellPlan("81283ffffffffff", flat)!;
+    expect(r1).toMatchObject({
+      res: 1,
+      tableRes: 3,
+      scope: "children",
+      url: "https://x/species_flat/res=3/p=81283ffffffffff.parquet",
+      split: { parentRes: 1, parent: "81283ffffffffff" },
+    });
+    expect(r1.range).toEqual(childRange(BigInt("0x81283ffffffffff"), 3));
+    // res 2: its res-1 parent's split file, the rows under it
+    const r2 = cellPlan("822837fffffffff", flat)!;
+    expect(r2).toMatchObject({
+      res: 2,
+      tableRes: 3,
+      scope: "children",
+      url: "https://x/species_flat/res=3/p=81283ffffffffff.parquet",
+      split: { parentRes: 1, parent: "81283ffffffffff" },
+    });
+    expect(r2.range).toEqual(childRange(BigInt("0x822837fffffffff"), 3));
+    // no parent_template: res 1 and 2 read their own whole-resolution files (the fallback)
+    const whole0 = { hrefTemplate: flat.hrefTemplate, resolutions: flat.resolutions };
+    expect(cellPlan("81283ffffffffff", whole0)).toMatchObject({
       res: 1,
       tableRes: 1,
       scope: "cell",
       url: "https://x/species_flat/res=1.parquet",
       split: null,
     });
-    expect(cellPlan("822837fffffffff", flat)).toMatchObject({
+    expect(cellPlan("822837fffffffff", whole0)).toMatchObject({
       res: 2,
       tableRes: 2,
       scope: "cell",
