@@ -50,8 +50,8 @@ def test_only_aquamaps_eov_stays_under_its_prefix_and_ends_with_the_collection(t
   for c in calls:
     dests = [w for w in c.split() if w.startswith("s3://")]
     assert len(dests) == 1 and dests[0].startswith(DEST), c
-  assert "--include score_*.tif" in calls[0] and "--exclude score_*_3857.tif" in calls[0]
-  assert "--include score_*_3857.tif" in calls[1] and all("image/tiff" in c for c in calls[:2])
+  assert "--include score_*.tif --include density_*.tif --exclude *_3857.tif" in calls[0]
+  assert "--include score_*_3857.tif --include density_*_3857.tif" in calls[1] and all("image/tiff" in c for c in calls[:2])
   assert calls[2].startswith(f"s3 sync {d}/items {DEST}/items")
   assert calls[-1].startswith(f"s3 cp {d}/collection.json {DEST}/collection.json")
 

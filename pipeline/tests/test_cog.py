@@ -329,3 +329,35 @@ def test_cli_cog_assets_rewrites_each_item_in_place(tmp_path):
     assert it["assets"]["cog"]["raster:bands"][0]["histogram"]["count"] == 32
     assert profiles.check_cog_assets(it) == []
   assert (tmp_path / "score_risk_3857.tif").exists()
+
+
+# ---- a reference asset's copy (the EOV density files) ----
+
+def test_a_reference_assets_copy_goes_under_its_own_key_and_is_never_the_one_drawn():
+  """`--key density`: the copy is `density_3857`, roles reference + visual, and the score's `cog_3857` is kept; so
+  pickCogAssets (the first data asset in EPSG:3857) still draws the score copy."""
+  it = two_asset_item()
+  it["assets"]["density"]["raster:bands"] = [{"name": "fish", "data_type": "float32", "nodata": "nan"},
+                                             {"name": "seabirds", "data_type": "float32", "nodata": "nan"}]
+  out = cog.add_cog_assets(it, "density", [SUM, None], "EPSG:4326", copy_info={"href": "../density_risk_3857.tif"},
+                           copy_key="density_3857")
+  d = out["assets"]["density_3857"]
+  assert d["href"] == "../density_risk_3857.tif" and d["roles"] == ["reference", "visual"]
+  assert d["proj:code"] == "EPSG:3857" and out["assets"]["cog_3857"] == it["assets"]["cog_3857"]
+  draw = [k for k, a in out["assets"].items() if "data" in a["roles"] and a.get("proj:code") == "EPSG:3857"]
+  assert draw == ["cog_3857"]
+  # an empty band of a reference asset (not under the cog profile) is only valid_percent 0, no borrowed range
+  assert out["assets"]["density"]["raster:bands"][1]["statistics"] == {"valid_percent": 0.0}
+  assert profiles.check_cog_assets(out) == []
+
+
+def test_copy_roles_add_visual_to_the_originals():
+  assert cog.copy_roles(["data"]) == ["data", "visual"] and cog.copy_roles(None) == ["data", "visual"]
+  assert cog.copy_roles(["reference"]) == ["reference", "visual"]
+
+
+def test_publish_cog_item_names_a_non_data_assets_copy_after_its_key(tmp_path):
+  tif = eov_tif(tmp_path / "density_risk.tif")
+  it, rep = cog.publish_cog_item(eov_item(), tif, key="density")
+  assert it["assets"]["density_3857"]["href"] == "../density_risk_3857.tif"
+  assert "cog_3857" not in it["assets"] and rep["copy"] == tmp_path / "density_risk_3857.tif"

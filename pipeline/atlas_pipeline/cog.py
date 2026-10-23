@@ -229,14 +229,25 @@ def _bands_key(asset: dict) -> str:
   return "bands" if "bands" in asset and "raster:bands" not in asset else "raster:bands"
 
 
+def copy_roles(roles: list[str] | None) -> list[str]:
+  """the 3857 copy's roles: the original's plus `visual` (a `data` original gives ["data", "visual"]; a `reference`
+  one, such as the EOV density files, ["reference", "visual"], so `pickCogAssets` never draws it in place of the
+  Item's data copy)."""
+  rs = list(roles or ["data"])
+  return rs + ([] if "visual" in rs else ["visual"])
+
+
 def add_cog_assets(item: dict, key: str, summaries: list[dict | None], proj_code: str = "EPSG:4326",
-                   file_band_info: list[dict] | None = None, copy_info: dict | None = None) -> dict:
+                   file_band_info: list[dict] | None = None, copy_info: dict | None = None,
+                   copy_key: str = COPY_KEY) -> dict:
   """the item (a new dict) with its data COG asset `key` given `proj:code` and per band `statistics` and `histogram`
   (from `band_summary` of the full-resolution source), and, unless `copy_info` is None or the original already is
   EPSG:3857, a `cog_3857` asset beside it: `proj:code` EPSG:3857, roles ["data", "visual"], the same draw hints
   (`atlas:bidx|rescale|colormap`) and the same band metadata. `copy_info` is {href, file:size?, file:checksum?,
   atlas:zoom?}. A band with no valid pixel (summary None) gets statistics {minimum, maximum} = the asset's display
-  range (`empty_range`) and valid_percent 0, no histogram (the `cog` profile requires minimum and maximum). The item's
+  range (`empty_range`) and valid_percent 0, no histogram (the `cog` profile requires minimum and maximum); on a
+  non-`data` asset (not under the `cog` profile) it gets only valid_percent 0. The copy goes under `copy_key`
+  (`cog_3857`; another asset's copy, such as `density`, under its own key, `density_3857`), with `copy_roles`. The item's
   `properties["proj:code"]` is the original's; the projection extension is declared."""
   out = copy.deepcopy(item)
   a = out["assets"][key]
@@ -248,7 +259,10 @@ def add_cog_assets(item: dict, key: str, summaries: list[dict | None], proj_code
   for i, (b, s) in enumerate(zip(bands, summaries), 1):
     for k, v in info[i - 1].items():
       b.setdefault(k, v)
-    if s is None:
+    if s is None and "data" not in (a.get("roles") or ["data"]):
+      b["statistics"] = {"valid_percent": 0.0}
+      b.pop("histogram", None)
+    elif s is None:
       rng = empty_range(a, out)
       if rng is None:
         raise ValueError(f"{item.get('id')}: band {i} of asset {key} has no valid pixel and no atlas:rescale or "
@@ -266,7 +280,7 @@ def add_cog_assets(item: dict, key: str, summaries: list[dict | None], proj_code
   if stac.EXT["projection"] not in ext:
     ext.append(stac.EXT["projection"])
   if copy_info is not None and proj_code != WEB_MERCATOR:
-    c = {"href": copy_info["href"], "type": COG_T, "roles": list(COPY_ROLES),
+    c = {"href": copy_info["href"], "type": COG_T, "roles": copy_roles(a.get("roles")),
          "title": f"{a['title']} (web mercator copy, drawn in the browser)" if a.get("title") else
                   "web mercator copy, drawn in the browser",
          "proj:code": WEB_MERCATOR}
@@ -277,7 +291,7 @@ def add_cog_assets(item: dict, key: str, summaries: list[dict | None], proj_code
     for k in ("file:size", "file:checksum", "atlas:zoom"):
       if k in copy_info:
         c[k] = copy_info[k]
-    out["assets"][COPY_KEY] = c
+    out["assets"][copy_key] = c
     if "file:size" in c and stac.EXT["file"] not in ext:
       ext.append(stac.EXT["file"])
   return out
@@ -285,9 +299,9 @@ def add_cog_assets(item: dict, key: str, summaries: list[dict | None], proj_code
 
 def data_cog_key(item: dict, src_tif: Path) -> str:
   """the key of the item's data COG asset that is `src_tif`: the one whose href names the file, else the only data
-  COG asset (the 3857 copy left out)."""
+  COG asset (the 3857 copies left out)."""
   cogs = {k: a for k, a in item.get("assets", {}).items()
-          if k != COPY_KEY and a.get("type") == COG_T and "data" in (a.get("roles") or [])}
+          if not k.endswith(COPY_SUFFIX) and a.get("type") == COG_T and "data" in (a.get("roles") or [])}
   named = [k for k, a in cogs.items() if a["href"].rsplit("/", 1)[-1] == Path(src_tif).name]
   if len(named) == 1:
     return named[0]
@@ -303,11 +317,12 @@ def _fresh(dst: Path, src: Path) -> bool:
 
 def publish_cog_item(item: dict, src_tif: Path, staging_dir: Path | None = None, *, key: str | None = None,
                      resampling: str = "nearest", summaries: list[dict | None] | None = None,
-                     log=None) -> tuple[dict, dict]:
+                     log=None, copy_key: str | None = None) -> tuple[dict, dict]:
   """everything the browser COG renderer needs for one Item over `src_tif` (the 4326 original as staged, rewritten in
   place with nearest/mode overviews): its 3857 copy `<stem>_3857.tif` in `staging_dir` (default: beside `src_tif`;
   kept when newer than the original, so several Items over one COG warp it once), the band statistics and histograms
   from the full-resolution original (`summaries` when the caller has them) and the two assets (`add_cog_assets`).
+  `copy_key` defaults to `cog_3857` for the Item's data asset and to `<key>_3857` for any other (`--key density`).
   Returns (the new item, a report {key, overviews, copy, zoom, bytes, summaries, seconds per step})."""
   src_tif = Path(src_tif)
   staging_dir = Path(staging_dir) if staging_dir is not None else src_tif.parent
@@ -339,5 +354,7 @@ def publish_cog_item(item: dict, src_tif: Path, staging_dir: Path | None = None,
     copy_info = {"href": copy_href(item["assets"][key]["href"]), "file:size": dst.stat().st_size,
                  "file:checksum": stac.multihash_sha256(dst), "atlas:zoom": list(zoom)}
     report |= {"copy": dst, "zoom": zoom, "bytes": dst.stat().st_size}
-  out = add_cog_assets(item, key, summaries, proj, file_bands(src_tif), copy_info)
+  if copy_key is None:
+    copy_key = COPY_KEY if "data" in (item["assets"][key].get("roles") or ["data"]) else f"{key}{COPY_SUFFIX}"
+  out = add_cog_assets(item, key, summaries, proj, file_bands(src_tif), copy_info, copy_key)
   return out, report

@@ -3,7 +3,7 @@
 #   pipeline/publish.sh            # aws s3 sync --dryrun
 #   pipeline/publish.sh --really   # real upload (needs AWS keys with write access to the bucket)
 #   pipeline/publish.sh --only swfsc_cce_becker2020b [--really]   # ONE restricted collection (+ its COGs), nothing else
-#   pipeline/publish.sh --only aquamaps_eov [--really]   # the EOV score COGs + _3857 copies + Items + collection.json, no delete
+#   pipeline/publish.sh --only aquamaps_eov [--really]   # the EOV score + density COGs, their _3857 copies, Items, collection.json; no delete
 # the restricted species collection goes to an unlisted prefix kept in pipeline/restricted_prefix.txt (git-ignored);
 # a collection published with --only has its own prefix file (pipeline/restricted_prefix_<name>.txt, git-ignored).
 set -euo pipefail
@@ -28,8 +28,8 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$flag" ] && echo "DRY RUN (add --really to publish)" || echo "PUBLISHING to s3://$bucket"
 
-# ---- --only aquamaps_eov: the score COGs, their _3857 copies, the Items and collection.json of the PUBLIC EOV collection ----
-# the rest of the product (Parquet, density COGs) is written and uploaded by oceanmetrics/workflows/aquamaps_eov.qmd; this
+# ---- --only aquamaps_eov: the score and density COGs, their _3857 copies, the Items and collection.json of the PUBLIC EOV collection ----
+# the rest of the product (Parquet) is written and uploaded by oceanmetrics/workflows/aquamaps_eov.qmd; this
 # is the narrow re-publish after `build.py cog-assets` (the staging folder holds score_*.tif, score_*_3857.tif, items/ and a
 # collection.json read from the bucket with the new file:size/file:checksum). Nothing is deleted (no --delete) and a key
 # whose size is unchanged is skipped (--size-only), so a COG or Item already published as it stands is not touched.
@@ -39,8 +39,9 @@ if [ "$only" = "aquamaps_eov" ]; then
   dest="s3://$bucket/atlas/aquamaps_eov"
   [ -f "$src/collection.json" ] || { echo "nothing staged at $src" >&2; exit 1; }
   echo "target: $dest/"
-  aws s3 sync "$src" "$dest" --exclude '*' --include 'score_*.tif' --exclude 'score_*_3857.tif' --exclude '*.orig.tif' --size-only --content-type image/tiff $flag
-  aws s3 sync "$src" "$dest" --exclude '*' --include 'score_*_3857.tif' --size-only --content-type image/tiff $flag
+  # the score and density originals (rewritten with nearest overviews), then the _3857 copies of both
+  aws s3 sync "$src" "$dest" --exclude '*' --include 'score_*.tif' --include 'density_*.tif' --exclude '*_3857.tif' --exclude '*.orig.tif' --size-only --content-type image/tiff $flag
+  aws s3 sync "$src" "$dest" --exclude '*' --include 'score_*_3857.tif' --include 'density_*_3857.tif' --size-only --content-type image/tiff $flag
   if [ -d "$src/items" ]; then
     aws s3 sync "$src/items" "$dest/items" --exclude '*' --include '*.json' --size-only --content-type application/json $flag
   fi

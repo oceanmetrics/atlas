@@ -9,6 +9,8 @@ cd pipeline && uv run --group dev pytest -q                       # one test per
 uv run pipeline/build.py build --collection swfsc_cce_becker2020b   # from the repo root
 uv run pipeline/build.py check
 uv run pipeline/build.py cog-assets <item.json>... <tif>          # the browser COG assets of Items written elsewhere
+uv run pipeline/build.py cog-3857-batch --release v7 --out <dir>  # the 3857 copies + side table of a MST release
+uv run --project pipeline pipeline/scripts/sweep_3857.py          # the gate counter: COGs referenced without a copy
 pipeline/publish.sh [--only <collection>] [--really]              # dry run unless --really
 ```
 
@@ -53,7 +55,10 @@ for (m in c("risk", "share")) {
 It writes `score_<metric>_3857.tif` beside each COG and rewrites each Item in place with the `cog_3857` asset (href
 `../score_<metric>_3857.tif`), `proj:code` on both assets and the Item, and per band statistics and histograms; it
 refuses an Item that then fails the `cog` profile. The upload chunk's `aws s3 sync` carries the `_3857.tif` files with
-the rest (`image/tiff`, from the extension). The `density` assets (roles `["reference"]`) are left as they are.
+the rest (`image/tiff`, from the extension). The `density` assets (roles `["reference"]`) take the same call with `--key density`: the copy goes under
+`density_3857` (roles `["reference", "visual"]`, so `pickCogAssets` never draws it in place of `cog_3857`), and an empty
+band of a reference asset gets only `valid_percent` 0. Done for the published `density_risk.tif` and `density_share.tif`
+on 2026-10-23 (below).
 
 Measured on the published `score_risk.tif` (7200 × 3600, 9 bands uint8, nodata 255) on the laptop, 2026-10-23, with
 the 8 risk Items: overviews rebuilt nearest (3600 × 1800 down to 225 × 113; the published ones went to 450 × 225 with
@@ -78,3 +83,44 @@ ATLAS_STAGE=<stage> pipeline/publish.sh --only aquamaps_eov [--really]
 It uploads the COGs, then their copies, then the Items, then `collection.json` last, under `atlas/aquamaps_eov/` only,
 with the same keys and `image/tiff` / `application/json` content types; it never deletes, and `--size-only` skips a
 key whose size did not change (the risk COG and Items published on 2026-10-23 are not touched).
+
+### The density COGs (2026-10-23, the mini)
+
+`build.py cog-assets items/*_<m>.json density_<m>.tif --key density` over the 8 Items of each metric: overviews rebuilt
+nearest (4 levels, unrecorded resampling, to 5 down to 225 x 113), 3857 copies of 481,467,696 B (risk) and
+674,782,732 B (share), zoom 0 to 5 (8 float32 bands), 82 s and 95 s. `collection.json` got the new `file:size` and
+`file:checksum` of both originals, `proj:code`, and two collection assets `density_<m>_3857`; then
+`ATLAS_STAGE=<stage> pipeline/publish.sh --only aquamaps_eov --really` (the originals and copies, the 16 Items,
+`collection.json`; the score files were not staged, so not touched). The published originals before the rewrite are
+kept at `/Volumes/msens_big/_big/oceanmetrics/cog3857/om_stage/aquamaps_eov_published/`.
+
+## The 3857 copies of a MarineSensitivity release (`cog-3857-batch`, week 6 step 5, D8)
+
+MST's published releases are immutable (D7), so the copies of their COGs go beside the release, never into it
+(`atlas_pipeline/cog3857.py`):
+
+- the release's COG list: the distinct `.tif` of `<ver>/tables/model_asset.parquet` (`cog_url`), `score_cog.parquet`
+  (`cog_url`) and `native_asset.parquet` (`asset_url` where `asset_type = cog`); a table a release lacks is skipped.
+  Each row's `content_hash` must be its file's stem (the store key);
+- each original downloaded path-style to `<out>/src/<path under marine-atlas/>` (cached, shared by releases), its md5
+  checked against the store catalog `marine-atlas/assets.parquet`, never rewritten (no `ensure_overviews`: it is a
+  published file);
+- the copy (`cog.web_mercator_copy`) at `<out>/<ver>/cog_3857/<path>_3857.tif`, published as
+  `marine-atlas/<ver>/cog_3857/<path>_3857.tif`;
+- one side-table row per COG in `<out>/<ver>/tables/cog_3857.parquet` (`cog3857.SCHEMA`): `content_hash` (the
+  original's, the join key), `url` (the original as the release names it), `cog_3857_key`, `proj:code` (EPSG:3857),
+  `src_proj:code`, `zoom_min`, `zoom_max`, `bands`, `statistics` and `histogram` (per band, from the full-resolution
+  4326 original, null for an empty band), `bytes` and `md5` of the copy, `src_bytes`, `src_md5`, `created`.
+
+Resumable: each finished COG is a line of `<out>/<ver>/cog_3857.jsonl` (the journal); the Parquet is rewritten from it
+every 1,000 rows and at the end; a rerun skips every `content_hash` in either. Failures go to
+`<out>/<ver>/cog_3857_errors.jsonl` and are retried by the next run (exit 1 while any remain). Publish, additive:
+
+```sh
+aws s3 sync <out>/<ver>/cog_3857 s3://oceanmetrics.io-public/marine-atlas/<ver>/cog_3857/ --content-type image/tiff
+aws s3 cp <out>/<ver>/tables/cog_3857.parquet s3://oceanmetrics.io-public/marine-atlas/<ver>/tables/cog_3857.parquet
+```
+
+`scripts/sweep_3857.py` prints the gate's one line, `COGs referenced without a 3857 copy = N of M (...)`, over the
+MST releases v7, v7b and v7c (each against its own side table), the OM `aquamaps_native` registry (D8's
+`cog_3857_url` and `cog_3857_url_005`) and the OM Items (a `*_3857` asset beside each COG asset); exit 0 at 0.

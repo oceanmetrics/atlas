@@ -1,4 +1,5 @@
-"""command line: `build --collection <slug>`, `check` and `cog-assets <item.json>... <tif>` (see pipeline/build.py)."""
+"""command line: `build --collection <slug>`, `check`, `cog-assets <item.json>... <tif>` and
+`cog-3857-batch --release <ver> --out <dir>` (see pipeline/build.py)."""
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import aquamaps, cog, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
+from . import aquamaps, cog, cog3857, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
@@ -379,7 +380,7 @@ def validate_stac(out: Path = STAGING) -> list[str]:
 # ---- cog-assets: the browser COG assets of Items another repo writes (workflows/R/eov_share.R) ----
 
 def cog_assets(item_paths: list[Path], tif: Path, staging_dir: Path | None = None, key: str | None = None,
-               resampling: str = "nearest") -> dict:
+               resampling: str = "nearest", copy_key: str | None = None) -> dict:
   """rewrite each Item JSON in place with the two data assets of `tif` (`cog.publish_cog_item`): the original's
   overviews rebuilt, its `<stem>_3857.tif` written beside it (or in `staging_dir`) once, the band statistics and
   histograms read once and shared by every Item; each Item must pass the `cog` profile. Returns the report."""
@@ -389,7 +390,7 @@ def cog_assets(item_paths: list[Path], tif: Path, staging_dir: Path | None = Non
   for p in item_paths:
     item = load_json(Path(p))
     item, rep = cog.publish_cog_item(item, Path(tif), staging_dir, key=key, resampling=resampling,
-                                     summaries=summaries, log=log)
+                                     summaries=summaries, log=log, copy_key=copy_key)
     first = first or rep   # the first Item's run did the work (the rebuild, the warp, the summaries)
     summaries = rep["summaries"]
     bad += [f"{Path(p).name}: {m}" for m in profiles.check_cog_assets(item)]
@@ -419,10 +420,24 @@ def main(argv=None) -> int:
   g.add_argument("--staging-dir", type=Path, default=None, help="where <stem>_3857.tif goes (default: beside the COG)")
   g.add_argument("--key", default=None, help="the data asset key (default: the one whose href names the COG)")
   g.add_argument("--resampling", choices=sorted(cog.RESAMPLING), default="nearest", help="overviews: nearest, or mode for classes")
+  g.add_argument("--copy-key", default=None, help="the copy's asset key (default: cog_3857 for a data asset, <key>_3857 otherwise)")
+  m = sub.add_parser("cog-3857-batch", help="the EPSG:3857 copies + side table (cog_3857.parquet) of a MST release's COGs")
+  m.add_argument("--release", required=True, help="the MST release label (v7, v7b, ...)")
+  m.add_argument("--out", type=Path, required=True, help="work dir: src/ (cached originals), <ver>/cog_3857/, <ver>/tables/")
+  m.add_argument("--base", default=cog3857.BASE, help="the marine-atlas/ root the release tables are read from")
+  m.add_argument("--workers", type=int, default=4, help="COGs at a time (downloads included)")
+  m.add_argument("--limit", type=int, default=None, help="only the first N not yet done (to time a run)")
+  m.add_argument("--flush-every", type=int, default=1000, help="rewrite the Parquet side table every N rows")
   a = ap.parse_args(argv)
 
+  if a.cmd == "cog-3857-batch":
+    r = cog3857.run_batch(a.release, a.out, a.base, a.workers, a.limit, a.flush_every, log=log)
+    log(f"done: {r}")
+    log(f"side table: {cog3857.table_path(a.out, a.release)} ({r['rows']:,} rows)")
+    return 1 if r["failed"] else 0
+
   if a.cmd == "cog-assets":
-    r = cog_assets(a.items, a.tif, a.staging_dir, a.key, a.resampling)
+    r = cog_assets(a.items, a.tif, a.staging_dir, a.key, a.resampling, a.copy_key)
     o = r["overviews"]
     log(f"{a.tif.name}: overviews {'rebuilt' if o['rebuilt'] else 'kept'} ({o['resampling']}) {o['levels']}"
         f" (before: {o['before']['resampling']} {o['before']['levels']})")
