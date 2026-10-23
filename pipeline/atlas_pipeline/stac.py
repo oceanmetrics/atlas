@@ -831,10 +831,20 @@ def root_catalog(external_children: list[dict]) -> dict:
        "title": "MBON BioTrack biodiversity indicators"},
       {"rel": "child", "href": "./aquamaps_native/collection.json", "type": JSON_T,
        "title": "AquaMaps habitat suitability (native 0.5° and global 0.05°)"},
+      # the obis-h3 release's stable collection (obisindicators 0.11, absolute hrefs into the current release), by
+      # absolute href in its own picker group (`atlas:group`, read by the app's catalog loader)
+      *[{"rel": "child", "href": c["href"], "type": JSON_T, "title": c["title"], "atlas:group": c["group"]}
+        for c in OBIS_CHILDREN],
       *[{"rel": "child", "href": c["href"], "type": JSON_T, "title": c["title"]} for c in external_children],
     ],
   }
 
+
+# the obis-h3 STAC collection (h3 profile 1.1): one stable url, rewritten by each obis-h3 refresh after latest.json
+OBIS_H3_COLLECTION = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/collection.json"
+OBIS_CHILDREN = [
+  {"href": OBIS_H3_COLLECTION, "title": "OBIS biodiversity indicators on H3", "group": "obis"},
+]
 
 MST_STAC = "https://file.marinesensitivity.org/stac"
 # the v7 collections are linked one by one (ids msens-v7-<key>, titles as the MST STAC states them), not through the v7

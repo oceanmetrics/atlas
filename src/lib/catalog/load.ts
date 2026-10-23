@@ -41,11 +41,12 @@ function fail<T>(kind: LoadErrorKind, url: string, message: string, status?: num
 // --- model --------------------------------------------------------------------------------------
 
 /** which picker group a collection belongs to. */
-export type CatalogGroup = "oceanmetrics" | "mst-v7" | "mst-v8" | "external" | "unlisted";
+export type CatalogGroup = "oceanmetrics" | "obis" | "mst-v7" | "mst-v8" | "external" | "unlisted";
 
 /** every group the code knows, the run-time twin of {@link CatalogGroup}. */
 export const CATALOG_GROUPS: readonly CatalogGroup[] = [
   "oceanmetrics",
+  "obis",
   "mst-v7",
   "mst-v8",
   "external",
@@ -221,9 +222,13 @@ function asItem(raw: unknown, url: string): Loaded<StacItem> {
 
 // --- grouping -----------------------------------------------------------------------------------
 
-/** which group a collection at `url` belongs to: under the catalog's own base -> OceanMetrics;
- * the MarineSensitivity STAC by path (`/stac/v7/`, `/stac/v8/`); anything else is external. */
-export function groupOf(url: string, base: string): CatalogGroup {
+/** which group a collection at `url` belongs to: the group its `child` link names (`atlas:group`, any known group
+ * but `unlisted`, which only a `?collection=` link is); else under the catalog's own base -> OceanMetrics; the
+ * MarineSensitivity STAC by path (`/stac/v7/`, `/stac/v8/`); anything else is external. */
+export function groupOf(url: string, base: string, link?: StacLink): CatalogGroup {
+  const declared = link?.["atlas:group"];
+  if (typeof declared === "string" && isCatalogGroup(declared) && declared !== "unlisted")
+    return declared;
   if (url.startsWith(base)) return "oceanmetrics";
   let path: string;
   try {
@@ -346,7 +351,7 @@ export async function loadCatalog(opts: LoadOptions = {}): Promise<Loaded<AtlasC
         };
         return [unavailable(link, url, "oceanmetrics", base, error)];
       }
-      return loadEntries(link, childUrl, groupOf(childUrl, base), base, 0, opts, cache);
+      return loadEntries(link, childUrl, groupOf(childUrl, base, link), base, 0, opts, cache);
     }),
   );
   const entries = groups.flat();

@@ -43,6 +43,7 @@
     "base": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/atlas/",
     "groups": [
       { "id": "oceanmetrics", "label": "OceanMetrics" },
+      { "id": "obis", "label": "OBIS biodiversity (H3)" },
       { "id": "mst-v7", "label": "MarineSensitivity v7" },
       { "id": "mst-v8", "label": "MarineSensitivity v8" },
       { "id": "external", "label": "Other" },

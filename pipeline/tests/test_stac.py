@@ -113,6 +113,18 @@ def test_species_collection_is_restricted_probability():
   assert c["contacts"] == stac.CONTACTS and c["license"] == "CC-BY-4.0"
 
 
+def test_root_catalog_links_the_obis_h3_collection_in_its_own_group():
+  cat = stac.root_catalog(stac.EXTERNAL_CHILDREN)
+  obis = [l for l in cat["links"] if l["rel"] == "child" and "obis-h3" in l["href"]]
+  assert obis == [{"rel": "child", "href": stac.OBIS_H3_COLLECTION, "type": stac.JSON_T,
+                   "title": "OBIS biodiversity indicators on H3", "atlas:group": "obis"}]
+  assert obis[0]["href"].startswith("https://") and obis[0]["href"].endswith("/obis-h3/collection.json")
+  # after the atlas' own collections (the app opens on the first child), before the MarineSensitivity ones
+  children = [l["href"] for l in cat["links"] if l["rel"] == "child"]
+  assert children.index(stac.OBIS_H3_COLLECTION) == 3
+  assert all(not h.startswith(stac.MST_STAC) for h in children[:4])
+
+
 def test_restricted_collection_not_linked_from_root_catalog():
   cat = stac.root_catalog(stac.EXTERNAL_CHILDREN)
   text = json.dumps(cat)

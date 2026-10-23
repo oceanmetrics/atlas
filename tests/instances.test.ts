@@ -203,6 +203,13 @@ describe("the built instance chooses among what the build knows", () => {
     }
   });
 
+  it("the OBIS group is the oceanmetrics instance's alone (decision D2: the MarineSensitivity instance lists no Ocean Metrics catalog in week 4)", () => {
+    expect(OM.catalog.groups.some((g: { id: string }) => g.id === "obis")).toBe(true);
+    const MST = readInstance("marinesensitivity");
+    expect(MST.catalog.groups.some((g: { id: string }) => g.id === "obis")).toBe(false);
+    expect(MST.lenses).not.toContain("collection");
+  });
+
   it("the selected instance's build carries exactly its lenses, in its order", () => {
     expect(LENSES).toEqual(INSTANCE.lenses);
   });

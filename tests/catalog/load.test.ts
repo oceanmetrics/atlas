@@ -371,4 +371,13 @@ describe("groupOf", () => {
     expect(groupOf("https://elsewhere.test/stac/collection.json", base)).toBe("external");
     expect(groupOf("not a url", base)).toBe("external");
   });
+  it("a child link's atlas:group wins (the obis-h3 collection by absolute href); unlisted and unknown groups do not", () => {
+    const url = "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/collection.json";
+    const link = (g: unknown) => ({ rel: "child", href: url, "atlas:group": g });
+    expect(groupOf(url, base, link("obis"))).toBe("obis");
+    expect(groupOf(url, base)).toBe("external");
+    expect(groupOf(url, base, link("unlisted"))).toBe("external");
+    expect(groupOf(url, base, link("nope"))).toBe("external");
+    expect(groupOf(url, base, link(7))).toBe("external");
+  });
 });
