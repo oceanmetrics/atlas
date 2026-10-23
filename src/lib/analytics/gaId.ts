@@ -8,3 +8,11 @@ export function analyticsGaId(): string {
   const env = (import.meta.env.VITE_GA_ID as string | undefined)?.trim();
   return env && GA_ID_RE.test(env) ? env : "";
 }
+
+/** which side loads GA for a build: the Ocean Metrics bar (`<om-nav data-ga>`, @oceanmetrics/nav >= 0.2.0) on an
+ * instance with the bar, this module's own GA4 leg on an instance without it (marinesensitivity keeps its own). Never
+ * both: the two would each send a config and a page_view. The bar's hits carry a rebuilt page_location (origin + path,
+ * no query, no fragment); this module's Sheet leg is unaffected. */
+export function gaLegs(id: string, hasBar: boolean): { bar: string; module: string } {
+  return hasBar ? { bar: id, module: "" } : { bar: "", module: id };
+}

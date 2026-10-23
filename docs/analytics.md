@@ -11,6 +11,30 @@ fixed `page_title` — never the live page's own href/fragment, never the live d
 That covers every hit **this code** constructs. It does not cover a hit gtag.js constructs on its
 own initiative.
 
+## The Ocean Metrics instance: GA4 is the bar's
+
+On an instance with the Ocean Metrics bar (`instance.json` `nav`, the oceanmetrics instance), `VITE_GA_ID` goes to the
+bar, not to this module: `gaLegs()` (`src/lib/analytics/gaId.ts`) hands it to `<om-nav data-ga>` and gives
+`createAnalytics()` no measurement id, so exactly one side configures GA4. The bar (`@oceanmetrics/nav` >= 0.2.0, its
+README "Analytics") is the loader every Ocean Metrics page shares: it appends the gtag.js script (this module never
+does, see `analytics.ts`'s header), configures `anonymize_ip: true`, `allow_google_signals: false`,
+`allow_ad_personalization_signals: false`, `send_page_view: false`, and sends its own page_view with a rebuilt
+`page_location` (origin + path: no query, no fragment, so no `#pl=` or `#t=`), on load and on each change of that
+location. The Sheet leg (`VITE_LOG_URL`) stays this module's. What the oceanmetrics instance does not send to GA4 any
+more is this module's `track()` events; an instance without the bar (marinesensitivity) keeps this module's GA4 leg
+whole.
+
+Gates: `tests/analytics/gaId.test.ts` (`gaLegs`), `tests/nav.test.ts` (the shell's wiring), `tests/check-ga.test.ts`
+and `scripts/check-ga.mjs` (run by `build-instance.yml` on every instance's dist: no gtag.js script tag in any page, the
+id in the build exactly when `VITE_GA_ID` is set), and `e2e/fixtures/nav-analytics/` (`npm run e2e:nav-analytics`, in
+`pages.yml`'s analytics-privacy job): two real builds of the instance, without the id (no `data-ga`, no tag, no
+`dataLayer`) and with `G-TEST000000` (one tag, one config, anonymized; `replaceState`, `pushState` and a hash edit
+carrying `#pl=` and `#t=` leave no trace in any gtag() call or request). Seeded by hand: with this module's GA leg
+also on, the spec reads two configs and goes red.
+
+The setting below applies to the bar's hits exactly as to this module's: the `oceanmetrics.io` property is one property
+for the whole domain, so its web stream's history setting must be off for every Ocean Metrics page.
+
 ## The GA4 property setting that must stay OFF
 
 GA4's **Enhanced Measurement** has a per-stream toggle: **"Page changes based on browser history

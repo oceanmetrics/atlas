@@ -43,6 +43,14 @@ describe("the shell", () => {
     expect(SHELL).not.toMatch(/^\s*import\s[^;]*@oceanmetrics\/nav/m);
   });
 
+  it("hands GA4 to the bar on an instance with it (data-ga from gaLegs), the module's leg only without it", () => {
+    const bar = SHELL.slice(SHELL.indexOf("<om-nav"), SHELL.indexOf("</om-nav>"));
+    expect(bar).toMatch(/data-ga=\{GA\.bar \|\| undefined\}/);
+    expect(SHELL).toMatch(/const GA = gaLegs\(analyticsGaId\(\), __NAV__ && NAV !== null\);/);
+    expect(SHELL).toMatch(/measurementId: GA\.module,/);
+    expect(SHELL).not.toMatch(/measurementId: analyticsGaId\(\)/);
+  });
+
   it("leaves the place search to the bar's default (no search-href)", () => {
     expect(SHELL.slice(SHELL.indexOf("<om-nav"), SHELL.indexOf("</om-nav>"))).not.toContain(
       "search-href",

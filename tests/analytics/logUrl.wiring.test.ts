@@ -16,9 +16,12 @@ describe("the Sheet-log beacon's logUrl is wired end to end (round 2, Q7)", () =
     expect(src).toMatch(/logUrl:\s*analyticsLogUrl\(/);
   });
 
-  it("Shell.svelte passes measurementId: analyticsGaId() to createAnalytics() (GA stays config-driven)", () => {
+  it("Shell.svelte passes the module's GA leg of analyticsGaId() to createAnalytics() (GA stays config-driven)", () => {
+    // the id goes to ONE side (gaLegs): the Ocean Metrics bar on an instance with it, this module on one
+    // without it (tests/nav.test.ts holds the bar's side)
     const src = readFileSync(join(ROOT, "src/shell/Shell.svelte"), "utf8");
-    expect(src).toMatch(/measurementId:\s*analyticsGaId\(/);
+    expect(src).toMatch(/const GA = gaLegs\(analyticsGaId\(\),/);
+    expect(src).toMatch(/measurementId:\s*GA\.module/);
   });
 
   it("pages.yml forwards VITE_LOG_URL from the repository variable into the published build", () => {

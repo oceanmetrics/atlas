@@ -197,7 +197,9 @@ fetches none of it until the Bathymetry row is turned on.
 an instance with a release and a seal `VITE_PREVIEW_ATLAS_ROUTE` (`1` once the preview host serves
 `/{ver}/atlas/`) and `VITE_SEAL` (`1` shows the instance's seal; anything else, none). They are the inputs of
 `.github/workflows/build-instance.yml`, which each caller fills from its own repository variables.
-Analytics are off unless `VITE_GA_ID` / `VITE_LOG_URL` are set.
+Analytics are off unless `VITE_GA_ID` / `VITE_LOG_URL` are set. On the oceanmetrics instance `VITE_GA_ID` goes to the
+Ocean Metrics bar (`<om-nav data-ga>`), which loads GA4 for every Ocean Metrics page; an instance without the bar keeps
+the atlas's own module (`docs/analytics.md`).
 
 ## Docs
 

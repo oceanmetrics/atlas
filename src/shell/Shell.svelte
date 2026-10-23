@@ -122,7 +122,7 @@
   } from "../lib/map/chromePadding";
   import { createAnalytics } from "../lib/analytics/analytics";
   import { analyticsLogUrl } from "../lib/analytics/logUrl";
-  import { analyticsGaId } from "../lib/analytics/gaId";
+  import { analyticsGaId, gaLegs } from "../lib/analytics/gaId";
   // atlas-8 Deliverable 4 (beta feedback, zero backend -- CLAUDE.md/GATES.md's "the CalCOFI
   // zero-backend fallback"): both pure functions take a snapshot the caller builds -- neither ever
   // reads `location`/`window.location` itself (tests/feedback/noHash.test.ts's source-scan gate).
@@ -204,12 +204,14 @@
   const health = createHealthStore();
 
   // the privacy-safe analytics module, OFF unless configured: with no `VITE_GA_ID` / `VITE_LOG_URL`
-  // at build time `track()` is a no-op (docs/analytics.md).
+  // at build time `track()` is a no-op (docs/analytics.md). GA4 is loaded by ONE side: the Ocean
+  // Metrics bar (`data-ga`) on an instance with the bar, this module's own leg on one without it.
+  const GA = gaLegs(analyticsGaId(), __NAV__ && NAV !== null);
   const analytics = createAnalytics({
     appVersion: __APP_VERSION__,
     preview: false,
     logUrl: analyticsLogUrl(),
-    measurementId: analyticsGaId(),
+    measurementId: GA.module,
   });
 
   // --- theme: the SAME rule as index.html's pre-paint script, kept live afterward -------------
@@ -1938,6 +1940,7 @@
     label={NAV.label}
     changes-href={NAV.changes_href}
     theme={resolvedTheme === "navy" ? "dark" : "light"}
+    data-ga={GA.bar || undefined}
   ></om-nav>
 {/if}
 

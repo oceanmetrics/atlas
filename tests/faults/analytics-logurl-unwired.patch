@@ -1,12 +1,12 @@
 diff --git a/src/shell/Shell.svelte b/src/shell/Shell.svelte
-index bd65fb2..dc85aa6 100644
+index c778f0d..531931d 100644
 --- a/src/shell/Shell.svelte
 +++ b/src/shell/Shell.svelte
-@@ -169,7 +169,6 @@
+@@ -207,7 +207,6 @@
    const analytics = createAnalytics({
      appVersion: __APP_VERSION__,
      preview: false,
 -    logUrl: analyticsLogUrl(),
-     measurementId: analyticsGaId(),
+     measurementId: GA.module,
    });
  

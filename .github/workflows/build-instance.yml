@@ -146,6 +146,12 @@ jobs:
       # the host, and on Pages its absence is what keeps a restricted release closed
       - run: node scripts/check-dist-session.mjs dist
 
+      # analytics: no gtag.js script tag in any page, and the measurement id in the build exactly when
+      # VITE_GA_ID is set (on an instance with the Ocean Metrics bar, the bar's loader with it)
+      - run: node scripts/check-ga.mjs dist --id "$VITE_GA_ID"
+        env:
+          VITE_GA_ID: ${{ inputs.VITE_GA_ID }}
+
       # the dist carries the modules this instance builds and none it does not (the instance module
       # table, scripts/instance-modules.mjs)
       - run: node scripts/check-instance-dist.mjs dist

@@ -196,3 +196,7 @@ jobs:
           browsers: chromium
 
       - run: npm run e2e:analytics-privacy
+
+      # the oceanmetrics instance's GA4 is the Ocean Metrics bar's (`<om-nav data-ga>`): two real builds of the
+      # instance, without VITE_GA_ID and with the dummy G-TEST000000 (e2e/fixtures/nav-analytics/)
+      - run: npm run e2e:nav-analytics
