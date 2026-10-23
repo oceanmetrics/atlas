@@ -14,6 +14,13 @@ uv run --project pipeline pipeline/scripts/sweep_3857.py          # the gate cou
 pipeline/publish.sh [--only <collection>] [--really]              # dry run unless --really
 ```
 
+`publish.sh` writes through the one publisher, `oceanmetrics/platform` `scripts/om-publish.sh` (`$OM_PUBLISH`, else a platform checkout beside
+this repo): both stores, R2 then S3, never a delete; dry run is `--dry-run`, a real run `--really`. `catalog.json` goes `no-cache` with
+`--keep-history`; `registry_index.json` goes gzip-encoded (`--content-encoding gzip`); a restricted collection goes to
+`atlas-restricted/<ULID>/<name>` behind the ULID guard, `collection.json` last. `atlas/<collection>/**/v<N>/**` is edge-immutable (the
+storage Worker caches it for a year): re-publishing `atlas/aquamaps_native/registry/v<N>/` with other bytes exits 3 by design (a dry run too);
+publish a new `registry/v<N+1>/` and repoint `collection.json` with `--only aquamaps_native`.
+
 ## COGs for the browser renderer (build week 2)
 
 From build week 2 the atlas draws COGs in the browser with `@oceanmetrics/map` `cogSlot` (the
@@ -32,8 +39,8 @@ each must carry its own `proj:code`. A band with no valid pixel (AquaMaps models
 `statistics` {minimum, maximum} = the asset's display range (`atlas:rescale`, else `atlas:value_range`) and
 `valid_percent` 0, and no histogram, because the `cog` profile requires a minimum and a maximum.
 
-`swfsc_cce.build` does all of this for the CCE COGs; `publish.sh --only swfsc_cce_becker2020b` uploads the originals,
-then the `_3857.tif` copies beside them (`--content-type image/tiff`), then the Items.
+`swfsc_cce.build` does all of this for the CCE COGs; `publish.sh --only swfsc_cce_becker2020b` publishes the staged folder (the originals, the `_3857.tif` copies beside them
+(`image/tiff`), the Items, the README and `models.csv`) without `collection.json`, then `collection.json` alone, `no-cache`, last.
 
 ### The next `aquamaps_eov` publish (oceanmetrics/workflows)
 
@@ -80,8 +87,8 @@ After `build.py cog-assets` on a downloaded COG and its Items, stage them as `<s
 ATLAS_STAGE=<stage> pipeline/publish.sh --only aquamaps_eov [--really]
 ```
 
-It uploads the COGs, then their copies, then the Items, then `collection.json` last, under `atlas/aquamaps_eov/` only,
-with the same keys and `image/tiff` / `application/json` content types; it never deletes, and `--size-only` skips a
+It publishes the score and density COGs, then their `_3857` copies, then the Items, then `collection.json` last (om-publish's `--last` chain), under
+`atlas/aquamaps_eov/` only, with the same keys and `image/tiff` / `application/json` content types; it never deletes, and `--size-only` skips a
 key whose size did not change (the risk COG and Items published on 2026-10-23 are not touched).
 
 ### The density COGs (2026-10-23, the mini)

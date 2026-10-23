@@ -5,7 +5,8 @@
 Defaults: the raw BioTrack folder on Google Drive -> catalog/staging/biotrack_indicators/hex_centroids.parquet
 (the repo-relative staging folder, git-ignored). A normal `build.py build` writes the same file
 (atlas_pipeline.cli.build_indicators), so this script only exists to publish the file without a rebuild.
-Publish: aws s3 cp <out> s3://oceanmetrics.io-public/atlas/biotrack_indicators/hex_centroids.parquet
+Publish (both stores, no delete; dry run unless --really):
+  ../platform/scripts/om-publish.sh --really <out> atlas/biotrack_indicators --as hex_centroids.parquet
 """
 import sys
 from pathlib import Path

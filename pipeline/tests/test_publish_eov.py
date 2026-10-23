@@ -1,30 +1,14 @@
-"""publish.sh --only aquamaps_eov: the narrow re-publish of the EOV score COGs after `build.py cog-assets`.
+"""publish.sh --only aquamaps_eov: the narrow re-publish of the EOV score COGs after `build.py cog-assets`, through om-publish.
 
-Seeded faults the gate must catch: a --delete anywhere, a destination outside atlas/aquamaps_eov/, a collection.json
-uploaded before the COGs and Items it names.
+Seeded faults the gate must catch: a --delete anywhere, a destination outside atlas/aquamaps_eov, a collection.json
+published before the COGs and Items it names (the --last chain), the density_* files left out, a missing --size-only.
 """
 
-import os
-import stat
-import subprocess
-from pathlib import Path
+from publish_fakes import run_publish
 
-PIPE = Path(__file__).resolve().parent.parent
-DEST = "s3://oceanmetrics.io-public/atlas/aquamaps_eov"
-
-
-def run_publish(tmp_path, stage, *args):
-  bindir = tmp_path / "bin"
-  bindir.mkdir(exist_ok=True)
-  aws = bindir / "aws"
-  aws.write_text('#!/usr/bin/env bash\necho "$@" >> "$AWS_LOG"\n')
-  aws.chmod(aws.stat().st_mode | stat.S_IEXEC)
-  log = tmp_path / "aws.log"
-  log.write_text("")
-  env = os.environ | {"PATH": f"{bindir}:{os.environ['PATH']}", "AWS_LOG": str(log), "ATLAS_STAGE": str(stage),
-                      "ATLAS_BUCKET": "oceanmetrics.io-public"}
-  r = subprocess.run(["bash", str(PIPE / "publish.sh"), *args], env=env, capture_output=True, text=True)
-  return r, [l for l in log.read_text().splitlines() if l]
+PREFIX = "atlas/aquamaps_eov"
+FLAGS = ("--size-only --include score_* --include density_* --include items/* --include collection.json "
+         "--exclude *.orig.tif --last score_*_3857.tif --last density_*_3857.tif --last items/* --last collection.json")
 
 
 def stage_eov(tmp_path):
@@ -36,26 +20,25 @@ def stage_eov(tmp_path):
 
 def test_only_aquamaps_eov_is_a_dry_run_by_default_and_never_deletes(tmp_path):
   d = stage_eov(tmp_path)
-  r, calls = run_publish(tmp_path, d.parent, "--only", "aquamaps_eov")
+  r, calls, aws = run_publish(tmp_path, d.parent, "--only", "aquamaps_eov")
   assert r.returncode == 0, r.stderr
-  assert calls and all("--dryrun" in c for c in calls)
-  assert not any("--delete" in c for c in calls)
+  assert calls == [f"--dry-run {FLAGS} {d} {PREFIX}"]
+  assert not any("--delete" in c for c in calls) and aws == []
 
 
-def test_only_aquamaps_eov_stays_under_its_prefix_and_ends_with_the_collection(tmp_path):
+def test_only_aquamaps_eov_is_one_call_to_its_prefix_with_the_collection_last(tmp_path):
   d = stage_eov(tmp_path)
-  r, calls = run_publish(tmp_path, d.parent, "--only", "aquamaps_eov", "--really")
+  r, calls, _ = run_publish(tmp_path, d.parent, "--only", "aquamaps_eov", "--really")
   assert r.returncode == 0, r.stderr
-  assert calls and not any("--dryrun" in c for c in calls)
-  for c in calls:
-    dests = [w for w in c.split() if w.startswith("s3://")]
-    assert len(dests) == 1 and dests[0].startswith(DEST), c
-  assert "--include score_*.tif --include density_*.tif --exclude *_3857.tif" in calls[0]
-  assert "--include score_*_3857.tif --include density_*_3857.tif" in calls[1] and all("image/tiff" in c for c in calls[:2])
-  assert calls[2].startswith(f"s3 sync {d}/items {DEST}/items")
-  assert calls[-1].startswith(f"s3 cp {d}/collection.json {DEST}/collection.json")
+  assert calls == [f"--really {FLAGS} {d} {PREFIX}"]
+  c = calls[0]
+  assert "--include density_*" in c and "--last density_*_3857.tif" in c   # the README one-liner once lacked density_*
+  # the order of --last: score copies, density copies, Items, then collection.json
+  lasts = [w for a, w in zip(c.split(), c.split()[1:]) if a == "--last"]
+  assert lasts == ["score_*_3857.tif", "density_*_3857.tif", "items/*", "collection.json"]
+  assert c.endswith(f" {PREFIX}") and "--dry-run" not in c
 
 
-def test_only_aquamaps_eov_without_a_staged_collection_uploads_nothing(tmp_path):
-  r, calls = run_publish(tmp_path, tmp_path / "empty", "--only", "aquamaps_eov", "--really")
+def test_only_aquamaps_eov_without_a_staged_collection_publishes_nothing(tmp_path):
+  r, calls, _ = run_publish(tmp_path, tmp_path / "empty", "--only", "aquamaps_eov", "--really")
   assert r.returncode == 1 and calls == []

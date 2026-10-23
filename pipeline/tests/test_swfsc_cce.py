@@ -3,15 +3,15 @@
 Gates and their planted faults (CLAUDE.md: every gate ships with a seeded fault):
   check_collection   an email, an href outside the prefix, a missing COG, a non-restricted access -> flagged
   check_staging      catalog.json linking the collection -> flagged
-  publish.sh --only  a prefix that is not a ULID -> refused before any aws call
+  publish.sh --only  a prefix that is not a ULID -> refused before any om-publish call
 """
 
 import csv
 import json
 import os
 import re
-import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +20,9 @@ import rasterio
 from rasterio.transform import from_origin
 
 from atlas_pipeline import cli, docs, profiles, stac, swfsc_cce
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import publish_fakes  # noqa: E402
 
 PREFIX = "01K8ZZZZZZZZZZZZZZZZZZZZZZ"   # a 26-character Crockford ULID shape
 PIPE = Path(__file__).resolve().parent.parent
@@ -518,23 +521,9 @@ def test_a_rebuild_drops_items_the_new_models_csv_no_longer_lists(tmp_path):
 
 # ---- publish.sh --only ----
 
-FAKE_AWS = """#!/usr/bin/env bash
-echo "$@" >> "$AWS_LOG"
-"""
-
-
 def run_publish(tmp_path, stage, prefix_dir, *args):
-  bindir = tmp_path / "bin"
-  bindir.mkdir(exist_ok=True)
-  aws = bindir / "aws"
-  aws.write_text(FAKE_AWS)
-  aws.chmod(aws.stat().st_mode | stat.S_IEXEC)
-  log = tmp_path / "aws.log"
-  log.write_text("")
-  env = os.environ | {"PATH": f"{bindir}:{os.environ['PATH']}", "AWS_LOG": str(log), "ATLAS_STAGE": str(stage),
-                      "ATLAS_PREFIX_DIR": str(prefix_dir), "ATLAS_BUCKET": "oceanmetrics.io-public"}
-  r = subprocess.run(["bash", str(PIPE / "publish.sh"), *args], env=env, capture_output=True, text=True)
-  return r, [l for l in log.read_text().splitlines() if l]
+  r, calls, _ = publish_fakes.run_publish(tmp_path, stage, *args, prefix_dir=prefix_dir)
+  return r, calls
 
 
 def test_publish_only_touches_nothing_but_the_collections_restricted_prefix(built, tmp_path):
@@ -547,41 +536,29 @@ def test_publish_only_touches_nothing_but_the_collections_restricted_prefix(buil
   (tmp_path / "restricted_prefix_swfsc_cce.txt").write_text(PREFIX + "\n")
   r, calls = run_publish(tmp_path, stage, tmp_path, "--only", stac.CCE_ID)
   assert r.returncode == 0, r.stderr
-  target = f"s3://oceanmetrics.io-public/atlas-restricted/{PREFIX}/{stac.CCE_ID}/"
-  assert calls and all("--dryrun" in c for c in calls)
-  for c in calls:
-    dests = [w for w in c.split() if w.startswith("s3://")]
-    assert len(dests) == 1 and dests[0].startswith(target), c
+  target = f"atlas-restricted/{PREFIX}/{stac.CCE_ID}"
+  # the folder without collection.json, then collection.json alone, no-cache, last: both to the one ULID prefix
+  assert calls == [f"--dry-run --exclude collection.json {dest} {target}",
+                   f"--dry-run --cache-control no-cache {dest}/collection.json {target}"]
   joined = "\n".join(calls)
-  assert "catalog.json" not in joined and "biotrack" not in joined and "aquamaps" not in joined
-  assert calls[0].startswith(f"s3 sync {dest}/cog {target}cog") and "--content-type image/tiff" in calls[0]
-  assert "--exclude *_3857.tif" in calls[0]
-  assert "--content-type application/json" in calls[2] and f"{target}items" in calls[2]
-  assert calls[-1].startswith(f"s3 cp {dest}/collection.json {target}collection.json")
-  assert "--cache-control no-cache" in calls[-1] and "--content-type application/json" in calls[-1]
+  assert "catalog.json" not in joined and "biotrack" not in joined and "aquamaps" not in joined and "--delete" not in joined
 
 
-def test_publish_only_uploads_the_3857_copies_beside_the_originals_before_the_items(built, tmp_path):
+def test_publish_only_folder_holds_the_originals_the_3857_copies_and_items_beside_each_other(built, tmp_path):
+  # the folder publish sends cog/ (originals and <stem>_3857.tif copies) and items/ whole: every item names a staged copy
   _, dest = built
-  (tmp_path / "restricted_prefix_swfsc_cce.txt").write_text(PREFIX + "\n")
-  r, calls = run_publish(tmp_path, dest.parent, tmp_path, "--only", stac.CCE_ID)
-  assert r.returncode == 0, r.stderr
-  target = f"s3://oceanmetrics.io-public/atlas-restricted/{PREFIX}/{stac.CCE_ID}/cog"
-  i = next(i for i, c in enumerate(calls) if "--include *_3857.tif" in c)
-  assert calls[i] == (f"s3 sync {dest}/cog {target} --exclude * --include *_3857.tif --content-type image/tiff --dryrun")
-  assert i < next(i for i, c in enumerate(calls) if "/items" in c)
-  # every item names a staged copy, beside its original
   for p in (dest / "items").glob("*.json"):
     a = json.loads(p.read_text())["assets"]
     assert a["cog_3857"]["href"] == a["cog"]["href"].replace(".tif", "_3857.tif")
     assert (dest / "cog" / a["cog_3857"]["href"].rsplit("/", 1)[-1]).exists()
+    assert (dest / "cog" / a["cog"]["href"].rsplit("/", 1)[-1]).exists()
 
 
-def test_publish_only_really_drops_the_dryrun_flag(built, tmp_path):
+def test_publish_only_really_maps_to_really(built, tmp_path):
   _, dest = built
   (tmp_path / "restricted_prefix_swfsc_cce.txt").write_text(PREFIX + "\n")
   r, calls = run_publish(tmp_path, dest.parent, tmp_path, "--only", stac.CCE_ID, "--really")
-  assert r.returncode == 0 and calls and not any("--dryrun" in c for c in calls)
+  assert r.returncode == 0 and calls and all(c.startswith("--really ") for c in calls) and not any("--dry-run" in c for c in calls)
 
 
 def test_publish_only_refuses_a_prefix_that_is_not_a_ulid(built, tmp_path):
