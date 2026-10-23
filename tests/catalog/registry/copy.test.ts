@@ -104,7 +104,9 @@ describe("the Item of a row with a copy", () => {
     expect(rasterAssetOf(it)!.url).toBe(COPY_RECORD.cog_url);
   });
   it("band statistics and histogram come from the side table row (band 1), the template keeps nodata and unit", () => {
-    const band = item(copyRow, undefined, { native: SIDE_NATIVE }).assets.cog_3857.bands![0];
+    const band = (
+      item(copyRow, undefined, { native: SIDE_NATIVE }).assets.cog_3857.bands as object[]
+    )[0];
     expect(band).toMatchObject({
       name: "suitability",
       data_type: "uint8",

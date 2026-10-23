@@ -3,7 +3,7 @@
 // read (pending -> nothing drawn, never titiler), a row without the column asks the table nothing and stays on
 // titiler, and a slow answer for a taxon the user has left is dropped. The real runes state, a stub table reader.
 import { flushSync } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   createRegistrySource,
   type RegistrySource,
@@ -57,7 +57,7 @@ let src: RegistrySource;
 let selStore: ReturnType<typeof createSelStore>;
 let stop: () => void;
 let answers: Map<string, (r: Cog3857Row | null) => void>;
-let readSide: ReturnType<typeof vi.fn>;
+let readSide: Mock<(contentHash: string) => Promise<Cog3857Row | null>>;
 
 const settle = (check: () => void) =>
   vi.waitFor(() => {
@@ -105,12 +105,14 @@ describe("a registry v2 row's copy numbers", () => {
     answers.get(HASH)!(SIDE);
     await settle(() => expect(drawnAsset()?.["atlas:stats_pending"]).toBeUndefined());
     expect(drawnAsset()).toMatchObject({ "atlas:zoom": [0, 2] });
-    expect(drawnAsset()?.bands?.[0]).toMatchObject({ statistics: { minimum: 1, maximum: 100 } });
+    expect((drawnAsset()?.bands as object[])[0]).toMatchObject({
+      statistics: { minimum: 1, maximum: 100 },
+    });
   });
   it("a table with no row settles the Item too (drawn from the copy, no numbers)", async () => {
     answers.get(HASH)!(null);
     await settle(() => expect(drawnAsset()?.["atlas:stats_pending"]).toBeUndefined());
-    expect(drawnAsset()?.bands?.[0].histogram).toBeUndefined();
+    expect((drawnAsset()?.bands as { histogram?: unknown }[])[0].histogram).toBeUndefined();
   });
   it("a reader that rejects settles it as well (never stuck pending)", async () => {
     stop();
