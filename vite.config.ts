@@ -102,10 +102,6 @@ export default defineConfig(({ mode }) => {
     base: "./",
     resolve: {
       alias: { "@instance": join(ROOT, instanceDir(id)) },
-      // @oceanmetrics/map is a `file:` link for now (TODO: ^0.2.1 from npm): its own imports resolve
-      // from the platform checkout, so without this the bundle would carry a second pmtiles (and the
-      // protocol would be registered on a Protocol MapLibre never sees). A published install has one copy.
-      dedupe: ["pmtiles", "maplibre-gl"],
     },
     // worker chunks named .mjs (the @oceanmetrics/map README): MapLibre 6's `importScriptInWorkers`
     // import()s a module only when its url ends in .mjs, and the worker is an ES module.

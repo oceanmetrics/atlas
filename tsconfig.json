@@ -27,12 +27,7 @@
     "checkJs": false,
     // `@instance` is a Vite alias for instances/<VITE_INSTANCE>/ (vite.config.ts); the type checker
     // reads the default instance, and src/lib/brand/instance.ts types the JSON by its own interface.
-    // `maplibre-gl`: @oceanmetrics/map is a `file:` link (TODO: ^0.2.1 from npm), whose types would
-    // otherwise read the platform checkout's own maplibre-gl (a second type tree: `Map` not assignable).
-    "paths": {
-      "@instance/*": ["./instances/oceanmetrics/*"],
-      "maplibre-gl": ["./node_modules/maplibre-gl"]
-    }
+    "paths": { "@instance/*": ["./instances/oceanmetrics/*"] }
   },
   "include": [
     "src/**/*.ts",

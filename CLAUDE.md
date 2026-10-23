@@ -18,8 +18,8 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   collections at https://file.marinesensitivity.org/stac/). `src/lens/collection/` is the generic lens.
 - External: MST titiler `https://titiler.marinesensitivity.org` (stock `/cog`), gazetteer
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
-- Platform packages (`oceanmetrics/platform`): `@oceanmetrics/map` (a `file:` link for now: setup, the COG provider),
-  and from npm `@oceanmetrics/places` (the gazetteer client; called only from
+- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.2.1: the MapLibre setup, the COG
+  provider), `@oceanmetrics/places` (the gazetteer client; called only from
   `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
   `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
 
@@ -49,10 +49,8 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
 - One MapLibre style, `setStyle(diff: true)`; never `addLayer` piecemeal after load (a `cogSlot` is mounted on a
   recorder and its source and layer go into the composed style; one mounted slot per COG href).
 - Pins: `@duckdb/duckdb-wasm` 1.32.0, `maplibre-gl` ^6.13.0 (the `@oceanmetrics/map` peer range), upload parsers
-  pinned; see `package.json` `pinReasons`. `@oceanmetrics/map` is `file:../platform/packages/map` until 0.2.1 is
-  published (TODO `^0.2.1`; `vite.config.ts` dedupes pmtiles and maplibre-gl, `tsconfig.json` maps maplibre-gl):
-  CI cannot install a `file:` link, so switch before pushing a deploy. `map.ts` calls `setupMapLibre` once (worker,
-  `pmtiles://`, lazy `cog://`); worker chunks are named `.mjs`.
+  pinned; see `package.json` `pinReasons`. `map.ts` calls `@oceanmetrics/map`'s `setupMapLibre` once (worker,
+  `pmtiles://`, lazy `cog://`); worker chunks are named `.mjs` (`vite.config.ts`).
 - Size budget 450 KB gzip static path + 150 KB workers. Lazy modules stay dynamic imports.
 - Every gate ships with a seeded fault that proves it can fail. A bug fix adds a named regression test.
 

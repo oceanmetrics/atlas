@@ -37,8 +37,7 @@ collection.json>` adds one unlisted collection to the picker (a private preview 
   Today that is the published `aquamaps_eov` risk Items. Every other raster Item still renders through the
   MarineSensitivity titiler (`src/lib/raster/tiles.ts`), the fallback until every COG has a 3857 asset
   (it retires in build week 6), as do a place summary's statistics over a raster. Numbers never come from
-  the tile server. `@oceanmetrics/map` is a `file:../platform/packages/map` link until 0.2.1 is on npm
-  (clone `oceanmetrics/platform` beside this repo; CI cannot install it).
+  the tile server. The map stack is `@oceanmetrics/map` ^0.2.1 from npm.
 
 ## Profiles
 
