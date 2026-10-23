@@ -139,6 +139,13 @@ URL, `exact`, `dropped`). **Both repos' tests read it**: `tests/state/obisHex.te
 what it writes; obis-hex copies the table into its `tests/redirect.test.ts` for `redirectFor` (step 5). Change the
 table here first, then copy it.
 
+**The paper's figures** (obis-hex parity rows 124 to 127, D7): `node scripts/figures.mjs` (`--url https://oceanmetrics.io/atlas/`
+for the live site, `--dist <dir>` for a built oceanmetrics dist, `--only <name>`) converts the paper's three obis-hex URLs with
+`obisHexRedirect`, adds the `theme` and the `cell` the redirect drops, opens them at 1512×798 in headless Chromium on SwiftShader,
+waits for the layer, and writes `docs/shots/figA_atlas_{global_es_2020s,seagrasses_globe,caribbean_cell_res4}.png`;
+`tests/figures.test.ts` decodes each URL with `parseSel`. The catalog the page reads gets the obis-h3 collection linked when the
+published `catalog.json` does not link it yet.
+
 ## The OBIS layer
 
 The obis-h3 release is a collection of the catalog (group `obis`, oceanmetrics instance), drawn by the Collections
