@@ -174,6 +174,41 @@ lenses — the panel IS the stack, its "Data" row expanding into the lens's own 
    mode hides a REAL choropleth, which is simply correct (nothing else reads through it the way
    pick-mode depends on the query fill).
 
+### The GEBCO sea floor (the Bathymetry row, 2026-10-23)
+
+Ben 2026-10-22: the GEBCO bathymetric basemap is global and goes everywhere. The `basemap-bathymetry` group, empty since
+R3, is now `@oceanmetrics/map`'s sea floor: the colour relief and igor hillshade of the GEBCO 2025 terrain tiers (far
+z0-5 under core z0-8 under the sanctuaries' regional tier z9-10), the isobaths gated by zoom, the GEBCO undersea feature
+names and the OpenStreetMap land mask, in the theme's look (navy is the dark sea floor, paper the light one).
+
+- **Where it is composed.** `map/layers/gebco.ts#withSeaFloor` runs the package's `composeStyle` on CARTO's style.json
+  as fetched, BEFORE `mergeCartoStyle` prefixes the ids, so the package's ids and order hold inside the basemap run
+  (the sea, the sea floor, the mask, CARTO's land and roads, the labels). `classifyBasemapLayer` puts the relief, the
+  shading, the isobaths and their depth labels in `basemap-bathymetry` (`GEBCO_SEA_FLOOR_RE`, the package's own rule),
+  the mask in `basemap-land` and the undersea names in `basemap-labels`. The data draws over the whole basemap run, as
+  before. The tiers are read through the storage rule (`store('basemap/')`).
+- **Lazy.** `gebco.ts` (the package's composer and its strings) is its own chunk, loaded by
+  `layers/basemap.ts#loadSeaFloor` the first time the row is visible (`Shell.svelte`); landing, it recomposes like the
+  CARTO style does. Until then, and whenever the row is off, `composeStyle` draws CARTO's own style and no tier is
+  fetched (`drawsSeaFloor`). A chunk that fails to load leaves CARTO's style.
+- **Per instance.** `instance.json` `defaults.bathymetry` (schema 1.3): `on` (oceanmetrics) shows the sea floor on a
+  fresh page; `off` (marinesensitivity, whose look is MMA's) keeps CARTO's own basemap and offers the row as a choice.
+  The row is listed and enabled in both (`LAYER_GROUP_IN_PANEL`, `LAYER_GROUP_ENABLED`); its default visibility is
+  `defaultVisible`, used by the default stack and by a `layers=` token that leaves the group out. A token is a
+  deviation from the instance's default: `basemap-bathymetry:h` on oceanmetrics, `basemap-bathymetry` (visible) on
+  marinesensitivity.
+- **Dimmed under data.** With a raster, a range, hexagons or the OBIS layer on, the sea floor is drawn at `DATA_DIM`
+  (0.5) of its theme default (the package's one `opacity` scales relief, shading and isobaths), so the data reads first.
+  The row's slider scales it further: `color-relief-opacity`, and for a hillshade (which has no opacity property)
+  `hillshade-exaggeration`.
+- **Credit.** The attribution line adds "GEBCO Compilation Group (2025) GEBCO 2025 Grid; IHO-IOC GEBCO Gazetteer of
+  Undersea Feature Names" while the sea floor draws (`basemapAttribution`); the land mask's OSM credit is CARTO's line.
+- **A Svelte trap.** The shell holds CARTO's style in `$state`, a Proxy, and the package's `structuredClone` refuses
+  it; `withSeaFloor` copies it as JSON first and keeps the result per style object (a WeakMap), so a recompose costs
+  nothing (`tests/map/seaFloor.test.ts`, the regression case).
+- **A no-op move.** Place labels moved down now swaps with the Bathymetry row; two basemap rows side by side share one
+  rank (point M1 above), so that move changes no pixel. Bathymetry moves visibly only past a data row.
+
 ## Camera padding: the centre sits in the open area (WP13)
 
 The panel (and, on a phone, the sheet) covers part of the stage, so the map's centre, and a globe

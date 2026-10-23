@@ -1,0 +1,13 @@
+seeded fault: the Bathymetry row's default ignores the instance's defaults.bathymetry (oceanmetrics opens without the sea floor)
+diff --git a/src/lib/map/layerStack.ts b/src/lib/map/layerStack.ts
+--- a/src/lib/map/layerStack.ts
++++ b/src/lib/map/layerStack.ts
+@@ -181,7 +181,7 @@
+ /** whether a group is visible on a fresh page: every group but `basemap-bathymetry`, which follows the
+  * instance's `defaults.bathymetry` ({@link BATHYMETRY_DEFAULT_ON}; `bathymetryOn` overrides it in a test). */
+ export function defaultVisible(id: LayerGroupId, bathymetryOn: boolean = BATHYMETRY_DEFAULT_ON): boolean {
+-  return id !== "basemap-bathymetry" || bathymetryOn;
++  return id !== "basemap-bathymetry";
+ }
+ 
+ /** the stack a fresh page of a layer shows: `labelsAboveData` is the h3 layer's ({@link LABELS_ABOVE_DATA_STACK}). */

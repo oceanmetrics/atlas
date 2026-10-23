@@ -1,13 +1,12 @@
 diff --git a/instances/oceanmetrics/instance.json b/instances/oceanmetrics/instance.json
-index 0204ef2..05ee01f 100644
 --- a/instances/oceanmetrics/instance.json
 +++ b/instances/oceanmetrics/instance.json
 @@ -50,7 +50,7 @@
      ]
    },
    "lenses": ["collection", "species"],
--  "defaults": { "lens": "collection", "theme": "dark", "tour": "on" },
-+  "defaults": { "lens": "collection", "theme": "auto", "tour": "on" },
+-  "defaults": { "lens": "collection", "theme": "dark", "tour": "on", "bathymetry": "on" },
++  "defaults": { "lens": "collection", "theme": "auto", "tour": "on", "bathymetry": "on" },
    "tools": ["layers", "details", "table", "places"],
    "pages": ["index", "catalog"],
    "repo": "oceanmetrics/atlas",

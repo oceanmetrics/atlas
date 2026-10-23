@@ -51,7 +51,7 @@
     ]
   },
   "lenses": ["collection", "species"],
-  "defaults": { "lens": "collection", "theme": "dark", "tour": "on" },
+  "defaults": { "lens": "collection", "theme": "dark", "tour": "on", "bathymetry": "on" },
   "tools": ["layers", "details", "table", "places"],
   "pages": ["index", "catalog"],
   "repo": "oceanmetrics/atlas",

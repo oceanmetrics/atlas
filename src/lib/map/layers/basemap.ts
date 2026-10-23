@@ -27,6 +27,32 @@ export const CARTO_STYLE_BASE = "https://basemaps.cartocdn.com/gl";
 
 export const BASEMAP_ATTRIBUTION = "© OpenStreetMap contributors © CARTO";
 
+/** the basemap's credit line: CARTO's, then the sea floor's own (`gebco.ts#SEA_FLOOR_ATTRIBUTION`, GEBCO's and the
+ * gazetteer's, from the lazy module, so the package's strings stay off the static path) while it draws */
+export function basemapAttribution(seaFloor: Pick<SeaFloorModule, "SEA_FLOOR_ATTRIBUTION"> | null): string {
+  return seaFloor ? `${BASEMAP_ATTRIBUTION}; ${seaFloor.SEA_FLOOR_ATTRIBUTION}` : BASEMAP_ATTRIBUTION;
+}
+
+/** the lazy sea-floor module (`gebco.ts`, with `@oceanmetrics/map`'s composer), loaded once, the first time the
+ * Bathymetry row is on. Resolves to null (and may be asked again) when the chunk fails to load: the map keeps
+ * CARTO's own style. */
+export type SeaFloorModule = typeof import("./gebco");
+let seaFloorLoad: Promise<SeaFloorModule | null> | null = null;
+export function loadSeaFloor(
+  load: () => Promise<SeaFloorModule> = () => import("./gebco"),
+): Promise<SeaFloorModule | null> {
+  seaFloorLoad ??= load().catch(() => {
+    seaFloorLoad = null;
+    return null;
+  });
+  return seaFloorLoad;
+}
+
+/** test-only: forgets the loaded module. */
+export function resetSeaFloorForTests(): void {
+  seaFloorLoad = null;
+}
+
 /** the basemap spec for a theme: just the style URL + attribution — `loadBasemapStyle()` does the
  * fetching, `composeStyle()` does the merging. Kept as its own function (rather than inlining the
  * URL template) so a theme's basemap is still ONE table, matching `layers/basemap.ts`'s original

@@ -41,7 +41,8 @@ export interface Instance {
   catalog: { base: string; groups: readonly { id: string; label: string }[] };
   /** the lenses this instance builds (1.1); `defaults.lens` is one of them. */
   lenses: readonly string[];
-  defaults: { lens: string; theme: string; tour: string };
+  /** `bathymetry` (1.3): the Layers panel's Bathymetry row on a fresh page, `on` or `off` (absent = `off`). */
+  defaults: { lens: string; theme: string; tour: string; bathymetry?: "on" | "off" };
   tools: readonly string[];
   /** the HTML entries this instance publishes (1.1), always `index`. */
   pages: readonly string[];
@@ -136,6 +137,11 @@ export function openInMapHref(id: string): string {
 
 /** the Ocean Metrics bar's settings, or `null` for an instance without the bar (`nav: false`). */
 export const NAV: NavSpec | null = navOf(INSTANCE);
+
+/** the GEBCO sea floor is on by default (instance `defaults.bathymetry`, schema 1.3): the oceanmetrics instance draws it
+ * on every map (Ben 2026-10-22: the bathymetric basemap goes everywhere); an instance whose look is its own (the
+ * MarineSensitivity Atlas) keeps its basemap and offers the Bathymetry row as a choice in the Layers panel */
+export const BATHYMETRY_DEFAULT_ON: boolean = INSTANCE.defaults.bathymetry === "on";
 
 /** an instance's bar settings, or `null` when it says `nav: false`. */
 export function navOf(instance: Pick<Instance, "nav">): NavSpec | null {

@@ -235,7 +235,11 @@
           "$ref": "#/$defs/lens"
         },
         "theme": { "enum": ["dark", "light", "auto"] },
-        "tour": { "enum": ["on", "off"] }
+        "tour": { "enum": ["on", "off"] },
+        "bathymetry": {
+          "description": "the Layers panel's Bathymetry row on a fresh page (1.3): on draws the GEBCO 2025 sea floor, isobaths, undersea names and the OSM land mask over the basemap (src/lib/map/layers/gebco.ts); off (or absent) keeps the instance's own basemap and offers the row as a choice",
+          "enum": ["on", "off"]
+        }
       }
     },
     "tools": {

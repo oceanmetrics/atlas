@@ -5,6 +5,8 @@
 // R3 layer stack model (round-2 plan §5 U4/§10, `docs/usability.md` §7 R3). Pure logic, no DOM/
 // MapLibre — CLAUDE.md "Testing pyramid": one fixture per rule, not one broad end-to-end check.
 import { describe, expect, it } from "vitest";
+import { BATHYMETRY_DEFAULT_ON } from "../../src/lib/brand/instance";
+import { rankForStack } from "../../src/lib/map/style";
 import {
   ALL_LAYER_GROUPS,
   applyLayerGroupStyling,
@@ -92,10 +94,15 @@ describe("scaleOpacity (B1 fix)", () => {
 });
 
 describe("defaultLayerStackEntries / isDefaultLayerStack", () => {
-  it("every group appears exactly once, all visible at full opacity", () => {
+  it("every group appears exactly once at full opacity, visible but for the Bathymetry row, which follows the instance", () => {
     const entries = defaultLayerStackEntries();
     expect(entries.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
-    expect(entries.every((e) => e.visible && e.opacity === 1)).toBe(true);
+    expect(entries.every((e) => e.opacity === 1)).toBe(true);
+    expect(entries.filter((e) => e.id !== "basemap-bathymetry").every((e) => e.visible)).toBe(true);
+    // marinesensitivity keeps its own (MMA) basemap: the sea floor is a choice (instance defaults.bathymetry off)
+    expect(entries.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(false);
+    expect(BATHYMETRY_DEFAULT_ON).toBe(false);
+    expect(defaultLayerStackEntries(false, true).find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
     expect(new Set(entries.map((e) => e.id)).size).toBe(ALL_LAYER_GROUPS.length);
   });
 
@@ -135,11 +142,10 @@ describe("LAYER_GROUP_IN_PANEL (R3: hidden basemap rows stay full model citizens
     expect(LAYER_GROUP_IN_PANEL["basemap-land"]).toBe(false);
     expect(LAYER_GROUP_IN_PANEL["basemap-boundaries"]).toBe(false);
     expect(LAYER_GROUP_IN_PANEL["basemap-roads"]).toBe(false);
-    // orchestrator hand-off (Opus UI review of main, 2026-09-25): "do NOT ship the 'Bathymetry —
-    // coming soon' stub row to reviewers" -- hidden too, still a full model citizen (still
-    // disabled via LAYER_GROUP_ENABLED, unchanged).
-    expect(LAYER_GROUP_IN_PANEL["basemap-bathymetry"]).toBe(false);
-    expect(LAYER_GROUP_ENABLED["basemap-bathymetry"]).toBe(false);
+    // the Bathymetry row was a hidden stub (Opus UI review of main, 2026-09-25) until the GEBCO tiers existed:
+    // since 2026-10-23 it is listed and enabled in both instances (on or off by the instance's default)
+    expect(LAYER_GROUP_IN_PANEL["basemap-bathymetry"]).toBe(true);
+    expect(LAYER_GROUP_ENABLED["basemap-bathymetry"]).toBe(true);
   });
 
   it("Place labels stays listed (Ben did not name it)", () => {
@@ -191,9 +197,10 @@ describe("normalizeLayerStack", () => {
     );
     const out = normalizeLayerStack(partial);
     expect(out.map((e) => e.id)).toEqual([...DEFAULT_LAYER_STACK]);
+    // a group put back takes its own default visibility (the instance's for the Bathymetry row), never "visible"
     expect(out.find((e) => e.id === "basemap-bathymetry")).toEqual({
       id: "basemap-bathymetry",
-      visible: true,
+      visible: false,
       opacity: 1,
     });
   });
@@ -515,7 +522,21 @@ describe("parseLayerStack / formatLayerStack (layers= round trip)", () => {
   });
 
   it("a token that parses to exactly the default (e.g. every flag redundant) formats back to null", () => {
-    expect(parseLayerStack("basemap-land,basemap-bathymetry,basemap-boundaries")).toBeNull();
+    // marinesensitivity's default has the Bathymetry row off: a redundant token names it hidden
+    expect(parseLayerStack("basemap-land,basemap-bathymetry:h,basemap-boundaries")).toBeNull();
+  });
+
+  it("the Bathymetry row on is a deviation here (the sea floor is a choice): written without :h, read back visible", () => {
+    const on = defaultLayerStackEntries().map((e) =>
+      e.id === "basemap-bathymetry" ? { ...e, visible: true } : e,
+    );
+    const token = formatLayerStack(on);
+    expect(token).toContain("basemap-bathymetry,");
+    expect(token).not.toContain("basemap-bathymetry:h");
+    expect(parseLayerStack(token!)?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
+    // an old link that names the row visible draws the sea floor; one that leaves it out keeps the default (off)
+    expect(parseLayerStack("basemap-land,basemap-bathymetry,basemap-boundaries")?.find((e) => e.id === "basemap-bathymetry")?.visible).toBe(true);
+    expect(parseLayerStack("basemap-labels,data-raster")?.find((e) => e.id === "basemap-bathymetry")?.visible ?? false).toBe(false);
   });
 });
 
@@ -641,19 +662,27 @@ describe("canMoveLayerStackEntry", () => {
 // hop over any number of hidden entries to reach the nearest VISIBLE neighbour, and disable the
 // button outright when there is none in that direction.
 describe("moveLayerStackEntryVisible / canMoveLayerStackEntryVisible (D2 fix)", () => {
-  it("regression: basemap-labels (Place labels) has NO visible neighbour below it -- 'down' is a real no-op, not a swap with a hidden row", () => {
+  it("regression: basemap-labels (Place labels) 'down' skips the hidden rows and swaps with its listed neighbour, Bathymetry (listed since 2026-10-23)", () => {
     const entries = defaultLayerStackEntries();
-    const before = entries.map((e) => e.id);
     const next = moveLayerStackEntryVisible(
       entries,
       "basemap-labels",
       "down",
       LAYER_GROUP_IN_PANEL,
     );
-    expect(next.map((e) => e.id)).toEqual(before); // unchanged -- every row below it is hidden
+    // never a swap with the hidden Boundaries or Roads rows: labels land right under Bathymetry
+    expect(next.map((e) => e.id).slice(0, 5)).toEqual([
+      "basemap-land",
+      "basemap-labels",
+      "basemap-bathymetry",
+      "basemap-boundaries",
+      "basemap-roads",
+    ]);
     expect(
       canMoveLayerStackEntryVisible(entries, "basemap-labels", "down", LAYER_GROUP_IN_PANEL),
-    ).toBe(false);
+    ).toBe(true);
+    // two basemap rows side by side share one rank (M1): the move changes no pixel; Bathymetry moves only past a data row
+    expect(rankForStack(next.map((e) => e.id)).get("basemap-labels")).toBe(rankForStack(next.map((e) => e.id)).get("basemap-bathymetry"));
   });
 
   it("basemap-labels (Place labels) 'up' swaps with its real visible neighbour, data-raster (Data)", () => {

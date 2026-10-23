@@ -18,6 +18,7 @@
 // ROLES a merged CARTO layer is classified into (`classifyBasemapLayer`, below).
 
 import { RELEASE_KEYS } from "../state/types";
+import { BATHYMETRY_DEFAULT_ON } from "../brand/instance";
 
 /** the Outlines row (`data-zones`) exists only where the release draws zone units (an instance with
  * `release`); elsewhere it is not a group at all: not in the default stack, the panel or a parsed
@@ -27,9 +28,10 @@ const ZONES_GROUP = RELEASE_KEYS;
 /** the basemap's five roles, bottom-to-top as CARTO's OWN style.json already draws them (land under
  * water under boundaries under roads under labels — every real vector basemap style is already
  * ordered this way; this module only gives that existing order NAMES a user can move relative to
- * the data). `basemap-bathymetry` has no CARTO layer today (CARTO ships no relief/depth/contour
- * layer) — the group exists, EMPTY and disabled (`LAYER_GROUP_ENABLED`), ready for a GEBCO PMTiles
- * source later (round-2 plan §5 U4's own words) without a second stack-model change. */
+ * the data). `basemap-bathymetry` holds no CARTO layer (CARTO ships no relief/depth/contour layer): since
+ * 2026-10-23 it is the GEBCO 2025 sea floor of `@oceanmetrics/map` (colour relief, hillshade, isobaths;
+ * `layers/gebco.ts`), composed into the CARTO style while the row is visible (round-2 plan §5 U4's "a GEBCO
+ * PMTiles source later", with no second stack-model change). */
 export const BASEMAP_GROUPS = [
   "basemap-land",
   "basemap-bathymetry",
@@ -96,11 +98,11 @@ export const LAYER_GROUP_LABEL: Record<LayerGroupId, string> = {
   "data-places": "Selection",
 };
 
-/** `basemap-bathymetry` renders nothing today (no GEBCO source yet) — the panel shows it disabled
- * rather than hiding it, so the row's PRESENCE documents "this is coming," per the deliverable. */
+/** every group has a working control: `basemap-bathymetry` was disabled until the GEBCO tiers existed
+ * (2026-10-23, `layers/gebco.ts`). */
 export const LAYER_GROUP_ENABLED: Record<LayerGroupId, boolean> = {
   "basemap-land": true,
-  "basemap-bathymetry": false,
+  "basemap-bathymetry": true,
   "basemap-boundaries": true,
   "basemap-roads": true,
   "basemap-labels": true,
@@ -120,17 +122,13 @@ export const LAYER_GROUP_ENABLED: Record<LayerGroupId, boolean> = {
  * a row. A `layers=` link naming a hidden group (e.g. `basemap-roads:h`) still parses and still
  * applies; the viewer just has no panel row to change it from again short of Reset or a new link.
  *
- * `basemap-bathymetry` ALSO hidden (orchestrator hand-off, Opus UI review of main, 2026-09-25):
- * "do NOT ship the 'Bathymetry — coming soon' stub row to reviewers." An unbuilt, permanently
- * disabled row with no working control is not a feature to preview — same "keep it in the model,
- * not in front of a reviewer" rule the three basemap rows above already follow, just for a
- * different reason (unbuilt vs. "fine as a fixed default"). Still full model citizen; still
- * classified disabled via {@link LAYER_GROUP_ENABLED}, so nothing about the STACK changes, only
- * what the panel lists.
+ * `basemap-bathymetry` is listed since 2026-10-23 (it was hidden as an unbuilt stub, Opus UI review of
+ * main, 2026-09-25): the row turns the GEBCO sea floor on or off and dims it, in both instances (on by
+ * default where the instance says `defaults.bathymetry: "on"`, a choice elsewhere).
  */
 export const LAYER_GROUP_IN_PANEL: Record<LayerGroupId, boolean> = {
   "basemap-land": false,
-  "basemap-bathymetry": false,
+  "basemap-bathymetry": true,
   "basemap-boundaries": false,
   "basemap-roads": false,
   "basemap-labels": true,
@@ -180,11 +178,20 @@ export const LABELS_ABOVE_DATA_STACK: readonly LayerGroupId[] = (() => {
   return out;
 })();
 
+/** whether a group is visible on a fresh page: every group but `basemap-bathymetry`, which follows the
+ * instance's `defaults.bathymetry` ({@link BATHYMETRY_DEFAULT_ON}; `bathymetryOn` overrides it in a test). */
+export function defaultVisible(id: LayerGroupId, bathymetryOn: boolean = BATHYMETRY_DEFAULT_ON): boolean {
+  return id !== "basemap-bathymetry" || bathymetryOn;
+}
+
 /** the stack a fresh page of a layer shows: `labelsAboveData` is the h3 layer's ({@link LABELS_ABOVE_DATA_STACK}). */
-export function defaultLayerStackEntries(labelsAboveData = false): LayerStackEntry[] {
+export function defaultLayerStackEntries(
+  labelsAboveData = false,
+  bathymetryOn: boolean = BATHYMETRY_DEFAULT_ON,
+): LayerStackEntry[] {
   return (labelsAboveData ? LABELS_ABOVE_DATA_STACK : DEFAULT_LAYER_STACK).map((id) => ({
     id,
-    visible: true,
+    visible: defaultVisible(id, bathymetryOn),
     opacity: 1,
   }));
 }
@@ -208,7 +215,7 @@ function insertMissingAtDefaultPosition(out: LayerStackEntry[]): LayerStackEntry
         break;
       }
     }
-    out.splice(insertAt, 0, { id, visible: true, opacity: 1 });
+    out.splice(insertAt, 0, { id, visible: defaultVisible(id), opacity: 1 });
     seen.add(id);
   }
   return out;
@@ -318,6 +325,10 @@ export interface ClassifiableLayer {
 const BOUNDARY_RE = /boundary/i;
 const ROADS_RE = /road|street|bridge|tunnel|building|railway|rail|aeroway|path|ferry/i;
 const BATHYMETRY_RE = /bathy|hillshade|relief|contour|depth/i;
+/** the GEBCO sea floor `@oceanmetrics/map` composes (`layers/gebco.ts`): each tier's colour relief and hillshade,
+ * the isobaths and their labels (the package's own `SEA_FLOOR` rule). Checked before the symbol rule, so the
+ * isobaths' depth labels dim and hide with the sea floor; the undersea feature names stay place labels. */
+export const GEBCO_SEA_FLOOR_RE = /^gebco(-far|-regional(-\d+)?)?-(relief|shade)$|^gebco-contour/;
 
 /**
  * Which of the five basemap roles a real CARTO layer belongs in — a TOTAL function (never throws,
@@ -334,6 +345,7 @@ const BATHYMETRY_RE = /bathy|hillshade|relief|contour|depth/i;
  * "road_major_label" is not miscaught by the roads pattern first.
  */
 export function classifyBasemapLayer(layer: ClassifiableLayer): BasemapGroupId {
+  if (GEBCO_SEA_FLOOR_RE.test(layer.id)) return "basemap-bathymetry";
   if (layer.type === "symbol") return "basemap-labels";
   if (BOUNDARY_RE.test(layer.id)) return "basemap-boundaries";
   if (ROADS_RE.test(layer.id)) return "basemap-roads";
@@ -358,6 +370,10 @@ const OPACITY_PAINT_KEYS: Record<string, readonly string[]> = {
   line: ["line-opacity"],
   circle: ["circle-opacity"],
   symbol: ["icon-opacity", "text-opacity"],
+  // the GEBCO sea floor (2026-10-23): the colour relief's own opacity; a hillshade has no opacity property, so its
+  // exaggeration (0..1, how strong the shading is) is scaled instead, which fades it the same way
+  "color-relief": ["color-relief-opacity"],
+  hillshade: ["hillshade-exaggeration"],
 };
 
 /** `layout`/`paint` are typed `unknown` here, deliberately looser than `Record<string, unknown>`:

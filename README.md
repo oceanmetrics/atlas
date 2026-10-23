@@ -79,6 +79,8 @@ strings the moved MarineSensitivity modules used to hard-code: `repo` (where fee
 Docs/changelog links point), `download.prefix` (the figure file names), `report` (`title`, `stem`;
 required when `pages` names `report`) and `about.credits`. Fixtures that pass and fail are in
 `tests/fixtures/instance/{valid,invalid}/`, with the expected error per invalid file in `invalid.json`.
+Schema 1.3 adds `defaults.bathymetry` (`on` or `off`, absent = `off`): the Layers panel's Bathymetry row, the GEBCO sea
+floor, on a fresh page (oceanmetrics `on`, marinesensitivity `off`).
 
 - `VITE_INSTANCE=<id>` picks the folder (default `oceanmetrics`; `.env` or the environment). Vite
   aliases `@instance` to it; `src/lib/brand/instance.ts` is the only reader of `instance.json` in
@@ -167,6 +169,27 @@ Collections declare their renderers in STAC through `atlas:*` hooks; `src/lib/ca
 one registry that maps a hook (`atlas:flower`, `atlas:cell_species`, `atlas:taxa_registry`, and `h3`, the platform
 profile) to its module.
 `unknownHooks` lists a collection's `atlas:*` keys that are neither a registered hook nor a data field.
+
+## The basemap
+
+CARTO's vector style (dark-matter for navy, positron for paper) with the GEBCO 2025 sea floor of `@oceanmetrics/map`:
+colour relief and hillshade, isobaths, the GEBCO undersea names and the OSM land mask, the Layers panel's Bathymetry
+row (`docs/map.md`, "The GEBCO sea floor"). On by default in the oceanmetrics instance, a choice in marinesensitivity
+(`defaults.bathymetry`), dimmed under a data layer, the tiers read through the storage rule. Shots
+`docs/shots/gebco-obis-1280-{dark,light}.png` and `gebco-eov-risk-1280-{dark,light}.png`.
+
+**What a first view costs** (2026-10-23, the oceanmetrics instance's own modules on a dev server, a 1280×800 map at one
+device pixel on the globe (the app's default projection), a fresh cache, bytes on the wire until idle; the far tier
+draws z0-5, core from z6):
+
+| view | CARTO | GEBCO and OSM tiers | total |
+|---|---|---|---|
+| z2 over the North Pacific (-120, 30) | 70,964 B (4 requests) | 8,914,822 B (44): far 2,938,708, core 2,938,730, contours 1,807,866, land 1,229,518 | 8,985,786 B (8.6 MiB) |
+| z8 over the Channel Islands (-119.7, 34.0) | 92,062 B (5) | 1,854,480 B (44): core 1,595,345, contours 116,109, far 88,160, land 30,892, names 23,974 | 1,946,542 B (1.9 MiB) |
+
+At z2 core's z0-5 tiles are fetched beside far's (the same tiles twice, the map package README's "Known" note): a
+third of the bytes, which gating core's layers from z6 in the package would save. The marinesensitivity instance
+fetches none of it until the Bathymetry row is turned on.
 
 ## Build-time configuration (all optional)
 

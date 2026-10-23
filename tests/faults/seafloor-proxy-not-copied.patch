@@ -1,0 +1,13 @@
+seeded fault: withSeaFloor hands the package CARTO's style as it is, a Svelte $state Proxy that structuredClone refuses (every compose threw, 2026-10-23)
+diff --git a/src/lib/map/layers/gebco.ts b/src/lib/map/layers/gebco.ts
+--- a/src/lib/map/layers/gebco.ts
++++ b/src/lib/map/layers/gebco.ts
+@@ -82,7 +82,7 @@
+   let byKey = composed.get(carto);
+   const hit = byKey?.get(key);
+   if (hit) return hit;
+-  const plain = JSON.parse(JSON.stringify(carto)) as StyleSpecification;
++  const plain = carto as unknown as StyleSpecification;
+   const out = composeSeaFloor(plain, {
+     theme: seaFloorTheme(theme),
+     tiles: opts.tiles ?? GEBCO_TILES,

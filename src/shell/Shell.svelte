@@ -73,7 +73,7 @@
     type LayerStackEntry,
   } from "../lib/state/types";
   import { createMap, type MapHandle } from "../lib/map/map";
-  import { composeStyle, BASEMAP_LAYER_PREFIX } from "../lib/map/style";
+  import { composeStyle, drawsSeaFloor, BASEMAP_LAYER_PREFIX } from "../lib/map/style";
   import { tallyCounts, tallyRasters, type RasterOrigin } from "../lib/raster/drawTally";
   // R3 (round-2 plan §5 U4): the layer stack — resolved here (the SAME resolved object both
   // `composeStyleInput` and each lens's `LayersPanel` mount read, per this task's own instructions
@@ -81,8 +81,10 @@
   import { layerStackForUrl, resolveLayerStack } from "../lib/map/layerStack";
   import {
     warmBasemapStyles,
-    BASEMAP_ATTRIBUTION,
+    basemapAttribution,
+    loadSeaFloor,
     type CartoStyleLike,
+    type SeaFloorModule,
   } from "../lib/map/layers/basemap";
   import { BRAND_CREDIT, BRAND_NAME, NAV, RELEASE, REPO } from "../lib/brand/instance";
   // build week 4: the instance module table (scripts/instance-modules.mjs). Each export is the module
@@ -1478,6 +1480,19 @@
       : null,
   );
 
+  // the GEBCO sea floor (Ben 2026-10-22: it goes everywhere): its composer is a lazy chunk (layers/gebco.ts), loaded the
+  // first time the Layers stack's Bathymetry row is visible (on a fresh page where the instance says
+  // `defaults.bathymetry: "on"`, else when the viewer turns the row on); landing, it recomposes like the CARTO style does.
+  // `$state.raw`: a module namespace is never proxied.
+  let seaFloor = $state.raw<SeaFloorModule | null>(null);
+  const bathymetryOn = $derived(layerStack.find((e) => e.id === "basemap-bathymetry")?.visible ?? false);
+  $effect(() => {
+    if (!bathymetryOn || seaFloor) return;
+    void loadSeaFloor().then((m) => {
+      if (m) seaFloor = m;
+    });
+  });
+
   const composeStyleInput = $derived({
     theme: resolvedTheme,
     // the reactive half of the 0.10.20 basemap fix: reading this is what makes the effect below
@@ -1521,7 +1536,10 @@
     // gazetteer-places: the "Pick from gazetteer" tile polygons, only while that picker is on
     gazetteer: placesMap.gazetteer,
     layerStack,
+    seaFloor,
   });
+  // the credit line names GEBCO and the gazetteer while the sea floor draws
+  const mapAttribution = $derived(basemapAttribution(drawsSeaFloor(composeStyleInput) ? seaFloor : null));
 
   $effect(() => {
     mapHandle?.applyStyle(composeStyle(composeStyleInput));
@@ -2293,7 +2311,8 @@
        an attribution control living INSIDE it would itself be an axe violation. A plain sibling
        `<div>` in `.stage`, always visible (no interaction needed, per the audit's own ask), keeps
        `#map` clean. `BASEMAP_ATTRIBUTION` is the SAME string composeStyle()'s own basemap input
-       carries (layers/basemap.ts) -- never a second, hand-typed copy of the CARTO/OSM credit. -->
+       carries (layers/basemap.ts) -- never a second, hand-typed copy of the CARTO/OSM credit; with the
+       GEBCO sea floor drawn, `basemapAttribution` adds GEBCO's and the gazetteer's lines. -->
   <div
     class="map-attribution"
     role="group"
@@ -2305,7 +2324,7 @@
   >
     <a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre</a>
     <span aria-hidden="true">|</span>
-    {BASEMAP_ATTRIBUTION}
+    {mapAttribution}
     <!-- WP5: the atlas' own credit line, with the basemap credit. Dropped on the phone (shell.css)
          so the ODbL credit stays whole there; the About dialog and the catalog footer carry it. -->
     <span class="brand-credit" data-testid="map-attribution-brand"

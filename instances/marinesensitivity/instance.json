@@ -33,7 +33,7 @@
     ]
   },
   "lenses": ["scores", "species"],
-  "defaults": { "lens": "scores", "theme": "dark", "tour": "on" },
+  "defaults": { "lens": "scores", "theme": "dark", "tour": "on", "bathymetry": "off" },
   "tools": ["layers", "details", "table", "report"],
   "pages": ["index", "report"],
   "repo": "MarineSensitivity/atlas",

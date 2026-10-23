@@ -16,6 +16,7 @@ import {
   GLYPHS_URL,
   MAP_BACKGROUND_BY_THEME,
   type CartoStyleLike,
+  type SeaFloorModule,
 } from "./layers/basemap";
 import { SELECTION_COLOR } from "./colors";
 import { rasterLayer, rasterSource } from "./layers/raster";
@@ -355,6 +356,17 @@ export interface ComposeStyleInput {
    * is a no-op on both counts — draw order unchanged, `applyLayerGroupStyling` never touches a
    * layer's own paint at opacity 1 — so this input is purely additive. */
   layerStack?: readonly LayerStackEntry[];
+  /** the GEBCO sea floor's composer (`layers/gebco.ts`, loaded lazily by `layers/basemap.ts#loadSeaFloor`): while the
+   * stack's `basemap-bathymetry` row is visible, CARTO's style gets the relief, the isobaths, the undersea names and
+   * the land mask, dimmed under a data layer. Absent (not loaded yet, or a caller without it): CARTO's own style. */
+  seaFloor?: Pick<SeaFloorModule, "withSeaFloor"> | null;
+}
+
+/** does this input draw the sea floor? the Bathymetry row visible, the composer loaded and a basemap at all */
+export function drawsSeaFloor(input: Pick<ComposeStyleInput, "seaFloor" | "layerStack" | "basemap">): boolean {
+  if (!input.seaFloor || input.basemap === null) return false;
+  const entries = normalizeLayerStack(input.layerStack ?? defaultLayerStackEntries());
+  return entries.find((e) => e.id === "basemap-bathymetry")?.visible ?? false;
 }
 
 /**
@@ -464,7 +476,12 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   let cartoGlyphs: string | undefined;
   let cartoHasSymbolLayer = false;
   if (basemap) {
-    const carto = input.basemapStyle ?? getCachedBasemapStyle(input.theme);
+    let carto = input.basemapStyle ?? getCachedBasemapStyle(input.theme);
+    // the GEBCO sea floor, composed into CARTO's own ids before they are prefixed (layers/gebco.ts); dimmed under data
+    if (drawsSeaFloor(input)) {
+      const underData = !!(input.raster || input.h3 || input.hex || input.range);
+      carto = input.seaFloor!.withSeaFloor(carto, input.theme, { underData });
+    }
     const merged = mergeCartoStyle(carto, sources);
     // R3: each CARTO layer classifies into ONE of five basemap sub-roles (land/bathymetry/
     // boundaries/roads/labels) instead of one flat "basemap" bucket — `classifyBasemapLayer` reads

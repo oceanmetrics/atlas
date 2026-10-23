@@ -1070,6 +1070,23 @@ export const FAULTS = [
       "and then exactly the footer -- the first lookup costs 512 KB before it reads a row",
     gate: ["npx", "vitest", "run", "tests/release/cog3857.test.ts", "-t", "opens in two requests"],
   },
+  // --- the GEBCO sea floor (2026-10-23, src/lib/map/layers/gebco.ts, layerStack.ts) ------------------------------------
+  {
+    id: "seafloor-proxy-not-copied",
+    patch: "tests/faults/seafloor-proxy-not-copied.patch",
+    describe:
+      "withSeaFloor hands @oceanmetrics/map's composeStyle CARTO's style as it is -- the shell's Svelte $state Proxy, " +
+      "which the package's structuredClone refuses, so every compose throws and the map never restyles",
+    gate: ["npx", "vitest", "run", "tests/map/seaFloor.test.ts", "-t", "regression: a CARTO style held"],
+  },
+  {
+    id: "seafloor-default-ignores-instance",
+    patch: "tests/faults/seafloor-default-ignores-instance.patch",
+    describe:
+      "the Bathymetry row's default visibility ignores instance defaults.bathymetry -- the oceanmetrics atlas " +
+      "opens without the GEBCO sea floor",
+    gate: ["npx", "vitest", "run", "tests/map/layerStack.test.ts", "-t", "visible but for the Bathymetry row"],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror
