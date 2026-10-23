@@ -1,0 +1,225 @@
+// The H3 layer's paint, legend and words (build week 4, step 5): pure functions of the release's own legend rows
+// (stats.parquet, `StatsRow`: p02, p98, min, max, n_cells per resolution and indicator), never of the cells
+// loaded for the view. Node-tested (tests/obis/legend.test.ts, coverage.test.ts).
+//
+// - The colours are viridis over [p02, p98] of the layer, period, resolution and indicator (`releaseDomains`).
+// - Records (`n`) span five orders of magnitude (1 to 6.9 million at res 2), so a linear ramp paints almost every
+//   hexagon the bottom colour: `n` is drawn on a log scale (`ln n` over [ln p02, ln p98]) and its legend says so.
+// - A cell without the indicator (ES(50) under 50 records) is not drawn: the slot's filter is `['has', indicator]`.
+import {
+  interpolateColors,
+  pickRes,
+  rampStops,
+  releaseDomains,
+  releaseMaxzoom,
+  type H3ReleaseLayer,
+  type StatsRow,
+} from "@oceanmetrics/map";
+import type { ExpressionSpecification } from "maplibre-gl";
+import type { LegendStop } from "../../../lib/raster/ramps";
+
+export const H3_RAMP = "viridis";
+/** the stops of the fill ramp (and the legend's gradient) */
+export const RAMP_STOPS = 9;
+/** the indicators drawn on a log scale */
+export const LOG_INDICATORS: ReadonlySet<string> = new Set(["n"]);
+
+export const scaleOf = (indicator: string): "log" | "linear" =>
+  LOG_INDICATORS.has(indicator) ? "log" : "linear";
+
+/** the domain of one resolution, from the legend rows: [p02, p98], or [min, max] when they meet. A log domain
+ * starts at 1 (a count). null when no row has a value at that resolution. */
+export function domainAt(
+  rows: readonly StatsRow[] | null,
+  indicator: string,
+  res: number,
+): [number, number] | null {
+  const d = releaseDomains(rows ?? [], indicator).get(res) ?? null;
+  if (!d) return null;
+  return scaleOf(indicator) === "log" ? [Math.max(1, d[0]), Math.max(1, d[1])] : d;
+}
+
+/** the value expression the ramp is applied to: the column, or its natural log for a log indicator. */
+function valueExpr(indicator: string): ExpressionSpecification {
+  return scaleOf(indicator) === "log"
+    ? ["ln", ["max", ["to-number", ["get", indicator]], 1]]
+    : ["to-number", ["get", indicator]];
+}
+
+const toScale = (indicator: string, d: [number, number]): [number, number] =>
+  scaleOf(indicator) === "log" ? [Math.log(d[0]), Math.log(d[1])] : d;
+
+function rampOn(indicator: string, d: [number, number]): ExpressionSpecification {
+  const [lo, hi] = toScale(indicator, d);
+  return [
+    "interpolate",
+    ["linear"],
+    valueExpr(indicator),
+    ...(rampStops(lo, hi > lo ? hi : lo + 1e-9, H3_RAMP, RAMP_STOPS) as (number | string)[]),
+  ] as ExpressionSpecification;
+}
+
+/**
+ * The fill colour of the layer: the ramp over the domain of the resolution a tile draws. Pinned (or one resolution
+ * in reach), one ramp; auto, a step on the zoom at each zoom where the resolution changes (the map package's
+ * `releaseFillColor` rule, with the log scale for records). A resolution without a domain takes the nearest one
+ * that has one; none at all gives [0, 1] (or [1, 10] on a log scale) until the legend rows arrive.
+ */
+export function h3FillColor(
+  l: H3ReleaseLayer,
+  indicator: string,
+  rows: readonly StatsRow[] | null,
+): ExpressionSpecification {
+  const fallback: [number, number] = scaleOf(indicator) === "log" ? [1, 10] : [0, 1];
+  const all = new Map<number, [number, number]>();
+  for (const r of new Set([...l.ladder, ...(l.pin === null ? [] : [l.pin])])) {
+    const d = domainAt(rows, indicator, r);
+    if (d) all.set(r, d);
+  }
+  const domainOf = (res: number): [number, number] => {
+    if (all.has(res)) return all.get(res)!;
+    const near = [...all.keys()].sort((a, b) => Math.abs(a - res) - Math.abs(b - res) || a - b)[0];
+    return near === undefined ? fallback : all.get(near)!;
+  };
+  const maxzoom = releaseMaxzoom(l);
+  const steps: [number, number][] = [];
+  for (let z = 0; z <= maxzoom; z++) {
+    const r = pickRes(z, l.ladder, l.pin);
+    if (!steps.length || steps[steps.length - 1][1] !== r) steps.push([z, r]);
+  }
+  if (steps.length === 1) return rampOn(indicator, domainOf(steps[0][1]));
+  const out: unknown[] = ["step", ["zoom"], rampOn(indicator, domainOf(steps[0][1]))];
+  for (const [z, r] of steps.slice(1)) out.push(z, rampOn(indicator, domainOf(r)));
+  return out as ExpressionSpecification;
+}
+
+/** the resolution the map draws at `zoom` (the tile zoom MapLibre asks: floor of the view zoom, capped at the
+ * source maxzoom; past it the last resolution, overzoomed). */
+export const resAtZoom = (l: H3ReleaseLayer, zoom: number) =>
+  pickRes(Math.min(Math.max(0, zoom), releaseMaxzoom(l)), l.ladder, l.pin);
+
+/** the legend's stops at one resolution: `RAMP_STOPS` values evenly spaced on the drawn scale (geometric for a
+ * log indicator), coloured as the map is. */
+export function legendStops(domain: [number, number], indicator: string): LegendStop[] {
+  const colors = interpolateColors(RAMP_STOPS, H3_RAMP);
+  const [lo, hi] = toScale(indicator, domain);
+  return colors.map((color, i) => {
+    const t = lo + ((hi - lo) * i) / (colors.length - 1);
+    return { value: scaleOf(indicator) === "log" ? Math.exp(t) : t, color };
+  });
+}
+
+// ---- words ---------------------------------------------------------------------------------------------------
+
+/** the average area of an H3 cell, km², res 0 to 15 (h3 `getHexagonAreaAvg(res, "km2")`, so h3-js stays out of
+ * the bundle) */
+export const HEX_AREA_KM2 = [
+  4357449.416078383, 609788.4417941332, 86801.7803989972, 12393.43465508816, 1770.347654491307,
+  252.9038581819449, 36.12906216441245, 5.161293359717191, 0.7373275975944177, 0.1053325134272067,
+  0.01504750190766435, 0.002149643129451879, 0.000307091875631606, 0.00004387026794728296,
+  0.000006267181135324313, 8.95311590760579e-7,
+];
+
+/** "~12,400 km²": three significant digits from 1,000 km², whole km² below (obis-hex `hexAreaLabel`) */
+export function hexAreaLabel(res: number): string {
+  const a = HEX_AREA_KM2[res] ?? NaN;
+  if (!Number.isFinite(a)) return "";
+  const r = a >= 1000 ? Number(a.toPrecision(3)) : Math.max(1, Math.round(a));
+  return `~${r.toLocaleString("en-US")} km²`;
+}
+
+/** the footer note of the resolution: "res 3 (auto)" or "res 3 (fixed)" */
+export const resNote = (res: number, auto: boolean) => `res ${res} (${auto ? "auto" : "fixed"})`;
+
+const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+
+/**
+ * The coverage line (`atlas:coverage`, obis-hex `coverageText`), from the legend rows of the drawn resolution:
+ * for ES(50), how many hexagons have a value (n ≥ 50) of how many have records: "9,196 of 26,361 hexagons have
+ * ≥ 50 records"; for another indicator "x of y hexagons have a value" when some lack it, else "N hexagons". Of the
+ * whole layer (the release's count), not of the view. "" before the rows arrive.
+ */
+export function coverageText(
+  rows: readonly StatsRow[] | null,
+  indicator: string,
+  res: number,
+  esn = 50,
+): string {
+  if (!rows) return "";
+  const cellsOf = (v: string) =>
+    rows.find((r) => r.res === res && r.variable === v)?.n_cells ?? null;
+  const cells = cellsOf("n");
+  const valued = cellsOf(indicator);
+  if (cells === null || valued === null) return "";
+  if (indicator === "es") return `${fmt(valued)} of ${fmt(cells)} hexagons have ≥ ${esn} records`;
+  if (valued !== cells) return `${fmt(valued)} of ${fmt(cells)} hexagons have a value`;
+  return `${fmt(cells)} hexagons`;
+}
+
+/** the legend's second line: the period, which domain it is, the resolution, and the scale
+ * ("All years · release p02–p98 · res 3 (auto) · log scale"). */
+export function legendSubtitle(o: {
+  period: string;
+  res: number;
+  auto: boolean;
+  indicator: string;
+}): string {
+  return `${o.period} · release p02–p98 · ${resNote(o.res, o.auto)}${scaleOf(o.indicator) === "log" ? " · log scale" : ""}`;
+}
+
+/** the title sentence (obis-hex `sentenceText`): "Fish (EOV), 1990s, worldwide, ~12,400 km² hexagons: ES(50)".
+ * The release snapshot and the resolution are the legend's and the footer's, not the sentence's. */
+export function sentenceText(o: {
+  label: string;
+  kind: string;
+  rank?: string;
+  period: string;
+  res: number;
+  indicator: string;
+  indicatorLabel: string;
+}): string {
+  const taxon =
+    o.kind === "taxon"
+      ? `${o.label} (${o.rank ?? "taxon"})`
+      : o.kind === "eov"
+        ? `${o.label} (EOV)`
+        : o.label;
+  const period = o.period.toLowerCase() === "all years" ? "all years" : o.period;
+  return `${taxon}, ${period}, worldwide, ${hexAreaLabel(o.res)} hexagons: ${shortLabel(o.indicator, o.indicatorLabel)}`;
+}
+
+/** the hover's text: the hexagon's id and all five indicators, the chosen one first. */
+export function hoverLines(
+  h3: string,
+  props: Record<string, unknown>,
+  indicators: readonly { value: string; label: string }[],
+  chosen: string,
+): string[] {
+  const order = [...indicators].sort((a, b) => +(b.value === chosen) - +(a.value === chosen));
+  return [
+    `Hexagon ${h3}`,
+    ...order.map(
+      (i) =>
+        `${i.value === chosen ? "▸ " : ""}${shortLabel(i.value, i.label)}: ${formatIndicator(i.value, props[i.value])}`,
+    ),
+  ];
+}
+
+/** the short names of the five (obis-hex `INDICATORS.short`) */
+const SHORT: Record<string, string> = {
+  es: "ES(50)",
+  sp: "Species",
+  shannon: "Shannon H′",
+  simpson: "Simpson Σp²",
+  n: "Records",
+};
+export const shortLabel = (value: string, label: string) => SHORT[value] ?? label;
+
+/** an indicator's value as text: counts whole with separators, indices to 2 decimals (simpson 3), "–" for none */
+export function formatIndicator(indicator: string, v: unknown): string {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return "–";
+  if (indicator === "n" || indicator === "sp") return fmt(n);
+  if (indicator === "simpson") return n.toFixed(3);
+  return n.toFixed(2);
+}

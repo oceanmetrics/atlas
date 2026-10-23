@@ -51,6 +51,7 @@ import {
 import type {
   BasemapSpec,
   GazetteerLayerSpec,
+  H3LayerSpec,
   HighlightSpec,
   PlaceOverlaySpec,
   LayerSpecification,
@@ -167,6 +168,9 @@ export const LAYER_ORDER = [
   "basemap-labels",
   "hex",
   "hex-selected",
+  // an `h3` collection's hexagons (the map package's release slot, `lens/collection/h3/`) and the selected one
+  "h3",
+  "h3-selected",
   "raster",
   "range",
   "overlay",
@@ -215,6 +219,8 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   overlay: "data-raster",
   hex: "data-raster",
   "hex-selected": "data-raster",
+  h3: "data-raster",
+  "h3-selected": "data-raster",
   choropleth: "data-raster",
   "zone-fill": "data-zones",
   "zone-line": "data-zones",
@@ -239,7 +245,16 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
   "basemap-boundaries": ["basemap-boundaries"],
   "basemap-roads": ["basemap-roads"],
   "basemap-labels": ["basemap-labels"],
-  "data-raster": ["hex", "hex-selected", "raster", "range", "overlay", "choropleth"],
+  "data-raster": [
+    "hex",
+    "hex-selected",
+    "h3",
+    "h3-selected",
+    "raster",
+    "range",
+    "overlay",
+    "choropleth",
+  ],
   "data-zones": ["zone-fill", "zone-line", "zone-label"],
   "data-overlays": ["place-overlay-fill", "place-overlay-line", "place-overlay-circle"],
   "data-places": [
@@ -311,6 +326,8 @@ export interface ComposeStyleInput {
   projection?: Projection;
   /** a catalog collection's hex grid, painted by feature state (`layers/hex.ts`). */
   hex?: HexLayerSpec | null;
+  /** an `h3` collection's hexagons: the release slot's vector source, its fill and the selected outline. */
+  h3?: H3LayerSpec | null;
   /** a species COG surface (atlas-5) or a collection's cloud-optimized GeoTIFF. */
   raster?: RasterLayerSpec | null;
   /** a species PMTiles range/presence fill (atlas-5's ranges branch) — `null` for none. */
@@ -468,6 +485,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
     sources[HEX_SOURCE_ID] = hexSource(input.hex);
     roled.push({ role: "hex", layer: hexFillLayer(input.hex) });
     roled.push({ role: "hex-selected", layer: hexSelectedLayer(input.hex) });
+  }
+  if (input.h3) {
+    sources[input.h3.sourceId] = input.h3.source;
+    roled.push({ role: "h3", layer: input.h3.fill });
+    if (input.h3.selected) roled.push({ role: "h3-selected", layer: input.h3.selected });
   }
   if (input.raster) {
     sources[input.raster.id] = rasterSource(input.raster);

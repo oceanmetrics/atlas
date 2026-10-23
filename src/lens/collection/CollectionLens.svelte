@@ -30,6 +30,7 @@
   import PlaceLayerList from "../../places/PlaceLayerList.svelte";
   import type { PlaceOverlays } from "../../places/overlays.svelte";
   import type { CollectionLens } from "./state.svelte";
+  import type { Component } from "svelte";
 
   interface Props {
     lens: CollectionLens;
@@ -121,6 +122,21 @@
     const r = lens.item?.properties?.["atlas:value_range"];
     return Array.isArray(r) && typeof r[1] === "number" ? r[1] : null;
   });
+  // an `h3` collection: the H3 layer's controls and Cell pane, lazy chunks of their own (loaded for such a
+  // collection only, so another collection's panel carries none of their bytes)
+  const h3 = $derived(lens.h3);
+  const h3Spec = $derived(hookSpec(lens.entry?.collection, "h3"));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a lazily loaded component of known props
+  let H3ControlsComp = $state<Component<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a lazily loaded component of known props
+  let H3CellPaneComp = $state<Component<any> | null>(null);
+  $effect(() => {
+    if (!h3Spec) return;
+    if (!H3ControlsComp && part === "layers")
+      void import("./h3/H3Controls.svelte").then((m) => (H3ControlsComp = m.default));
+    if (!H3CellPaneComp && part === "details")
+      void import("./h3/H3CellPane.svelte").then((m) => (H3CellPaneComp = m.default));
+  });
   const sourceAuthority = $derived.by(() => {
     const a = lens.entry?.collection?.["sdm:source_authority"];
     return typeof a === "string" && a.trim() ? a.trim() : null;
@@ -143,10 +159,16 @@
     {#if lens.entry}
       <p class="collection-title">{lens.entry.title}</p>
     {/if}
-    {#if lens.itemTitle}
+    {#if lens.itemTitle && !h3Spec}
       <h3>{lens.itemTitle}</h3>
     {/if}
-    {#if cell && lens.entry && cell.collection === lens.entry.id}
+    {#if h3Spec}
+      {#if h3 && H3CellPaneComp}
+        <H3CellPaneComp layer={h3} spec={h3Spec} />
+      {:else}
+        <p role="status">Loading the hexagon layer…</p>
+      {/if}
+    {:else if cell && lens.entry && cell.collection === lens.entry.id}
       <p data-testid="collection-cell">
         Cell <b>{cell.fid}</b>:
         {cell.value === null ? "no value" : formatCellValue(cell.value)}
@@ -343,7 +365,13 @@
                 </label>
               {/if}
             {/each}
-            {#if lens.notice}
+            {#if h3Spec}
+              {#if h3 && H3ControlsComp}
+                <H3ControlsComp layer={h3} spec={h3Spec} />
+              {:else}
+                <p class="note" role="status">Loading the hexagon layer…</p>
+              {/if}
+            {:else if lens.notice}
               <p class="note" role="status" data-testid="collection-notice">{lens.notice}</p>
             {:else if lens.itemsPhase === "ready" && !lens.drawable && lens.rangeLoading}
               <p class="note" role="status">Reading the value range…</p>

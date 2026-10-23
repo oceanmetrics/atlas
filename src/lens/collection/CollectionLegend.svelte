@@ -75,6 +75,7 @@
       formatValue={formatCollectionValue}
       histogram={legend.histogram}
       marker={legend.marker}
+      ticks={legend.ticks ?? 2}
     />
   </div>
 {/if}

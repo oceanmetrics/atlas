@@ -101,6 +101,16 @@ export interface RasterLayerSpec {
   maxzoom?: number;
 }
 
+/** an `h3` collection's hexagons as style parts: the vector source of the map package's release slot (`h3r://`
+ * tiles read in MapLibre's worker, `promoteId: "h3"`), its fill, and the selected hexagon's outline (or none).
+ * Built by the lazy H3 layer (`lens/collection/h3/`); plain data, so `style.ts` stays Node-testable. */
+export interface H3LayerSpec {
+  sourceId: string;
+  source: SourceSpecification;
+  fill: LayerSpecification;
+  selected: LayerSpecification | null;
+}
+
 /**
  * A gazetteer collection's PMTiles polygons, shown while "Pick from gazetteer" is on (places/
  * gazPick.ts) so a click can read a feature's `place_id`. Distinct from `RangeLayerSpec` (a per-species

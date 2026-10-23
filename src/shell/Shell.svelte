@@ -814,6 +814,11 @@
     selectTool(PLACES_FLOW_TOOL);
   }
 
+  // a link that names an h3 layer's selected hexagon (`cell=`) opens on its Cell pane, once
+  onMount(() => {
+    if (__LENS_COLLECTION__ && sel.lens === "collection" && sel.cell) selectTool("details");
+  });
+
   // R4-B: the popup's "Details" link opens the Details tool. The popup is a MapLibre-owned div
   // outside Svelte, so ONE delegated click handler on `document` covers every popup of either lens.
   onMount(() => {
@@ -1451,6 +1456,10 @@
     hex:
       __LENS_COLLECTION__ && sel.lens === "collection"
         ? (collectionLens?.mapInputs.hex ?? null)
+        : null,
+    h3:
+      __LENS_COLLECTION__ && sel.lens === "collection"
+        ? (collectionLens?.mapInputs.h3 ?? null)
         : null,
     zoneStyle,
     raster:

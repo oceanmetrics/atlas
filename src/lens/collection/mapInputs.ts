@@ -19,7 +19,12 @@ import type { RasterBackend } from "../../lib/raster/tiles";
 import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
 import { RANGE_FILL_COLOR, RANGE_FILL_OPACITY } from "../../lib/map/layers/ranges";
-import type { HighlightSpec, RangeLayerSpec, RasterLayerSpec } from "../../lib/map/types";
+import type {
+  H3LayerSpec,
+  HighlightSpec,
+  RangeLayerSpec,
+  RasterLayerSpec,
+} from "../../lib/map/types";
 import { cellOf, type CellGrid } from "../../lib/catalog/cellSpecies";
 import { wrapLon } from "../../lib/raster/pointRead";
 import { PALETTES } from "../../lib/state/types";
@@ -44,10 +49,14 @@ export interface CollectionLegend {
   histogram: Histogram | null;
   /** the clicked cell's value (a vertical line on the histogram + ramp); `null` for none. */
   marker: number | null;
+  /** how many stops get a label under the ramp (`Legend`'s `ticks`); default the two ends. */
+  ticks?: number;
 }
 
 export interface CollectionMapInputs {
   hex: HexLayerSpec | null;
+  /** an `h3` collection's hexagons (the lazy H3 layer, `./h3/layer.svelte.ts`); `null` for any other. */
+  h3: H3LayerSpec | null;
   raster: RasterLayerSpec | null;
   /** a vector range item (a v7 model that publishes PMTiles only): drawn as a presence fill. */
   range: RangeLayerSpec | null;
@@ -64,6 +73,7 @@ export interface CollectionMapInputs {
 
 export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {
   hex: null,
+  h3: null,
   raster: null,
   range: null,
   legend: null,
@@ -199,6 +209,7 @@ export function collectionMapInputs(args: {
     const colors = collectionRamp(style);
     const finite = (values?.values ?? []).filter((v): v is number => typeof v === "number");
     return {
+      h3: null,
       hex: {
         pmtiles: hexAsset.url,
         sourceLayer: hexAsset.layer,
@@ -237,6 +248,7 @@ export function collectionMapInputs(args: {
     const lg = src.legend();
     if (!lg.ramp) return EMPTY_COLLECTION_INPUTS;
     return {
+      h3: null,
       hex: null,
       highlight,
       cogUrl: cog.url,
@@ -275,6 +287,7 @@ export function collectionMapInputs(args: {
       : "spectral_r";
     const colors = [...(paletteStopsWithFallback(null, colormap) ?? [])];
     return {
+      h3: null,
       hex: null,
       highlight,
       cogUrl: cog.url,
@@ -311,6 +324,7 @@ export function collectionMapInputs(args: {
   if (vector) {
     // a vector-only model: presence, no value to colour by (the shard carries none)
     return {
+      h3: null,
       hex: null,
       raster: null,
       range: {

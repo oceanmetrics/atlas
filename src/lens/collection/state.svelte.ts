@@ -101,6 +101,7 @@ import {
   type LoadOptions,
 } from "../../lib/catalog/load";
 import type { CubeDimension, StacCollection, StacItem } from "../../lib/catalog/types";
+import type { H3Layer } from "./h3/layer.svelte";
 import { readValueColumn, type ValueColumn } from "../../lib/catalog/values";
 import {
   createHexPainter,
@@ -244,6 +245,9 @@ export interface CollectionLens {
   /** the clicked cell's value for every metric of the same group and season (empty when the
    * collection has no `metric` dimension). */
   readonly siblings: SiblingValue[];
+  /** the H3 layer of an `h3` collection (the obis-h3 release: indicator, period, resolution, taxon, the Cell
+   * pane), a lazy module loaded when such a collection opens; `null` for any other collection, or while it loads. */
+  readonly h3: H3Layer | null;
   /** the MarineSensitivity side of the active collection (taxon search, identifiers, notices). */
   readonly mst: MstSource;
   /** the registry side of the active collection (AquaMaps native: taxon search, representation switch). */
@@ -452,8 +456,48 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     });
   });
 
-  const view = $derived(viewOf(collection, items, selStore.sel.i));
+  // --- an `h3` collection: the H3 layer, a lazy module (`./h3/layer.svelte.ts`, the map package's release slot) ---
+  const h3Spec = $derived(hookSpec(entry?.collection, "h3"));
+  // the view dimensions of an h3 collection (indicator, period, resolution) select no Item: the H3 layer's own
+  // controls carry them (`dim.<key>=`, `res=`), so the Item selectors see the collection without them
+  const itemCollection = $derived.by((): StacCollection | null => {
+    const c = collection;
+    const cube = c?.["cube:dimensions"];
+    if (!h3Spec || !c || !cube) return c;
+    const drop: string[] = Object.values(h3Spec.viewDims).filter((k): k is string => !!k);
+    return {
+      ...c,
+      "cube:dimensions": Object.fromEntries(
+        Object.entries(cube).filter(([k]) => !drop.includes(k)),
+      ),
+    };
+  });
+
+  const view = $derived(viewOf(itemCollection, items, selStore.sel.i));
   const item = $derived(view.item);
+
+  let h3Layer = $state.raw<H3Layer | null>(null);
+  let h3Loading = false;
+  $effect(() => {
+    if (!h3Spec || h3Layer || h3Loading || selStore.sel.lens !== "collection") return;
+    h3Loading = true;
+    void import("./h3/layer.svelte").then(
+      (m) => {
+        h3Layer = m.createH3Layer({
+          selStore,
+          mapHandle: deps.mapHandle,
+          ...(deps.isOwned ? { isOwned: deps.isOwned } : {}),
+          entry: () => entry,
+          item: () => item,
+          items: () => items,
+          spec: () => h3Spec,
+        });
+      },
+      () => {
+        h3Loading = false;
+      },
+    );
+  });
 
   // --- a raster's display rescale (`rescale: "auto"`): titiler's band statistics, cached ------------
   const rescaleCache = deps.rescale ?? createRescaleCache(defaultFetchJson);
@@ -1008,6 +1052,8 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
       point,
     });
+    // an h3 collection is drawn by the H3 layer (its slot's source and fill, its legend from stats.parquet)
+    if (h3Spec) return { ...inputs, h3: h3Layer?.style ?? null, legend: h3Layer?.legend ?? null };
     // a raster is held back until its footprint is known (the legend and the summaries stay)
     return extentPending && inputs.raster ? { ...inputs, raster: null } : inputs;
   });
@@ -1241,6 +1287,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     get drawable() {
       // a raster held back for its footprint is still a drawable item (its legend is up)
       return (
+        h3Spec !== null ||
         mapInputs.hex !== null ||
         mapInputs.raster !== null ||
         mapInputs.range !== null ||
@@ -1273,6 +1320,9 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get siblings() {
       return siblings;
+    },
+    get h3() {
+      return h3Spec ? h3Layer : null;
     },
     get mst() {
       return mst;

@@ -50,6 +50,8 @@ export const MODULE_TABLE = {
       // MarineSensitivity twins are the `*.mst.test.ts` files under the Scores lens)
       tests: [
         "tests/lens/collection/**",
+        // the OBIS layer (the H3 layer of an `h3` collection, src/lens/collection/h3/), its hook and the codec keys
+        "tests/obis/**",
         "tests/catalog/**",
         "tests/places/summary.test.ts",
         "tests/state/registryUrl.test.ts",
