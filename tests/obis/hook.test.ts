@@ -90,6 +90,17 @@ describe("the h3 hook", () => {
       resolutions: [3],
     });
   });
+  it("the release's metadata and manifest by asset key; sci:citation when the collection publishes one", () => {
+    const s = parseH3(coll())!;
+    expect(s.releaseMeta).toBe(`${REL}release.json`);
+    expect(s.files).toBe(`${REL}files.parquet`);
+    expect(s.citation).toBeNull();
+    expect(parseH3(coll({ "sci:citation": "X (2026). Y." }))!.citation).toBe("X (2026). Y.");
+    // no release asset: the related link to a release.json
+    const noAsset = coll();
+    delete (noAsset.assets as Record<string, unknown>).release;
+    expect(parseH3(noAsset)!.releaseMeta).toBe(`${REL}release.json`);
+  });
 });
 
 describe("counter-fixtures", () => {

@@ -113,3 +113,29 @@ describe("the legend", () => {
     );
   });
 });
+
+describe("the loaded hexagons' domain (dom=view)", () => {
+  it("view domain equals duckdb quantile_cont", async () => {
+    const { quantileSorted, viewDomain } = await import("../../src/lens/collection/h3/share");
+    // duckdb: SELECT quantile_cont(x, 0.02), quantile_cont(x, 0.98) FROM (SELECT unnest([...]::DOUBLE[]) x)
+    const xs = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 32, 0.5, 12, 7.25, 4];
+    const d = viewDomain([...xs, null, "", Number.NaN])!;
+    expect(d[0]).toBeCloseTo(0.69, 12);
+    expect(d[1]).toBeCloseTo(24.4, 12);
+    // 1..100: 2.98 and 98.02
+    const r = Array.from({ length: 100 }, (_, i) => i + 1);
+    expect(viewDomain(r)).toEqual([2.98, 98.02].map((v) => expect.closeTo(v, 12)) as never);
+    expect(quantileSorted([5], 0.5)).toBe(5);
+    // the quantiles meet: min to max; a log indicator starts at 1; nothing loaded, no domain
+    expect(viewDomain([4, 4, 4, 4, 4])).toEqual([4, 4]);
+    expect(viewDomain(Array(60).fill(4).concat([9]))).toEqual([4, 9]);
+    expect(viewDomain([0, 0.5, 300], true)![0]).toBe(1);
+    expect(viewDomain([])).toBeNull();
+  });
+  it("the subtitle says the loaded hexagons when the domain is theirs", async () => {
+    const { legendSubtitle } = await import("../../src/lens/collection/h3/paint");
+    expect(
+      legendSubtitle({ period: "1990s", res: 4, auto: true, indicator: "es", domain: "view" }),
+    ).toBe("1990s · loaded hexagons p02–p98 · res 4 (auto)");
+  });
+});

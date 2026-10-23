@@ -646,7 +646,7 @@
           <p>{summaries.caveat}</p>
         </details>
       {/if}
-      {#if summaries.mode === "hex" || summaries.filterOn}
+      {#if summaries.mode === "hex" || summaries.h3 || summaries.filterOn}
         <div class="filter-row">
           <Switch
             label="Only inside places"

@@ -226,3 +226,44 @@ export async function searchGazetteer(
   }
   return out;
 }
+
+/** a place's collection and its H3 membership (the h3 layer's place filter, `src/lens/collection/h3/placeFilter.ts`) */
+export interface PlaceMembership {
+  id: string;
+  /** the collection (layers.json `slug`) */
+  slug: string | null;
+  title: string | null;
+  citation: string | null;
+  license: string | null;
+  /** `<slug>/h3/membership.json` on the data base, null for a point or line collection or a stale build */
+  membership: string | null;
+}
+
+/**
+ * Where a gazetteer place's H3 membership is: its collection (the built-in `places` authorities by their prefix, else
+ * the feature's own `collection`) and that collection's layers.json `h3` url, re-based on the data base. Never throws:
+ * an unreachable gazetteer is a place without membership.
+ */
+export async function placeMembership(
+  id: string,
+  client: GazetteerClient = gazetteerClient(),
+): Promise<PlaceMembership> {
+  const none = { id, slug: null, title: null, citation: null, license: null, membership: null };
+  try {
+    let slug: string | null = isPlacesAuthority(authorityOf(id)) ? PLACES_SLUG : null;
+    if (!slug) slug = (await client.getPlace(id))?.collection ?? null;
+    if (!slug) return none;
+    const row = (await client.listLayers()).find((l) => l.slug === slug || l.collection === slug);
+    const h3 = (row as { h3?: string | null } | undefined)?.h3 ?? null;
+    return {
+      id,
+      slug,
+      title: row?.title ?? null,
+      citation: (row as { citation?: string | null } | undefined)?.citation ?? null,
+      license: (row as { license?: string | null } | undefined)?.license ?? null,
+      membership: h3 ? toDataUrl(h3) : null,
+    };
+  } catch {
+    return none;
+  }
+}

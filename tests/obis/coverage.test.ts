@@ -7,8 +7,12 @@ import {
   formatIndicator,
   hexAreaLabel,
   hoverLines,
+  placePart,
   resNote,
+  sentenceParts,
   sentenceText,
+  statusLine,
+  withinPart,
 } from "../../src/lens/collection/h3/paint";
 import { localFetch, REL, spec } from "./support";
 
@@ -53,8 +57,8 @@ describe("hex area words and res note", () => {
 });
 
 describe("the title sentence", () => {
-  it("sentence parts for all, eov, taxon", () => {
-    const base = { res: 3, indicator: "es", indicatorLabel: "ES(50)…" };
+  const base = { res: 3, indicator: "es", indicatorLabel: "ES(50)…" };
+  it("sentence parts for all, eov, taxon: the common name first, its rank and name after", () => {
     expect(sentenceText({ ...base, label: "All taxa", kind: "all", period: "All years" })).toBe(
       "All taxa, all years, worldwide, ~12,400 km² hexagons: ES(50)",
     );
@@ -64,13 +68,78 @@ describe("the title sentence", () => {
     expect(
       sentenceText({
         ...base,
-        label: "Aves — birds",
+        label: "Aves",
         kind: "taxon",
         rank: "class",
+        taxon: "Aves",
         period: "All years",
         indicator: "n",
       }),
-    ).toBe("Aves — birds (class), all years, worldwide, ~12,400 km² hexagons: Records");
+    ).toBe("Birds (class Aves), all years, worldwide, ~12,400 km² hexagons: Records");
+    expect(
+      sentenceText({
+        ...base,
+        label: "Nudibranchia",
+        kind: "taxon",
+        rank: "order",
+        taxon: "Nudibranchia",
+        period: "All years",
+      }),
+    ).toBe("Nudibranchia (order), all years, worldwide, ~12,400 km² hexagons: ES(50)");
+  });
+  it("the five chips, each naming the control it opens", () => {
+    const p = sentenceParts({ ...base, label: "Fish", kind: "eov", period: "2015" });
+    expect(Object.values(p).map((c) => [c.control, c.label, c.qual])).toEqual([
+      ["taxon", "Fish", "(EOV)"],
+      ["period", "2015", ""],
+      ["place", "worldwide", ""],
+      ["scale", "~12,400 km² hexagons", ""],
+      ["indicator", "ES(50)", ""],
+    ]);
+  });
+  it("worldwide and in view words: a split resolution reads the parents under the map", () => {
+    expect(placePart(null)).toEqual({ label: "worldwide", qual: "", control: "place" });
+    expect(placePart({ parentRes: 3 })).toEqual({
+      label: "in view",
+      qual: "(the res-3 parent files under the map)",
+      control: "place",
+    });
+    expect(
+      sentenceText({
+        ...base,
+        res: 7,
+        label: "All taxa",
+        kind: "all",
+        period: "All years",
+        place: placePart({ parentRes: 3 }),
+      }),
+    ).toBe(
+      "All taxa, all years, in view (the res-3 parent files under the map), ~5 km² hexagons: ES(50)",
+    );
+  });
+  it("the place filter's label: statistics of the hexagons, one place or how many", () => {
+    expect(withinPart(["Channel Islands"])).toEqual({
+      label: "in Channel Islands",
+      qual: "(statistics of its hexagons)",
+      control: "place",
+    });
+    expect(withinPart(["A", "B", "C"]).label).toBe("in 3 places");
+    expect(withinPart(["A", "B"]).qual).toBe("(statistics of their hexagons)");
+  });
+});
+
+describe("the status line", () => {
+  it("status words: loading, an error, no hexagons in view, no records for the period, drawn", () => {
+    const o = { loading: false, cells: 12, label: "Seabirds", period: null };
+    expect(statusLine({ ...o, loading: true })).toBe("Loading the release…");
+    expect(statusLine({ ...o, error: "HTTP 403" })).toBe("The release could not be read: HTTP 403");
+    expect(statusLine({ ...o, cells: 0 })).toBe("No hexagons in this view.");
+    expect(statusLine({ ...o, cells: 0, period: "1960s" })).toBe(
+      "No OBIS records for Seabirds in the 1960s in this view.",
+    );
+    expect(statusLine({ ...o, cells: 0, filtered: true })).toBe("No hexagons in the place.");
+    expect(statusLine(o)).toBeNull();
+    expect(statusLine({ ...o, cells: null })).toBeNull();
   });
 });
 

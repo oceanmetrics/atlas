@@ -348,7 +348,8 @@
                 "unknown"}).
             </p>
           {:else}
-            {#each lens.dims as dim (dim.key)}
+            <!-- an h3 collection's controls own its dimensions (the layer list, the indicator, the period) -->
+            {#each h3Spec ? [] : lens.dims as dim (dim.key)}
               {@const sel = lens.selectorOptions(dim.key, showAllTaxa)}
               <label class="field">
                 <span class="field-label" title={dim.description}>{dim.label}</span>

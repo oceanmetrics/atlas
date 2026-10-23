@@ -22,6 +22,7 @@
   } from "./cellSpecies";
   import type { H3Layer } from "./layer.svelte";
   import { formatIndicator, hexAreaLabel, shortLabel } from "./paint";
+  import { speciesErrorLine } from "./share";
 
   interface Props {
     layer: H3Layer;
@@ -104,7 +105,12 @@
       {#if sp.phase === "loading"}
         <p role="status">Reading the species of this hexagon…</p>
       {:else if sp.phase === "error"}
-        <p role="alert">{sp.error}</p>
+        <p role="alert" data-testid="h3-cell-species-error">
+          {speciesErrorLine(sp.error ?? "unknown")}
+          {#if sp.checklist}<a href={sp.checklist} target="_blank" rel="noopener"
+              >the OBIS checklist of the box ↗</a
+            >{/if}
+        </p>
       {:else if sp.list}
         {@const list = sp.list}
         <p class="muted" data-testid="h3-cell-species-total">

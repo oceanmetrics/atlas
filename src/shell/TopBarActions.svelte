@@ -51,6 +51,8 @@
      * `openPhoneModal()`) -- see that file's header for why the phone route is a Modal rather than
      * a second Menu instance nested inside this one. */
     onOpenDownload: () => void;
+    /** the shown layer's own About (an h3 layer's release and credit), passed to the About modal */
+    layerAbout?: { title: string; lines: string[] } | null;
   }
 
   let {
@@ -65,6 +67,7 @@
     resolvedTheme,
     onToggleTheme,
     onOpenDownload,
+    layerAbout = null,
   }: Props = $props();
 
   // --- About popover-dialog -----------------------------------------------------------------
@@ -291,6 +294,7 @@
     {helpDocsHref}
     {changelogHref}
     {release}
+    {layerAbout}
   />
 {/if}
 

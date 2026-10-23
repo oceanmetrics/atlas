@@ -46,7 +46,8 @@ export type SummaryMode = "hex" | "raster" | "none";
 export type SummaryLens = Pick<
   CollectionLens,
   "entry" | "item" | "itemTitle" | "mapInputs" | "values" | "valuesLoading"
->;
+> &
+  Partial<Pick<CollectionLens, "drawsH3">>;
 
 export interface PlaceSummaries {
   readonly mode: SummaryMode;
@@ -64,6 +65,9 @@ export interface PlaceSummaries {
   /** whether the filter can do anything for the current item/places, and when not, why. */
   readonly filterNote: string | null;
   readonly filterOn: boolean;
+  /** the shown layer is an h3 layer: the filter keeps its hexagons by the gazetteer's H3 membership (the layer's
+   * own panel says how many) */
+  readonly h3: boolean;
   setFilter(on: boolean): void;
 }
 
@@ -282,6 +286,10 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
   });
   const filterNote = $derived.by<string | null>(() => {
     if (!filterOn) return null;
+    if (lens.drawsH3)
+      return inputs.length
+        ? "Only the hexagons of the places (the gazetteer's H3 membership): statistics of the hexagons, in the layer's panel."
+        : "Add a place to see its hexagons.";
     if (mode !== "hex") return "The filter works on hex-grid layers; this layer isn't one.";
     if (unavailable) return unavailable;
     if (!inputs.length) return "Add a place to see the cells inside it.";
@@ -317,6 +325,9 @@ export function createPlaceSummaries(deps: PlaceSummariesDeps): PlaceSummaries {
     },
     get filterOn() {
       return filterOn;
+    },
+    get h3() {
+      return !!lens.drawsH3;
     },
     setFilter(on) {
       selStore.set({ filter: on ? "places" : undefined });

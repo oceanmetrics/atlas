@@ -1,0 +1,29 @@
+{
+  "release": "v20261012",
+  "obis_snapshot": "2026-10-11",
+  "store": "obis_h3_global_v20261012.duckdb",
+  "obisindicators_version": "0.11.0",
+  "worms_version": "2026-10-01",
+  "duckdb_version": "v1.5.6",
+  "built_at": "2026-10-12T11:52:30Z",
+  "esn": 50,
+  "res": [1, 2, 3, 4, 5, 6, 7],
+  "res_decade": [1, 2, 3, 4, 5],
+  "decades": [1960, 1970, 1980, 1990, 2000, 2010, 2020],
+  "res_species": [3, 4, 5],
+  "sorted_by": "cell_id",
+  "row_group_rows": 10000,
+  "parents": {
+    "parent_res": {
+      "6": 2,
+      "7": 3
+    },
+    "parent_res_taxon": {
+      "6": 0,
+      "7": 0
+    },
+    "parent_min_rows": 50000,
+    "note": "a layer's resolutions listed in its `parent_res` are split one file per parent cell, <layer path>/.../res=<r>/p=<parent h3>/data_0.parquet, for every (layer key, res) with more than parent_min_rows rows (others stay whole); files.parquet `parent` is that parent cell (NULL for a whole file), and its H3 resolution is the parent resolution. A viewer loads the parents covering its viewport."
+  },
+  "exported_at": "2026-10-23T03:15:08Z"
+}

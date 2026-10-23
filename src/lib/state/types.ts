@@ -107,6 +107,9 @@ export interface Sel {
   taxon?: string;
   /** `cell=<h3>`: the selected hexagon of an h3 layer (15 lowercase hex digits), its Cell pane open. */
   cell?: string;
+  /** `dom=view`: an h3 layer's ramp spans the loaded hexagons (p02 to p98 of the cells drawn) instead of the release's
+   * stats; `undefined` = the release's (never written). */
+  dom?: "view";
   /** a validated `https` catalog base overriding the default (`?catalog=`, `catalog/base.ts`). */
   catalog?: string;
   /** WP11: `?collection=<https url of a collection.json>`: one extra, unlisted collection loaded into the
@@ -158,6 +161,7 @@ export const QUERY_KEYS = [
   "res",
   "taxon",
   "cell",
+  "dom",
   "catalog",
   "collection",
   "ov",
@@ -301,6 +305,7 @@ export const DEFAULT_SEL: Sel = {
   res: undefined,
   taxon: undefined,
   cell: undefined,
+  dom: undefined,
   catalog: undefined,
   collection: undefined,
   ov: undefined,

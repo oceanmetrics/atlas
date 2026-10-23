@@ -7,6 +7,8 @@
 //
 // The rules live in the plain modules beside it (view.ts, paint.ts, periods.ts, taxa.ts, cellSpecies.ts); this file
 // only wires them to the URL (`Sel`: `i`, `taxon`, `dim.indicator`, `dim.period`, `res`, `cell`) and the map.
+/* eslint-disable svelte/prefer-svelte-reactivity -- the Maps and Sets here are locals of readers and caches; the
+   reactive state is `$state.raw`, always reassigned whole */
 import {
   H3_LAYER,
   ReleaseReader,
@@ -14,9 +16,7 @@ import {
   type ReadStats,
   cellIdOf,
   cellIdRes,
-  h3OfCellId,
   h3ReleaseSlot,
-  parentId,
   releaseFilter,
   releaseSource,
   setupMapLibre,
@@ -28,6 +28,7 @@ import { addProtocol, importScriptInWorkers, setWorkerUrl } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { untrack } from "svelte";
+import { BRAND_NAME } from "../../../lib/brand/instance";
 import type { H3Spec } from "../../../lib/catalog/h3";
 import type { CollectionEntry } from "../../../lib/catalog/load";
 import type { StacItem } from "../../../lib/catalog/types";
@@ -52,6 +53,13 @@ import {
 import {
   coverageText,
   domainAt,
+  placePart,
+  rampOn,
+  resNote,
+  sentenceParts,
+  statusLine,
+  withinPart,
+  type SentenceParts,
   formatIndicator,
   h3FillColor,
   hoverLines,
@@ -63,13 +71,37 @@ import {
   shortLabel,
 } from "./paint";
 import {
+  aboutLines,
+  boxKm2,
+  boxOfRings,
+  cellFileUrls,
+  footerText,
+  h3ShortcutFor,
+  obisChecklistUrl,
+  pinForView,
+  pngStamp,
+  releaseMetaOf,
+  reproduceSql,
+  viewDomain,
+  type ReleaseMeta,
+} from "./share";
+import {
+  FILTER_MAX_CELLS,
+  membershipFiles,
+  parseMembership,
+  placeFilterExpr,
+  placeFilterNote,
+  readMembershipCells,
+  type MembershipManifest,
+} from "./placeFilter";
+import {
   periodBars,
   readPeriodRows,
   stripMessage,
   type PeriodBar,
   type PeriodStatRow,
 } from "./periods";
-import { headsOf, readTaxonRows } from "./taxa";
+import { headsOf, layerRows, readTaxonRows, type LayerRow } from "./taxa";
 import {
   h3ViewOf,
   headRowOf,
@@ -93,6 +125,8 @@ export interface H3LayerDeps {
   /** the collection's Items: a taxon filters the all-taxa one */
   items: () => readonly StacItem[];
   spec: () => H3Spec | null;
+  /** the app's name and version for the footer and the citation ("OceanMetrics Atlas 0.5.0") */
+  app?: string;
   /** readers (tests) */
   readTaxa?: typeof readTaxonRows;
   fetchJson?: (url: string) => Promise<unknown>;
@@ -128,9 +162,39 @@ export interface H3Layer {
     phase: "idle" | "loading" | "ready" | "error";
     list: CellSpeciesList | null;
     error: string | null;
+    /** the OBIS API checklist of the hexagon's box, when the species table cannot be read */
+    checklist?: string | null;
   };
   readonly statsRows: StatsRow[] | null;
+  /** the title sentence as chips (taxon, period, place, hexagon size, indicator) */
+  readonly parts: SentenceParts | null;
+  /** what the map is waiting for, or why it shows nothing (null when the hexagons are drawn) */
+  readonly status: string | null;
+  /** release.json, once read */
+  readonly meta: ReleaseMeta | null;
+  /** the footer line: OBIS and WoRMS dates, the release, the resolution, the app */
+  readonly footer: string;
+  /** Reproduce: DuckDB SQL over the layer's own file for the view (and the selected hexagon) */
+  readonly reproduce: string;
+  /** the ramp's domain: the release's (stats.parquet) or the loaded hexagons' */
+  readonly domain: "release" | "view";
+  /** All taxa and the EOVs, most records first */
+  readonly layers: LayerRow[];
+  /** the selected Item (`i=`) */
+  readonly layerId: string | null;
+  /** the place filter's line, null when the filter is off */
+  readonly filterNote: string | null;
+  /** the selected places' collections (Data sources) */
+  readonly placeSources: { title: string; citation: string | null; license: string | null }[];
+  /** the app's name and version */
+  readonly app: string;
+  /** the About modal's section of the layer */
+  readonly about: { title: string; lines: string[] } | null;
+  /** what the map PNG is stamped with */
+  readonly stamp: { title: string; description: string | null; ver: string | null } | null;
   ensureTaxa(): void;
+  setDomain(d: "release" | "view"): void;
+  setLayer(id: string): void;
   setIndicator(v: string): void;
   setPeriod(token: string): void;
   setRes(r: "auto" | number): void;
@@ -196,6 +260,7 @@ let lookupPromise: {
 
 export function createH3Layer(deps: H3LayerDeps): H3Layer {
   const { selStore } = deps;
+  const appName = deps.app ?? `${BRAND_NAME} ${__APP_VERSION__}`;
   const fetchJson =
     deps.fetchJson ??
     (async (url: string) => {
@@ -217,6 +282,34 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     null,
   );
   let species = $state.raw<H3Layer["species"]>({ phase: "idle", list: null, error: null });
+  let meta = $state.raw<ReleaseMeta | null>(null);
+  /** the hexagons in the map's loaded tiles at the drawn resolution (read on idle), their five values */
+  let loaded = $state.raw<{
+    key: string;
+    res: number;
+    cells: Record<string, number | null>[];
+  } | null>(null);
+  /** the map's view area, km² (a pinned split resolution steps down past MAX_PARENTS parents) */
+  let viewKm2 = $state(0);
+  // the place filter: the places codec (lazy), each place's membership, and the cells per resolution
+  let placesModel = $state.raw<typeof import("../../../places/model") | null>(null);
+  let membership = $state.raw<{
+    key: string;
+    phase: "idle" | "loading" | "ready" | "error";
+    error: string | null;
+    byRes: Map<number, string[]>;
+    without: string[];
+    minShare: number;
+    sources: { title: string; citation: string | null; license: string | null }[];
+  }>({
+    key: "",
+    phase: "idle",
+    error: null,
+    byRes: new Map(),
+    without: [],
+    minShare: 0.01,
+    sources: [],
+  });
 
   const spec = $derived(deps.spec());
   const entry = $derived(deps.entry());
@@ -247,16 +340,33 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       : null,
   );
 
+  // a pinned split resolution over a wide view draws a coarser one (obis-hex's MAX_PARENTS fallback)
+  const layoutParentRes = $derived(
+    (target?.collection["h3:layout"] as { parent_res?: Record<string, number> } | undefined)
+      ?.parent_res ?? null,
+  );
+  const pinPlan = $derived(view ? pinForView(view.res, layoutParentRes, viewKm2) : null);
+  const effRes = $derived(pinPlan?.res ?? "auto");
+
+  // ---- the place filter (`?filter=places` with gazetteer places in the hash) ---------------------------------------
+  const filterOn = $derived(selStore.sel.filter === "places");
+  const filterPlaces = $derived(
+    filterOn && placesModel ? placesModel.placesFromHash(selStore.sel.pl) : [],
+  );
+  const gazPlaces = $derived(
+    filterPlaces.flatMap((p) => (p.kind === "gaz" ? [{ id: p.id, name: p.name || p.id }] : [])),
+  );
+  const placesKey = $derived(gazPlaces.map((p) => p.id).join("|"));
+  const domain = $derived<"release" | "view">(selStore.sel.dom === "view" ? "view" : "release");
+
   // ---- the slot: one per target (layer templates + item), updated for indicator, period and resolution -------
   let slot = $state.raw<H3ReleaseSlot | null>(null);
   let slotKey = "";
   const rec = recorder(() => untrack(() => zoom));
 
   // ---- the period strip and taxa: one read each ---------------------------------------------------------------
-  /* eslint-disable svelte/prefer-svelte-reactivity -- plain caches read inside effects, never by a template */
   const periodCache = new Map<string, PeriodStatRow[]>();
   const listCache = new Map<string, CellSpeciesList>();
-  /* eslint-enable svelte/prefer-svelte-reactivity */
 
   // the tiles are asked only once the h3 module is in MapLibre's worker (an `h3r://` request before it fails)
   let workerOk = $state(false);
@@ -307,7 +417,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
             item: t.item,
             indicator: v.indicator,
             period: periodArg,
-            res: v.res,
+            res: untrack(() => effRes),
             title: t.label,
             opacity: H3_FILL_OPACITY,
             onchange: () => queueMicrotask(() => statsTick++),
@@ -315,10 +425,117 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
           s.mount(rec, null, null);
           slot = s;
         } else {
-          slot.update({ indicator: v.indicator, period: periodArg, res: v.res });
+          slot.update({ indicator: v.indicator, period: periodArg, res: untrack(() => effRes) });
         }
         statsTick++;
       });
+    });
+
+    // the drawn resolution follows the pinned one's plan (a wide view steps a split resolution down)
+    $effect(() => {
+      const r = effRes;
+      const s = untrack(() => slot);
+      const v = untrack(() => view);
+      if (!s || !v) return;
+      untrack(() => {
+        s.update({
+          indicator: v.indicator,
+          period: v.periodRef ? { grain: v.periodRef.grain, value: v.periodRef.value } : null,
+          res: r,
+        });
+        statsTick++;
+      });
+    });
+
+    // release.json (the footer, Cite, About, Data sources): once per collection
+    $effect(() => {
+      const href = spec?.releaseMeta;
+      if (!href) return;
+      void fetchJson(href).then(
+        (j) => {
+          if (untrack(() => spec?.releaseMeta) === href) meta = releaseMetaOf(j);
+        },
+        () => {
+          /* the words leave the dates out */
+        },
+      );
+    });
+
+    // the map's view area and the hexagons in its loaded tiles (on idle: the tiles are in)
+    $effect(() => {
+      const handle = deps.mapHandle();
+      const s = slot;
+      if (!handle || !s) return;
+      const m = handle.map;
+      const onMove = () => {
+        try {
+          const b = m.getBounds();
+          viewKm2 = boxKm2(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+        } catch {
+          /* a map without bounds yet */
+        }
+      };
+      const onIdle = () => untrack(() => readLoaded(m, s));
+      onMove();
+      m.on("moveend", onMove);
+      m.on("idle", onIdle);
+      return () => {
+        m.off("moveend", onMove);
+        m.off("idle", onIdle);
+      };
+    });
+
+    // the places codec, once the filter is on
+    $effect(() => {
+      if (!filterOn || placesModel) return;
+      void import("../../../places/model").then((mod) => (placesModel = mod));
+    });
+
+    // the membership of the filter's places at the drawn resolution (and the parents' for res 6 and 7)
+    $effect(() => {
+      const key = placesKey;
+      const res = shownRes;
+      if (!filterOn || res === null) return;
+      untrack(() => {
+        if (membership.key !== key)
+          membership = {
+            key,
+            phase: "idle",
+            error: null,
+            byRes: new Map(),
+            without: [],
+            minShare: 0.01,
+            sources: [],
+          };
+        if (!key || membership.byRes.has(res) || membership.phase === "loading") return;
+        void loadMembership(key, gazPlaces, res);
+      });
+    });
+
+    // the layer's own keys: g toggles the globe (never while typing, with a modifier, or under a modal or the tour)
+    $effect(() => {
+      const onKey = (e: KeyboardEvent) => {
+        if (untrack(() => selStore.sel.lens) !== "collection") return;
+        const t = e.target as HTMLElement | null;
+        const sc = h3ShortcutFor(
+          {
+            key: e.key,
+            ctrlKey: e.ctrlKey,
+            altKey: e.altKey,
+            metaKey: e.metaKey,
+            targetTag: t?.tagName,
+            targetEditable: t?.isContentEditable,
+          },
+          { busy: !!document.querySelector("dialog[open], .driver-popover") },
+        );
+        if (sc !== "projection") return;
+        const proj = untrack(() => selStore.sel.proj) === "globe" ? "mercator" : "globe";
+        selStore.set({ proj });
+        deps.mapHandle()?.setProjection(proj);
+        e.preventDefault();
+      };
+      document.addEventListener("keydown", onKey);
+      return () => document.removeEventListener("keydown", onKey);
     });
 
     // the legend rows the slot read (every resolution and variable of the layer and period)
@@ -381,7 +598,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
             (species = {
               phase: "error",
               list: null,
-              error: "This collection publishes no species table for a hexagon.",
+              error: "the collection publishes no species table for a hexagon",
             }),
         );
         return;
@@ -403,12 +620,15 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
             species = { phase: "ready", list, error: null };
         },
         (e: unknown) => {
-          if (untrack(() => selStore.sel.cell) === h3)
+          if (untrack(() => selStore.sel.cell) === h3) {
+            const box = cellBox(h3);
             species = {
               phase: "error",
               list: null,
-              error: `The species of this hexagon could not be read (${e instanceof Error ? e.message : String(e)}).`,
+              error: e instanceof Error ? e.message : String(e),
+              checklist: box ? obisChecklistUrl(box) : null,
             };
+          }
         },
       );
     });
@@ -431,18 +651,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       const id = cellIdOf(h3);
       const res = cellIdRes(id);
       if (!l.ladder.includes(res)) return null;
-      const whole = l.template.replace("{res}", String(res));
-      const pr = l.parentRes?.[String(res)];
-      const urls =
-        l.parentTemplate && pr !== undefined
-          ? [
-              l.parentTemplate
-                .replace("{res}", String(res))
-                .replace("{parent}", h3OfCellId(parentId(id, pr))),
-              whole,
-            ]
-          : [whole];
-      for (const url of urls) {
+      for (const url of cellFileUrls(l, h3)) {
         const got = await pageReader.rows(url, [[id, id]], {
           id: "cell_id",
           idType: "int64",
@@ -526,6 +735,128 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       lookupBytes,
       ms: Math.round(performance.now() - t0),
     };
+  }
+
+  /** the hexagons of the loaded tiles at the drawn resolution, deduplicated (a hexagon cut by tile edges is in
+   * several tiles), with the place filter's cells only when it is on */
+  function readLoaded(m: MapLibreMap, s: H3ReleaseSlot): void {
+    const res = untrack(() => shownRes);
+    if (res === null || !m.getSource(s.ids.source)) return;
+    let feats: { properties?: Record<string, unknown> | null }[];
+    try {
+      feats = m.querySourceFeatures(s.ids.source, { sourceLayer: H3_LAYER });
+    } catch {
+      return;
+    }
+    const keep = filterOn ? new Set(filterCells()) : null;
+    const cols = spec?.indicators.map((i) => i.value) ?? [];
+    const seen = new Map<string, Record<string, number | null>>();
+    for (const f of feats) {
+      const h3 = f.properties?.h3;
+      if (typeof h3 !== "string" || seen.has(h3) || parseInt(h3[1], 16) !== res) continue;
+      if (keep && !keep.has(h3)) continue;
+      const row: Record<string, number | null> = {};
+      for (const c of cols) {
+        const v = Number(f.properties?.[c]);
+        row[c] = f.properties?.[c] == null || !Number.isFinite(v) ? null : v;
+      }
+      seen.set(h3, row);
+    }
+    let sum = 0;
+    for (const r of seen.values()) sum += r.n ?? 0;
+    const key = `${res}|${seen.size}|${sum}|${keep ? keep.size : -1}`;
+    if (loaded?.key !== key) loaded = { key, res, cells: [...seen.values()] };
+  }
+
+  /** the box of the hexagon from the tile features that draw it (the OBIS checklist link) */
+  function cellBox(h3: string): [number, number, number, number] | null {
+    const m = deps.mapHandle()?.map;
+    const s = untrack(() => slot);
+    if (!m || !s || !m.getSource(s.ids.source)) return null;
+    try {
+      const fs = m.querySourceFeatures(s.ids.source, {
+        sourceLayer: H3_LAYER,
+        filter: ["==", ["get", "h3"], h3],
+      });
+      const rings = fs.flatMap((f) =>
+        f.geometry.type === "Polygon"
+          ? f.geometry.coordinates
+          : f.geometry.type === "MultiPolygon"
+            ? f.geometry.coordinates.flat()
+            : [],
+      );
+      return boxOfRings(rings);
+    } catch {
+      return null;
+    }
+  }
+
+  /** the filter's cells: every resolution read so far for the current places (the fill's step on the zoom draws one) */
+  function filterCells(): string[] {
+    const out: string[] = [];
+    for (const c of untrack(() => membership.byRes).values()) out.push(...c);
+    return out;
+  }
+
+  const manifestCache = new Map<string, Promise<MembershipManifest | null>>();
+  async function loadMembership(
+    key: string,
+    places: readonly { id: string; name: string }[],
+    res: number,
+  ): Promise<void> {
+    membership = { ...membership, phase: "loading" };
+    try {
+      const { placeMembership } = await import("../../../lib/gazetteer/resolve");
+      const infos = await Promise.all(places.map((p) => placeMembership(p.id)));
+      const without = places.filter((_, i) => !infos[i].membership).map((p) => p.name);
+      const cells = new Set<string>();
+      let minShare = 0.01;
+      for (const info of infos) {
+        if (!info.membership) continue;
+        const url = info.membership;
+        let mp = manifestCache.get(url);
+        if (!mp) {
+          mp = fetchJson(url).then(
+            (j) => parseMembership(j, url),
+            () => null,
+          );
+          manifestCache.set(url, mp);
+        }
+        const man = await mp;
+        if (!man) throw new Error(`${url}: no membership manifest`);
+        minShare = man.minShare;
+        const cellsAt = async (r: number, parents: ReadonlySet<string> | null) => {
+          const got = await Promise.all(
+            membershipFiles(man, r, parents).map((f) => readMembershipCells(f.url, [info.id])),
+          );
+          return got.flat();
+        };
+        const pr = man.parentRes[String(res)];
+        const parents = pr !== undefined ? new Set(await cellsAt(pr, null)) : null;
+        for (const c of await cellsAt(res, parents)) cells.add(c);
+      }
+      if (untrack(() => membership.key) !== key) return;
+      const byRes = new Map(membership.byRes);
+      byRes.set(res, [...cells].sort());
+      membership = {
+        key,
+        phase: "ready",
+        error: null,
+        byRes,
+        without,
+        minShare,
+        sources: infos
+          .filter((i) => i.title)
+          .map((i) => ({ title: i.title!, citation: i.citation, license: i.license })),
+      };
+    } catch (e) {
+      if (untrack(() => membership.key) === key)
+        membership = {
+          ...membership,
+          phase: "error",
+          error: e instanceof Error ? e.message : String(e),
+        };
+    }
   }
 
   function loadTaxa(): void {
@@ -639,6 +970,9 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     void statsTick;
     const l = s.layer();
     const cell = selStore.sel.cell ?? null;
+    const base = releaseFilter(v.indicator);
+    // the place filter draws only the places' hexagons, and nothing while their membership loads
+    const filter = filterOn ? placeFilterExpr(base, filterTooMany ? [] : filterList) : base;
     return {
       sourceId: s.ids.source,
       source: releaseSource(l),
@@ -647,9 +981,12 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         type: "fill",
         source: s.ids.source,
         "source-layer": H3_LAYER,
-        filter: releaseFilter(v.indicator),
+        filter,
         paint: {
-          "fill-color": h3FillColor(l, v.indicator, statsRows),
+          "fill-color":
+            domain === "view" && loadedDomain
+              ? rampOn(v.indicator, loadedDomain)
+              : h3FillColor(l, v.indicator, statsRows),
           "fill-opacity": H3_FILL_OPACITY,
         },
       },
@@ -666,7 +1003,27 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     };
   });
 
-  const shownRes = $derived(slot && view ? resAtZoom(slot.layer(), zoom) : null);
+  const shownRes = $derived.by(() => {
+    void effRes;
+    void statsTick;
+    return slot && view ? resAtZoom(slot.layer(), zoom) : null;
+  });
+  const filterList = $derived.by(() => {
+    const out: string[] = [];
+    for (const c of membership.byRes.values()) out.push(...c);
+    return out;
+  });
+  const filterTooMany = $derived(filterList.length > FILTER_MAX_CELLS);
+  /** the loaded hexagons at the drawn resolution, when the reader has them for it */
+  const loadedNow = $derived(loaded && loaded.res === shownRes ? loaded.cells : null);
+  const loadedDomain = $derived.by(() => {
+    const v = view;
+    if (!v || !loadedNow) return null;
+    return viewDomain(
+      loadedNow.map((c) => c[v.indicator]),
+      scaleOf(v.indicator) === "log",
+    );
+  });
   const periodLabel = $derived(spec && view ? (spec.periodLabels[view.period] ?? view.period) : "");
 
   const legend = $derived.by((): CollectionLegend | null => {
@@ -674,7 +1031,8 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     const t = target;
     const res = shownRes;
     if (!v || !t || res === null) return null;
-    const d = domainAt(statsRows, v.indicator, res);
+    const d =
+      domain === "view" && loadedDomain ? loadedDomain : domainAt(statsRows, v.indicator, res);
     const ind = spec?.indicators.find((i) => i.value === v.indicator);
     return {
       kind: "continuous",
@@ -684,6 +1042,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
         res,
         auto: v.res === "auto",
         indicator: v.indicator,
+        domain: domain === "view" && loadedDomain ? "view" : "release",
       }),
       stops: d ? legendStops(d, v.indicator) : [],
       unit: v.indicator === "n" ? "records" : v.indicator === "sp" ? "species" : "",
@@ -699,21 +1058,77 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     return periodBars(periodRows?.rows ?? [], t.periods, t.item);
   });
 
-  const sentence = $derived.by(() => {
+  const parts = $derived.by((): SentenceParts | null => {
     const t = target;
     const v = view;
-    if (!t || !v || shownRes === null) return "";
+    const s = slot;
+    if (!t || !v || !s || shownRes === null) return null;
     const ind = spec?.indicators.find((i) => i.value === v.indicator);
-    return sentenceText({
+    const pr = s.layer().parentRes?.[String(shownRes)];
+    return sentenceParts({
       label: t.label,
       kind: t.kind,
       ...(t.item.rank ? { rank: t.item.rank } : {}),
+      ...(t.kind === "taxon" && t.item.key ? { taxon: t.item.key } : {}),
       period: periodLabel,
       res: shownRes,
       indicator: v.indicator,
       indicatorLabel: ind?.label ?? v.indicator,
+      place:
+        filterOn && gazPlaces.length
+          ? withinPart(gazPlaces.map((p) => p.name))
+          : placePart(pr !== undefined ? { parentRes: pr } : null),
     });
   });
+  const sentence = $derived(parts ? sentenceText(parts) : "");
+  const valued = (rows: readonly Record<string, number | null>[], k: string) =>
+    rows.reduce((a, r) => a + (r[k] === null || r[k] === undefined ? 0 : 1), 0);
+  const coverage = $derived.by(() => {
+    const v = view;
+    if (!v || shownRes === null) return "";
+    // the place filter's line counts its own hexagons (the loaded ones: the release's counts are worldwide)
+    if (filterOn && loadedNow) {
+      const n = loadedNow.length;
+      const k = valued(loadedNow, v.indicator);
+      const fmt = (x: number) => x.toLocaleString("en-US");
+      return v.indicator === "es"
+        ? `${fmt(k)} of ${fmt(n)} hexagons in the place have ≥ ${meta?.esn ?? 50} records`
+        : `${fmt(n)} hexagons in the place`;
+    }
+    return coverageText(statsRows, v.indicator, shownRes, meta?.esn ?? 50);
+  });
+  const status = $derived(
+    statusLine({
+      error: workerError,
+      loading: !workerOk || (!!slot && statsRows === null),
+      cells: loadedNow ? loadedNow.length : null,
+      label: target?.label ?? "this layer",
+      period: view?.periodRef ? (spec?.periodLabels[view.period] ?? view.period) : null,
+      filtered: filterOn,
+    }),
+  );
+  const filterNote = $derived(
+    filterOn
+      ? placeFilterNote({
+          phase: membership.phase,
+          places: filterPlaces.length,
+          without: [
+            ...membership.without,
+            ...filterPlaces
+              .filter((p) => p.kind !== "gaz")
+              .map((p) => ("name" in p && p.name) || "a drawn place"),
+          ],
+          cells:
+            membership.phase === "ready" && shownRes !== null
+              ? (membership.byRes.get(shownRes)?.length ?? null)
+              : null,
+          res: shownRes ?? 0,
+          minShare: membership.minShare,
+          error: membership.error,
+          tooMany: filterTooMany,
+        })
+      : null,
+  );
 
   const cell = $derived.by((): CellView | null => {
     const h3 = selStore.sel.cell;
@@ -745,7 +1160,86 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       return shownRes;
     },
     get coverage() {
-      return view && shownRes !== null ? coverageText(statsRows, view.indicator, shownRes) : "";
+      return coverage;
+    },
+    get parts() {
+      return parts;
+    },
+    get status() {
+      return status;
+    },
+    get meta() {
+      return meta;
+    },
+    get footer() {
+      return shownRes === null || !view
+        ? ""
+        : footerText({
+            meta,
+            res: resNote(shownRes, view.res === "auto"),
+            app: appName,
+          });
+    },
+    get reproduce() {
+      const s = slot;
+      const v = view;
+      if (!s || !v || shownRes === null) return "";
+      return reproduceSql({
+        layer: s.layer(),
+        res: shownRes,
+        indicator: v.indicator,
+        title: sentence,
+        cell: selStore.sel.cell ?? null,
+        manifest: spec?.files ?? null,
+      });
+    },
+    get domain() {
+      return domain;
+    },
+    get layers() {
+      return layerRows(
+        deps.items().map((it) => {
+          const k = itemKindOf(it);
+          const title = it.properties?.title;
+          return {
+            id: it.id,
+            label: typeof title === "string" && title.trim() ? title.trim() : it.id,
+            kind: k.layer,
+            ...(k.key ? { key: k.key } : {}),
+          };
+        }),
+        taxa,
+      );
+    },
+    get layerId() {
+      return item?.id ?? null;
+    },
+    get filterNote() {
+      return filterNote;
+    },
+    get app() {
+      return appName;
+    },
+    get stamp() {
+      return legend
+        ? pngStamp({
+            legendTitle: legend.title,
+            sentence,
+            release: meta?.release ?? spec?.release ?? null,
+          })
+        : null;
+    },
+    get about() {
+      const e = entry;
+      if (!e) return null;
+      const d = (e.collection as { description?: unknown } | null)?.description;
+      return {
+        title: e.title,
+        lines: aboutLines({ meta, description: typeof d === "string" ? d : null }),
+      };
+    },
+    get placeSources() {
+      return membership.sources;
     },
     get sentence() {
       return sentence;
@@ -754,6 +1248,7 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       return [
         ...(view?.notes ?? []),
         ...(resolved.note ? [resolved.note] : []),
+        ...(pinPlan?.note ? [pinPlan.note] : []),
         ...(workerError ? [`The hexagon layer could not start: ${workerError}`] : []),
       ];
     },
@@ -786,6 +1281,12 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
       return statsRows;
     },
     ensureTaxa: () => loadTaxa(),
+    setDomain(d) {
+      selStore.set({ dom: d === "view" ? "view" : undefined });
+    },
+    setLayer(id) {
+      selStore.set({ i: id, taxon: undefined, cell: undefined });
+    },
     setIndicator(v) {
       const k = spec?.viewDims.indicator ?? "indicator";
       selStore.set({ dim: { ...(selStore.sel.dim ?? {}), [k]: v } });

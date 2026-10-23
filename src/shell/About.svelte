@@ -31,6 +31,8 @@
     release?: AboutRelease | null;
     /** the seal build flag (`VITE_SEAL`, exactly "1" or no seal: fail closed); a prop for tests. */
     sealFlag?: string;
+    /** the shown layer's own About (an h3 layer: what it maps, its release, its credit) */
+    layerAbout?: { title: string; lines: string[] } | null;
   }
   let {
     open,
@@ -40,6 +42,7 @@
     changelogHref,
     release = null,
     sealFlag = import.meta.env.VITE_SEAL,
+    layerAbout = null,
   }: Props = $props();
 
   // the agency seal (instance.json `seal`): only on a build with VITE_SEAL=1 whose agency resolves
@@ -72,6 +75,13 @@
       </li>
     {/if}
   </ul>
+
+  {#if layerAbout}
+    <h3>This layer: {layerAbout.title}</h3>
+    <div data-testid="about-layer">
+      {#each layerAbout.lines as line (line)}<p class="cite">{line}</p>{/each}
+    </div>
+  {/if}
 
   <h3>How to cite this atlas</h3>
   <!-- the per-collection note belongs to an instance with a catalog of collections -->

@@ -5,6 +5,7 @@ import {
   commonName,
   GROUP_CAP,
   headsOf,
+  layerRows,
   logBar,
   matchRank,
   readTaxonRows,
@@ -146,5 +147,49 @@ describe("heads.json", () => {
       },
     ]);
     expect(headsOf(null)).toEqual([]);
+  });
+});
+
+describe("the layer list", () => {
+  const ITEMS = [
+    ["all", "All taxa", "all"],
+    ["fish", "Fish (Agnatha, Chondrichthyes, Osteichthyes)", "eov"],
+    ["hardCorals", "Hard corals (order Scleractinia)", "eov"],
+    ["mangroves", "Mangroves (19 seed taxa: family/genus)", "eov"],
+    ["marineMammals", "Marine mammals (7 seed taxa: infraorder/order/species)", "eov"],
+    ["seabirds", "Seabirds (class Aves)", "eov"],
+    ["seagrasses", "Seagrasses (order Alismatales)", "eov"],
+    ["seaTurtles", "Sea turtles (superfamily Chelonioidea)", "eov"],
+  ].map(([id, label, kind]) => ({ id, label, kind, ...(kind === "eov" ? { key: id } : {}) }));
+  it("the 7 EOV items: All taxa first, then most records first, with their counts on a log bar", async () => {
+    const out = layerRows(ITEMS, await rows());
+    expect(out.map((r) => r.id)).toEqual([
+      "all",
+      "fish",
+      "seabirds",
+      "marineMammals",
+      "hardCorals",
+      "seaTurtles",
+      "seagrasses",
+      "mangroves",
+    ]);
+    expect(out[0]).toMatchObject({ n: null, bar: 0 });
+    expect(out[1]).toMatchObject({ n: 63640528, bar: 1 });
+    expect(out[2].n).toBe(26801088);
+    expect(out[7].bar).toBeGreaterThan(0.6);
+    expect(out[7].bar).toBeLessThan(out[1].bar);
+  });
+  it("before the counts arrive, the cube's order", () => {
+    expect(layerRows(ITEMS, null).map((r) => r.id)).toEqual(ITEMS.map((i) => i.id));
+  });
+  it("the IOOS link is the EOV definitions' and the list says so", async () => {
+    const { IOOS_EOV_URL } = await import("../../src/lens/collection/h3/share");
+    expect(IOOS_EOV_URL).toBe(
+      "https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy",
+    );
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync("src/lens/collection/h3/H3Controls.svelte", "utf8")).toMatch(
+      /What defines each EOV\? ↗/,
+    );
   });
 });

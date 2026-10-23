@@ -150,6 +150,10 @@ export const SPECIES_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export function tourStepsForLens(lens: Lens): TourStep[] {
-  return lens === "species" ? SPECIES_TOUR_STEPS : COLLECTION_TOUR_STEPS;
+/** the lens's stops; a layer's own stops (an h3 layer's, `tourH3.ts`, a lazy chunk) go after "layers" */
+export function tourStepsForLens(lens: Lens, layerSteps: readonly TourStep[] = []): TourStep[] {
+  if (lens === "species") return SPECIES_TOUR_STEPS;
+  if (!layerSteps.length) return COLLECTION_TOUR_STEPS;
+  const i = COLLECTION_TOUR_STEPS.findIndex((s) => s.id === "layers") + 1;
+  return [...COLLECTION_TOUR_STEPS.slice(0, i), ...layerSteps, ...COLLECTION_TOUR_STEPS.slice(i)];
 }

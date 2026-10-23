@@ -90,6 +90,12 @@ export interface H3Spec {
   parentResByKind: Record<string, Record<string, number>>;
   /** the release id (`obis:release`), for file names and the cite line. */
   release: string | null;
+  /** the release's metadata (`release.json`: the asset `release`, else the `related` link to a release.json), absolute. */
+  releaseMeta: string | null;
+  /** the release's file manifest (`files.parquet`, the asset `files`), absolute: the Reproduce snippet lists from it. */
+  files: string | null;
+  /** the collection's own citation (`sci:citation`), when it publishes one. */
+  citation: string | null;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -310,5 +316,22 @@ export function parseH3(collection: StacCollection | null | undefined): H3Spec |
         : null,
     parentResByKind,
     release: str(c["obis:release"]),
+    releaseMeta: assetByKey(c, "release") ?? relatedReleaseJson(c),
+    files: assetByKey(c, "files"),
+    citation: str(c["sci:citation"]),
   };
+}
+
+function assetByKey(c: Record<string, unknown>, key: string): string | null {
+  const a = isRecord(c.assets) ? c.assets[key] : null;
+  return isRecord(a) ? absolute(c, str(a.href)) : null;
+}
+
+function relatedReleaseJson(c: Record<string, unknown>): string | null {
+  const l = Array.isArray(c.links)
+    ? (c.links as { rel?: string; href?: string }[]).find(
+        (x) => x?.rel === "related" && /release\.json$/.test(String(x?.href ?? "")),
+      )
+    : undefined;
+  return l ? absolute(c, str(l.href)) : null;
 }

@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "min_share": 0.01,
+  "columns": ["place_id", "h3", "share"],
+  "share": "fraction of the cell's area inside the place (equal-area plane), float32",
+  "res": [1, 2, 3, 4, 5, 6, 7],
+  "parent_res": {
+    "6": 2,
+    "7": 3
+  },
+  "files": [
+    {
+      "res": 2,
+      "parent": null,
+      "path": "h3/res=2/membership.parquet",
+      "rows": 56,
+      "places": 18,
+      "bytes": 1578
+    },
+    {
+      "res": 5,
+      "parent": null,
+      "path": "h3/res=5/membership.parquet",
+      "rows": 6563,
+      "places": 18,
+      "bytes": 25446
+    },
+    {
+      "res": 6,
+      "parent": "822917fffffffff",
+      "path": "h3/res=6/p=822917fffffffff/membership.parquet",
+      "rows": 399,
+      "places": 2,
+      "bytes": 2970
+    },
+    {
+      "res": 6,
+      "parent": "82291ffffffffff",
+      "path": "h3/res=6/p=82291ffffffffff/membership.parquet",
+      "rows": 288,
+      "places": 2,
+      "bytes": 2526
+    },
+    {
+      "res": 6,
+      "parent": "8229a7fffffffff",
+      "path": "h3/res=6/p=8229a7fffffffff/membership.parquet",
+      "rows": 12,
+      "places": 1,
+      "bytes": 1142
+    }
+  ],
+  "parents": "h3/parents.parquet",
+  "rows": 353755,
+  "bytes": 1218518,
+  "slug": "places",
+  "collection_version": "2.0.0",
+  "places_sha256": "8043b4ffae2d67ae5255b2d96804aa6776a21cc69854a9ff9f92d1f9e00c5e97",
+  "built": "2026-10-22T18:26:39Z",
+  "seconds": 1.4,
+  "places": 18,
+  "warnings": []
+}

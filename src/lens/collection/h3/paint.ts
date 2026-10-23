@@ -17,6 +17,7 @@ import {
 } from "@oceanmetrics/map";
 import type { ExpressionSpecification } from "maplibre-gl";
 import type { LegendStop } from "../../../lib/raster/ramps";
+import { commonName } from "./taxa";
 
 export const H3_RAMP = "viridis";
 /** the stops of the fill ramp (and the legend's gradient) */
@@ -49,7 +50,8 @@ function valueExpr(indicator: string): ExpressionSpecification {
 const toScale = (indicator: string, d: [number, number]): [number, number] =>
   scaleOf(indicator) === "log" ? [Math.log(d[0]), Math.log(d[1])] : d;
 
-function rampOn(indicator: string, d: [number, number]): ExpressionSpecification {
+/** the ramp over one domain (a log indicator on ln) */
+export function rampOn(indicator: string, d: [number, number]): ExpressionSpecification {
   const [lo, hi] = toScale(indicator, d);
   return [
     "interpolate",
@@ -163,29 +165,129 @@ export function legendSubtitle(o: {
   res: number;
   auto: boolean;
   indicator: string;
+  /** the loaded hexagons' p02 to p98 (`dom=view`) instead of the release's */
+  domain?: "release" | "view";
 }): string {
-  return `${o.period} · release p02–p98 · ${resNote(o.res, o.auto)}${scaleOf(o.indicator) === "log" ? " · log scale" : ""}`;
+  const dom = o.domain === "view" ? "loaded hexagons p02–p98" : "release p02–p98";
+  return `${o.period} · ${dom} · ${resNote(o.res, o.auto)}${scaleOf(o.indicator) === "log" ? " · log scale" : ""}`;
 }
 
-/** the title sentence (obis-hex `sentenceText`): "Fish (EOV), 1990s, worldwide, ~12,400 km² hexagons: ES(50)".
- * The release snapshot and the resolution are the legend's and the footer's, not the sentence's. */
-export function sentenceText(o: {
+// ---- the title sentence ----------------------------------------------------------------------------------------
+
+/** one chip of the title sentence: the bold, clickable words, the plain qualifier after them, and the control the chip
+ * opens (the same field as in the panel). */
+export interface SentencePart {
+  label: string;
+  qual: string;
+  control: "taxon" | "period" | "place" | "scale" | "indicator";
+}
+export type SentenceParts = Record<SentencePart["control"], SentencePart>;
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** the taxon chip (obis-hex `taxonPart`): "All taxa"; an EOV's title + "(EOV)"; a taxon layer by its common name
+ * first ("Birds" (class Aves)), else its name and rank. */
+export function taxonPart(o: {
   label: string;
   kind: string;
   rank?: string;
+  taxon?: string;
+}): SentencePart {
+  if (o.kind === "taxon") {
+    const name = o.taxon || o.label;
+    const cn = commonName(name);
+    const rank = o.rank ?? "taxon";
+    return cn
+      ? { label: cap(cn), qual: `(${rank} ${name})`, control: "taxon" }
+      : { label: name, qual: `(${rank})`, control: "taxon" };
+  }
+  if (o.kind === "eov") return { label: o.label, qual: "(EOV)", control: "taxon" };
+  return { label: o.label, qual: "", control: "taxon" };
+}
+
+/** the place chip: "worldwide" when the drawn resolution is one whole file per layer, "in view" when the map reads
+ * the files of the parents under its tiles (a split resolution, `h3:layout.parent_res`); a place filter's words
+ * replace both. */
+export function placePart(split: { parentRes: number } | null): SentencePart {
+  return split
+    ? {
+        label: "in view",
+        qual: `(the res-${split.parentRes} parent files under the map)`,
+        control: "place",
+      }
+    : { label: "worldwide", qual: "", control: "place" };
+}
+
+/** the place filter's words (obis-hex `withinPart`): "in Channel Islands" (one place), "in 3 places" */
+export function withinPart(names: readonly string[]): SentencePart {
+  return names.length === 1
+    ? { label: `in ${names[0]}`, qual: "(statistics of its hexagons)", control: "place" }
+    : {
+        label: `in ${names.length.toLocaleString("en-US")} places`,
+        qual: "(statistics of their hexagons)",
+        control: "place",
+      };
+}
+
+/** the five chips (obis-hex `sentenceParts`): taxon, period, place, hexagon size, indicator. */
+export function sentenceParts(o: {
+  label: string;
+  kind: string;
+  rank?: string;
+  taxon?: string;
   period: string;
   res: number;
   indicator: string;
   indicatorLabel: string;
-}): string {
-  const taxon =
-    o.kind === "taxon"
-      ? `${o.label} (${o.rank ?? "taxon"})`
-      : o.kind === "eov"
-        ? `${o.label} (EOV)`
-        : o.label;
-  const period = o.period.toLowerCase() === "all years" ? "all years" : o.period;
-  return `${taxon}, ${period}, worldwide, ${hexAreaLabel(o.res)} hexagons: ${shortLabel(o.indicator, o.indicatorLabel)}`;
+  place?: SentencePart | null;
+}): SentenceParts {
+  return {
+    taxon: taxonPart(o),
+    period: {
+      label: o.period.toLowerCase() === "all years" ? "all years" : o.period,
+      qual: "",
+      control: "period",
+    },
+    place: o.place ?? placePart(null),
+    scale: { label: `${hexAreaLabel(o.res)} hexagons`, qual: "", control: "scale" },
+    indicator: { label: shortLabel(o.indicator, o.indicatorLabel), qual: "", control: "indicator" },
+  };
+}
+
+const joinPart = (p: SentencePart) => (p.qual ? `${p.label} ${p.qual}` : p.label);
+
+/** the title sentence as text (obis-hex `sentenceText`): "Seabirds (class Aves) (EOV), 1990s, worldwide, ~12,400 km²
+ * hexagons: ES(50)". The release snapshot and the resolution are the legend's and the footer's, not the sentence's. */
+export function sentenceText(o: Parameters<typeof sentenceParts>[0] | SentenceParts): string {
+  const s =
+    "taxon" in o && typeof o.taxon === "object"
+      ? (o as SentenceParts)
+      : sentenceParts(o as Parameters<typeof sentenceParts>[0]);
+  return `${joinPart(s.taxon)}, ${joinPart(s.period)}, ${joinPart(s.place)}, ${joinPart(s.scale)}: ${joinPart(s.indicator)}`;
+}
+
+/** the layer's status line (obis-hex `message`, `noDataReason`, `loadError`): what the map is waiting for, or why it
+ * shows nothing. null when the hexagons are drawn. */
+export function statusLine(o: {
+  /** the h3 module failed to join MapLibre's worker, or the legend rows failed */
+  error?: string | null;
+  /** the worker or the legend rows are not there yet */
+  loading: boolean;
+  /** hexagons drawn in the loaded tiles once the map is idle; null before the first count */
+  cells: number | null;
+  label: string;
+  /** the period token when one is chosen ("1990s", "2015"), else null */
+  period: string | null;
+  /** a place filter is on */
+  filtered?: boolean;
+}): string | null {
+  if (o.error) return `The release could not be read: ${o.error}`;
+  if (o.loading) return "Loading the release…";
+  if (o.cells === null || o.cells > 0) return null;
+  const where = o.filtered ? "in the place" : "in this view";
+  return o.period
+    ? `No OBIS records for ${o.label} in the ${o.period} ${where}.`
+    : `No hexagons ${where}.`;
 }
 
 /** the hover's text: the hexagon's id and all five indicators, the chosen one first. */

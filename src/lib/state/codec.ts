@@ -223,6 +223,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     res: parseRes(params.get("res")),
     taxon: parseTaxon(params.get("taxon")),
     cell: parseCell(params.get("cell")),
+    dom: params.get("dom") === "view" ? "view" : undefined,
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     collection: validateCollectionUrl(params.get("collection")) ?? undefined,
     ov: parseOv(params.get("ov")),
@@ -304,6 +305,7 @@ export function formatSel(input: Sel): { search: string; hash: string } {
     params.set("res", String(sel.res));
   if (sel.taxon && parseTaxon(sel.taxon)) params.set("taxon", sel.taxon);
   if (sel.cell && parseCell(sel.cell)) params.set("cell", sel.cell);
+  if (sel.dom === "view") params.set("dom", "view");
   if (sel.catalog) params.set("catalog", sel.catalog);
   if (sel.collection) params.set("collection", sel.collection);
   const ovToken = formatOv(sel.ov);

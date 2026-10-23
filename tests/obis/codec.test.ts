@@ -136,3 +136,21 @@ describe("the other OBIS keys the table carries", () => {
     expect(parseSel(formatSel(s)).i).toBe("all");
   });
 });
+
+describe("dom", () => {
+  it("dom=view round-trips (the loaded hexagons' colour range); anything else is the release's, never written", () => {
+    expect(sel("?c=obis_h3&dom=view").dom).toBe("view");
+    expect(formatSel({ ...DEFAULT_SEL, c: "obis_h3", dom: "view" }).search).toBe(
+      "?c=obis_h3&dom=view",
+    );
+    for (const v of ["", "release", "VIEW", "x"]) expect(sel(`?dom=${v}`).dom).toBeUndefined();
+    expect(formatSel({ ...DEFAULT_SEL, c: "obis_h3" }).search).toBe("?c=obis_h3");
+    expect(QUERY_KEYS).toContain("dom");
+  });
+  it("the place filter is the atlas's own filter=places over the hash's places", () => {
+    const s = sel("?c=obis_h3&filter=places", "#pl=p.NMS%253ACINMS.Channel%2520Islands");
+    expect(s.filter).toBe("places");
+    expect(s.pl).toBe("p.NMS%3ACINMS.Channel%20Islands");
+    expect(formatSel(s).search).toBe("?c=obis_h3&filter=places");
+  });
+});

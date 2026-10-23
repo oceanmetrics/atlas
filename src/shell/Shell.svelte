@@ -511,7 +511,12 @@
     tourActive = true;
     const lens = sel.lens;
     const { startTour } = await import("./tourRuntime");
-    const steps = tourStepsForLens(lens);
+    const steps = tourStepsForLens(
+      lens,
+      __LENS_COLLECTION__ && lens === "collection" && collectionLens?.drawsH3
+        ? (await import("./tourH3")).H3_TOUR_STEPS
+        : [],
+    );
     const actions = buildTourActions();
     analytics.track("tour_start", { lens });
     startTour(steps, actions, {
@@ -985,6 +990,10 @@
     return desc === (phoneLegend?.title ?? null) ? null : desc;
   });
   const downloadDescription = $derived(phoneLegendDescription);
+  // an h3 layer stamps its figure with its title sentence and its release (h3/share.ts `pngStamp`)
+  const h3Stamp = $derived(
+    __LENS_COLLECTION__ && sel.lens === "collection" ? (collectionLens?.h3?.stamp ?? null) : null,
+  );
 
   // usability M4: "the default camera frames Canada; panel/sheet cover the study area" -- the
   // FALLBACK study area's own center+zoom never accounted for the panel/sheet's own reserved
@@ -2000,10 +2009,10 @@
       bind:this={downloadMenuRef}
       autoOpen={downloadAutoOpen}
       lens={sel.lens}
-      ver={feedbackVer}
+      ver={h3Stamp?.ver ?? feedbackVer}
       {mapHandle}
       title={downloadTitle}
-      description={downloadDescription}
+      description={h3Stamp ? h3Stamp.description : downloadDescription}
       unit={downloadUnit}
       metricOrMdlKey={downloadMetricOrMdlKey}
       cogUrl={downloadCogUrl}
@@ -2087,8 +2096,30 @@
                zoom-out key" -- MapLibre's own default keyboard handler binds "-" (zoom out)
                alongside "="/"+" (zoom in); only the in-key was ever documented here. -->
           <li>- — zoom the map out</li>
+          {#if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens?.drawsH3}
+            <li>g — globe or flat map (hexagon layers)</li>
+          {/if}
         </ul>
       </div>
+      {#if __LENS_COLLECTION__ && sel.lens === "collection" && collectionLens?.drawsH3}
+        <!-- an h3 layer: its citation, Reproduce, data sources and keys are in its controls -->
+        <button
+          type="button"
+          class="help-menu-item"
+          data-testid="help-h3-layer"
+          onclick={() => {
+            closeHelp(false);
+            selectTool("layers");
+            requestAnimationFrame(() => {
+              const d = document.querySelector<HTMLDetailsElement>('[data-testid="h3-sources"]');
+              if (d) {
+                d.open = true;
+                d.scrollIntoView({ block: "nearest" });
+              }
+            });
+          }}>This layer: sources, citation, keys</button
+        >
+      {/if}
       <a
         class="help-menu-item"
         href={docsHref}
@@ -2146,6 +2177,9 @@
     {resolvedTheme}
     onToggleTheme={toggleTheme}
     onOpenDownload={() => openDownload("phone")}
+    layerAbout={__LENS_COLLECTION__ && sel.lens === "collection"
+      ? (collectionLens?.h3?.about ?? null)
+      : null}
   />
   <!-- U2a (round 2): sun/moon, CalCOFI's convention (src/App.tsx's `.cc-theme-toggle`) -- the
        icon shown is the DESTINATION theme (a sun while dark invites switching to light, a moon

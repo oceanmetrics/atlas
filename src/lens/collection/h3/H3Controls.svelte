@@ -10,12 +10,81 @@
   import { shortCount, stepPeriod } from "./periods";
   import { taxonGroups, rowLabel } from "./taxa";
   import type { H3Spec } from "../../../lib/catalog/h3";
+  import type { SentencePart } from "./paint";
+  import { aboutLines, citeText, H3_SHORTCUTS, IOOS_EOV_URL, sourceRows } from "./share";
 
   interface Props {
     layer: H3Layer;
     spec: H3Spec;
   }
   let { layer, spec }: Props = $props();
+
+  // ---- layer: all taxa and the EOVs, most records first (the counts come with the taxon list) ----
+  $effect(() => {
+    layer.ensureTaxa();
+  });
+  const layerRows = $derived(layer.layers);
+
+  // ---- the title sentence's chips open the field of their control ----
+  let root = $state<HTMLDivElement | null>(null);
+  function openControl(p: SentencePart) {
+    const el = root?.querySelector<HTMLElement>(`[data-control-field="${p.control}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "nearest" });
+    el.querySelector<HTMLElement>("input, select, button, [tabindex]")?.focus();
+  }
+  const SEPS = [", ", ", ", ", ", ": ", ""];
+  const chips = $derived(
+    layer.parts
+      ? [
+          layer.parts.taxon,
+          layer.parts.period,
+          layer.parts.place,
+          layer.parts.scale,
+          layer.parts.indicator,
+        ]
+      : [],
+  );
+
+  // ---- the period strip folds (a per-viewer convenience, not the view) ----
+  let stripFolded = $state(readFold());
+  function readFold(): boolean {
+    try {
+      return localStorage.getItem("atlas.h3.stripFolded") === "1";
+    } catch {
+      return false;
+    }
+  }
+  function setFold(on: boolean) {
+    stripFolded = on;
+    try {
+      localStorage.setItem("atlas.h3.stripFolded", on ? "1" : "0");
+    } catch {
+      /* private window: the fold lasts the page */
+    }
+  }
+
+  // ---- cite, reproduce, sources, about ----
+  let copied = $state<string | null>(null);
+  const cite = $derived(
+    citeText({
+      citation: spec.citation,
+      title: "OBIS biodiversity indicators on H3 hexagons",
+      meta: layer.meta,
+      app: layer.app,
+      url: typeof location === "undefined" ? "" : location.href,
+    }),
+  );
+  const sources = $derived(sourceRows({ meta: layer.meta, place: layer.placeSources[0] ?? null }));
+  const about = $derived(aboutLines({ meta: layer.meta }));
+  async function copy(what: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = what;
+    } catch {
+      copied = null;
+    }
+  }
 
   // ---- taxon ----
   let query = $state("");
@@ -70,9 +139,49 @@
   const sliderRes = $derived(pinned ?? layer.shownRes ?? ladder[0]);
 </script>
 
-<div class="h3-controls" data-testid="h3-controls">
+<div class="h3-controls" data-testid="h3-controls" bind:this={root}>
+  {#if chips.length}
+    <!-- the title sentence: each chip opens the field of its control -->
+    <p class="sentence" data-testid="h3-sentence" data-tour="h3-sentence">
+      {#each chips as c, i (c.control)}<button
+          type="button"
+          class="chip-word"
+          data-chip={c.control}
+          onclick={() => openControl(c)}>{c.label}</button
+        >{#if c.qual}<span class="qual">{` ${c.qual}`}</span>{/if}{SEPS[i]}{/each}
+    </p>
+  {/if}
+  {#if layer.status}
+    <p class="note status" role="status" data-testid="h3-status">{layer.status}</p>
+  {/if}
+
+  <!-- layer: all taxa or an EOV (the collection's Items) -->
+  <div class="field" data-testid="h3-layer" data-tour="h3-layer">
+    <span class="field-label">Layer</span>
+    <div class="layers" role="listbox" aria-label="Layer: all taxa or an Essential Ocean Variable">
+      {#each layerRows as r (r.id)}
+        <button
+          type="button"
+          role="option"
+          class="row"
+          aria-selected={!layer.taxon && layer.layerId === r.id}
+          data-testid="h3-layer-row"
+          data-layer={r.id}
+          onclick={() => layer.setLayer(r.id)}
+        >
+          <span class="name">{r.label}</span>
+          {#if r.n !== null}<span class="count">{shortCount(r.n)}</span>{/if}
+          <span class="bar" style={`--w:${(r.bar * 100).toFixed(1)}%`}></span>
+        </button>
+      {/each}
+    </div>
+    <a class="link-out" href={IOOS_EOV_URL} target="_blank" rel="noopener"
+      >What defines each EOV? ↗</a
+    >
+  </div>
+
   <!-- taxon -->
-  <div class="field" data-testid="h3-taxon">
+  <div class="field" data-testid="h3-taxon" data-control-field="taxon" data-tour="h3-taxon">
     <span class="field-label">Taxon</span>
     {#if layer.taxon}
       <p class="current" data-testid="h3-taxon-current">
@@ -127,7 +236,7 @@
 
   <!-- indicator -->
   {#if view}
-    <label class="field">
+    <div class="field" data-control-field="indicator" data-tour="h3-indicator">
       <span class="field-label">Indicator</span>
       <Select
         label="Indicator"
@@ -135,12 +244,42 @@
         options={spec.indicators.map((i) => ({ value: i.value, label: i.label }))}
         onchange={(v) => layer.setIndicator(v)}
       />
-    </label>
+      <div class="domain" data-testid="h3-domain">
+        <span class="field-label">Colour range</span>
+        <Segmented
+          ariaLabel="Colour range: the release's or the loaded hexagons'"
+          value={layer.domain}
+          options={[
+            {
+              value: "release",
+              label: "Release",
+              title: "p02 to p98 of the release's hexagons at this size",
+            },
+            {
+              value: "view",
+              label: "Loaded",
+              title: "p02 to p98 of the hexagons in the map's loaded tiles",
+            },
+          ]}
+          onchange={(d) => layer.setDomain(d === "view" ? "view" : "release")}
+        />
+      </div>
+    </div>
   {/if}
 
   <!-- period -->
-  <div class="field" data-testid="h3-period">
-    <span class="field-label">Period</span>
+  <div class="field" data-testid="h3-period" data-control-field="period" data-tour="h3-period">
+    <span class="field-label"
+      >Period
+      {#if !layer.stripNote && view}<button
+          type="button"
+          class="link fold"
+          aria-expanded={!stripFolded}
+          data-testid="h3-strip-fold"
+          onclick={() => setFold(!stripFolded)}
+          >{stripFolded ? "Show the bars" : "Hide the bars"}</button
+        >{/if}</span
+    >
     {#if layer.stripNote}
       <p class="note" data-testid="h3-strip-note">{layer.stripNote}</p>
     {:else if view}
@@ -162,6 +301,7 @@
       </div>
       <div
         class="strip"
+        hidden={stripFolded}
         class:years={shownGrain === "year"}
         role="toolbar"
         bind:this={stripEl}
@@ -194,7 +334,7 @@
 
   <!-- resolution -->
   {#if view}
-    <div class="field" data-testid="h3-res">
+    <div class="field" data-testid="h3-res" data-control-field="scale" data-tour="h3-res">
       <span class="field-label">Hexagon size</span>
       <label class="auto">
         <input
@@ -219,15 +359,69 @@
     </div>
   {/if}
 
-  {#if layer.sentence}
-    <p class="sentence" data-testid="h3-sentence">{layer.sentence}</p>
-  {/if}
-  {#if layer.coverage}
-    <p class="note" data-testid="h3-coverage">{layer.coverage}</p>
-  {/if}
+  <div class="field" data-control-field="place">
+    {#if layer.coverage}
+      <p class="note" data-testid="h3-coverage">{layer.coverage}</p>
+    {/if}
+    {#if layer.filterNote}
+      <p class="note" role="status" data-testid="h3-filter-note">{layer.filterNote}</p>
+    {:else}
+      <p class="note">
+        Only the hexagons of a place: add it in Places and turn on “Only inside places”.
+      </p>
+    {/if}
+  </div>
   {#each layer.notes as n (n)}
     <p class="note" role="status" data-testid="h3-note">{n}</p>
   {/each}
+  {#if layer.footer}
+    <p class="note footer" data-testid="h3-footer">{layer.footer}</p>
+  {/if}
+
+  <!-- cite, reproduce, sources, about, keys -->
+  <details class="more" data-testid="h3-cite" data-tour="h3-share">
+    <summary>Cite this data</summary>
+    <pre class="text">{cite}</pre>
+    <button type="button" class="chip" onclick={() => copy("cite", cite)}
+      >{copied === "cite" ? "Copied" : "Copy citation"}</button
+    >
+  </details>
+  <details class="more" data-testid="h3-reproduce">
+    <summary>Reproduce</summary>
+    <p class="note">
+      DuckDB reads the layer's own file{layer.view?.periodRef ? " for the period" : ""} at the size on
+      the map{layer.cell ? ", the selected hexagon by cell_id" : ""}:
+    </p>
+    <pre class="text"><code>{layer.reproduce}</code></pre>
+    <button type="button" class="chip" onclick={() => copy("sql", layer.reproduce)}
+      >{copied === "sql" ? "Copied" : "Copy DuckDB SQL"}</button
+    >
+  </details>
+  <details class="more" data-testid="h3-sources">
+    <summary>Data sources and attribution</summary>
+    <ul class="sources">
+      {#each sources as r (r.name)}
+        <li>
+          <a href={r.href} target="_blank" rel="noopener">{r.name}</a>: {r.role}
+          {#if r.citation}<br /><span class="muted">{r.citation}</span>{/if}
+          {#if r.licence}<br /><span class="muted">Licence: {r.licence}</span>{/if}
+          {#if r.doi}<br /><a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener"
+              >doi:{r.doi}</a
+            >{/if}
+        </li>
+      {/each}
+    </ul>
+  </details>
+  <details class="more" data-testid="h3-about">
+    <summary>About this layer</summary>
+    {#each about as line (line)}<p class="note">{line}</p>{/each}
+    <p class="note">Keys:</p>
+    <ul class="sources" data-testid="h3-keys">
+      {#each H3_SHORTCUTS as k (k.what)}
+        <li><kbd>{k.keys.join(" ")}</kbd> {k.what}</li>
+      {/each}
+    </ul>
+  </details>
 </div>
 
 <style>
@@ -260,7 +454,58 @@
   .sentence {
     margin: 0;
     font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+  .chip-word {
+    padding: 0 var(--space-1);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-pill);
+    background: var(--fill-control);
+    color: var(--text-primary);
+    font: inherit;
     font-weight: 600;
+    cursor: pointer;
+  }
+  .qual {
+    color: var(--text-secondary);
+  }
+  .layers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .link-out {
+    font-size: var(--text-xs);
+    color: var(--text-link);
+  }
+  .domain {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .fold {
+    margin-left: var(--space-2);
+  }
+  .more summary {
+    cursor: pointer;
+    font-size: var(--text-sm);
+  }
+  .text {
+    margin: var(--space-1) 0;
+    padding: var(--space-1);
+    max-height: 14rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: var(--text-xs);
+    background: var(--fill-control);
+    border-radius: var(--radius-control);
+  }
+  .sources {
+    margin: var(--space-1) 0;
+    padding-left: var(--space-3);
+    font-size: var(--text-xs);
   }
   .search {
     width: 100%;
@@ -362,7 +607,13 @@
     align-items: flex-end;
     gap: 2px;
     height: 56px;
+    min-height: 48px;
+    max-height: 240px;
+    resize: vertical;
     overflow-x: auto;
+  }
+  .strip[hidden] {
+    display: none;
   }
   .pbar {
     position: relative;

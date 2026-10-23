@@ -295,3 +295,40 @@ export function headsOf(json: unknown): HeadRow[] {
     }))
     .filter((h) => Number.isInteger(h.aphiaid) && h.layer !== "");
 }
+
+// ---- the layer list: all taxa and the EOVs (the collection's Items) -------------------------------------------------
+
+export interface LayerRow {
+  /** the Item id (`i=`) */
+  id: string;
+  label: string;
+  /** "eov" or "all" */
+  kind: string;
+  /** the EOV's records (`taxon_groups.parquet` `kind = 'eov'`), null before the taxa are read and for all taxa */
+  n: number | null;
+  bar: number;
+}
+
+/**
+ * The layer list (obis-hex `taxonItems()`'s head): All taxa first, then the EOVs most records first with their
+ * records on a log bar (the counts of the search asset's EOV rows); before the counts arrive, the EOVs in the cube's
+ * order. `items` are the collection's Items with their kind and key (`itemKindOf`).
+ */
+export function layerRows(
+  items: readonly { id: string; label: string; kind: string; key?: string }[],
+  taxa: readonly Pick<TaxonRow, "kind" | "taxon" | "n">[] | null,
+): LayerRow[] {
+  const counts = new Map((taxa ?? []).filter((r) => r.kind === "eov").map((r) => [r.taxon, r.n]));
+  const max = Math.max(1, ...counts.values());
+  const rows = items.map((it, i) => {
+    const n = it.kind === "eov" ? (counts.get(it.key ?? it.id) ?? null) : null;
+    return { row: { id: it.id, label: it.label, kind: it.kind, n, bar: logBar(n ?? 0, max) }, i };
+  });
+  rows.sort(
+    (a, b) =>
+      +(b.row.kind === "all") - +(a.row.kind === "all") ||
+      (b.row.n ?? -1) - (a.row.n ?? -1) ||
+      a.i - b.i,
+  );
+  return rows.map((r) => r.row);
+}
