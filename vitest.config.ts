@@ -27,6 +27,10 @@ export default defineConfig({
           // "include" is already a strict allowlist under tests/, so spikes/** and the parallel
           // spike-agent worktrees under .claude/ can't match — excluded explicitly anyway, defensively.
           exclude: [...exclude, "tests/**/*.svelte.test.ts"],
+          // @oceanmetrics/map loads the cog:// protocol with a dynamic import() when a COG slot mounts
+          // (tests/raster/cog.test.ts), and @geomatico/maplibre-cog-protocol's ESM build imports its own
+          // modules without extensions, which Node cannot resolve: both go through vite here, as in the app
+          server: { deps: { inline: ["@oceanmetrics/map", "@geomatico/maplibre-cog-protocol"] } },
         },
       },
       {
