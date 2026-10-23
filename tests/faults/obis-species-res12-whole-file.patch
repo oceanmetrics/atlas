@@ -1,0 +1,13 @@
+diff --git a/src/lens/collection/h3/cellSpecies.ts b/src/lens/collection/h3/cellSpecies.ts
+index c3399f8..7170872 100644
+--- a/src/lens/collection/h3/cellSpecies.ts
++++ b/src/lens/collection/h3/cellSpecies.ts
+@@ -116,7 +116,7 @@ export function cellPlan(h3: string, flat: H3SpeciesFlat | readonly number[]): C
+   // under it), res 2 the file of its res-1 parent (the rows under it, one contiguous cell-id range), the rows
+   // summed by species. The whole files (`res=1`, `res=2`: 9.0 and 14.6 MB, a footer and row groups) stay the way
+   // for a collection with no `parent_template` and for res 0, whose children lie in several split files.
+-  const splitRes = f.parentTemplate
++  const splitRes = false && f.parentTemplate
+     ? flatRes
+         .filter(
+           (r) => r > res && f.parentRes?.[String(r)] !== undefined && f.parentRes[String(r)] <= res,

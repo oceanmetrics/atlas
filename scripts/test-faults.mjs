@@ -1058,6 +1058,29 @@ export const FAULTS = [
       "parent is 135 KB) is a tail then its row groups, two requests of about 0.2 s, not one",
     gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "256 KiB"],
   },
+  {
+    id: "obis-species-res12-whole-file",
+    patch: "tests/faults/obis-species-res12-whole-file.patch",
+    describe:
+      "the Cell pane reads a res-1 or res-2 hexagon from its whole-resolution file again (`res=1` 9.0 MB, `res=2` " +
+      "14.6 MB: a footer then row groups, 0.5 to 0.6 s) instead of the res-1 split file, one request",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/obis/cellSpecies.test.ts",
+      "-t",
+      "which file for which hexagon",
+    ],
+  },
+  {
+    id: "obis-species-res2-parent-unfiltered",
+    patch: "tests/faults/obis-species-res2-parent-unfiltered.patch",
+    describe:
+      "a res-2 hexagon keeps every row of its res-1 parent's split file, not the rows whose res-2 ancestor it is -- " +
+      "its list holds its siblings' species and records",
+    gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "larger than the tail"],
+  },
   // --- build week 6 step 5: the species and Scores lenses draw release COGs from their 3857 copies ------
   {
     id: "release-cog-pending-titiler",

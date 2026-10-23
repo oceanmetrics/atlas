@@ -177,6 +177,69 @@ describe("the species of a hexagon", () => {
       });
     }
   });
+  it("0.12: res-2 hexagons under one res-1 parent each keep only their own rows (the siblings' are skipped), and the res-2 lists add up to the res-1 list", async () => {
+    const PARENT = "8129bffffffffff";
+    const url = `${REL}species_flat/res=3/p=${PARENT}.parquet`;
+    // 832980 and 832981 under 822987, 832988 under 82298f, 8329b0 under 8229b7 (make_siblings_split.sql)
+    const kids = ["822987fffffffff", "82298ffffffffff", "8229b7fffffffff"];
+    const all = (await reader().rows(url, [[0n, (1n << 63n) - 1n]], {
+      id: "cell_id",
+      idType: "int64",
+      columns: ["aphiaid", "n", "name_key", "year_min", "year_max"],
+    }))!;
+    const lists = new Map<string, Awaited<ReturnType<typeof readCellRows>>>();
+    for (const h3 of kids) {
+      expect(flatParentOf(h3, 1)).toBe(PARENT);
+      const stats = { requests: 0, bytes: 0 };
+      const split = new ReleaseReader({ fetch: localFetch(stats), tail: SPLIT_TAIL });
+      const got = (await readCellRows(S, h3, reader(), split))!;
+      lists.set(h3, got);
+      expect(got.plan).toMatchObject({ res: 2, tableRes: 3, scope: "children", url });
+      expect(stats.requests).toBe(1);
+      // the rows whose res-2 ancestor is the hexagon, by the bit rules (h3-js cellToParent's), summed
+      const keep = all.h3.map((c) => h3OfCellId(parentId(cellIdOf(c), 2)) === h3);
+      const pick = (c: ArrayLike<number>) => Array.from(c).filter((_, i) => keep[i]);
+      const own = sumBySpecies({
+        aphiaid: pick(all.columns.aphiaid),
+        n: pick(all.columns.n),
+        name_key: pick(all.columns.name_key),
+        year_min: pick(all.columns.year_min),
+        year_max: pick(all.columns.year_max),
+      });
+      expect(keep.filter(Boolean).length).toBeGreaterThan(0);
+      expect(keep.filter((k) => !k).length).toBeGreaterThan(0); // the siblings' rows are in the file
+      expect(sorted(got.summed)).toEqual(sorted(own));
+      expect(got.groupsSkipped).toBeGreaterThan(0);
+    }
+    // 822987 sums two res-3 hexagons that share AphiaIDs: more records than either alone, the years min and max
+    const two = lists.get("822987fffffffff")!;
+    expect(two.summed.size).toBeLessThan(2 * 12);
+    // the res-1 hexagon: its own file, every row, the sum of the three res-2 lists
+    const top = (await readCellRows(
+      S,
+      PARENT,
+      reader(),
+      new ReleaseReader({ fetch: localFetch(), tail: SPLIT_TAIL }),
+    ))!;
+    expect(top.plan).toMatchObject({ res: 1, tableRes: 3, split: { parent: PARENT } });
+    expect(sum(top.summed)).toBe([...lists.values()].reduce((t, l) => t + sum(l!.summed), 0));
+    const merged = sumBySpecies({
+      aphiaid: [...lists.values()].flatMap((l) => [...l!.summed.keys()]),
+      n: [...lists.values()].flatMap((l) => [...l!.summed.values()].map((v) => v.n)),
+      name_key: [...lists.values()].flatMap((l) =>
+        [...l!.summed.values()].map((v) => v.nameKey ?? NaN),
+      ),
+      year_min: [...lists.values()].flatMap((l) =>
+        [...l!.summed.values()].map((v) => v.yearMin ?? NaN),
+      ),
+      year_max: [...lists.values()].flatMap((l) =>
+        [...l!.summed.values()].map((v) => v.yearMax ?? NaN),
+      ),
+    });
+    expect(sorted(merged)).toEqual(sorted(top.summed));
+    // species with no years keep null years
+    expect([...top.summed.values()].some((v) => v.yearMin === null)).toBe(true);
+  });
   it("0.12: a res-1 or res-2 hexagon over a split file larger than the tail reads the tail, then the row groups, the same rows", async () => {
     // 812abffffffffff: 294,507 B, over SPLIT_TAIL; its 6000 species of every res-3 child
     const h3 = "812abffffffffff";
