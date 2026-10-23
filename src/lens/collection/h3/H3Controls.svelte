@@ -11,6 +11,7 @@
   import { taxonGroups, rowLabel } from "./taxa";
   import type { H3Spec } from "../../../lib/catalog/h3";
   import type { SentencePart } from "./paint";
+  import { SEAS } from "./placeFilter";
   import { aboutLines, citeText, H3_SHORTCUTS, IOOS_EOV_URL, sourceRows } from "./share";
 
   interface Props {
@@ -359,7 +360,17 @@
     </div>
   {/if}
 
-  <div class="field" data-control-field="place">
+  <div class="field" data-control-field="place" data-testid="h3-place">
+    <span class="field-label">Place</span>
+    <Select
+      label="Go to a sea or ocean"
+      value=""
+      options={[
+        { value: "", label: "Go to a sea or ocean…" },
+        ...SEAS.map((s) => ({ value: s.id, label: s.label })),
+      ]}
+      onchange={(id) => id && layer.goToSea(id)}
+    />
     {#if layer.coverage}
       <p class="note" data-testid="h3-coverage">{layer.coverage}</p>
     {/if}

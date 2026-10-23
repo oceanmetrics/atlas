@@ -143,3 +143,34 @@ describe("where a place's membership is", () => {
     expect(await placeMembership("BOEM:X", down)).toMatchObject({ slug: null, membership: null });
   });
 });
+
+describe("seas and oceans", () => {
+  it("a sea clears the place and flies: 13 cameras, the places, their filter and the hexagon cleared", async () => {
+    const { SEAS, seaPatch } = await import("../../src/lens/collection/h3/placeFilter");
+    expect(SEAS.map((s) => s.label)).toEqual([
+      "Whole world",
+      "Pacific Ocean",
+      "Atlantic Ocean",
+      "Indian Ocean",
+      "Southern Ocean",
+      "Arctic Ocean",
+      "Caribbean Sea",
+      "Gulf of Maine",
+      "North Sea",
+      "Mediterranean Sea",
+      "Great Barrier Reef",
+      "Coral Triangle",
+      "Benguela Current",
+    ]);
+    expect(seaPatch("gulf-maine")).toEqual({
+      camera: { key: "gulf-maine", label: "Gulf of Maine", lon: -68.5, lat: 42.8, zoom: 6.2 },
+      sel: {
+        map: { lon: -68.5, lat: 42.8, zoom: 6.2 },
+        pl: undefined,
+        filter: undefined,
+        cell: undefined,
+      },
+    });
+    expect(seaPatch("atlantis")).toBeNull();
+  });
+});

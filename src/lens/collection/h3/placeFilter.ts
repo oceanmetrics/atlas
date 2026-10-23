@@ -144,3 +144,56 @@ export function placeFilterNote(o: {
     );
   return lines.join(" ") || null;
 }
+
+// ---- seas and oceans: camera presets (obis-hex `view/regions.ts`) ------------------------------------------------
+
+export interface Sea {
+  id: string;
+  label: string;
+  lon: number;
+  lat: number;
+  zoom: number;
+}
+
+/** the 13 "Seas & oceans" cameras of obis-hex 0.11.3: a camera each (no gazetteer feature), chosen so the region fills
+ * a laptop-sized map */
+export const SEAS: readonly Sea[] = [
+  { id: "world", label: "Whole world", lon: -20, lat: 5, zoom: 1.4 },
+  { id: "pacific", label: "Pacific Ocean", lon: -160, lat: 5, zoom: 1.8 },
+  { id: "atlantic", label: "Atlantic Ocean", lon: -35, lat: 15, zoom: 1.9 },
+  { id: "indian", label: "Indian Ocean", lon: 75, lat: -15, zoom: 2.2 },
+  { id: "southern", label: "Southern Ocean", lon: 0, lat: -62, zoom: 1.6 },
+  { id: "arctic", label: "Arctic Ocean", lon: 0, lat: 78, zoom: 2.2 },
+  { id: "caribbean", label: "Caribbean Sea", lon: -75, lat: 16, zoom: 4.2 },
+  { id: "gulf-maine", label: "Gulf of Maine", lon: -68.5, lat: 42.8, zoom: 6.2 },
+  { id: "north-sea", label: "North Sea", lon: 3, lat: 56, zoom: 4.8 },
+  { id: "mediterranean", label: "Mediterranean Sea", lon: 18, lat: 38, zoom: 3.9 },
+  { id: "gbr", label: "Great Barrier Reef", lon: 150, lat: -18, zoom: 4.6 },
+  { id: "coral-triangle", label: "Coral Triangle", lon: 125, lat: 0, zoom: 4 },
+  { id: "benguela", label: "Benguela Current", lon: 14, lat: -27, zoom: 4.6 },
+];
+
+/** going to a sea: the camera to fly to, and the URL patch: the camera written (a programmatic move never writes
+ * `map=` itself) and the places, their filter and the hexagon cleared (a sea has no gazetteer feature, so the outlined
+ * place no longer says where the map is) */
+export function seaPatch(id: string): {
+  camera: { key: string; label: string; lon: number; lat: number; zoom: number };
+  sel: {
+    map: { lon: number; lat: number; zoom: number };
+    pl: undefined;
+    filter: undefined;
+    cell: undefined;
+  };
+} | null {
+  const s = SEAS.find((x) => x.id === id);
+  if (!s) return null;
+  return {
+    camera: { key: s.id, label: s.label, lon: s.lon, lat: s.lat, zoom: s.zoom },
+    sel: {
+      map: { lon: s.lon, lat: s.lat, zoom: s.zoom },
+      pl: undefined,
+      filter: undefined,
+      cell: undefined,
+    },
+  };
+}

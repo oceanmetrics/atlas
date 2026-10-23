@@ -92,6 +92,7 @@ import {
   placeFilterExpr,
   placeFilterNote,
   readMembershipCells,
+  seaPatch,
   type MembershipManifest,
 } from "./placeFilter";
 import {
@@ -195,6 +196,8 @@ export interface H3Layer {
   ensureTaxa(): void;
   setDomain(d: "release" | "view"): void;
   setLayer(id: string): void;
+  /** fly to a sea or ocean (a camera preset), clearing the places and their filter */
+  goToSea(id: string): void;
   setIndicator(v: string): void;
   setPeriod(token: string): void;
   setRes(r: "auto" | number): void;
@@ -1284,6 +1287,12 @@ export function createH3Layer(deps: H3LayerDeps): H3Layer {
     ensureTaxa: () => loadTaxa(),
     setDomain(d) {
       selStore.set({ dom: d === "view" ? "view" : undefined });
+    },
+    goToSea(id) {
+      const p = seaPatch(id);
+      if (!p) return;
+      selStore.set(p.sel);
+      deps.mapHandle()?.flyTo(p.camera);
     },
     setLayer(id) {
       selStore.set({ i: id, taxon: undefined, cell: undefined });

@@ -246,3 +246,30 @@ test("catalog override: a staging catalog's release opens (a dry run), nothing r
   expect(requests.some((u) => u.startsWith(OBIS))).toBe(false);
   expect(requests.some((u) => u.startsWith(`${STAGING}obis-h3/v20990101/all/res=2/`))).toBe(true);
 });
+
+test("a sea clears the place and flies", async ({ page }) => {
+  await boot(page, `${Q}&filter=places#pl=p.NMS%253ACINMS.Channel%2520Islands`);
+  await page.getByTestId("h3-place").locator("select").selectOption("gulf-maine");
+  const centre = () =>
+    page.evaluate(() => {
+      const m = (
+        window as never as {
+          __atlasMap: {
+            handle: {
+              map: { getCenter: () => { lng: number; lat: number }; getZoom: () => number };
+            };
+          };
+        }
+      ).__atlasMap.handle.map;
+      const c = m.getCenter();
+      return [
+        Math.round(c.lng * 10) / 10,
+        Math.round(c.lat * 10) / 10,
+        Math.round(m.getZoom() * 10) / 10,
+      ];
+    });
+  await expect.poll(centre, { timeout: 15_000 }).toEqual([-68.5, 42.8, 6.2]);
+  await expect.poll(() => new URL(page.url()).searchParams.get("map")).toBe("-68.5,42.8,6.2");
+  expect(new URL(page.url()).hash).not.toContain("pl=");
+  expect(new URL(page.url()).searchParams.get("filter")).toBeNull();
+});
