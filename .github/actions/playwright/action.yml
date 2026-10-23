@@ -1,0 +1,31 @@
+name: playwright browsers
+description: >
+  The Playwright browsers for an e2e job, cached on ~/.cache/ms-playwright and keyed on the OS, the
+  browsers and the @playwright/test version in package-lock.json. A cache miss downloads them
+  (`playwright install --with-deps`: 14 to 37 minutes on the runner's slow days, and it sometimes
+  hangs, so each calling job also has a timeout); a hit installs only the system libraries
+  (`playwright install-deps`, which are not part of the cache). Run after `npm ci`.
+inputs:
+  browsers:
+    description: the browsers to install, space separated
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: bash
+      run: echo "playwright=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.version.outputs.playwright }}-${{ inputs.browsers }}
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npx playwright install --with-deps ${{ inputs.browsers }}
+
+    - if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: npx playwright install-deps ${{ inputs.browsers }}
