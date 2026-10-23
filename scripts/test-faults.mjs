@@ -1079,7 +1079,14 @@ export const FAULTS = [
     describe:
       "a res-2 (or res-3) hexagon reads the rows of its res-1 parent (the file's every row) instead of the rows whose ancestor it is -- " +
       "its list holds its siblings' species and records",
-    gate: ["npx", "vitest", "run", "tests/obis/cellSpecies.test.ts", "-t", "larger than the tail"],
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/obis/cellSpecies.test.ts",
+      "-t",
+      "each keep only their own rows",
+    ],
   },
   // --- build week 6 step 5: the species and Scores lenses draw release COGs from their 3857 copies ------
   {
