@@ -35,6 +35,13 @@ uv run pipeline/build.py build --collection swfsc_cce_becker2020b   # restricted
 pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collection alone, dry run unless --really
 ```
 
+## CI notes
+
+- The Playwright jobs of `pages.yml` (e2e-engine, e2e-opfs, analytics-privacy) install their browsers through the composite action
+  `.github/actions/playwright`: `actions/cache` on `~/.cache/ms-playwright`, keyed on the OS, the browser list and the
+  `@playwright/test` version in `package-lock.json`; a miss runs `playwright install --with-deps`, a hit only `install-deps` (the system
+  libraries are not cached). Each job stops after 20 minutes. A new e2e job uses the action and sets `timeout-minutes`.
+
 ## Rules carried over from the MST atlas (still enforced by tests and scripts)
 
 - Relative base (`base: "./"`); never an absolute `/assets/` URL. URL is the view: every view state lives in the
