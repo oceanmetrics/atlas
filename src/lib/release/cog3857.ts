@@ -7,6 +7,9 @@
 // store key, which is the original's file stem): the copy's key, its zoom range and, per band, `data_type`,
 // `nodata`, `statistics` and the 32-bucket `histogram` read from the full-resolution 4326 original.
 //
+// Hrefs: the copy is its key under `dataBase(ver)` (on the build's storage host), the original is `onStorage(cogUrl)`
+// (`catalog/storage.ts`, D7's rebase at read).
+//
 // `resolveCog3857(ver, cogUrl)` is the one door: it answers the same `RasterChoice` as `raster/cog.ts`
 // `rasterChoiceOf` does for a STAC Item, so a lens draws the copy with `cogRasterSource` and reads values from the
 // original with `cogPoint.ts`, or, when the release has no side table, no row for that COG, or the URL is not a
@@ -18,6 +21,7 @@
 // hyparquet out of the static graph).
 import type { CogAsset } from "@oceanmetrics/map";
 import type { RasterChoice } from "../raster/cog";
+import { onStorage } from "../catalog/storage";
 import { dataBase, dataUrl, type SessionLike } from "./dataBase";
 
 /** the side table's path inside a release. */
@@ -151,7 +155,8 @@ export function choiceOfRow(row: Cog3857Row, base: string, originalUrl: string, 
     ...(b.histogram ? { histogram: b.histogram } : {}),
   }));
   const common = { type: COG_T, bands, ...hints } as Omit<CogAsset, "href">;
-  const values: CogAsset = { ...common, href: originalUrl, roles: ["data"], "proj:code": "EPSG:4326" };
+  // the original as the release names it, moved onto this build's storage host (D7: rebased at read, never rewritten)
+  const values: CogAsset = { ...common, href: onStorage(originalUrl), roles: ["data"], "proj:code": "EPSG:4326" };
   const draw: CogAsset = {
     ...common,
     href,
