@@ -600,8 +600,8 @@ export const FAULTS = [
     id: "cog-tile-url-drops-band",
     patch: "tests/faults/cog-tile-url-drops-band.patch",
     describe:
-      "the browser COG's tile url leaves out the band -- the eight EOV items are bands of one file, so " +
-      "MapLibre serves one band's cached tiles for another",
+      "the browser COG's tile url loses the package's band key (`?b=<bidx>`) -- the eight EOV items are " +
+      "bands of one file, so MapLibre serves one band's cached tiles for another",
     gate: ["npx", "vitest", "run", "tests/raster/cog.test.ts"],
   },
   {

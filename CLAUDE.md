@@ -18,7 +18,7 @@ Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collecti
   collections at https://file.marinesensitivity.org/stac/). `src/lens/collection/` is the generic lens.
 - External: MST titiler `https://titiler.marinesensitivity.org` (stock `/cog`), gazetteer
   `https://storage.oceanmetrics.io/gazetteer/` (`index/layers.json`, `<collection>/places.parquet|pmtiles`).
-- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.2.1: the MapLibre setup, the COG
+- Platform packages from npm (`oceanmetrics/platform`): `@oceanmetrics/map` (^0.2.2: the MapLibre setup, the COG
   provider), `@oceanmetrics/places` (the gazetteer client; called only from
   `src/lib/gazetteer/resolve.ts`, a dynamic import, elsewhere `import type` only) and `@oceanmetrics/catalog` (dev: the
   `schemas/*.schema.json` the pipeline's profiles read). No vendored client.
@@ -47,7 +47,8 @@ pipeline/publish.sh --only swfsc_cce_becker2020b [--really]       # that collect
   point read from the 4326 original (`raster/cogPoint.ts`, `pointValue`). Titiler is the fallback for an Item with no
   3857 asset yet (display, `/cog/point`, `/cog/statistics`, behind the same interfaces) and retires in build week 6.
 - One MapLibre style, `setStyle(diff: true)`; never `addLayer` piecemeal after load (a `cogSlot` is mounted on a
-  recorder and its source and layer go into the composed style; one mounted slot per COG href).
+  recorder and its source and layer go into the composed style; one mounted slot per band of a file, the package's
+  `cogHref`, `?b=<atlas:bidx>`).
 - Pins: `@duckdb/duckdb-wasm` 1.32.0, `maplibre-gl` ^6.13.0 (the `@oceanmetrics/map` peer range), upload parsers
   pinned; see `package.json` `pinReasons`. `map.ts` calls `@oceanmetrics/map`'s `setupMapLibre` once (worker,
   `pmtiles://`, lazy `cog://`); worker chunks are named `.mjs` (`vite.config.ts`).

@@ -99,9 +99,9 @@ describe("cogRasterSource: cogSlot behind the seam", () => {
     const src = cogRasterSource(it, drawOf(it), { domain: [0, 100] });
     expect(src.kind).toBe("cog");
     expect(
-      src.template.startsWith(`cog://${FIXTURE_BASE}aquamaps_eov/score_risk_3857.tif#color:[`),
+      src.template.startsWith(`cog://${FIXTURE_BASE}aquamaps_eov/score_risk_3857.tif?b=2#color:[`),
     ).toBe(true);
-    expect(src.template.endsWith(",0,100,c,b2/{z}/{x}/{y}")).toBe(true);
+    expect(src.template.endsWith(",0,100,c/{z}/{x}/{y}")).toBe(true);
     expect(src.tileUrl(3, 1, 2, { url: "", colormapName: "", rescaleMin: 0, rescaleMax: 1 })).toBe(
       src.template.replace("{z}/{x}/{y}", "3/1/2"),
     );
@@ -109,13 +109,16 @@ describe("cogRasterSource: cogSlot behind the seam", () => {
     expect(src.maxzoom).toBe(5);
   });
 
-  it("two bands of one file get two templates (MapLibre keys its tile cache by url)", () => {
+  // regression (0.4.3): the eight EOV items are bands of one file; MapLibre keys its tile cache and the protocol its
+  // colour function by url, so the band must be in it (@oceanmetrics/map 0.2.2 `cogHref`: `?b=<atlas:bidx>`)
+  it("two bands of one file get two templates, each naming its band", () => {
     const fish = with3857(item("fish_risk"));
     const all = with3857(item("all_risk"));
     const a = cogRasterSource(fish, drawOf(fish), { domain: [0, 100] }).template;
     const b = cogRasterSource(all, drawOf(all), { domain: [0, 100] }).template;
     expect(a).not.toBe(b);
-    expect(b).toContain(",b1/");
+    expect(a).toContain("score_risk_3857.tif?b=2#");
+    expect(b).toContain("score_risk_3857.tif?b=1#");
   });
 
   it("idempotent: the same asset and options give the same mounted source", () => {
@@ -125,14 +128,15 @@ describe("cogRasterSource: cogSlot behind the seam", () => {
     );
   });
 
-  it("one mounted slot per href: another band of the file unmounts the first (the protocol holds one colour function per href)", () => {
+  it("one mounted slot per band of a file: another range of the band unmounts the first, another band does not", () => {
     const fish = with3857(item("fish_risk"));
     const all = with3857(item("all_risk"));
     const a = cogRasterSource(fish, drawOf(fish), { domain: [0, 100] });
     const unmount = vi.spyOn(a.slot, "unmount");
     cogRasterSource(fish, drawOf(fish), { domain: [0, 100] });
-    expect(unmount).not.toHaveBeenCalled();
     cogRasterSource(all, drawOf(all), { domain: [0, 100] });
+    expect(unmount).not.toHaveBeenCalled();
+    cogRasterSource(fish, drawOf(fish), { domain: [0, 50] });
     expect(unmount).toHaveBeenCalledOnce();
   });
 

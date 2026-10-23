@@ -1,14 +1,14 @@
 diff --git a/src/lib/raster/cog.ts b/src/lib/raster/cog.ts
 --- a/src/lib/raster/cog.ts
 +++ b/src/lib/raster/cog.ts
-@@ -132,7 +132,9 @@
- const live = new Map<string, { key: string; source: CogRasterSource }>();
- 
- /** the band the tile url names: the protocol's colour grammar ignores a field after the modifiers. */
--const bandKey = (bidx: number) => `,b${bidx}`;
-+// SEEDED FAULT (tests/faults/cog-tile-url-drops-band.patch): the band is left out of the tile url, so
-+// MapLibre serves one EOV's cached tiles for another band of the same file.
-+const bandKey = (bidx: number) => (void bidx, "");
- 
- /**
-  * The browser-drawn `RasterSource` of `item`'s EPSG:3857 COG `asset` (`rasterChoiceOf(item).draw.asset`, href
+@@ -170,7 +170,9 @@
+   if (hit) hit.source.slot.unmount(rec.map);
+   slot.mount(rec.map, null, null);
+   const { source, layer } = rec.recorded();
+-  const base = source.url!;
++  // SEEDED FAULT (tests/faults/cog-tile-url-drops-band.patch): the band key of the package's url is dropped, so
++  // MapLibre serves one EOV's cached tiles for another band of the same file.
++  const base = source.url!.replace(/\?b=\d+/, "");
+   const opacity = layer.paint?.["raster-opacity"];
+   const tileUrl = (z: number | string, x: number | string, y: number | string) =>
+     `${base}/${z}/${x}/${y}`;

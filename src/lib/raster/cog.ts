@@ -13,10 +13,11 @@
 // One MapLibre style (CLAUDE.md): the slot is MOUNTED on a recorder, not on the map, and what it adds (one
 // raster source, one raster layer) goes into the composed style as a `RasterLayerSpec`; `setStyle(diff)` does the
 // rest. Mounting also hands the protocol the slot's colour function (the band, the ramp over the range, the band's
-// nodata transparent), which the protocol keys by the COG's href: so at most ONE slot per href is mounted at a
-// time (`live` below), and the tile url carries the band (`#...,b<bidx>`) because MapLibre keys its tile cache by
-// url and the eight EOV Items are bands of one file.
+// nodata transparent), which the protocol keys by the asset's `cogHref` (the href with the band, `?b=<atlas:bidx>`,
+// since @oceanmetrics/map 0.2.2: the eight EOV Items are bands of one file, and the protocol's caches and MapLibre's
+// tile cache are keyed by url): so at most ONE slot per `cogHref` is mounted at a time (`live` below).
 import {
+  cogHref,
   cogSlot,
   pickCogAssets,
   type CogAsset,
@@ -117,7 +118,7 @@ export interface CogRasterSource extends RasterSource {
   readonly slot: LayerSlot;
   /** the asset drawn, as the slot was given it. */
   readonly asset: CogAsset;
-  /** the MapLibre tile template (`cog://<href>#color:...,b<bidx>/{z}/{x}/{y}`). */
+  /** the MapLibre tile template (`cog://<href>?b=<bidx>#color:.../{z}/{x}/{y}`). */
   readonly template: string;
   /** the layer opacity the slot set. */
   readonly opacity: number;
@@ -128,18 +129,15 @@ export interface CogRasterSource extends RasterSource {
   legend(): LegendSpec;
 }
 
-/** the one live (mounted) source per COG href, see the module header. */
+/** the one live (mounted) source per `cogHref` (a file's band), see the module header. */
 const live = new Map<string, { key: string; source: CogRasterSource }>();
-
-/** the band the tile url names: the protocol's colour grammar ignores a field after the modifiers. */
-const bandKey = (bidx: number) => `,b${bidx}`;
 
 /**
  * The browser-drawn `RasterSource` of `item`'s EPSG:3857 COG `asset` (`rasterChoiceOf(item).draw.asset`, href
  * absolute): `cogSlot` mounted on a recorder, its source turned into a tile template. Throws the package's
  * `CogProjectionError` for an asset that is not EPSG:3857. Idempotent: the same Item asset, domain and opacity
- * give the same source without mounting again; another band or range of the same file unmounts the previous one
- * first (the protocol holds one colour function per href).
+ * give the same source without mounting again; another range or ramp of the same band unmounts the previous one
+ * first (the protocol holds one colour function per `cogHref`); another band of the file is a key of its own.
  */
 export function cogRasterSource(
   item: StacItem,
@@ -147,7 +145,6 @@ export function cogRasterSource(
   opts: CogRasterOptions = {},
 ): CogRasterSource {
   const drawn: CogAsset = opts.domain ? { ...asset, "atlas:rescale": opts.domain } : asset;
-  const bidx = typeof drawn["atlas:bidx"] === "number" ? drawn["atlas:bidx"] : 1;
   const proj = item.properties?.["proj:code"];
   const slot = cogSlot({ kind: "cog", id: item.id, variable: null }, drawn, {
     name: asset.title ?? asset.href,
@@ -158,22 +155,22 @@ export function cogRasterSource(
   const zoom = drawn["atlas:zoom"];
   const maxzoom =
     Array.isArray(zoom) && typeof zoom[1] === "number" && Number.isFinite(zoom[1]) ? zoom[1] : null;
+  const href = cogHref(drawn);
   const key = JSON.stringify([
-    drawn.href,
-    bidx,
+    href,
     drawn["atlas:rescale"] ?? null,
     drawn["atlas:colormap"] ?? null,
     opts.opacity ?? null,
     opts.title ?? null,
   ]);
-  const hit = live.get(drawn.href);
+  const hit = live.get(href);
   if (hit && hit.key === key) return hit.source;
 
   const rec = recorder();
   if (hit) hit.source.slot.unmount(rec.map);
   slot.mount(rec.map, null, null);
   const { source, layer } = rec.recorded();
-  const base = `${source.url}${bandKey(bidx)}`;
+  const base = source.url!;
   const opacity = layer.paint?.["raster-opacity"];
   const tileUrl = (z: number | string, x: number | string, y: number | string) =>
     `${base}/${z}/${x}/${y}`;
@@ -187,11 +184,11 @@ export function cogRasterSource(
     tileUrl,
     legend: () => slot.legend()!,
   };
-  live.set(drawn.href, { key, source: src });
+  live.set(href, { key, source: src });
   return src;
 }
 
-/** unmount every live COG source (tests; the lens never needs it: the next source of a href replaces it). */
+/** unmount every live COG source (tests; the lens never needs it: the next source of a band replaces it). */
 export function releaseCogSources(): void {
   const rec = recorder();
   for (const { source } of live.values()) source.slot.unmount(rec.map);
