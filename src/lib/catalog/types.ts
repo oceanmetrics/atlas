@@ -119,6 +119,8 @@ export interface StacCollection extends StacBase {
   "sci:doi"?: string;
   /** funders (BOEM, MBON, ...) until a standard field exists. */
   "atlas:funders"?: string[];
+  /** one sentence crediting the data a product was built on (telemetry networks, ...), until a STAC field exists. */
+  "atlas:acknowledgement"?: string;
   "atlas:status"?: string;
   /** a flower plot on a raster click: the petals are the sibling items across `dimension`, the centre the
    * `composite` value of it (`lib/catalog/flower.ts`). */

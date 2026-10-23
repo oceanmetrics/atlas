@@ -127,4 +127,13 @@ describe("creditsOf: citation, license, PIs, funders, methods", () => {
     expect(c.contacts).toEqual([]);
     expect(c.funders).toEqual(["BOEM"]);
   });
+
+  it("atlas:acknowledgement is read trimmed, and absent when blank or not a string", () => {
+    const ack = "Made possible through data sharing via ACT, FACT, iTAG and OTN.";
+    expect(creditsOf(base({ "atlas:acknowledgement": `  ${ack} ` })).acknowledgement).toBe(ack);
+    expect(creditsOf(base({ "atlas:acknowledgement": " " }))).not.toHaveProperty("acknowledgement");
+    expect(creditsOf(base({ "atlas:acknowledgement": 3 as unknown as string }))).not.toHaveProperty(
+      "acknowledgement",
+    );
+  });
 });

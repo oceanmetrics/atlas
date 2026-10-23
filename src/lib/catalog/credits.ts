@@ -39,6 +39,8 @@ export interface Credits {
   /** a second `describedby` that is a rendered HTML page (the method notebook), opened in a new tab; absent
    * when the collection has none. */
   methodsPageUrl?: string;
+  /** the collection's `atlas:acknowledgement` (the data networks a product was built on); absent when it has none. */
+  acknowledgement?: string;
 }
 
 function isPi(c: StacContact): boolean {
@@ -95,6 +97,8 @@ export function creditsOf(collection: StacCollection | null): Credits {
   const methods = described.find((l) => !isHtml(l)) ?? described[0];
   const page = described.find((l) => l !== methods && isHtml(l));
   const pageUrl = page ? assetUrl(collection, page) : null;
+  const ack = collection["atlas:acknowledgement"];
+  const acknowledgement = typeof ack === "string" ? ack.trim() : "";
   return {
     title: (collection.title ?? "").trim() || null,
     citation: (collection["sci:citation"] ?? "").trim() || null,
@@ -114,5 +118,6 @@ export function creditsOf(collection: StacCollection | null): Credits {
     note: noteOf(collection),
     methodsUrl: methods ? assetUrl(collection, methods) : null,
     ...(pageUrl ? { methodsPageUrl: pageUrl } : {}),
+    ...(acknowledgement ? { acknowledgement } : {}),
   };
 }

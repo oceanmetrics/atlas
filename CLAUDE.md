@@ -4,7 +4,7 @@ Guidance for Claude Code when working in `oceanmetrics/atlas`: **OceanMetrics At
 TypeScript app (no SvelteKit, no client router) that maps species distribution model (SDM) products described by a
 STAC catalog, with places from the Ocean Metrics gazetteer. Forked 2026-10-14 from `MarineSensitivity/atlas`
 0.10.88 (remote `upstream`); the plan is `~/Github/bbest/notes/om/plans_todo/2026-10-14_oceanmetrics-atlas_plan.md`.
-Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collections credit NOAA IOOS MBON only).
+Brand: "OceanMetrics Atlas", supported by MMA and MBON (Neil's BioTrack collections credit NOAA IOOS MBON, SECOORA, NASA and NOAA, and acknowledge the ACT, FACT, iTAG and OTN telemetry networks).
 
 ## Where things are
 

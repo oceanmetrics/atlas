@@ -47,6 +47,7 @@ export const HOOK_NAMES = Object.keys(HOOKS) as HookName[];
  */
 export const DATA_FIELDS: ReadonlySet<string> = new Set([
   "atlas:absent",
+  "atlas:acknowledgement",
   "atlas:absent_note",
   "atlas:access",
   "atlas:bidx",
