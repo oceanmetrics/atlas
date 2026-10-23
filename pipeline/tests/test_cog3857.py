@@ -206,18 +206,40 @@ def test_rows_written_before_data_type_and_nodata_get_them_from_the_cached_origi
   assert all(x["data_type"] and x["nodata"] for x in rows)
 
 
-def test_the_side_table_is_sorted_by_content_hash_in_small_row_groups_with_statistics(tmp_path):
-  rows = [{f.name: None for f in cog3857.SCHEMA} | {"content_hash": f"{i:016x}", "url": "u", "cog_3857_key": "k",
+def _rows(n):
+  return [{f.name: None for f in cog3857.SCHEMA} | {"content_hash": f"{i:016x}", "url": "u", "cog_3857_key": "k",
           "proj:code": "EPSG:3857", "src_proj:code": "EPSG:4326", "bands": 1, "bytes": 1, "md5": "m",
-          "src_bytes": 1, "src_md5": "m", "created": "t"} for i in reversed(range(1100))]
-  p = cog3857.write_table(rows, tmp_path / "t.parquet")
+          "src_bytes": 1, "src_md5": "m", "created": "t"} for i in reversed(range(n))]
+
+
+def test_the_side_table_is_sorted_by_content_hash_in_row_groups_with_statistics(tmp_path):
+  n = 2 * cog3857.ROW_GROUP_ROWS + 100
+  p = cog3857.write_table(_rows(n), tmp_path / "t.parquet")
   md = pq.ParquetFile(p).metadata
-  assert md.num_row_groups == 3
+  assert cog3857.ROW_GROUP_ROWS == 8192 and md.num_row_groups == 3
+  g = cog3857.ROW_GROUP_ROWS
   st = [md.row_group(i).column(0).statistics for i in range(3)]
-  assert [(s.min, s.max) for s in st] == [(f"{0:016x}", f"{511:016x}"), (f"{512:016x}", f"{1023:016x}"),
-                                          (f"{1024:016x}", f"{1099:016x}")]
-  # statistics on content_hash only (a small footer: the reader's first tail read pulls all of it)
+  assert [(s.min, s.max) for s in st] == [(f"{0:016x}", f"{g - 1:016x}"), (f"{g:016x}", f"{2 * g - 1:016x}"),
+                                          (f"{2 * g:016x}", f"{n - 1:016x}")]
+  # statistics on content_hash only (a small footer: the reader pulls all of it, 24 leaf columns per group)
   assert all(md.row_group(g).column(c).statistics is None for g in range(3) for c in range(1, md.num_columns))
+
+
+def test_the_side_table_has_a_page_index_of_128_row_pages_and_no_dictionary(tmp_path):
+  # the layout a one-hash lookup (hyparquet usePageIndex) depends on: the column index of content_hash (per page
+  # min/max) to pick the page, the offset index of every column to read just that page; a regression test for
+  # the 227 KB footer + 89 KB row group (about 620 KB per first lookup) of 512-row groups
+  p = cog3857.write_table(_rows(1000), tmp_path / "t.parquet")
+  md = pq.ParquetFile(p).metadata
+  rg = md.row_group(0)
+  assert cog3857.PAGE_ROWS == 128
+  assert rg.column(0).has_column_index and all(not rg.column(c).has_column_index for c in range(1, rg.num_columns))
+  assert all(rg.column(c).has_offset_index for c in range(rg.num_columns))
+  assert all("RLE_DICTIONARY" not in rg.column(c).encodings for c in range(rg.num_columns))
+  assert pq.read_table(p).to_pylist() == sorted(_rows(1000), key=lambda r: r["content_hash"])
+  # the footer stays small as rows grow: 8 row groups' chunk metadata, not 112
+  q = cog3857.write_table(_rows(8 * cog3857.ROW_GROUP_ROWS), tmp_path / "big.parquet")
+  assert pq.ParquetFile(q).metadata.serialized_size < 64 * 1024
 
 
 # ---- the hash ----

@@ -113,8 +113,8 @@ MST's published releases are immutable (D7), so the copies of their COGs go besi
   4326 original, null for an empty band), `bytes` and `md5` of the copy, `src_bytes`, `src_md5`, `created`.
 
 Resumable: each finished COG is a line of `<out>/<ver>/cog_3857.jsonl` (the journal); the Parquet is rewritten from it
-every 1,000 rows and at the end, sorted by `content_hash` in row groups of 512 (a reader filtering on one
-hash skips the rest by their statistics); a rerun skips every `content_hash` in either. Failures go to
+every 1,000 rows and at the end, sorted by `content_hash` in row groups of 8,192 with 128-row data pages and the page index (a reader looking up one
+hash skips the other groups by their statistics and the other pages by the column index: about 47 KB per first lookup, footer included); a rerun skips every `content_hash` in either. Failures go to
 `<out>/<ver>/cog_3857_errors.jsonl` and are retried by the next run (exit 1 while any remain). Publish, additive:
 
 ```sh
@@ -126,7 +126,7 @@ aws s3 cp <out>/<ver>/tables/cog_3857.parquet s3://oceanmetrics.io-public/marine
 
 The copies are content addressed (the original's `content_hash` is its file stem, shared across releases), so one
 pool serves every release and registry after v7: `marine-atlas/cog_3857/<content_hash>_3857.tif` and one shared
-table `marine-atlas/tables/cog_3857.parquet` (the same `SCHEMA`, sorted by hash, row groups of 512).
+table `marine-atlas/tables/cog_3857.parquet` (the same `SCHEMA`, sorted by hash, row groups of 8,192, 128-row pages with the page index).
 
 ```sh
 uv run pipeline/build.py cog-3857-batch --pool --release v7b --release v7c --registry aquamaps_native --out <dir>

@@ -291,17 +291,29 @@ def load_rows(out: Path, ver: str) -> dict[str, dict]:
   return rows
 
 
-def write_table(rows: dict[str, dict] | list[dict], path: Path) -> Path:
-  """the side table: `SCHEMA`, sorted by content_hash, zstd, written atomically."""
+# the side table's layout (measured 2026-10-23 on the 57,279-row shared table, docs/release-cog-table.md): ONE lookup of
+# one hash reads the footer once and then, by the page index, one 128-row page of each column the reader uses, so
+# the cost is the footer (17 KB at 7 row groups) plus about 30 KB, not a whole 512-row group (89 KB) behind a 227 KB footer
+ROW_GROUP_ROWS = 8192
+PAGE_ROWS = 128
+
+
+def write_table(rows: dict[str, dict] | list[dict], path: Path, row_group_rows: int = ROW_GROUP_ROWS,
+                page_rows: int = PAGE_ROWS) -> Path:
+  """the side table: `SCHEMA`, sorted by content_hash, zstd, written atomically.
+
+  Layout for a one-hash lookup by range reads (the atlas reader, `src/lib/release/cog3857.ts`): big row groups
+  (`row_group_rows`, so the footer, which every reader pulls whole, stays small: its size is the chunk metadata of
+  24 leaf columns per group), small data pages (`page_rows`) with the page index written, and statistics on
+  content_hash ONLY. The reader skips the groups whose min/max exclude the hash, then the pages of the
+  group's content_hash column index that exclude it, and reads one page of each column it uses. No dictionary
+  pages (a dictionary page is read whole with its chunk; plain pages compress as well here and the file is smaller)."""
   rs = sorted(rows.values() if isinstance(rows, dict) else rows, key=lambda r: r["content_hash"])
   t = pa.Table.from_pylist([{f.name: r.get(f.name) for f in SCHEMA} for r in rs], schema=SCHEMA)
   path.parent.mkdir(parents=True, exist_ok=True)
   tmp = path.with_name(path.name + ".part")
-  # small row groups, sorted by content_hash: a reader asking for one hash (hyparquet's `filter`) skips the
-  # others by their min/max statistics and reads about 1/70 of the v7 table. Statistics on content_hash ONLY: the
-  # other columns' made the footer 366 KB on the shared table (240 KB on v7's), all pulled by a reader's first tail
-  # read; without them it is 227 KB (the 24 leaf columns' chunk metadata over 112 groups is the rest)
-  pq.write_table(t, tmp, compression="zstd", row_group_size=512, write_statistics=["content_hash"])
+  pq.write_table(t, tmp, compression="zstd", row_group_size=row_group_rows, write_statistics=["content_hash"],
+                 use_dictionary=False, write_page_index=True, max_rows_per_page=page_rows, write_batch_size=page_rows)
   tmp.replace(path)
   return path
 
@@ -382,7 +394,7 @@ def run_batch(ver: str, out: Path, base: str = BASE, workers: int = 4, limit: in
 #
 # The copies are content addressed (the original's `content_hash` is its file stem, shared across releases), so one
 # pool serves every release: `marine-atlas/cog_3857/<content_hash>_3857.tif` and one table
-# `marine-atlas/tables/cog_3857.parquet` (`SCHEMA`, sorted by hash, row groups of 512). A hash a release side table
+# `marine-atlas/tables/cog_3857.parquet` (`SCHEMA`, sorted by hash, row groups of 8,192, 128-row pages, `write_table`). A hash a release side table
 # already has (v7's) is not copied again: its row joins the shared table as it is, pointing at the existing
 # `marine-atlas/v7/cog_3857/...` key. Locally the pool is `<out>/shared/` (the journal, the errors, `cog_3857/`,
 # `tables/`), the new registry versions `<out>/om/<registry>/registry/<version>/registry.parquet` (published under

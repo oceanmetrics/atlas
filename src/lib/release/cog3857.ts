@@ -22,9 +22,15 @@
 // and v7's rows as they are (their keys under `marine-atlas/v7/cog_3857/`). `resolveCog3857` reads it FIRST (its
 // footer once per page, whatever the release) and the release's own table only for a hash it lacks.
 //
-// The table is sorted by `content_hash` in row groups of 512, so a read of one hash (hyparquet's `filter`) skips
-// the other groups by their statistics; the Parquet reader is a dynamic import (scripts/size-budget-core.mjs keeps
-// hyparquet out of the static graph).
+// The table is sorted by `content_hash` in row groups of 8,192 rows with 128-row data pages and the page index
+// (pipeline `cog3857.write_table`), so a read of one hash skips the other groups by their statistics and the other
+// pages by the column index of `content_hash`, and reads one page of each column the row needs. Its first lookup
+// (build week 6, measured 2026-10-23 on the 57,279-row shared table, `docs/release-cog-table.md`) is 8 B of tail,
+// the 16.9 KB footer, about 30 KB of page indexes and pages: 47 KB, against 620 KB before (hyparquet's 512 KB
+// initial tail, which reads a 227 KB footer, plus a 89 KB row group of 512 rows). The open is two requests, the
+// 8-byte trailer (which also gives the file's length: the `Content-Range` of the suffix range) and then exactly
+// the footer, parsed here, once per source. The Parquet reader is a dynamic import (scripts/size-budget-core.mjs
+// keeps hyparquet out of the static graph).
 import type { CogAsset } from "@oceanmetrics/map";
 import type { RasterChoice } from "../raster/cog";
 import { onStorage } from "../catalog/storage";
@@ -196,7 +202,12 @@ export function choiceOfRow(
 
 // ---- the reader ----
 
-type Opened = { file: unknown; metadata: unknown } | null;
+/** what hyparquet reads from, and what a test hands in to count requests: a length and a ranged read. */
+export interface RangedFile {
+  byteLength: number;
+  slice(start: number, end?: number): ArrayBuffer | Promise<ArrayBuffer>;
+}
+type Opened = { file: RangedFile; metadata: unknown } | null;
 const opened = new Map<string, Promise<Opened>>();
 const rows = new Map<string, Promise<Cog3857Row | null>>();
 
@@ -213,16 +224,72 @@ async function hyparquet() {
   return { ...h, compressors };
 }
 
-/** the side table opened once per source (its footer read); null when it is absent or unreadable. */
-function open(source: string | ArrayBuffer): Promise<Opened> {
+/** the columns `rowFromRecord` reads (the table's md5s, byte counts, projection codes and `created` stay unread). */
+export const READ_COLUMNS = [
+  "content_hash",
+  "url",
+  "cog_3857_key",
+  "zoom_min",
+  "zoom_max",
+  "bands",
+  "data_type",
+  "nodata",
+  "statistics",
+  "histogram",
+];
+
+/** a Parquet file's trailer: the 4-byte little-endian footer length, then `PAR1`. */
+const TRAILER = 8;
+
+/** a file at `url` read by ranges. The FIRST request is the 8-byte tail (`Range: bytes=-8`), whose
+ * `Content-Range` carries the length (the bucket exposes it; else a HEAD does), and a read of exactly those 8 bytes
+ * is then answered from it. A server that ignores `Range` answers the whole body, which then serves every read. */
+export async function urlFile(url: string, fetcher: typeof fetch = fetch): Promise<RangedFile> {
+  const res = await fetcher(url, { headers: { Range: `bytes=-${TRAILER}` } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+  const body = await res.arrayBuffer();
+  if (res.status !== 206) return body; // the whole file
+  let total = Number(/\/(\d+)\s*$/.exec(res.headers.get("content-range") ?? "")?.[1]);
+  if (!Number.isFinite(total)) {
+    const head = await fetcher(url, { method: "HEAD" });
+    total = Number(head.headers.get("content-length"));
+    if (!head.ok || !Number.isFinite(total)) throw new Error(`no length for ${url}`);
+  }
+  return {
+    byteLength: total,
+    async slice(start, end = total) {
+      if (start === total - body.byteLength && end === total) return body;
+      const r = await fetcher(url, { headers: { Range: `bytes=${start}-${end - 1}` } });
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
+      const b = await r.arrayBuffer();
+      return r.status === 206 ? b : b.slice(start, end); // 200: the server sent the whole file
+    },
+  };
+}
+
+/** the side table opened once per source in two requests: the 8-byte trailer, then exactly the footer (no
+ * speculative tail read: the footer of the shared table is 16.9 KB, hyparquet's default tail is 512 KB); null when
+ * it is absent or unreadable. */
+function open(source: string | RangedFile): Promise<Opened> {
   const id = typeof source === "string" ? source : null;
   const hit = id ? opened.get(id) : undefined;
   if (hit) return hit;
   const p = (async (): Promise<Opened> => {
     try {
-      const { asyncBufferFromUrl, parquetMetadataAsync } = await hyparquet();
-      const file = typeof source === "string" ? await asyncBufferFromUrl({ url: source }) : source;
-      return { file, metadata: await parquetMetadataAsync(file) };
+      const { parquetMetadata } = await hyparquet();
+      const file = typeof source === "string" ? await urlFile(source) : source;
+      const len = file.byteLength;
+      if (len < TRAILER + 4) throw new Error("not Parquet");
+      const trailer = await file.slice(len - TRAILER, len);
+      const view = new DataView(trailer);
+      const magic = String.fromCharCode(...new Uint8Array(trailer, 4, 4));
+      const footer = view.getUint32(0, true);
+      if (magic !== "PAR1" || footer + TRAILER > len) throw new Error("not Parquet");
+      const body = await file.slice(len - TRAILER - footer, len - TRAILER);
+      const tail = new Uint8Array(footer + TRAILER);
+      tail.set(new Uint8Array(body), 0);
+      tail.set(new Uint8Array(trailer), footer);
+      return { file, metadata: parquetMetadata(tail.buffer) };
     } catch {
       return null; // no side table (403/404 on the bucket), or not Parquet: every COG stays on titiler
     }
@@ -233,7 +300,7 @@ function open(source: string | ArrayBuffer): Promise<Opened> {
 
 /** the side-table row of `contentHash`, or null (no table, no row, an unreadable table). */
 export function readCog3857Row(
-  source: string | ArrayBuffer,
+  source: string | RangedFile,
   contentHash: string,
 ): Promise<Cog3857Row | null> {
   const id = typeof source === "string" ? `${source}#${contentHash}` : null;
@@ -248,6 +315,8 @@ export function readCog3857Row(
         file: t.file as never,
         metadata: t.metadata as never,
         compressors,
+        columns: READ_COLUMNS,
+        usePageIndex: true, // the column index of content_hash picks the page, the offset indexes read just it
         filter: { content_hash: { $eq: contentHash } },
       })) as Record<string, unknown>[];
       return recs.length ? rowFromRecord(recs[0]) : null;
@@ -262,9 +331,9 @@ export function readCog3857Row(
 export interface ResolveOptions {
   session?: SessionLike | null;
   /** the release's side table itself (tests), instead of `sideTableUrl(ver)`. */
-  source?: string | ArrayBuffer;
+  source?: string | RangedFile;
   /** the shared table itself (tests), instead of `sharedTableUrl()`; `null` skips it. */
-  sharedSource?: string | ArrayBuffer | null;
+  sharedSource?: string | RangedFile | null;
 }
 
 /** how release `ver` draws the COG at `cogUrl`: its 3857 copy from the shared table when it has the hash, else
