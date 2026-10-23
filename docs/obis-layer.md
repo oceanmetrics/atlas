@@ -10,7 +10,7 @@ oceanmetrics instance only (decision D2: not the marinesensitivity instance in w
 
 - **The hook is the profile.** `src/lib/catalog/h3.ts` (`parseH3`, registered as `h3` in `hooks.ts`) reads the
   profile's fields; nothing in `src/` names the collection id.
-- **The renderer is the map package's.** `@oceanmetrics/map` 0.3.2 `h3ReleaseSlot` reads the release's own Parquet
+- **The renderer is the map package's.** `@oceanmetrics/map` 0.3.3 `h3ReleaseSlot` reads the release's own Parquet
   in MapLibre's worker (`h3r://` tiles, every indicator in each tile, the resolution ladder of the release, never a
   roll-up). The slot is mounted on a style recorder, as `cogSlot` is, and its source and fill go into the one
   composed style (`composeStyle({ h3 })`, roles `h3` and `h3-selected` in the data group).
@@ -25,6 +25,9 @@ oceanmetrics instance only (decision D2: not the marinesensitivity instance in w
 | `taxa.ts`         | the taxon field: the release's taxon layers by rank (the heads above class first), common names, families only while searching                                                                                                                                                                                      |
 | `cellSpecies.ts`  | the Cell pane's species: `species_flat/res=3.parquet` read by the map package's `speciesForCell` (a 256 KiB tail, one reader per page; a coarser hexagon sums its res-3 children exactly; a finer one shows its res-3 parent's), names from `species/species.parquet`, filter, sort, CSV, the line of what was read |
 | `layer.svelte.ts` | the wiring: the slot, the reads, hover and click, the style parts                                                                                                                                                                                                                                                   |
+| `subtree.ts`      | the WoRMS subtree's rules: the class files from the lookup's `lineage`, obisindicators' indicator SQL (ES(50) by `lgamma`), the roll-up to res 1 and 2, the view's box at res 5, the cap and the words                                                                                                              |
+| `subtreeRun.ts`   | the subtree's runner (lazy): DuckDB-WASM over the lookup and the class files, the cells COPY'd to Parquet, a `blob:` url for the slot                                                                                                                                                                               |
+| `worms.ts`        | the WoRMS REST API: "Search all of WoRMS" (`AphiaRecordsByName`, `like=true`), the record of an AphiaID, a `rank:name` resolved                                                                                                                                                                                     |
 
 Sizes (gzip, `npm run build`, oceanmetrics; static path 432.6 of 450 KB after the 0.3.2 step, workers 143.6 of 150 KB): static path 432.4 of 450 KB (428.9 before step 5: the parser, the
 codec keys, the style role, the lens wiring, and the map package's shared modules split into chunks of their
@@ -191,56 +194,140 @@ filter'), `e2e/obis.spec.ts` (the select and its words; a collection over the ca
 
 ## Still open after the second pass
 
-- **Bytes in the footer** (parity row 80). The tiles are read in MapLibre's worker by the map package's
-  `releaseReader`, which keeps its `stats` (bytes, requests) but has no message to the page, and a worker's
-  resource timings are not the page's. The footer has every other part of obis-hex's line. Needs a map package
-  change (a `h3r-stats` request or a worker message, with the page's own readers added): about 2 hours in
-  `oceanmetrics/platform` plus the atlas wiring, then a re-measure.
-- **Monterey zoom 9 and the Cell pane bars** (rows 30, 63): unchanged, measured above.
-- **The WoRMS subtree** (rows 7, 9, 10, 11): designed below, not built (over a day).
+- **Monterey zoom 9 and the Cell pane bars** (rows 30, 63): measured above. The footer (below) now reads the Monterey
+  view at z9 as 9 requests and 135.1 KB, the same bytes as the page's own responses of `all/res=7/` (135,141 B); the
+  bar is obis-hex's 118 KB.
+- **Bytes in the footer** (parity row 80): built with `@oceanmetrics/map` 0.3.3 (below).
+- **The WoRMS subtree** (rows 7, 9, 10, 11): built (below).
 
-### The WoRMS subtree, in the page (design; estimate 1.5 to 2 days)
+### The footer's tile costs (parity row 80, `@oceanmetrics/map` ^0.3.3)
 
-What obis-hex's h3t service did for any AphiaID, from the release's own species tables, through the DuckDB-WASM engine
-the atlas already ships (`src/lib/engine/`, lazy, the `parquet` extension self-hosted; no `h3` extension).
+The release slot's `stats()` (the map package's worker posts one message per built tile on `BroadcastChannel('om-h3')`,
+the slot totals its own) is fed to the layer by `onStats`, at most once per animation frame (`share.ts`
+`feedTileStats`; a view loads tens of tiles), and the footer carries "N requests, X KB in Y ms, Z row groups skipped"
+(`tilesLine`, KB of 1,000 bytes, the ms the sum of the tiles' own reads) before the app: "OBIS 2026-10-11 · WoRMS
+2026-10-01 · release v20261012 · res 7 (auto) · 9 requests, 135.1 KB in 3,163 ms, 0 row groups skipped · OceanMetrics
+Atlas 0.5.0" (Monterey Bay at z9, the live release). The counts are the slot's since it was mounted (an indicator
+change resets nothing; a new layer or taxon is a new slot); a subtree's slot counts its `blob:` file ("1 request,
+8.4 KB in 179 ms"). Tests: `tests/obis/share.test.ts` ("the footer's tile costs": the line, the footer, and the feed
+with a stubbed `onStats`: one write per frame, none after it stops). Shot `obis_footer_tiles_1280_light`.
 
-1. **Search all of WoRMS** (row 9). The names a search can serve without a service: the species lookup
-   (`species/species.parquet`: `species`, `genus`, `family`, `order`, `class`, `phylum`, `lineage`; 1.97 MB for the
-   name columns, once per page, the Cell pane already reads it) and the heads (`heads.json`). An intermediate rank
-   (infraorder Cetacea, suborder, tribe) has no row: its name and AphiaID come from the WoRMS REST API
-   (`https://www.marinespecies.org/rest/AphiaRecordsByName/<name>?like=true&marine_only=true`, CORS-open, live), which
-   also gives the status and the accepted name of a synonym (row 10's line and its "in WoRMS" link). Two letters,
-   250 ms debounce, 20 hits, accepted first: the rule of obis-hex's `AphiaSearch`, its tests moved.
-2. **The subtree's cells** (rows 7, 11). For AphiaID `a`: the taxa `SELECT aphiaid, name_key, class FROM lookup WHERE
-list_contains(lineage, a)` (the lookup's `lineage` is self first, then the ancestors), then the class partitions
-   those taxa fall in, `species/res=<r>/class=<c>/data_0.parquet` (res 3, 4 and 5 only: the table's resolutions),
-   read whole (Cetacea is Mammalia: 0.28 MB at res 3, 0.76 MB at res 4, 1.94 MB at res 5; Aves 1.5 / 3.4 / 7.6 MB;
-   Teleostei 4.9 / 8.2 / 13.8 MB, so a fish subtree caps at res 4 and res 5 only with the view's box, `cell_id`
-   ranges of the viewport's parents, as `tileRanges` forms them), with `n` summed per (cell, name_key) and per cell
-   the five indicators in SQL: records `sum(n)`, richness `count(DISTINCT name_key)`, Shannon and Simpson over the
-   name shares, ES(50) `sum(1 - exp(lgamma(N-n_i+1) + lgamma(N-50+1) - lgamma(N-n_i-50+1) - lgamma(N+1)))` where
-   `N >= 50`. A decade reads `species_decade/res=<r>/decade=<d>/class=<c>/` (res 3 and 4). Res 1 and 2 roll res 3 up
-   by the parent's `cell_id` bits (the indicators recomputed from the summed (cell, name) counts, never averaged).
-   The cap: res 5 at most, the view's box from res 5 (obis-hex: res 7 with a bbox; the release has no species table
-   past res 5), a class set over 25 MB (the engine's `MATERIALIZE_MAX_BYTES`) refused with a line that says which
-   resolution would serve it.
-3. **Drawing them**. The cells go back to the map package's own renderer: DuckDB writes them sorted by `cell_id`
-   as Parquet (`COPY ... TO 'subtree_<res>.parquet'`), handed to the slot as a `blob:` url per resolution in a
-   one-layer `H3CollectionLike` (the `h3r://` worker reads it by range like any release file; to be proven: Range on a
-   `blob:` url in the worker, else a whole-file read, which these sizes allow). The legend is the loaded hexagons'
-   (`dom=view`, built in this pass: a subtree has no stats.parquet), the coverage line counts the subtree's cells, the
-   sentence's taxon chip reads "Whales and dolphins (infraorder Cetacea, WoRMS)".
-4. **Tests and shots**: a species-table fixture (a class partition trimmed to two res-3 parents) for the SQL (spike
-   2's rows, `_none`, a name shared by two AphiaIDs), the search parser over a recorded WoRMS answer, the cap and its
-   words, an e2e search-and-draw on the fixture; shots `obis_cetacea_res4` and `obis_worms_search`.
+### The WoRMS subtree, in the page (built 2026-10-23; parity rows 7, 9, 10, 11)
 
-Estimate: search and the taxon line 0.5 day; the SQL, its tests and the cap 0.5 day; the blob hand-off to the slot
-and its proof 0.25 to 0.5 day; words, e2e and shots 0.25 day. 1.5 to 2 days.
+What obis-hex's h3t service did on a server for any AphiaID, the page now does from the release's own species table,
+through the DuckDB-WASM 1.32 engine the atlas already ships (`src/lib/engine/`, its own lazy instance; the `parquet`
+extension self-hosted). No h3t, no service of our own: WoRMS's REST API names the taxon, the species lookup's
+`lineage` holds the descendants (WoRMS's `AphiaChildrenByAphiaID` is never asked).
+
+**The URL.** `taxon=aphia:<id>` for an AphiaID that is no head (`heads.json`: a head stays the release's own layer), and
+`taxon=<rank>:<name>` for a taxon the release has no layer for (`infraorder:Cetacea`, resolved by WoRMS's
+`AphiaRecordsByName/<name>?like=false` at that rank). The case table's `aphia:` cases (`l=aphia:137092` of obis-hex) open
+the subtree instead of the "heads only" note (`tests/obis/subtree.test.ts` "the case table's aphia cases open the
+subtree", `tests/obis/view.test.ts` "an AphiaID that is no head is a subtree computed in the page").
+
+**The steps** (`subtree.ts`, the rules, Node-tested on DuckDB-WASM's own engine; `subtreeRun.ts`, the runner, lazy):
+
+1. WoRMS's record (`AphiaRecordByAphiaID/<id>`): name, authority, rank, status; a synonym's subtree is its accepted
+   AphiaID's, and the taxon line says so.
+2. The lookup (`species/species.parquet`, 4,086,019 B, whole, once per page; `Engine.load`): the taxa
+   `list_contains(lineage, <id>)` and the classes they fall in (a NULL class is `_none`, `obis:species.null_class`).
+3. The class files at the table resolution: `species/res=<r>/class=<c>/data_0.parquet` (a class with a space is
+   `%2520` in the url, as the store holds it), or `species_decade/res=<r>/decade=<d>/class=<c>/` for a decade
+   (`obis:species.decade`, res 3 and 4). Their sizes by HEAD (Content-Length, exposed by the bucket's CORS) are summed
+   before a byte is read: over 25 MB (the engine's `MATERIALIZE_MAX_BYTES`) the subtree is refused with its estimate
+   and the coarser resolution that would serve it ("The subtree of X at res 5 would read 30.0 MB of the species table
+   (2 files), over the 25.0 MB the page reads at once: pin res 4 (12.00 MB) or coarser."). No single-class subtree
+   of v20261012 is over it (the largest class file is Teleostei's res 5, 13.8 MB), so on the live release the line
+   is a guard; a taxon spanning classes is a head.
+4. The files, whole (`Engine.load`, kept registered: a zoom back or a pan reads nothing again), then obisindicators'
+   own SQL ported as it is (`.h3t_indicators_sql()` over `obis_h3_species_subtree_sql()`'s source: the rows joined to
+   the lookup, `n` summed per (cell, `name_key`), so richness counts names; Shannon and Simpson over the shares; ES(50)
+   `1 - exp(lgamma(N-n_i+1) + lgamma(N-50+1) - lgamma(N-n_i-50+1) - lgamma(N+1))`, 1 for a species that leaves fewer
+   than 50, NULL under 50 records). Res 1 and 2 take res 3's rows to the parent's cell id by its bits
+   (`parentIdSql`; DuckDB-WASM has no h3 extension), the counts summed and the indicators recomputed. From res 5 the
+   rows are those of the view's box: the view grown by a quarter and rounded out to half degrees (obis-hex's
+   `subtreeBbox`), its cell_id ranges formed as the map package's worker forms a tile's (`tileRanges` over the box's
+   tiles), and recomputed only when the view leaves the box.
+5. The cells `COPY`'d to Parquet (`Engine.exportParquet`, sorted by `cell_id`, row groups of 10,240) and handed to the
+   map package's own renderer as a one-resolution `H3CollectionLike` whose template is a `blob:` url
+   (`subtreeTarget`, no stats.parquet). **The path is the blob url, not the in-memory fallback**: Chromium answers a
+   Range request on a `blob:` url in a worker with 206 and Content-Range (a suffix range `bytes=-65536` too; checked
+   alone first, then end to end), so the `h3r://` reader in MapLibre's worker opens it as it opens a release file,
+   and the tiles carry all five indicators (the in-memory `h3Slot` carries one value per cell: no five-indicator
+   hover, no Cell pane values). A 200 with the whole file would work as well (the reader takes it). The page revokes a
+   blob url two computations later (the worker may still read the one before).
+
+**What it shows.** The sentence's chip "Whales and dolphins (infraorder Cetacea, WoRMS)" (a common name first, else the
+name), at res 5 "in view (the view's box at res 5)"; under the taxon field the line "subtree of Cetacea (computed in
+the browser from the species table, res ≤ 5)", the taxon line ("Cetacea Brisson, 1762 · infraorder · accepted ·
+2,339,779 records · in WoRMS ↗"; a synonym adds "accepted name …, whose subtree is shown"), and what was read ("Read
+0.26 MB of the species table (1 file) and the lookup (3.90 MB, once per page); 15,617 hexagons in 1,486 ms."). The
+legend is the computed cells' p02 to p98 (`quantile_cont`, the release's rule; "subtree p02–p98"; records on the log
+scale), or the loaded hexagons' with `dom=view`; the coverage line "1,755 of 15,617 hexagons of the subtree have ≥ 50
+records"; the status line "Computing the subtree of Cetacea in the browser…", the refusal, or "The subtree could not
+be computed: …". The Cell pane reads the hexagon's five values from the same blob and keeps the species of the subtree
+(the lookup's lineage) in its list; Reproduce is the subtree's SQL over the release's own urls (DuckDB with httpfs). A
+pin past the cap is res 5 (4 with a decade) and says so; auto past zoom 7 stays at res 5 and says so. "Search all of
+WoRMS" (row 9): `AphiaRecordsByName/<text>?like=true&marine_only=true`, 2 letters, 250 ms after the last key, 20 hits,
+the accepted names first, a synonym with "→ <accepted name> (<AphiaID>)" (`createWormsSearch`); a pick writes
+`taxon=aphia:<id>` on the all-taxa item (a decade kept, a year dropped).
+
+**Parity with the release** (the week 4 export proved obisindicators' head equals its subtree SQL; this proves the port):
+
+- `tests/obis/subtree.test.ts` runs the SQL on DuckDB-WASM 1.32's own engine (the in-process node build): a
+  hand-computed 3-cell fixture (n, sp by name, Shannon, Simpson, ES(50) by exact binomials; a name under two AphiaIDs,
+  a taxon outside the lineage, a NULL class, the roll-up, the box) and the real cell 831914fffffffff of Animalia
+  at res 3 (227 rows of every class, 146 in Animalia): n 2,086 and sp 146 exactly, Shannon and Simpson to 1e-12,
+  ES(50) 16.2897650257 against the head's 16.2897650254 (2e-11 relative).
+- **Animalia at res 3, cell for cell, in the browser**: `runSubtree` (the built chunk) for AphiaID 2 in headless
+  Chromium against the live release read the lookup and 99 class files (18,664,955 B, 199 requests, 23.7 s cold) and
+  wrote 36,854 cells; against the published head `taxon/rank=kingdom/taxon=Animalia/res=3`: 36,854 = 36,854, none
+  unmatched, `n` and `sp` equal in every cell, ES(50) NULL in the same cells, Shannon within 5.7e-13 and Simpson 2.6e-14,
+  ES(50) within 2.3e-5 absolute (4.2e-6 relative; 429 cells past 1e-9 relative, all with N in the millions, where the
+  four `lgamma` terms are about 7e7 and the browser's libm rounds them differently from the native build's; the two
+  decimals shown never differ). The same SQL in native DuckDB 1.5.6 over the same files: every cell equal to 1.8e-13
+  (res 3, 36,854 cells) and 3.1e-13 (res 2 through the roll-up, 5,789 cells).
+
+**Measured** (2026-10-23, headless Chromium 1243 on the Mac mini M4 Pro, ANGLE Metal, 1280 × 800, the built app under
+`vite preview`, the live S3 release, a new browser context per run (cold cache), three runs each; "page" is from
+navigation to the read line, which includes the app's and DuckDB-WASM's boot; "compute" is the read line's own time,
+from the lookup's read to the blob url):
+
+| subtree, view                                  | species table read                                          | lookup      | hexagons | compute (ms)        | page (s)         |
+| ---------------------------------------------- | ----------------------------------------------------------- | ----------- | -------- | ------------------- | ---------------- |
+| Cetacea (2688), res 3, world (`map=-150,30,4`) | 276,067 B (`class=Mammalia`, 1 file)                        | 4,086,019 B | 15,617   | 1,486, 1,532, 1,501 | 3.94, 3.94, 3.92 |
+| Cetacea, res 4, world                          | 755,665 B (1 file)                                          | 4,086,019 B | 52,203   | 1,562, 1,438, 1,691 | 3.44, 3.43, 3.97 |
+| Cetacea, res 5, Monterey Bay's box (z6.5)      | 1,938,991 B (1 file, read whole; the box keeps 1,905)       | 4,086,019 B | 1,905    | 1,698, 1,656, 1,632 | 3.94, 3.92, 3.98 |
+| Teleostei (293496), res 3, world               | 5,170,744 B (`class=Teleostei` 4,938,095 + `_none` 232,649) | 4,086,019 B | 21,819   | 2,581, 2,430, 2,143 | 4.93, 4.45, 4.43 |
+
+In one page (warm: the lookup and the files kept), Cetacea res 3 → 4 read 0.72 MB in 0.66 s, 4 → 5 1.85 MB in 0.69 s,
+and back to 3 or 4 nothing, 36 and 58 ms (the SQL alone). A subtree's tiles are one small file (Cetacea res 1: 1
+request, 20.6 KB). The first subtree of a page pays the lookup (3.9 MB; the Cell pane reads the same file's name
+columns, 1.97 MB, separately).
+
+**Sizes**: the static path is unchanged (434.6 to 434.7 KB of 450: the Details title follows the taxon); the H3 layer's
+chunk 7.5 to 13.0 KB gzip (the subtree's rules, the WoRMS client, the wiring), its controls 5.3 to 6.3 KB, the runner
+1.6 KB more and the engine's own lazy chunks, loaded the first time a subtree is asked.
+
+**Tests and shots**: `tests/obis/subtree.test.ts` (the SQL, the files, the cap and its words, the box, the case table),
+`tests/obis/worms.test.ts` (WoRMS's answers recorded on 2026-10-23, a stubbed fetch, the debounced field),
+`tests/obis/subtreeLayer.svelte.test.ts` (the wiring in the real runes layer with a stubbed runner and WoRMS: the
+chip, the line, the legend, the coverage, a head stays a head, a rank:name, the pin and the decade, the refusal, the
+status, a pick), `e2e/obis.spec.ts` "the WoRMS subtree: search, pick, computed in the page" (hermetic: the fixture's
+`species/res=3/class=Mammalia` and a lookup with `lineage`, WoRMS routed; 832834fffffffff's richness 22 read back from
+the tiles the worker built from the blob). Seeded faults `obis-subtree-es-small-term-dropped`,
+`obis-subtree-sp-counts-aphiaids`. Shots `obis_worms_cetacea_1280_dark` (res 3 off the US east coast, the taxon
+block), `obis_worms_search_1280_light` ("Delphin": accepted names first, synonyms with their accepted AphiaID),
+`obis_worms_cell_390_dark` (phone, 832834fffffffff: ES(50) 5.86, 22 species, 63,741 records, the subtree's species).
+
+**Still open**: the lookup is read whole (4.1 MB) beside the Cell pane's read of its names (1.97 MB), so a page that
+does both reads the file twice (a release that splits the lookup's lineage into its own small file, or the pane reading
+the names from the engine's copy, would save it); the class files stay registered in DuckDB-WASM's memory for the page
+(Teleostei res 3 to 5 is 27 MB; no eviction yet); records in the search hits (obis-hex showed the subtree's records per
+hit; WoRMS's search has none, the taxon line has them once picked); res 6 and 7 (the species table stops at res 5).
 
 ## Not built yet
 
-- `taxon=aphia:<id>` for a taxon that is no head, and "Search all of WoRMS": designed above. The layer says the id is
-  not one of the release's precomputed taxa.
 - The view as places (obis-hex `v=places`, waiting on Ben's word to drop). A whole collection as the place filter is
   built (`filter=coll:<slug>`, above); obis-hex's `f=<coll>` redirects to it; `f=<coll>|<id>,<id>` (a collection and some
   of its places) is not carried (the places filter with `#pl=` is its nearest).
