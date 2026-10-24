@@ -2,7 +2,12 @@
 // storage rule, the package's stack inside the basemap run, the Bathymetry row's switch and slider, the dimming under
 // data, the credit line and the lazy loader. Runs under both instances: every input names its own stack.
 import { afterEach, describe, expect, it } from "vitest";
-import { BASEMAP_URL, BASEMAP_VERSION, bathyDefaultOpacity, DEFAULT_TILES } from "@oceanmetrics/map";
+import {
+  BASEMAP_URL,
+  BASEMAP_VERSION,
+  bathyDefaultOpacity,
+  DEFAULT_TILES,
+} from "@oceanmetrics/map";
 import { store } from "../../src/lib/catalog/storage";
 import {
   BASEMAP_ATTRIBUTION,
@@ -77,7 +82,9 @@ describe("the tiers", () => {
     expect(gebco.GEBCO_TILES).toEqual(gebco.tilesAt(DEFAULT_TILES, BASEMAP_URL, base));
     expect(gebco.GEBCO_TILES.far).toBe(`${base}gebco/v${BASEMAP_VERSION}/far.pmtiles`);
     expect(gebco.GEBCO_TILES.core).toBe(`${base}gebco/v${BASEMAP_VERSION}/core.pmtiles`);
-    expect(gebco.GEBCO_TILES.regional).toEqual([`${base}gebco/v${BASEMAP_VERSION}/core-sanctuaries.pmtiles`]);
+    expect(gebco.GEBCO_TILES.regional).toEqual([
+      `${base}gebco/v${BASEMAP_VERSION}/core-sanctuaries.pmtiles`,
+    ]);
     expect(gebco.GEBCO_TILES.contours).toBe(`${base}gebco/v${BASEMAP_VERSION}/contours.pmtiles`);
     expect(gebco.GEBCO_TILES.names).toBe(`${base}gebco/v${BASEMAP_VERSION}/names.pmtiles`);
     expect(gebco.GEBCO_TILES.land).toBe(`${base}osm/v${BASEMAP_VERSION}/land.pmtiles`);
