@@ -2,7 +2,7 @@
 // storage rule, the package's stack inside the basemap run, the Bathymetry row's switch and slider, the dimming under
 // data, the credit line and the lazy loader. Runs under both instances: every input names its own stack.
 import { afterEach, describe, expect, it } from "vitest";
-import { BASEMAP_URL, bathyDefaultOpacity, DEFAULT_TILES } from "@oceanmetrics/map";
+import { BASEMAP_URL, BASEMAP_VERSION, bathyDefaultOpacity, DEFAULT_TILES } from "@oceanmetrics/map";
 import { store } from "../../src/lib/catalog/storage";
 import {
   BASEMAP_ATTRIBUTION,
@@ -75,12 +75,12 @@ describe("the tiers", () => {
   it("are read through the storage rule (store('basemap/')), every tier and the regional list", () => {
     const base = store("basemap/");
     expect(gebco.GEBCO_TILES).toEqual(gebco.tilesAt(DEFAULT_TILES, BASEMAP_URL, base));
-    expect(gebco.GEBCO_TILES.far).toBe(`${base}gebco/far.pmtiles`);
-    expect(gebco.GEBCO_TILES.core).toBe(`${base}gebco/core.pmtiles`);
-    expect(gebco.GEBCO_TILES.regional).toEqual([`${base}gebco/core-sanctuaries.pmtiles`]);
-    expect(gebco.GEBCO_TILES.contours).toBe(`${base}gebco/contours.pmtiles`);
-    expect(gebco.GEBCO_TILES.names).toBe(`${base}gebco/names.pmtiles`);
-    expect(gebco.GEBCO_TILES.land).toBe(`${base}osm/land.pmtiles`);
+    expect(gebco.GEBCO_TILES.far).toBe(`${base}gebco/v${BASEMAP_VERSION}/far.pmtiles`);
+    expect(gebco.GEBCO_TILES.core).toBe(`${base}gebco/v${BASEMAP_VERSION}/core.pmtiles`);
+    expect(gebco.GEBCO_TILES.regional).toEqual([`${base}gebco/v${BASEMAP_VERSION}/core-sanctuaries.pmtiles`]);
+    expect(gebco.GEBCO_TILES.contours).toBe(`${base}gebco/v${BASEMAP_VERSION}/contours.pmtiles`);
+    expect(gebco.GEBCO_TILES.names).toBe(`${base}gebco/v${BASEMAP_VERSION}/names.pmtiles`);
+    expect(gebco.GEBCO_TILES.land).toBe(`${base}osm/v${BASEMAP_VERSION}/land.pmtiles`);
   });
   it("keep a url from elsewhere and a null tier as they are", () => {
     expect(
@@ -146,27 +146,27 @@ describe("composeStyle with the sea floor", () => {
     it(`${theme}: every tier is a source on the storage host, prefixed like CARTO's`, () => {
       expect(src[`${P}gebco-far`]).toMatchObject({
         type: "raster-dem",
-        url: `pmtiles://${base}gebco/far.pmtiles`,
+        url: `pmtiles://${base}gebco/v${BASEMAP_VERSION}/far.pmtiles`,
       });
       expect(src[`${P}gebco`]).toMatchObject({
         type: "raster-dem",
-        url: `pmtiles://${base}gebco/core.pmtiles`,
+        url: `pmtiles://${base}gebco/v${BASEMAP_VERSION}/core.pmtiles`,
       });
       expect(src[`${P}gebco-regional`]).toMatchObject({
         type: "raster-dem",
-        url: `pmtiles://${base}gebco/core-sanctuaries.pmtiles`,
+        url: `pmtiles://${base}gebco/v${BASEMAP_VERSION}/core-sanctuaries.pmtiles`,
       });
       expect(src[`${P}gebco-contours`]).toMatchObject({
         type: "vector",
-        url: `pmtiles://${base}gebco/contours.pmtiles`,
+        url: `pmtiles://${base}gebco/v${BASEMAP_VERSION}/contours.pmtiles`,
       });
       expect(src[`${P}gebco-names`]).toMatchObject({
         type: "vector",
-        url: `pmtiles://${base}gebco/names.pmtiles`,
+        url: `pmtiles://${base}gebco/v${BASEMAP_VERSION}/names.pmtiles`,
       });
       expect(src[`${P}osm-land`]).toMatchObject({
         type: "vector",
-        url: `pmtiles://${base}osm/land.pmtiles`,
+        url: `pmtiles://${base}osm/v${BASEMAP_VERSION}/land.pmtiles`,
       });
     });
     it(`${theme}: the package's order inside the basemap run: the sea, far under core under regional, the isobaths, the mask, CARTO's land, the labels`, () => {
