@@ -7,6 +7,7 @@
 export { createScoresLens, type ScoresLens } from "./state.svelte";
 export { ecoregionZoneUnitFromManifest, fullSubregion, layerByKey, unitOptions } from "./boot";
 export { effectiveLyr } from "./fallback";
+export { scoresLegendUnit } from "./mapInputs";
 export { parseScoresSelection } from "./selection";
 export { placesSubjectHeader } from "./species";
 export { lastClickedLabel } from "./lastClicked";

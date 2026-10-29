@@ -12,6 +12,7 @@
 import { combineSpeciesPartials, type SpeciesAgg, type SpeciesPartial } from "./combine";
 import type { CellCoverage } from "../geo/coverage";
 import { ident, lit, renderSql } from "../engine/sql";
+import { DEFAULT_SCOPE, rowScope, type Scope } from "./scope";
 
 /** the one method the SQL twins need from a database. */
 export interface SqlRunner {
@@ -44,6 +45,7 @@ export const METRIC_PATTERN = "_ecoregion_rescaled$";
 interface BootLayer {
   metric_key?: unknown;
   category?: unknown;
+  scope?: unknown;
 }
 
 /**
@@ -52,12 +54,21 @@ interface BootLayer {
  * atlas-1 publishes `category: "component"` for exactly the keys matching {@link METRIC_PATTERN}
  * (app_bundle.R:428-432), and the set genuinely differs by release: v7 has `extrisk_other`, v9 has
  * `extrisk_primary_producer` instead. Reading it from `boot` is what keeps one build serving both.
+ *
+ * v10 P6: a release can publish a second set, `scope: "nation"`; `scope` (default `"ecoregion"`,
+ * which is every component of a bundle without `scope` fields, so v1-v9 are unchanged) picks one;
+ * `"all"` is both (the empty-tile placeholder view must carry every column a query may name).
  */
-export function componentMetricKeys(boot: unknown): string[] {
+export function componentMetricKeys(boot: unknown, scope: Scope | "all" = DEFAULT_SCOPE): string[] {
   const layers = (boot as { layers?: unknown })?.layers;
   if (!Array.isArray(layers)) return [];
   return (layers as BootLayer[])
-    .filter((l) => l.category === "component" && typeof l.metric_key === "string")
+    .filter(
+      (l) =>
+        l.category === "component" &&
+        typeof l.metric_key === "string" &&
+        (scope === "all" || rowScope(l) === scope),
+    )
     .map((l) => l.metric_key as string);
 }
 

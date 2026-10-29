@@ -9,6 +9,7 @@
   import { columnWidthPx, totalTableWidthPx } from "../../lib/ui/dataTableCore";
   import { zonesTableRows, type ZonesTableRow } from "./zonesTable";
   import type { ZoneRow } from "./boot";
+  import { NATION_SCORE_HEADER, WORLD_SHARE_HEADER } from "../../lib/analysis/scope";
 
   // P3 fix (owner-reported, 2026-09-24): the checkbox column's own fixed width, and the pseudo
   // "columns" `columnWidthPx()`/`totalTableWidthPx()` size this table by -- Rank/Score/each
@@ -25,15 +26,45 @@
     metricLabel: string;
     componentKeys: string[];
     onSelectZone: (key: string) => void;
+    /** v10 P6: the national scope -- each component gets TWO columns, its location quotient (100 =
+     * the national average, "vs national avg") and the share of the world's range the area holds
+     * ("% of world range"); "—" where the component is not reportable. Default off = unchanged. */
+    nation?: boolean;
+    /** the manifest's own wording per `metric_key` (national headers; the ecoregion table keeps
+     * `categoryLabel`). */
+    metricLabels?: Readonly<Record<string, string>>;
     /** atlas-7 step 4: "Report on selected" -- omit to hide the checkbox column/button entirely
      * (a caller with no report entry point wired up yet, e.g. a gallery/mockup usage). */
     onReportSelected?: (keys: string[]) => void;
   }
 
-  let { zones, metricKey, metricLabel, componentKeys, onSelectZone, onReportSelected }: Props =
-    $props();
+  let {
+    zones,
+    metricKey,
+    metricLabel,
+    componentKeys,
+    onSelectZone,
+    nation = false,
+    metricLabels = {},
+    onReportSelected,
+  }: Props = $props();
 
-  const rows = $derived(zonesTableRows(zones, metricKey, componentKeys));
+  const rows = $derived(zonesTableRows(zones, metricKey, componentKeys, { nation }));
+
+  // a component's header text: the manifest's label in the national scope, else the category's
+  function headerOf(c: { label: string; key?: string }): string {
+    const shown = nation && c.key ? metricLabels[c.key]?.trim() : "";
+    return shown || categoryLabel(c.label);
+  }
+  // the share of the world's range: one decimal from 10 up, two significant digits below
+  function formatShare(v: number | null): string {
+    if (v === null) return "—";
+    return v >= 10
+      ? v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+      : v.toLocaleString("en-US", { maximumSignificantDigits: 2 });
+  }
+  // columns per component: 2 national (quotient, share), 1 ecoregion
+  const perComponent = $derived(nation ? 2 : 1);
 
   // a plain Set, not derived from `rows`: the selection is the user's OWN choice and must survive
   // a re-sort/re-rank when the ranked metric changes underneath it (atlas-4's layer picker can
@@ -66,7 +97,9 @@
         NARROW_COLUMN,
         ZONE_COLUMN,
         NARROW_COLUMN,
-        ...(rows[0]?.components ?? []).map(() => NARROW_COLUMN),
+        ...(rows[0]?.components ?? []).flatMap(() =>
+          Array.from({ length: perComponent }, () => NARROW_COLUMN),
+        ),
       ],
       onReportSelected ? CHECKBOX_COLUMN_PX : 0,
     ),
@@ -105,6 +138,7 @@
         {#if rows[0]}
           {#each rows[0].components as c (c.label)}
             <col style={`width:${columnWidthPx(NARROW_COLUMN)}px`} />
+            {#if nation}<col style={`width:${columnWidthPx(NARROW_COLUMN)}px`} />{/if}
           {/each}
         {/if}
       </colgroup>
@@ -124,14 +158,25 @@
                label is still reachable as a hover `title` AND as the accessible name (`aria-label`)
                so "Score" alone is never the only cue to which metric is ranked. -->
           <th scope="col" class="num" title={metricLabel} aria-label={`Score (${metricLabel})`}
-            >Score</th
+            >{nation ? metricLabel : "Score"}</th
           >
           {#if rows[0]}
             {#each rows[0].components as c (c.label)}
               <!-- P round V2 fix (Opus eyes-on: raw lowercase component labels show in the UI):
                    `c.label` (the each-block KEY, matching `r.components` below positionally) stays
                    RAW -- only the displayed text goes through `categoryLabel()`. -->
-              <th scope="col" class="num">{categoryLabel(c.label)}</th>
+              {#if nation}
+                <!-- two columns per component: one header row (it stays sticky), the quantity named
+                     under the component -->
+                <th scope="col" class="num" data-testid="zones-lq-header"
+                  >{headerOf(c)}<span class="sub">{NATION_SCORE_HEADER}</span></th
+                >
+                <th scope="col" class="num" data-testid="zones-world-header"
+                  >{headerOf(c)}<span class="sub">{WORLD_SHARE_HEADER}</span></th
+                >
+              {:else}
+                <th scope="col" class="num">{categoryLabel(c.label)}</th>
+              {/if}
             {/each}
           {/if}
         </tr>
@@ -158,9 +203,22 @@
             </td>
             <td class="num" title={formatValue(r.value)}>{formatValue(r.value)}</td>
             {#each r.components as c (c.label)}
-              <td class="num" title={`${categoryLabel(c.label)}: ${formatValue(c.score)}`}
-                >{formatValue(c.score)}</td
-              >
+              {#if nation}
+                <td
+                  class="num"
+                  title={`${headerOf(c)}, ${NATION_SCORE_HEADER}: ${formatValue(c.score)}`}
+                  >{formatValue(c.score)}</td
+                >
+                <td
+                  class="num"
+                  title={`${headerOf(c)}, ${WORLD_SHARE_HEADER}: ${formatShare(c.world ?? null)}`}
+                  >{formatShare(c.world ?? null)}</td
+                >
+              {:else}
+                <td class="num" title={`${categoryLabel(c.label)}: ${formatValue(c.score)}`}
+                  >{formatValue(c.score)}</td
+                >
+              {/if}
             {/each}
           </tr>
         {/each}
@@ -267,6 +325,13 @@
      column (`.num` below) -- every numeric header now right-aligns to match its data. */
   th.num {
     text-align: right;
+  }
+
+  /* v10 P6: the quantity under a national component's name */
+  th .sub {
+    display: block;
+    font-weight: 400;
+    color: var(--text-secondary);
   }
 
   /* the Zone column: sticky on the left, stacking above a plain top-sticky header cell scrolling

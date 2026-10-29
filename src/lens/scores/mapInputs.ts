@@ -19,6 +19,7 @@ import type { LegendStop, PaletteName } from "../../lib/raster/ramps";
 import type { Histogram } from "../../lib/map/density";
 import { valueListDistribution } from "../../lib/map/distribution";
 import type { ReleaseCogChoice } from "../../lib/raster/releaseCog";
+import { NATION_UNIT, type Scope } from "../../lib/analysis/scope";
 
 /**
  * The scores lens' floating legend (atlas-4 defect fix: the scores lens had NO floating legend at
@@ -35,6 +36,8 @@ export type ScoresLegend =
       stops: LegendStop[];
       histogram?: Histogram | null;
       marker?: number | null;
+      /** v10 P6: set only for the national scope (a location quotient: "100 = national average"). */
+      scope?: Scope;
     }
   | {
       kind: "zone";
@@ -42,6 +45,7 @@ export type ScoresLegend =
       stops: LegendStop[];
       histogram?: Histogram | null;
       marker?: number | null;
+      scope?: Scope;
     }
   | { kind: "unavailable"; title: string }
   | { kind: "empty"; title: string }
@@ -57,6 +61,12 @@ export function formatScoresLegendValue(value: number): string {
   return String(value);
 }
 
+/** the unit a scores legend's values are in: "score" (0-100, within the ecoregion), or v10 P6's
+ * "× national avg" for a national layer. The legend card and the Download menu's footer read it. */
+export function scoresLegendUnit(legend: ScoresLegend | { scope?: Scope } | null): string {
+  return legend && "scope" in legend && legend.scope === "nation" ? NATION_UNIT : "score";
+}
+
 export interface ScoresMapInputs {
   zones: ZoneUnitSpec[];
   raster: RasterLayerSpec | null;
@@ -70,6 +80,8 @@ export interface ScoresMapState {
   overlays: readonly ManifestOverlayRow[] | null | undefined;
   unit: string; // "cell" or the release's one drawable unit's type
   lyr: string | null; // resolved metric_key (never undefined at call time — the caller defaults it)
+  /** v10 P6: the scoring scope; `"nation"` marks the legend (100 = national average). Absent = ecoregion. */
+  scope?: Scope;
   palette: PaletteName;
   showOutsidePra: boolean;
   /** R4-A: the Raster-cells layer's WHOLE-layer histogram (`/cog/statistics`, resolved async by the
@@ -254,6 +266,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
               stops: rl.stops,
               histogram: histogram ?? null,
               marker: state.marker ?? null,
+              ...(state.scope === "nation" ? { scope: state.scope } : {}),
             };
       })()
     : zoneEmpty
@@ -265,6 +278,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
             stops: zoneLegendStops(zoneLegend),
             histogram: zoneHistogram,
             marker: state.marker ?? null,
+            ...(state.scope === "nation" ? { scope: state.scope } : {}),
           }
         : { kind: "unavailable", title };
 

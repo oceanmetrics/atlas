@@ -11,7 +11,25 @@
     zoneFlowerComponents,
     type DedupResult,
   } from "./flower";
-  import { flowerMaxComponentScore, zoneAllKey, zoneRows } from "./boot";
+  import {
+    flowerMaxComponentScore,
+    metricLabelsFromManifest,
+    scopeComponentKeys,
+    scopeScaleMax,
+    zoneAllKey,
+    zoneRows,
+  } from "./boot";
+  import {
+    NATION_AVERAGE,
+    nationFlowerScaleMax,
+    type FlowerScaleSpec,
+  } from "../../lib/ui/flowerGeometry";
+  import {
+    DEFAULT_SCOPE,
+    NATION_RING_LABEL,
+    NATION_SCORE_HEADER,
+    type Scope,
+  } from "../../lib/analysis/scope";
   import type { ScoresSelection } from "./selection";
   // V4 fix (owner phone report, 2026-09-24, docs fact-check item 3): `zoneName` below used to
   // return the bundle's bare `name` (== the key on every real release -- zoneStats.ts's own
@@ -51,6 +69,9 @@
     compactFlower?: boolean;
     /** R4-B: the Details panel header already shows the clicked subject -- show it once. */
     subjectInHeader?: boolean;
+    /** v10 P6: the scoring scope the flower draws. `"nation"` = location quotients (100 = the
+     * national average), unbounded above; the default is the 0-100 ecoregion flower, unchanged. */
+    scope?: Scope;
   }
 
   let {
@@ -62,6 +83,7 @@
     cellCoords,
     compactFlower = false,
     subjectInHeader = false,
+    scope = DEFAULT_SCOPE,
   }: Props = $props();
 
   /** the flower's own size cap at the phone's "half" detent (see `compactFlower`'s own header
@@ -92,14 +114,42 @@
   // every path already returns ONE slot per category (`flower.ts`'s `dedupeFlowerComponents`,
   // atlas-4 fix round 2) -- `droppedLabels` is surfaced to `Flower.svelte` so it can announce the
   // drop once, rather than the data quirk silently disappearing.
+  const national = $derived(scope === "nation");
+  // the national scope reads its component keys from the boot's own layer rows, so a component a zone
+  // does not report still gets its (hollow) slot; the manifest's labels name them
+  const scopeOptions = $derived(
+    national
+      ? {
+          scope,
+          componentKeys: scopeComponentKeys(boot, scope),
+          metricLabels: metricLabelsFromManifest(manifest),
+        }
+      : undefined,
+  );
   const result = $derived.by((): DedupResult | null => {
     if (selection?.kind === "zone")
-      return zoneFlowerComponents(zoneRows(boot, selection.unit), selection.key);
+      return zoneFlowerComponents(zoneRows(boot, selection.unit), selection.key, scopeOptions);
     if (selection?.kind === "cell") return cellComponents ?? null;
+    // `boot.flower_default` is the ecoregion family only (msens `app_flower_default`); the national
+    // default is the all-areas zone's own metrics
+    if (national) return zoneFlowerComponents(zoneRows(boot, "subregion"), allKey, scopeOptions);
     return defaultFlowerComponents(boot, allKey);
   });
   const components = $derived(result?.components ?? null);
   const droppedLabels = $derived(result?.droppedLabels ?? []);
+  // v10 P6: the national petal scale -- the published p99, or this place's largest component when
+  // larger, never below the national average; a ring at 100; absent components hollow
+  const flowerScale = $derived.by((): FlowerScaleSpec | undefined => {
+    if (!national) return undefined;
+    return {
+      max: nationFlowerScaleMax(
+        scopeScaleMax(boot, scope),
+        (components ?? []).map((c) => c.score),
+      ),
+      mark: { value: NATION_AVERAGE, label: NATION_RING_LABEL },
+      hollowAbsent: true,
+    };
+  });
 </script>
 
 <div class="flower-panel">
@@ -110,6 +160,8 @@
       {components}
       {droppedLabels}
       {maxScore}
+      scale={flowerScale}
+      scoreHeader={national ? NATION_SCORE_HEADER : undefined}
       size={compactFlower ? FLOWER_SIZE_HALF_DETENT : undefined}
     />
   {:else if selection?.kind === "cell" && cellComponents === undefined}

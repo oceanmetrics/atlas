@@ -31,13 +31,24 @@
   // IS the stack" (Ben's decision R3). `ScoresLayersPanel` above is now only its "Data" row's
   // content, passed in as the `dataControls` snippet below.
   import LibLayersPanel, {
+    type LayersCompareToggle,
     type LayersLayerField,
     type LayersOutlineChoice,
     type LayersProjectionControl,
     type LayersRowState,
     type LayersUnitToggle,
   } from "../../lib/ui/LayersPanel.svelte";
-  import { layerByKey, layerGroups, metricKeyLabel, primaryUnitNote, unitOptions } from "./boot";
+  import {
+    hasNationScope,
+    layerByKey,
+    layerGroups,
+    metricKeyLabel,
+    metricLabelsFromManifest,
+    primaryUnitNote,
+    retargetLayerKey,
+    unitOptions,
+  } from "./boot";
+  import { COMPONENT_SQL_PATTERN, SCOPE_LABEL, type Scope } from "../../lib/analysis/scope";
   import { isPlacesSelectionEmpty } from "../../lib/state/types";
   import { placesFromHash } from "../../places/model";
   import FlowerPanel from "./FlowerPanel.svelte";
@@ -151,7 +162,32 @@
   // moved OUT again, into `ScoresSearch.svelte`'s "Regions" group (`search.ts#matchRegions`,
   // `state.svelte.ts#selectRegion`) -- "the Search bar is really a zoom to this place... Region
   // ... could also [live] there too" (Ben). `LibLayersPanel`'s `zoomField` prop is gone with it.
-  const groups = $derived(layerGroups(boot));
+  const scope = $derived(lens.scope);
+  const groups = $derived(layerGroups(boot, scope));
+
+  // v10 P6: the "Compare" switch (Within ecoregion | Across the nation), shown ONLY when this release
+  // publishes national layers. Switching re-targets the layer to the same-category counterpart in the
+  // new scope (composite -> composite, bird -> bird, else the composite) in the SAME write as `cmp`,
+  // so the map never draws a layer of the old scope under the new mode.
+  function onCompareChange(value: string) {
+    const next: Scope = value === "nation" ? "nation" : "ecoregion";
+    selStore.set({
+      cmp: next === "nation" ? "nation" : "region",
+      lyr: retargetLayerKey(boot, lens.lyr, next) ?? undefined,
+    });
+  }
+  const compareToggle = $derived<LayersCompareToggle | undefined>(
+    hasNationScope(boot)
+      ? {
+          options: [
+            { value: "ecoregion", label: SCOPE_LABEL.ecoregion },
+            { value: "nation", label: SCOPE_LABEL.nation },
+          ],
+          value: scope,
+          onChange: onCompareChange,
+        }
+      : undefined,
+  );
 
   // Fix round (orchestrator, 2026-09-25, R3-B1): the WHOLE `metricLabels ?? layer.label` chain
   // now routes through `metricKeyLabel()` as its `label` argument -- a curated label that is
@@ -240,6 +276,9 @@
   $effect(() => {
     const s = selection;
     const v = ver;
+    // read synchronously so the effect re-runs when the mode (or the manifest's labels) change
+    const sc = scope;
+    const labels = sc === "nation" ? metricLabelsFromManifest(manifest) : undefined;
     if (s?.kind !== "cell") {
       cellFlowerRows = undefined;
       cellFlowerError = null;
@@ -259,7 +298,8 @@
         const { cellComponents } = await import("../../lib/analysis/queries");
         const rows = await cellComponents(sources.db, sources.templates, {
           cellId: s.cellId,
-          metricKeys: componentMetricKeys(bootObj),
+          metricKeys: componentMetricKeys(bootObj, sc),
+          metricPattern: COMPONENT_SQL_PATTERN[sc],
         });
         // `cellComponents()` is typed as `Promise<Record<string, unknown>[]>` (a generic engine
         // result); `sql/cell_components.sql`'s actual columns are exactly `CellComponentRow`'s.
@@ -267,7 +307,11 @@
       });
     })()
       .then((rows) => {
-        if (token === cellFlowerToken) cellFlowerRows = cellFlowerComponents(rows);
+        if (token === cellFlowerToken)
+          cellFlowerRows = cellFlowerComponents(
+            rows,
+            labels ? { metricLabels: labels } : undefined,
+          );
       })
       .catch((err: unknown) => {
         if (token !== cellFlowerToken) return;
@@ -297,6 +341,7 @@
     stack={layerStack}
     onChange={onLayerStackChange}
     {unitToggle}
+    {compareToggle}
     {layerField}
     {outline}
     {projection}
@@ -337,6 +382,7 @@
       {boot}
       {manifest}
       {selection}
+      {scope}
       cellComponents={cellFlowerRows}
       cellComponentsError={cellFlowerError}
       {cellCoords}
@@ -355,6 +401,7 @@
     {lyr}
     {selection}
     {cellCoords}
+    {scope}
     {onOpenPlaces}
   />
 {:else}

@@ -31,6 +31,17 @@
     onChange: (value: string) => void;
   }
 
+  /** v10 P6: the "Compare" switch -- ONE question as the control (method page section 12): "Within
+   * ecoregion" or "Across the nation". Rendered between the unit toggle and the Layer picker, and
+   * only when a lens passes it (the Scores lens, and only for a release that publishes national
+   * layers); the layer picker below it then lists that mode's rows. Same `Segmented` as the unit
+   * toggle. */
+  export interface LayersCompareToggle {
+    options: SegmentedOption[];
+    value: string;
+    onChange: (value: string) => void;
+  }
+
   /** R3 deliverable 3: the Layer (metric) picker, promoted from inside the Data row's own body
    * (`lens/scores/LayersPanel.svelte`'s old bespoke native `<select>`) to panel-level, directly
    * below the unit toggle — full width (W6, 2026-09-25: the field it used to sit beside, "Zoom to
@@ -160,6 +171,8 @@
      * that has not resolved `boot` yet renders the rest of the panel with no toggle at all, never a
      * disabled-looking placeholder for data that just has not arrived. */
     unitToggle?: LayersUnitToggle;
+    /** v10 P6 -- see {@link LayersCompareToggle}. Omitted = no switch (every release before v10). */
+    compareToggle?: LayersCompareToggle;
     /** R3 deliverable 3 — see {@link LayersLayerField}. Omitted by the species lens (no metric
      * layer choice there). */
     layerField?: LayersLayerField;
@@ -204,6 +217,7 @@
     labelsAboveData = false,
     dataControls,
     unitToggle,
+    compareToggle,
     layerField,
     speciesField,
     outline,
@@ -329,6 +343,18 @@
         value={unitToggle.value}
         ariaLabel="Spatial units"
         onchange={onUnitToggleChange}
+        fit
+      />
+    </div>
+  {/if}
+
+  {#if compareToggle}
+    <div class="unit-toggle" data-control="layers-compare-toggle">
+      <Segmented
+        options={compareToggle.options}
+        value={compareToggle.value}
+        ariaLabel="Compare"
+        onchange={compareToggle.onChange}
         fit
       />
     </div>

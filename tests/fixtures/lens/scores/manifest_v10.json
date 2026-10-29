@@ -1,0 +1,54 @@
+{
+  "ver": "v10",
+  "status": "prerelease",
+  "metrics": [
+    {
+      "metric_key": "extrisk_bird_v10_global",
+      "subregion_key": "FULL",
+      "label": "Birds, across the nation",
+      "description": "Birds, across the nation",
+      "rescale_min": 0,
+      "rescale_max": 312.4
+    },
+    {
+      "metric_key": "extrisk_mammal_v10_global",
+      "subregion_key": "FULL",
+      "label": "Mammals, across the nation",
+      "description": "Mammals, across the nation",
+      "rescale_min": 0,
+      "rescale_max": 208.9
+    },
+    {
+      "metric_key": "extrisk_turtle_v10_global",
+      "subregion_key": "FULL",
+      "label": "Sea turtles, across the nation",
+      "description": "Sea turtles, across the nation",
+      "rescale_min": 0,
+      "rescale_max": 402.1
+    },
+    {
+      "metric_key": "primprod_v10",
+      "subregion_key": "FULL",
+      "label": "Primary production, across the nation",
+      "description": "Primary production, across the nation",
+      "rescale_min": 0,
+      "rescale_max": 187.5
+    },
+    {
+      "metric_key": "score_v10_equalweights_global",
+      "subregion_key": "FULL",
+      "label": "Overall score, across the nation",
+      "description": "Overall score, across the nation",
+      "rescale_min": 0,
+      "rescale_max": 240.6
+    },
+    {
+      "metric_key": "score_extriskspcat_primprod_ecoregionrescaled_equalweights",
+      "subregion_key": "FULL",
+      "label": "Overall score, within ecoregion",
+      "description": "Overall score, within ecoregion",
+      "rescale_min": 0,
+      "rescale_max": 96
+    }
+  ]
+}

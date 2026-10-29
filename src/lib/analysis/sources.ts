@@ -237,7 +237,7 @@ export class AnalysisSources {
       "NULL::DOUBLE AS area_km2",
       "NULL::BOOLEAN AS in_usa",
       "NULL::BOOLEAN AS in_pra",
-      ...componentMetricKeys(this.boot).map((k) => `NULL::DOUBLE AS ${ident(k)}`),
+      ...componentMetricKeys(this.boot, "all").map((k) => `NULL::DOUBLE AS ${ident(k)}`),
     ];
     await this.engine.exec(`CREATE OR REPLACE VIEW cell AS SELECT ${cols.join(", ")} WHERE FALSE;`);
   }

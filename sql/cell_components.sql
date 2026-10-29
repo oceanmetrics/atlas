@@ -18,6 +18,10 @@
 -- Numbers never come from the tile server (master-plan D4): a clicked cell's score is read from the
 -- wide Parquet tile, never by sampling a rendered COG pixel.
 --
+-- v10 P6: the suffix strip also takes the national scope's `_v10_global` / `_v10` (`extrisk_bird_v10_global`
+-- and `primprod_v10` read "bird" and "primprod", like their ecoregion twins); `.component_of()`'s R twin
+-- is unchanged for every v1-v9 key (the suffix is only ever at the end).
+--
 -- `cols` is the ident()-validated component column list (sql.ts's RAW_ALLOWLIST); a cell_id that is
 -- not in any loaded tile returns zero rows, which is a real answer (off-grid or unscored), not an
 -- error.
@@ -36,7 +40,7 @@ SELECT long.metric_key,
        regexp_replace(
          regexp_replace(
            regexp_replace(long.metric_key, 'extrisk_', ''),
-           '_ecoregion_rescaled', ''),
+           '(_ecoregion_rescaled|_v10_global|_v10)$', ''),
          '_', ' ')                            AS component,
        c.area_km2,
        c.in_usa,
@@ -47,6 +51,6 @@ SELECT long.metric_key,
    AND regexp_replace(
          regexp_replace(
            regexp_replace(long.metric_key, 'extrisk_', ''),
-           '_ecoregion_rescaled', ''),
+           '(_ecoregion_rescaled|_v10_global|_v10)$', ''),
          '_', ' ') <> 'all'
  ORDER BY long.metric_key

@@ -467,3 +467,18 @@ export const MANIFEST_OVERLAYS_V7 = [
     colormap: "spectral_r",
   },
 ];
+
+// v10 P6: a v10-SHAPED bundle (msens 0.60.2: every composite/component layer carries `scope`) -- two
+// composites, two component sets (`ecoregion`, `nation`), a Program Area whose turtle component is
+// ABSENT in the national scope (GAA: not reportable, covers < 5 %), and the raw companions
+// (`*_pct_world`, `*_coverage`) beside the components in `zones[*].metrics`. Derived from the shape
+// `app_boot()` writes (R/app_bundle.R `.metric_scope`, inst/schema/app_boot.schema.json); a real v10
+// bundle is not on S3 yet. `BOOT_V7`/`BOOT_V9` above carry NO `scope` field, like every bundle on S3.
+// The manifest fixture holds the `metric_short_label` wording ("Birds, across the nation").
+import bootV10 from "../../fixtures/lens/scores/boot_v10.json";
+import manifestV10 from "../../fixtures/lens/scores/manifest_v10.json";
+
+export const BOOT_V10 = bootV10;
+export const MANIFEST_V10 = manifestV10;
+export const V10_COMPOSITE_NATION = "score_v10_equalweights_global";
+export const V10_COMPOSITE_ECOREGION = "score_extriskspcat_primprod_ecoregionrescaled_equalweights";

@@ -16,6 +16,7 @@ import { zoneKeyProperty } from "../../lib/map/layers/zones";
 import { ZONE_LINE_WHITE } from "../../lib/map/colors";
 import { paLabel } from "../../places/zoneStats";
 import type { ZoneRow } from "./boot";
+import { NATION_TOOLTIP_SUFFIX, type Scope } from "../../lib/analysis/scope";
 
 /** lightgrey (`app.R:2318`) — a zone with no value for the current layer is drawn, not dropped.
  * Named, not a hex literal (`scripts/check-hex-literals.mjs`'s allow-list is CSS named colors). */
@@ -120,8 +121,10 @@ export function zoneChoropleth(
 }
 
 /** the hover/click tooltip text, verbatim (parity doc §6.4: `"{name}: {round(value)}"`). */
-export function zoneTooltip(v: ZoneValue): string {
-  return `${v.name}: ${roundHalfEven(v.value)}`;
+export function zoneTooltip(v: ZoneValue, scope?: Scope): string {
+  const text = `${v.name}: ${roundHalfEven(v.value)}`;
+  // v10 P6: a national value is a location quotient -- say what 100 is, next to the number
+  return scope === "nation" ? `${text} ${NATION_TOOLTIP_SUFFIX}` : text;
 }
 
 /**

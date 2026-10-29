@@ -10,7 +10,7 @@
   // shown at all for the zone-choropleth branch.
   import Legend from "../../lib/ui/Legend.svelte";
   import { uid } from "../../lib/ui/uid";
-  import { formatScoresLegendValue, type ScoresLegend } from "./mapInputs";
+  import { formatScoresLegendValue, scoresLegendUnit, type ScoresLegend } from "./mapInputs";
   import { legendTitle } from "../../lib/map/legendTitle";
 
   interface Props {
@@ -38,6 +38,8 @@
           lens: "scores",
           branch: legend.kind === "zone" ? "zone" : "raster",
           metricLabel: legend.title,
+          nationScope:
+            legend.kind !== "unavailable" && legend.kind !== "empty" && legend.scope === "nation",
           zoomRegionLabel,
           release,
         })
@@ -61,7 +63,7 @@
       title={lt?.title ?? legend.title}
       subtitle={lt?.subtitle}
       stops={legend.stops}
-      unit="score"
+      unit={scoresLegendUnit(legend)}
       formatValue={formatScoresLegendValue}
       histogram={legend.histogram ?? null}
       marker={legend.marker ?? null}

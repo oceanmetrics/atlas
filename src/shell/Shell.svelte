@@ -921,7 +921,9 @@
   // already shows, reused here so the download title can never drift from what the app displays.
   // Scores: `effectiveLyr` (never raw `sel.lyr`) is the SAME fallback the lens' own `lyr` applies, so
   // the download names what the raster actually paints
-  const downloadLyr = $derived(scoresMod ? scoresMod.effectiveLyr(sel.lyr, boot) : null);
+  const downloadLyr = $derived(
+    scoresLens ? scoresLens.lyr : scoresMod ? scoresMod.effectiveLyr(sel.lyr, boot) : null,
+  );
   const downloadTitle = $derived(
     sel.lens === "species"
       ? (speciesLens.card?.sci ?? "Species")
@@ -934,7 +936,11 @@
   );
   const downloadUnit = $derived(
     __LENS_SCORES__ && sel.lens === "scores"
-      ? "score"
+      ? scoresMod
+        ? scoresMod.scoresLegendUnit(
+            phoneLegend as Parameters<typeof scoresMod.scoresLegendUnit>[0],
+          )
+        : "score"
       : phoneLegend && "unit" in phoneLegend
         ? phoneLegend.unit
         : undefined,

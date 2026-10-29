@@ -80,7 +80,7 @@ export function componentCategory(c: FlowerComponentInput): Category {
 export interface FlowerPetal {
   key: string;
   category: Category;
-  /** the score actually drawn, clamped to [0, 100] */
+  /** the score actually drawn, clamped to [0, scaleMax] (100 unless a caller sets `scaleMax`) */
   score: number;
   startAngle: number;
   endAngle: number;
@@ -105,6 +105,9 @@ export interface FlowerSlot {
   note?: string;
   startAngle: number;
   endAngle: number;
+  /** v10 P6: set only under `hollowAbsent` -- the outline of the whole empty slot (hub to rim), an
+   * unfilled petal that says "this component belongs here and is not reportable", not "zero". */
+  outlinePath?: string;
 }
 
 export interface FlowerGeometry {
@@ -125,6 +128,16 @@ export interface FlowerGeometry {
   innerRadius: number;
 }
 
+/** v10 P6: how a flower reads a unitless, unbounded score -- see `Flower.svelte`'s `scale` prop. */
+export interface FlowerScaleSpec {
+  /** the score drawn at the outer edge (>= the mark). */
+  max: number;
+  /** a labelled ring at `value` (national: 100, "national average"). */
+  mark?: { value: number; label: string };
+  /** an absent component draws as an unfilled outline slot. */
+  hollowAbsent?: boolean;
+}
+
 export interface FlowerGeometryOptions {
   /** the SVG viewBox is `0 0 (2*outerRadius) (2*outerRadius)`; the centre is
    * `(outerRadius, outerRadius)`. Default 100 (a 0-100 viewBox unit maps 1:1 to a score point). */
@@ -136,6 +149,12 @@ export interface FlowerGeometryOptions {
   /** the centre number when the data states it (the composite item's own band value); omitted = the mean of
    * the non-null scores. `null` states "no data". */
   centerValue?: number | null;
+  /** the score drawn at the outer edge, default 100 (a 0-100 score maps 1:1). v10 P6: a national
+   * score is a location quotient, unbounded above (100 = the national average), so the caller
+   * passes a larger ceiling and the petals scale to it; a score above it is clamped to the rim. */
+  scaleMax?: number;
+  /** v10 P6: a null-score slot also carries an `outlinePath` for the caller to draw unfilled. */
+  hollowAbsent?: boolean;
 }
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -250,11 +269,51 @@ export function computeFlowerReferenceRing(
 ): FlowerReferenceRing {
   const outerRadius = options.outerRadius ?? 100;
   const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
   const isFallback =
     maxScore === null || maxScore === undefined || !Number.isFinite(maxScore) || maxScore <= 0;
-  const value = isFallback ? FLOWER_MAX_FALLBACK : signif3(clamp(maxScore as number, 0, 100));
-  const radius = innerRadius + (value / 100) * (outerRadius - innerRadius);
+  const value = isFallback ? FLOWER_MAX_FALLBACK : signif3(clamp(maxScore as number, 0, scaleMax));
+  const radius = innerRadius + (value / scaleMax) * (outerRadius - innerRadius);
   return { value, isFallback, radius };
+}
+
+/** the national average, as a location quotient. */
+export const NATION_AVERAGE = 100;
+
+/**
+ * v10 P6, PURE: the ceiling of a national flower's petal scale. A national component is a location
+ * quotient (100 = the national average), unbounded above, published stretched to [0, p99]
+ * (`by_subregion.FULL.rescale`). The flower scales to that p99, or to the largest component of the
+ * place being drawn when that is larger (so no petal is cut off at the rim), and never below 100 so
+ * the national-average ring always lies inside the plot.
+ */
+export function nationFlowerScaleMax(
+  p99: number | null | undefined,
+  scores: readonly (number | null)[],
+): number {
+  const present = scores.filter((v): v is number => v !== null && Number.isFinite(v));
+  const published = p99 !== null && p99 !== undefined && Number.isFinite(p99) ? p99 : 0;
+  return Math.max(NATION_AVERAGE, published, ...present);
+}
+
+export interface FlowerMarkRing {
+  /** the value the ring marks (signif3'd for display, like {@link FlowerReferenceRing}). */
+  value: number;
+  radius: number;
+}
+
+/** PURE: a reference ring at `value` on a flower scaled to `options.scaleMax` -- v10 P6's ring at
+ * 100 ("national average"). Same radius rule as a petal of that score, so a petal of exactly
+ * `value` ends on the ring. */
+export function computeFlowerMarkRing(
+  value: number,
+  options: FlowerGeometryOptions = {},
+): FlowerMarkRing {
+  const outerRadius = options.outerRadius ?? 100;
+  const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
+  const v = clamp(value, 0, scaleMax);
+  return { value: signif3(v), radius: innerRadius + (v / scaleMax) * (outerRadius - innerRadius) };
 }
 
 /** the ring's own small "contour label" text — "max 93", or "max 100 (no published maximum for
@@ -285,6 +344,7 @@ export function computeFlowerGeometry(
 ): FlowerGeometry {
   const outerRadius = options.outerRadius ?? 100;
   const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
   const n = components.length;
   const petals: FlowerPetal[] = [];
   const noData: FlowerSlot[] = [];
@@ -336,16 +396,28 @@ export function computeFlowerGeometry(
         ...(c.note ? { note: c.note } : {}),
         startAngle,
         endAngle,
+        ...(options.hollowAbsent
+          ? {
+              outlinePath: sectorPath(
+                outerRadius,
+                outerRadius,
+                outerRadius,
+                startAngle,
+                endAngle,
+                innerRadius,
+              ),
+            }
+          : {}),
       });
       return;
     }
-    const score = clamp(c.score, 0, 100);
+    const score = clamp(c.score, 0, scaleMax);
     present.push(score);
     // an ANNULAR sector, innerRadius -> radius (never a pie slice from the true centre) -- see
     // this module's header. score=0 -> radius === innerRadius (degenerate, draws nothing, same
     // "real but invisible" contract as before); score=100 -> radius === outerRadius (reaches the
     // same outer edge a pre-fix pie slice did).
-    const radius = innerRadius + (score / 100) * (outerRadius - innerRadius);
+    const radius = innerRadius + (score / scaleMax) * (outerRadius - innerRadius);
     petals.push({
       key: c.key,
       category,
