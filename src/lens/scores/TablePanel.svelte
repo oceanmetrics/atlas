@@ -12,7 +12,16 @@
   import { componentMetricKeys, type SpeciesRow } from "../../lib/analysis/queries";
   import type { Sel } from "../../lib/state/types";
   import type { SelStore } from "../../lib/state/sel.svelte";
-  import { layerByKey, primaryUnitType, zoneAllKey, zoneRows } from "./boot";
+  import {
+    layerByKey,
+    metricKeyLabel,
+    metricLabelsFromManifest,
+    primaryUnitType,
+    scopeComponentKeys,
+    zoneAllKey,
+    zoneRows,
+  } from "./boot";
+  import { DEFAULT_SCOPE, type Scope } from "../../lib/analysis/scope";
   import { formatZoneToken } from "./selection";
   import type { ScoresSelection } from "./selection";
   import {
@@ -68,6 +77,9 @@
      * `FlowerPanel` already receives), so this panel's header can print "Species in Cell {id} ·
      * {lat}° N, {lon}° W" through the shared `formatSubject()` rather than the id alone. */
     cellCoords?: { lon: number; lat: number };
+    /** v10 P6: the scoring scope the Zones tab ranks in (`"nation"`: two labelled values per
+     * component). Default `"ecoregion"`, unchanged. */
+    scope?: Scope;
     /** R3-W8 item 5 fix round: switches the rail to the Report tool's Places tab -- the empty-state
      * hand-off ("Select places under Report → Places") shown when nothing is selected AND no place
      * has been explicitly added (`reportSubjects()`'s own "last-clicked, selection: null" case). */
@@ -84,6 +96,7 @@
     lyr,
     selection,
     cellCoords,
+    scope = DEFAULT_SCOPE,
     onOpenPlaces,
   }: Props = $props();
 
@@ -271,7 +284,19 @@
   }
 
   const currentLayer = $derived(layerByKey(boot, lyr));
-  const componentKeys = $derived(componentMetricKeys(boot));
+  // national: the SAME component set (and `order`) the flower reads -- layers plus the zone-only
+  // components (`primprod_v10` is no layer); ecoregion: unchanged
+  const componentKeys = $derived(
+    scope === "nation" ? scopeComponentKeys(boot, scope) : componentMetricKeys(boot, scope),
+  );
+  // v10 P6: the manifest's own wording for a metric (item 5 of the phase: labels come from the
+  // manifest when it names them); the national table headers read it, the ecoregion one is unchanged
+  const metricLabels = $derived(metricLabelsFromManifest(manifest));
+  const zonesMetricLabel = $derived(
+    scope === "nation" && lyr
+      ? metricKeyLabel(lyr, metricLabels[lyr] ?? currentLayer?.label)
+      : (currentLayer?.label ?? lyr ?? "Score"),
+  );
   // the zones table always ranks the release's ONE drawable unit (D17) — independent of whether
   // the map is currently in the cell-raster branch or the zone-choropleth branch.
   const zonesUnit = $derived(primaryUnitType(boot) ?? "programarea");
@@ -344,8 +369,10 @@
     <ZonesTable
       zones={zoneRows(boot, zonesUnit)}
       metricKey={lyr ?? ""}
-      metricLabel={currentLayer?.label ?? lyr ?? "Score"}
+      metricLabel={zonesMetricLabel}
       {componentKeys}
+      nation={scope === "nation"}
+      {metricLabels}
       {onSelectZone}
       {onReportSelected}
     />

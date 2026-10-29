@@ -6,14 +6,29 @@
 import { paLabel } from "../../places/zoneStats";
 import { componentLabel } from "./flower";
 import type { ZoneRow } from "./boot";
+import { companionKey } from "../../lib/analysis/scope";
 
 export interface ZonesTableRow {
   key: string;
   name: string;
   /** the current layer's value for this zone, or `null` when unpublished. */
   value: number | null;
-  /** component label (`flower.ts`'s `componentLabel`) -> score, in `componentKeys`' order. */
-  components: ReadonlyArray<{ label: string; score: number | null }>;
+  /** component label (`flower.ts`'s `componentLabel`) -> score, in `componentKeys`' order. In the
+   * national scope each also carries its `key` (the manifest labels it) and `world`, the share of
+   * the world's range the area holds (`extrisk_{cat}_pct_world`); `null` = not reportable there
+   * ("—", absent is not zero). */
+  components: ReadonlyArray<{
+    label: string;
+    score: number | null;
+    key?: string;
+    world?: number | null;
+  }>;
+}
+
+/** does a national component's column pair include the share of the world's range? Not productivity:
+ * it is no species range, so it has no `pct_world` companion. */
+export function hasWorldShare(componentKey: string | undefined): boolean {
+  return !!componentKey && companionKey(componentKey, "pct_world") !== null;
 }
 
 function metricOf(z: ZoneRow, key: string): number | null {
@@ -30,6 +45,7 @@ export function zonesTableRows(
   zones: readonly ZoneRow[],
   metricKey: string,
   componentKeys: readonly string[],
+  opts: { nation?: boolean } = {},
 ): ZonesTableRow[] {
   // P3 fix (owner-reported, 2026-09-24): "Program area selection should list full names and
   // parenthetical acronyms" -- the zones table is a list of every Program Area, so its own Zone
@@ -38,7 +54,12 @@ export function zonesTableRows(
     key: z.key,
     name: paLabel(z.key, z.name),
     value: metricOf(z, metricKey),
-    components: componentKeys.map((k) => ({ label: componentLabel(k), score: metricOf(z, k) })),
+    components: componentKeys.map((k) => {
+      const base = { label: componentLabel(k), score: metricOf(z, k) };
+      if (!opts.nation) return base;
+      const world = companionKey(k, "pct_world");
+      return { ...base, key: k, world: world ? metricOf(z, world) : null };
+    }),
   }));
   return rows.sort((a, b) => {
     if (a.value === null && b.value === null) return 0;

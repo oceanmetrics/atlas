@@ -1,8 +1,8 @@
 diff --git a/src/lens/scores/popup.ts b/src/lens/scores/popup.ts
-index f3ff17b..ced6352 100644
+index 1866e9e..c4f57c1 100644
 --- a/src/lens/scores/popup.ts
 +++ b/src/lens/scores/popup.ts
-@@ -71,13 +71,14 @@ function cellPopupContent(input: CellPopupInput): ValuePopupContent {
+@@ -81,15 +81,14 @@ function cellPopupContent(input: CellPopupInput): ValuePopupContent {
        ? formatLatLon(input.lat, input.lon)
        : formatSubject({ kind: "cell", cellId: input.cellId, lon: input.lon, lat: input.lat });
    const swatch = cellSwatch(input.value, input.ramp);
@@ -11,7 +11,9 @@ index f3ff17b..ced6352 100644
    return {
      subject,
 -    valueLine:
--      input.value === null ? "No scored cell here" : formatValueLine(input.layerLabel, input.value),
+-      input.value === null
+-        ? "No scored cell here"
+-        : valueLineFor(input.layerLabel, input.value, input.scope),
 +    valueLine: formatValueLine(input.layerLabel, input.value),
      swatchColor: swatch?.color ?? null,
      textColor: swatch?.textColor ?? null,

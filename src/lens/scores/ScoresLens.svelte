@@ -31,13 +31,30 @@
   // IS the stack" (Ben's decision R3). `ScoresLayersPanel` above is now only its "Data" row's
   // content, passed in as the `dataControls` snippet below.
   import LibLayersPanel, {
+    type LayersCompareToggle,
     type LayersLayerField,
     type LayersOutlineChoice,
     type LayersProjectionControl,
     type LayersRowState,
     type LayersUnitToggle,
   } from "../../lib/ui/LayersPanel.svelte";
-  import { layerByKey, layerGroups, metricKeyLabel, primaryUnitNote, unitOptions } from "./boot";
+  import {
+    compareSelPatch,
+    defaultLayerKey,
+    hasNationScope,
+    layerByKey,
+    layerGroups,
+    metricKeyLabel,
+    metricLabelsFromManifest,
+    primaryUnitNote,
+    unitOptions,
+  } from "./boot";
+  import {
+    COMPONENT_SQL_PATTERN,
+    SCOPE_LABEL,
+    stripScopeSuffix,
+    type Scope,
+  } from "../../lib/analysis/scope";
   import { isPlacesSelectionEmpty } from "../../lib/state/types";
   import { placesFromHash } from "../../places/model";
   import FlowerPanel from "./FlowerPanel.svelte";
@@ -151,14 +168,39 @@
   // moved OUT again, into `ScoresSearch.svelte`'s "Regions" group (`search.ts#matchRegions`,
   // `state.svelte.ts#selectRegion`) -- "the Search bar is really a zoom to this place... Region
   // ... could also [live] there too" (Ben). `LibLayersPanel`'s `zoomField` prop is gone with it.
-  const groups = $derived(layerGroups(boot));
+  const scope = $derived(lens.scope);
+  const groups = $derived(layerGroups(boot, scope));
+
+  // v10 P6: the "Compare" switch (Within ecoregion | Across the nation), shown ONLY when this release
+  // publishes national layers. Switching re-targets the layer to the same-category counterpart in the
+  // new scope (composite -> composite, bird -> bird, else the composite) in the SAME write as `cmp`,
+  // so the map never draws a layer of the old scope under the new mode.
+  function onCompareChange(value: string) {
+    const next: Scope = value === "nation" ? "nation" : "ecoregion";
+    selStore.set(compareSelPatch(boot, lens.lyr, next));
+  }
+  const compareToggle = $derived<LayersCompareToggle | undefined>(
+    hasNationScope(boot)
+      ? {
+          options: [
+            { value: "ecoregion", label: SCOPE_LABEL.ecoregion },
+            { value: "nation", label: SCOPE_LABEL.nation },
+          ],
+          value: scope,
+          onChange: onCompareChange,
+        }
+      : undefined,
+  );
 
   // Fix round (orchestrator, 2026-09-25, R3-B1): the WHOLE `metricLabels ?? layer.label` chain
   // now routes through `metricKeyLabel()` as its `label` argument -- a curated label that is
   // itself just the bare key ("score") is caught there too, not only an ABSENT one (see that
   // function's own header for why the old `?? metricKeyLabel(key)` tail never saw that case).
-  function metricLabel(l: { metric_key: string; label?: string }): string {
-    return metricKeyLabel(l.metric_key, lens.metricLabels[l.metric_key] ?? l.label);
+  function metricLabel(l: { metric_key: string; label?: string; category?: string }): string {
+    const label = metricKeyLabel(l.metric_key, lens.metricLabels[l.metric_key] ?? l.label);
+    // inside the national mode a component's label loses the mode's own words ("Birds, across the
+    // nation" -> "Birds"); the composite and the raw layers keep theirs
+    return scope === "nation" && l.category === "component" ? stripScopeSuffix(label) : label;
   }
 
   function onLyrChange(value: string) {
@@ -240,6 +282,10 @@
   $effect(() => {
     const s = selection;
     const v = ver;
+    // read synchronously so the effect re-runs when the mode (or the manifest's labels) change
+    const sc = scope;
+    const labels = sc === "nation" ? metricLabelsFromManifest(manifest) : undefined;
+    const compositeKey = sc === "nation" ? defaultLayerKey(boot, sc) : null;
     if (s?.kind !== "cell") {
       cellFlowerRows = undefined;
       cellFlowerError = null;
@@ -256,18 +302,33 @@
       const sources = await getAnalysisSources(v, bootObj);
       return exclusive(sources.db, async () => {
         await sources.cellTiles([tile]);
-        const { cellComponents } = await import("../../lib/analysis/queries");
+        const { cellComponents, cellValue } = await import("../../lib/analysis/queries");
         const rows = await cellComponents(sources.db, sources.templates, {
           cellId: s.cellId,
-          metricKeys: componentMetricKeys(bootObj),
+          metricKeys: componentMetricKeys(bootObj, sc),
+          metricPattern: COMPONENT_SQL_PATTERN[sc],
+          // national: a component the cell does not carry is an (empty) slot, like a zone's
+          includeNulls: sc === "nation",
         });
+        // the centre of a national cell flower is the cell's own published composite
+        let center: number | null = null;
+        if (compositeKey) {
+          center = await cellValue(sources.db, sources.templates, {
+            cellId: s.cellId,
+            metricKey: compositeKey,
+          }).catch(() => null);
+        }
         // `cellComponents()` is typed as `Promise<Record<string, unknown>[]>` (a generic engine
         // result); `sql/cell_components.sql`'s actual columns are exactly `CellComponentRow`'s.
-        return rows as unknown as CellComponentRow[];
+        return { rows: rows as unknown as CellComponentRow[], center };
       });
     })()
-      .then((rows) => {
-        if (token === cellFlowerToken) cellFlowerRows = cellFlowerComponents(rows);
+      .then(({ rows, center }) => {
+        if (token === cellFlowerToken)
+          cellFlowerRows = cellFlowerComponents(
+            rows,
+            labels ? { metricLabels: labels, center } : undefined,
+          );
       })
       .catch((err: unknown) => {
         if (token !== cellFlowerToken) return;
@@ -297,6 +358,7 @@
     stack={layerStack}
     onChange={onLayerStackChange}
     {unitToggle}
+    {compareToggle}
     {layerField}
     {outline}
     {projection}
@@ -337,6 +399,7 @@
       {boot}
       {manifest}
       {selection}
+      {scope}
       cellComponents={cellFlowerRows}
       cellComponentsError={cellFlowerError}
       {cellCoords}
@@ -355,6 +418,7 @@
     {lyr}
     {selection}
     {cellCoords}
+    {scope}
     {onOpenPlaces}
   />
 {:else}

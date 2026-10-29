@@ -47,14 +47,17 @@
   import {
     componentCategory,
     computeFlowerGeometrySafe,
+    computeFlowerMarkRing,
     computeFlowerReferenceRing,
     describeFlowerSummary,
     flowerReferenceRingLabel,
     flowerViewBox,
     petalCentroid,
     petalLabelText,
+    petalTooltipText,
     type FlowerComponentInput,
     type FlowerPetal,
+    type FlowerScaleSpec,
   } from "./flowerGeometry";
 
   interface Props {
@@ -96,6 +99,13 @@
      * caller (`FlowerPanel.svelte`, the gallery) has no such table of its own, so the default stays
      * `true` -- unchanged there. */
     showTable?: boolean;
+    /** v10 P6: a NATIONAL flower -- scores are location quotients (100 = the national average),
+     * unbounded above, so the petals scale to `scale.max`, a labelled ring marks `scale.mark`, and an
+     * absent component (`hollowAbsent`) draws as an unfilled outline. Omitted = the 0-100 ecoregion
+     * flower, unchanged. */
+    scale?: FlowerScaleSpec;
+    /** the table's score column header (default "Score"; national: "vs national avg"). */
+    scoreHeader?: string;
   }
 
   let {
@@ -107,6 +117,8 @@
     size = 480,
     maxScore = null,
     showTable = true,
+    scale,
+    scoreHeader = "Score",
   }: Props = $props();
 
   const uid = nextUid();
@@ -120,7 +132,10 @@
   // via `droppedLabels` instead) degrades to "drop the duplicate, draw the rest" rather than
   // blanking the whole flower -- see flowerGeometry.ts.
   const safe = $derived(
-    computeFlowerGeometrySafe(components, center === undefined ? {} : { centerValue: center }),
+    computeFlowerGeometrySafe(components, {
+      ...(center === undefined ? {} : { centerValue: center }),
+      ...(scale ? { scaleMax: scale.max, hollowAbsent: scale.hollowAbsent === true } : {}),
+    }),
   );
   const geometry = $derived(safe.geometry);
   const roundedCenter = $derived(
@@ -131,9 +146,24 @@
   // when the caller has one, else `computeFlowerReferenceRing`'s own fallback. Uses the SAME
   // `innerRadius` `geometry` drew its petals with, so the two can never independently drift.
   const ring = $derived(
-    computeFlowerReferenceRing(maxScore, { innerRadius: geometry.innerRadius }),
+    computeFlowerReferenceRing(scale ? scale.max : maxScore, {
+      innerRadius: geometry.innerRadius,
+      ...(scale ? { scaleMax: scale.max } : {}),
+    }),
   );
   const ringLabel = $derived(flowerReferenceRingLabel(ring));
+  // v10 P6: the labelled ring at the scale's mark (100, "national average"). When the plot's whole
+  // scale IS the mark (max == 100) the outer ring and this one coincide, so only this one is drawn.
+  const markRing = $derived(
+    scale?.mark
+      ? computeFlowerMarkRing(scale.mark.value, {
+          innerRadius: geometry.innerRadius,
+          scaleMax: scale.max,
+        })
+      : null,
+  );
+  const showMaxRing = $derived(!markRing || scale === undefined || scale.max > scale.mark!.value);
+  const markLabelTopPct = $derived(markRing ? (100 - Math.min(markRing.radius + 6, 96)) / 2 : 0);
   // the label's own on-screen position: a small inset from the ring's TOPMOST point (never past
   // the ring itself, never past the viewBox edge) so it never clips regardless of how large `ring`
   // is -- a contour label sitting just inside its own line.
@@ -218,7 +248,7 @@
         class="flower-svg"
         viewBox={flowerViewBox()}
         role="group"
-        aria-label={`Composite mean ${roundedCenter !== null ? roundedCenter : "no data"}, reference ${ringLabel}`}
+        aria-label={`Composite mean ${roundedCenter !== null ? roundedCenter : "no data"}, reference ${markRing && scale?.mark ? `${scale.mark.label} ${markRing.value}, ${ringLabel}` : ringLabel}`}
       >
         <!-- role="group" (never "img") on the SVG above: an "img" role makes its whole subtree
              presentational, which is exactly what swallowed each petal's own name (axe
@@ -235,15 +265,44 @@
              line drawing a visible seam across the topmost petal. Decorative (aria-hidden): the
              SAME value is already stated in the group's own aria-label above and in the visible
              `.ring-label` beside it -- never a THIRD, competing source of this number. -->
-        <circle
-          cx="100"
-          cy="100"
-          r={ring.radius}
-          class="reference-ring"
-          data-testid="flower-reference-ring"
-          data-ring-value={ring.value}
-          aria-hidden="true"
-        />
+        {#if showMaxRing}
+          <circle
+            cx="100"
+            cy="100"
+            r={ring.radius}
+            class="reference-ring"
+            data-testid="flower-reference-ring"
+            data-ring-value={ring.value}
+            aria-hidden="true"
+          />
+        {/if}
+        {#if markRing}
+          <circle
+            cx="100"
+            cy="100"
+            r={markRing.radius}
+            class="reference-ring reference-ring--mark"
+            data-testid="flower-mark-ring"
+            data-ring-value={markRing.value}
+            aria-hidden="true"
+          />
+        {/if}
+        {#each geometry.noData as slot (slot.key)}
+          {#if slot.outlinePath}
+            <!-- v10 P6: an absent component draws as an unfilled outline of its whole slot -- it
+                 belongs on the flower and has no value to report (absent, never zero). -->
+            <path
+              d={slot.outlinePath}
+              class="petal-hollow"
+              style={`stroke: var(${slot.category.color})`}
+              data-testid="flower-hollow-petal"
+              role="img"
+              aria-label={`${slot.category.label}: ${slot.note ?? "No data"}`}
+            >
+              <title>{slot.category.label}: {slot.note ?? "No data"}</title>
+            </path>
+          {/if}
+        {/each}
         {#each geometry.petals as p (p.key)}
           <!-- data-cx/data-cy below: this petal's own on-screen (viewBox) centroid (petalCentroid --
                flowerGeometry.ts), so e2e/scores.flower.spec.ts can probe the exact pixel a petal's
@@ -283,9 +342,52 @@
               if (hoveredKey === p.key) hoveredKey = null;
             }}
           >
-            <title>{petalLabelText(p)}</title>
+            <title>{petalTooltipText(p)}</title>
           </path>
         {/each}
+        {#if scale}
+          {#each geometry.petals as p (p.key)}
+            {#if p.clipped}
+              <!-- v10 P6: a value above the plot's scale is drawn to the rim; this marker (a small
+                   triangle pointing out) and the number say it was cut, never a longer petal. -->
+              {@const mid = (p.startAngle + p.endAngle) / 2}
+              {@const tip = petalCentroid(
+                { startAngle: mid, endAngle: mid, innerRadius: 99, radius: 99 },
+                100,
+                100,
+              )}
+              {@const left = petalCentroid(
+                { startAngle: mid - 4, endAngle: mid - 4, innerRadius: 92, radius: 92 },
+                100,
+                100,
+              )}
+              {@const right = petalCentroid(
+                { startAngle: mid + 4, endAngle: mid + 4, innerRadius: 92, radius: 92 },
+                100,
+                100,
+              )}
+              {@const num = petalCentroid(
+                { startAngle: mid, endAngle: mid, innerRadius: 82, radius: 82 },
+                100,
+                100,
+              )}
+              <path
+                d={`M ${tip.x.toFixed(2)} ${tip.y.toFixed(2)} L ${left.x.toFixed(2)} ${left.y.toFixed(2)} L ${right.x.toFixed(2)} ${right.y.toFixed(2)} Z`}
+                class="clip-marker"
+                data-testid="flower-clip-marker"
+                aria-hidden="true"
+              />
+              <text
+                x={num.x}
+                y={num.y}
+                text-anchor="middle"
+                dy="0.35em"
+                class="clip-number"
+                aria-hidden="true">{formatScore(p.clipped.actual)}</text
+              >
+            {/if}
+          {/each}
+        {/if}
         <circle cx="100" cy="100" r={geometry.innerRadius} class="hub" />
         <!-- P3 fix (Opus eyes-on review, 2026-09-24, phone-07/desktop-07, new with the bigger
              flower): the hub number's own glyph feet used to poke out below the `.petal-label`
@@ -309,9 +411,21 @@
            sit behind the ring at this angle (an SVG <text> here would sit over whatever colored
            petal reaches this high, an untestable/uncheckable contrast pair). Purely visual: the
            SAME value is already in the SVG group's own aria-label above. -->
-      <div class="ring-label" style={`top: ${ringLabelTopPct}%`} aria-hidden="true">
-        {ringLabel}
-      </div>
+      {#if showMaxRing}
+        <div class="ring-label" style={`top: ${ringLabelTopPct}%`} aria-hidden="true">
+          {ringLabel}
+        </div>
+      {/if}
+      {#if markRing && scale?.mark}
+        <div
+          class="ring-label ring-label--mark"
+          style={`top: ${markLabelTopPct}%`}
+          data-testid="flower-mark-label"
+          aria-hidden="true"
+        >
+          {scale.mark.label}
+        </div>
+      {/if}
 
       {#if shownPetal}
         <!-- purely visual (the SAME text already reaches assistive tech via the petal's own
@@ -349,7 +463,7 @@
             <tr>
               <th scope="col"><span class="sr-only">Color</span></th>
               <th scope="col">Component</th>
-              <th scope="col">Score</th>
+              <th scope="col">{scoreHeader}</th>
             </tr>
           </thead>
           <tbody>
@@ -461,6 +575,33 @@
      aria-label) -- so `--border-control` (already the "quiet outline" token, e.g. the flower
      table's own row borders use `--divider`, its sibling) rather than a `--cat-*`/`--focus-ring`
      color that would read as a selected/active state. */
+  /* v10 P6: the national-average ring is the plot's one reference, so it is the solid one */
+  .reference-ring--mark {
+    stroke-dasharray: none;
+    opacity: 0.9;
+  }
+
+  .clip-marker {
+    fill: var(--text-primary);
+    stroke: var(--surface-panel);
+    stroke-width: 0.5;
+  }
+
+  .clip-number {
+    fill: var(--text-primary);
+    font-size: 9px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: var(--surface-panel);
+    stroke-width: 2.5px;
+  }
+
+  .petal-hollow {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 3 2;
+  }
+
   .reference-ring {
     fill: none;
     stroke: var(--border-control);

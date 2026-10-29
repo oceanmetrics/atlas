@@ -24,11 +24,23 @@ import type { ZoneUnitSpec } from "../../lib/map/types";
 // from the SAME rule `flower.ts#fromMetrics` uses to build the petals themselves. A type-only import
 // already runs the other way (`flower.ts` -> `ZoneRow` from this file), so this adds no runtime cycle.
 import { componentLabel } from "./flower";
+import {
+  DEFAULT_SCOPE,
+  SCOPE_COMPONENT_GROUP_LABEL,
+  nationScaleMax,
+  rowScope,
+  scopeComponentSet,
+  type Scope,
+} from "../../lib/analysis/scope";
 
 export interface BootLayerRow {
   metric_key: string;
   label?: string;
   category: string;
+  /** v10 P6 (msens 0.60.2): `"ecoregion"` | `"nation"` on a composite/component row, `null` on a raw
+   * row. ABSENT on every bundle published before 0.60.2 -- read through `rowScope()`, which treats a
+   * composite/component row without one as `"ecoregion"`. */
+  scope?: string | null;
   order: number;
   colormap?: string;
   by_subregion?: Record<string, { cog?: string; rescale?: [number, number] }>;
@@ -114,17 +126,43 @@ export function layerRows(boot: unknown): BootLayerRow[] {
   return Array.isArray(rows) ? rows.filter(isLayerRow) : [];
 }
 
+/** does this row belong in the picker/default of `scope`? A raw row (no scope) always does; `scope`
+ * `undefined` = no filtering at all (every pre-P6 caller). */
+function inScope(row: BootLayerRow, scope: Scope | undefined): boolean {
+  if (scope === undefined) return true;
+  const s = rowScope(row);
+  return s === null || s === scope;
+}
+
+/** v10 P6: does the release publish any NATIONAL composite/component? It decides whether the mode
+ * toggle exists at all; a bundle without `scope` fields (v1-v9 on S3 today) never does. */
+export function hasNationScope(boot: unknown): boolean {
+  return layerRows(boot).some((r) => rowScope(r) === "nation");
+}
+
+/** the scope the lens is in: `"nation"` only when asked for AND the release publishes it, else the
+ * ecoregion scope -- a stale `?cmp=nation` on a v7 link is harmless. */
+export function effectiveScope(wantNation: boolean, boot: unknown): Scope {
+  return wantNation && hasNationScope(boot) ? "nation" : DEFAULT_SCOPE;
+}
+
 /**
  * The layer `<select>`'s groups: composite first (there is exactly one — the "overall score"),
  * then component, then raw, each sorted by the row's own `order` ascending. A category the release
- * does not publish is simply absent, never an empty group.
+ * does not publish is simply absent, never an empty group. With a `scope`, the composite and
+ * component groups hold only that scope's rows (v10 publishes two of each); the raw group is
+ * unchanged.
  */
-export function layerGroups(boot: unknown): LayerGroup[] {
-  const rows = layerRows(boot);
+export function layerGroups(boot: unknown, scope?: Scope): LayerGroup[] {
+  const rows = layerRows(boot).filter((r) => inScope(r, scope));
   const groups: LayerGroup[] = [];
   for (const category of CATEGORY_GROUP_ORDER) {
     const layers = rows.filter((r) => r.category === category).sort((a, b) => a.order - b.order);
-    if (layers.length) groups.push({ category, label: CATEGORY_LABEL[category], layers });
+    const label =
+      category === "component" && scope
+        ? SCOPE_COMPONENT_GROUP_LABEL[scope]
+        : CATEGORY_LABEL[category];
+    if (layers.length) groups.push({ category, label, layers });
   }
   // an unrecognized category (a future release) still gets a group, appended last, rather than
   // silently dropping those layers from the picker.
@@ -141,18 +179,89 @@ export function layerGroups(boot: unknown): LayerGroup[] {
 }
 
 /**
- * The default layer: the release's one `category === "composite"` row (the overall score) —
- * derived, never `boot.layers[0]` or a hardcoded metric_key. `null` for a boot with no composite
- * row at all (should not happen on a published release, but this module never assumes it).
+ * The default layer: the release's first `category === "composite"` row (the overall score) —
+ * derived, never `boot.layers[0]` or a hardcoded metric_key. With a `scope`, the first composite OF
+ * THAT SCOPE (a v10 release has two); none of that scope falls back to any composite. `null` for a
+ * boot with no composite row at all (should not happen on a published release, but this module
+ * never assumes it).
  */
-export function defaultLayerKey(boot: unknown): string | null {
-  const composite = layerRows(boot).find((r) => r.category === "composite");
-  return composite?.metric_key ?? null;
+export function defaultLayerKey(boot: unknown, scope?: Scope): string | null {
+  const composites = layerRows(boot).filter((r) => r.category === "composite");
+  const scoped = scope ? composites.find((r) => rowScope(r) === scope) : undefined;
+  return (scoped ?? composites[0])?.metric_key ?? null;
+}
+
+/**
+ * The layer to show after the scope changes (the mode toggle, or a link whose `lyr` belongs to the
+ * other scope): a raw layer, and any layer already in `scope`, stay; a composite becomes `scope`'s
+ * composite; a component becomes the same-category component of `scope` (`componentLabel` equal:
+ * bird -> bird) when there is one, else `scope`'s composite.
+ */
+export function retargetLayerKey(
+  boot: unknown,
+  key: string | null | undefined,
+  scope: Scope,
+): string | null {
+  const row = layerByKey(boot, key);
+  if (!row) return defaultLayerKey(boot, scope);
+  const from = rowScope(row);
+  if (from === null || from === scope) return row.metric_key;
+  if (row.category === "component") {
+    const label = componentLabel(row.metric_key);
+    const twin = layerRows(boot).find(
+      (r) =>
+        r.category === "component" &&
+        rowScope(r) === scope &&
+        componentLabel(r.metric_key) === label,
+    );
+    if (twin) return twin.metric_key;
+  }
+  return defaultLayerKey(boot, scope);
+}
+
+/**
+ * The `Sel` patch the Compare switch writes: the mode, and the layer re-targeted into the new scope
+ * (`retargetLayerKey`) -- except that the scope's own DEFAULT layer is never written, so `lyr=` stays
+ * out of the URL (`undefined` clears it).
+ */
+export function compareSelPatch(
+  boot: unknown,
+  currentLyr: string | null | undefined,
+  next: Scope,
+): { cmp: "region" | "nation"; lyr: string | undefined } {
+  const target = retargetLayerKey(boot, currentLyr, next);
+  return {
+    cmp: next === "nation" ? "nation" : "region",
+    lyr: target === defaultLayerKey(boot, next) ? undefined : (target ?? undefined),
+  };
+}
+
+/** the component `metric_key`s a place's flower and the zones table read for `scope`: the boot's
+ * component layers in their `order`, plus (national) the zone-only components found in the zones'
+ * metrics -- `primprod_v10` is no layer on a real v10 bundle. See `scope.ts#scopeComponentSet`. */
+export function scopeComponentKeys(boot: unknown, scope: Scope): string[] {
+  return scopeComponentSet(layerRows(boot), boot, scope);
 }
 
 export function layerByKey(boot: unknown, key: string | undefined | null): BootLayerRow | null {
   if (!key) return null;
   return layerRows(boot).find((r) => r.metric_key === key) ?? null;
+}
+
+/** the scope of the layer `key` (`"nation"` | `"ecoregion"` for a composite/component row, `null` for a
+ * raw layer or an unknown key). The legend, its unit and the popups read THIS -- the selected layer's
+ * scope -- never the mode: a raw layer in the national mode is not a location quotient. */
+export function layerScope(boot: unknown, key: string | null | undefined): Scope | null {
+  return rowScope(layerByKey(boot, key));
+}
+
+/** the release's one national petal scale (`scope.ts#nationScaleMax`), over the drawable unit. */
+export function nationFlowerScale(boot: unknown): number {
+  return nationScaleMax(
+    boot,
+    primaryUnitType(boot) ?? "programarea",
+    scopeComponentKeys(boot, "nation"),
+  );
 }
 
 /**

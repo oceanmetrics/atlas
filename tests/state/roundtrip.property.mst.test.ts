@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { formatSel, parseSel } from "../../src/lib/state/codec";
 import {
+  COMPARES,
   DEFAULT_SEL,
   OUTLINES,
   PALETTES,
@@ -100,6 +101,7 @@ function randomSel(rng: Rng): Sel {
     rep: rng.pick(REPRESENTATIONS),
     us,
     out,
+    cmp: rng.pick(COMPARES),
     obis,
     sel: rng.maybe(() => {
       const kind = rng.int(0, 2);

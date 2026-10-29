@@ -1,0 +1,13 @@
+diff --git a/src/lens/scores/boot.ts b/src/lens/scores/boot.ts
+index 20c9f10..8623d36 100644
+--- a/src/lens/scores/boot.ts
++++ b/src/lens/scores/boot.ts
+@@ -252,7 +252,7 @@ export function layerByKey(boot: unknown, key: string | undefined | null): BootL
+  * raw layer or an unknown key). The legend, its unit and the popups read THIS -- the selected layer's
+  * scope -- never the mode: a raw layer in the national mode is not a location quotient. */
+ export function layerScope(boot: unknown, key: string | null | undefined): Scope | null {
+-  return rowScope(layerByKey(boot, key));
++  return hasNationScope(boot) ? "nation" : rowScope(layerByKey(boot, key));
+ }
+ 
+ /** the release's one national petal scale (`scope.ts#nationScaleMax`), over the drawable unit. */

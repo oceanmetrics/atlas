@@ -83,6 +83,7 @@ function randomSel(rng: Rng): Sel {
     unit: DEFAULT_SEL.unit,
     area: DEFAULT_SEL.area,
     out: DEFAULT_SEL.out,
+    cmp: DEFAULT_SEL.cmp,
     lens,
     pal: rng.pick(PALETTES),
     map: rng.maybe(

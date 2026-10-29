@@ -329,6 +329,41 @@ describe("zl: default true (zoom-to-layer on); only zl=0 turns it off (R3-W8 ite
   });
 });
 
+describe("cmp: region (default, never written) | nation (v10 P6, the Compare mode)", () => {
+  it("defaults to region with no key", () => {
+    expect(parseSel(EMPTY).cmp).toBe("region");
+    expect(DEFAULT_SEL.cmp).toBe("region");
+  });
+
+  it("cmp=nation parses, and round-trips through formatSel", () => {
+    const sel = parseSel({ search: "?cmp=nation", hash: "" });
+    expect(sel.cmp).toBe("nation");
+    expect(formatSel(sel).search).toBe("?cmp=nation");
+    expect(parseSel({ ...formatSel(sel) }).cmp).toBe("nation");
+  });
+
+  it("cmp=region is the default: parsed, never written", () => {
+    expect(parseSel({ search: "?cmp=region", hash: "" }).cmp).toBe("region");
+    expect(formatSel({ ...DEFAULT_SEL, cmp: "region" }).search).toBe("");
+  });
+
+  it("an unknown value clamps to the default instead of throwing", () => {
+    expect(parseSel({ search: "?cmp=bogus", hash: "" }).cmp).toBe("region");
+    expect(parseSel({ search: "?cmp=", hash: "" }).cmp).toBe("region");
+    expect(parseSel({ search: "?cmp=NATION", hash: "" }).cmp).toBe("region");
+  });
+
+  it("travels with the layer it re-targets", () => {
+    const sel = parseSel({
+      search: "?lyr=extrisk_bird_v10_global&cmp=nation&unit=programarea",
+      hash: "",
+    });
+    expect(sel.lyr).toBe("extrisk_bird_v10_global");
+    expect(sel.cmp).toBe("nation");
+    expect(formatSel(sel).search).toBe("?lyr=extrisk_bird_v10_global&unit=programarea&cmp=nation");
+  });
+});
+
 describe("obis: default false (off); only obis=1 turns it on", () => {
   it("defaults to false", () => {
     expect(parseSel(EMPTY).obis).toBe(false);

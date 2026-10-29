@@ -60,9 +60,12 @@ import { OUTSIDE_PRA_CLASSES, outsidePraCog, type ManifestOverlayRow } from "./r
 import type { ReleaseCogChoice, ReleaseCogRequest } from "../../lib/raster/releaseCog";
 import { OVERLAY_RASTER_OPACITY, SCORE_RASTER_OPACITY } from "../../lib/map/layers/raster";
 import type { SessionLike } from "../../lib/release/dataBase";
+import type { Scope } from "../../lib/analysis/scope";
 import {
+  effectiveScope,
   fullSubregion,
   layerByKey,
+  layerScope,
   metricLabelsFromManifest,
   primaryUnitType,
   zoneCacheKey,
@@ -132,6 +135,9 @@ export interface ScoresLens {
   /** the resolved `metric_key` — `sel.lyr` already fallen back (`fallback.ts#effectiveLyr`); never
    * `undefined` once a release's `boot` has loaded. */
   readonly lyr: string | null;
+  /** v10 P6: the scoring scope in force -- `"nation"` only when `sel.cmp` asks for it AND the
+   * release publishes national layers, else `"ecoregion"` (every release before v10). */
+  readonly scope: Scope;
   /** `manifest.overlays`, read once here so `ScoresLens.svelte`/`LayersPanel.svelte` never derive
    * it a second time. */
   readonly manifestOverlays: readonly ManifestOverlayRow[] | null;
@@ -240,7 +246,11 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
   const metricLabels = $derived(metricLabelsFromManifest(deps.manifest()));
 
   const unit = $derived(effectiveUnit(deps.selStore.sel.unit, deps.boot()));
-  const lyr = $derived(effectiveLyr(deps.selStore.sel.lyr, deps.boot()));
+  const scope = $derived(effectiveScope(deps.selStore.sel.cmp === "nation", deps.boot()));
+  const lyr = $derived(effectiveLyr(deps.selStore.sel.lyr, deps.boot(), scope));
+  // v10 P6: the popups anchor a value ("national avg = 100") by the SELECTED LAYER's scope, never the
+  // mode: a raw layer in the national mode is not a location quotient
+  const lyrScope = $derived(layerScope(deps.boot(), lyr));
 
   const selection: ScoresSelection = $derived(parseScoresSelection(deps.selStore.sel.sel));
 
@@ -484,8 +494,13 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
     const stops = lyr ? paletteStopsWithFallback(bootObj, deps.selStore.sel.pal) : null;
     setMarker(zoneValue);
     return {
-      html: zonePopupText({ zones: zRows, lyr, zone, stops }),
-      announceText: zonePopupAnnounceText({ zones: zRows, lyr, zone }),
+      html: zonePopupText({ zones: zRows, lyr, zone, stops, scope: lyrScope ?? undefined }),
+      announceText: zonePopupAnnounceText({
+        zones: zRows,
+        lyr,
+        zone,
+        scope: lyrScope ?? undefined,
+      }),
     };
   }
 
@@ -540,6 +555,7 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
       layerLabel: label,
       value,
       ramp,
+      scope: lyrScope ?? undefined,
     };
     // D3(a) round 2 (orchestrator, 2026-09-24 -- fixes a regression the FIRST D3 fix introduced):
     // `handleMapClick` below now writes `sel` EAGERLY, synchronously, on click -- exactly the
@@ -658,6 +674,9 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
     },
     get lyr() {
       return lyr;
+    },
+    get scope() {
+      return scope;
     },
     get manifestOverlays() {
       return manifestOverlays;
@@ -797,7 +816,9 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
       // CI's fully-parallel three-engine job. The retry is a SECOND, later attempt at the exact
       // same resolution (`zoneKnownBounds`), never a different one: `zoneCenterFromBoot` is not
       // re-tried (it reads only `boot`, which does not change between attempts).
-      announce(zonePopupAnnounceText({ zones: zRows, lyr, zone: hit }));
+      announce(
+        zonePopupAnnounceText({ zones: zRows, lyr, zone: hit, scope: lyrScope ?? undefined }),
+      );
       if (handle) void retryZoneFlyAfterIdle(handle, boot, unit, key, hit, zRows);
     },
 

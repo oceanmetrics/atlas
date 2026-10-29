@@ -12,6 +12,8 @@
 //     "Raster cells"); Program Areas: "Program Areas · {release}".
 //   - species:     "{common name} (*{binomial}*)" title, "{input label} · {representation} ·
 //     {value semantics}" subtitle.
+import { NATION_AVG_NOTE } from "../analysis/scope";
+
 export interface LegendTitleContext {
   lens: "collection" | "scores" | "species";
   /** collection only: the item's own title (the dimension selection spelled out), else its id. */
@@ -30,6 +32,9 @@ export interface LegendTitleContext {
   release?: string | null;
   /** scores only: a component whose values are rescaled 0-100 within each ecoregion. */
   rescaledByEcoregion?: boolean;
+  /** scores only (v10 P6): the layer is a NATIONAL one -- a location quotient, 100 = the national
+   * average -- and the subtitle says so. */
+  nationScope?: boolean;
   /** species only. */
   commonName?: string;
   scientificName?: string;
@@ -66,13 +71,14 @@ function collectionLegendTitle(ctx: LegendTitleContext): LegendTitle {
 /** the scores lens' two branches. */
 function scoresLegendTitle(ctx: LegendTitleContext): LegendTitle {
   const title = ctx.metricLabel ?? "Score";
+  const anchor = ctx.nationScope ? NATION_AVG_NOTE : null;
   if (ctx.branch === "zone") {
-    return { title, subtitle: joinClauses(["Program Areas", ctx.release]) };
+    return { title, subtitle: joinClauses(["Program Areas", anchor, ctx.release]) };
   }
   // raster (default branch when unspecified -- every scores legend that is not the zone
   // choropleth is a raster-cells one).
   const unit = ctx.rescaledByEcoregion ? "Rescaled 0-100 by ecoregion" : "Raster cells";
-  return { title, subtitle: joinClauses([unit, ctx.zoomRegionLabel, ctx.release]) };
+  return { title, subtitle: joinClauses([unit, anchor, ctx.zoomRegionLabel, ctx.release]) };
 }
 
 /** the species lens: common name + italic-flagged binomial as the title (the caller renders the

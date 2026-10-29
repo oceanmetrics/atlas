@@ -64,6 +64,8 @@ export interface FlowerComponentInput {
   color?: string;
   /** why a null score is null, shown beside the empty slot ("(not in AquaMaps)"); absent = "No data". */
   note?: string;
+  /** v10 P6: the component's full label, for the petal's tooltip when `label` is the short form. */
+  fullLabel?: string;
 }
 
 /** the category row a component draws with: the table's row for its key, with the component's own label and
@@ -80,7 +82,7 @@ export function componentCategory(c: FlowerComponentInput): Category {
 export interface FlowerPetal {
   key: string;
   category: Category;
-  /** the score actually drawn, clamped to [0, 100] */
+  /** the score actually drawn, clamped to [0, scaleMax] (100 unless a caller sets `scaleMax`) */
   score: number;
   startAngle: number;
   endAngle: number;
@@ -88,6 +90,10 @@ export interface FlowerPetal {
    * coordinates) -- exposed so a caller/test can compute this petal's on-screen centroid without
    * parsing `path` (see `petalCentroid`). */
   innerRadius: number;
+  /** v10 P6: set only when the score was above `scaleMax` and drawn to the rim: the true value. */
+  clipped?: { actual: number };
+  /** v10 P6: the component's full label (tooltip), when the displayed one is the short form. */
+  fullLabel?: string;
   /** this petal's own OUTER edge radius: `innerRadius` when `score` is 0, the geometry's
    * `outerRadius` option when `score` is 100. */
   radius: number;
@@ -105,6 +111,9 @@ export interface FlowerSlot {
   note?: string;
   startAngle: number;
   endAngle: number;
+  /** v10 P6: set only under `hollowAbsent` -- the outline of the whole empty slot (hub to rim), an
+   * unfilled petal that says "this component belongs here and is not reportable", not "zero". */
+  outlinePath?: string;
 }
 
 export interface FlowerGeometry {
@@ -125,6 +134,16 @@ export interface FlowerGeometry {
   innerRadius: number;
 }
 
+/** v10 P6: how a flower reads a unitless, unbounded score -- see `Flower.svelte`'s `scale` prop. */
+export interface FlowerScaleSpec {
+  /** the score drawn at the outer edge (>= the mark). */
+  max: number;
+  /** a labelled ring at `value` (national: 100, "national average"). */
+  mark?: { value: number; label: string };
+  /** an absent component draws as an unfilled outline slot. */
+  hollowAbsent?: boolean;
+}
+
 export interface FlowerGeometryOptions {
   /** the SVG viewBox is `0 0 (2*outerRadius) (2*outerRadius)`; the centre is
    * `(outerRadius, outerRadius)`. Default 100 (a 0-100 viewBox unit maps 1:1 to a score point). */
@@ -136,6 +155,12 @@ export interface FlowerGeometryOptions {
   /** the centre number when the data states it (the composite item's own band value); omitted = the mean of
    * the non-null scores. `null` states "no data". */
   centerValue?: number | null;
+  /** the score drawn at the outer edge, default 100 (a 0-100 score maps 1:1). v10 P6: a national
+   * score is a location quotient, unbounded above (100 = the national average), so the caller
+   * passes a larger ceiling and the petals scale to it; a score above it is clamped to the rim. */
+  scaleMax?: number;
+  /** v10 P6: a null-score slot also carries an `outlinePath` for the caller to draw unfilled. */
+  hollowAbsent?: boolean;
 }
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -211,8 +236,19 @@ export function petalCentroid(
  * focus regardless of pointer type) and the visible on-tap/on-hover label Flower.svelte draws in
  * the hub area, so the two can never disagree (atlas-4 fix round 3, owner: "values of petal show
  * on click (and for desktop on hover)"). */
-export function petalLabelText(petal: Pick<FlowerPetal, "category" | "score">): string {
-  return `${petal.category.label}: ${formatScore(petal.score)}`;
+export function petalLabelText(
+  petal: Pick<FlowerPetal, "category" | "score"> & Partial<Pick<FlowerPetal, "clipped">>,
+): string {
+  return `${petal.category.label}: ${formatScore(petal.clipped ? petal.clipped.actual : petal.score)}`;
+}
+
+/** the petal's tooltip (`<title>`): the full label when the displayed one is the short form. */
+export function petalTooltipText(
+  petal: Pick<FlowerPetal, "category" | "score" | "fullLabel"> &
+    Partial<Pick<FlowerPetal, "clipped">>,
+): string {
+  const value = formatScore(petal.clipped ? petal.clipped.actual : petal.score);
+  return `${petal.fullLabel ?? petal.category.label}: ${value}`;
 }
 
 /** the reference ring's fallback value (P round, Ben's live review 2026-09-24: "Flower plot...
@@ -250,11 +286,35 @@ export function computeFlowerReferenceRing(
 ): FlowerReferenceRing {
   const outerRadius = options.outerRadius ?? 100;
   const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
   const isFallback =
     maxScore === null || maxScore === undefined || !Number.isFinite(maxScore) || maxScore <= 0;
-  const value = isFallback ? FLOWER_MAX_FALLBACK : signif3(clamp(maxScore as number, 0, 100));
-  const radius = innerRadius + (value / 100) * (outerRadius - innerRadius);
+  const value = isFallback ? FLOWER_MAX_FALLBACK : signif3(clamp(maxScore as number, 0, scaleMax));
+  const radius = innerRadius + (value / scaleMax) * (outerRadius - innerRadius);
   return { value, isFallback, radius };
+}
+
+/** the national average, as a location quotient. */
+export const NATION_AVERAGE = 100;
+
+export interface FlowerMarkRing {
+  /** the value the ring marks (signif3'd for display, like {@link FlowerReferenceRing}). */
+  value: number;
+  radius: number;
+}
+
+/** PURE: a reference ring at `value` on a flower scaled to `options.scaleMax` -- v10 P6's ring at
+ * 100 ("national average"). Same radius rule as a petal of that score, so a petal of exactly
+ * `value` ends on the ring. */
+export function computeFlowerMarkRing(
+  value: number,
+  options: FlowerGeometryOptions = {},
+): FlowerMarkRing {
+  const outerRadius = options.outerRadius ?? 100;
+  const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
+  const v = clamp(value, 0, scaleMax);
+  return { value: signif3(v), radius: innerRadius + (v / scaleMax) * (outerRadius - innerRadius) };
 }
 
 /** the ring's own small "contour label" text — "max 93", or "max 100 (no published maximum for
@@ -285,6 +345,7 @@ export function computeFlowerGeometry(
 ): FlowerGeometry {
   const outerRadius = options.outerRadius ?? 100;
   const innerRadius = options.innerRadius ?? outerRadius * FLOWER_HUB_RADIUS_RATIO;
+  const scaleMax = options.scaleMax ?? 100;
   const n = components.length;
   const petals: FlowerPetal[] = [];
   const noData: FlowerSlot[] = [];
@@ -336,20 +397,34 @@ export function computeFlowerGeometry(
         ...(c.note ? { note: c.note } : {}),
         startAngle,
         endAngle,
+        ...(options.hollowAbsent
+          ? {
+              outlinePath: sectorPath(
+                outerRadius,
+                outerRadius,
+                outerRadius,
+                startAngle,
+                endAngle,
+                innerRadius,
+              ),
+            }
+          : {}),
       });
       return;
     }
-    const score = clamp(c.score, 0, 100);
+    const score = clamp(c.score, 0, scaleMax);
     present.push(score);
     // an ANNULAR sector, innerRadius -> radius (never a pie slice from the true centre) -- see
     // this module's header. score=0 -> radius === innerRadius (degenerate, draws nothing, same
     // "real but invisible" contract as before); score=100 -> radius === outerRadius (reaches the
     // same outer edge a pre-fix pie slice did).
-    const radius = innerRadius + (score / 100) * (outerRadius - innerRadius);
+    const radius = innerRadius + (score / scaleMax) * (outerRadius - innerRadius);
     petals.push({
       key: c.key,
       category,
       score,
+      ...(c.score > scaleMax ? { clipped: { actual: c.score } } : {}),
+      ...(c.fullLabel ? { fullLabel: c.fullLabel } : {}),
       startAngle,
       endAngle,
       innerRadius,
@@ -435,7 +510,9 @@ export function describeFlowerSummary(title: string, geometry: FlowerGeometry): 
     return `${title}. Composite mean: no data. No data for any component (${absent}).`;
   }
 
-  const parts = petals.map((p) => `${p.category.label} ${formatScore(p.score)}`);
+  const parts = petals.map(
+    (p) => `${p.category.label} ${formatScore(p.clipped ? p.clipped.actual : p.score)}`,
+  );
   let text =
     `${title}. Composite mean ${meanText} across ${n} component${n === 1 ? "" : "s"}: ` +
     `${parts.join(", ")}.`;

@@ -1191,6 +1191,38 @@ export const FAULTS = [
       "visible but for the Bathymetry row",
     ],
   },
+  // --- v10 P6: the Scores lens' national mode ---
+  {
+    id: "scope-ignored-defaults-to-first-composite",
+    patch: "tests/faults/scope-ignored-defaults-to-first-composite.patch",
+    describe:
+      "defaultLayerKey() ignores the active scope and takes the first composite -- a v10 release in " +
+      '"Across the nation" opens on the within-ecoregion score (and a mode switch lands on the other scope\'s layer)',
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/lens/scores/scope.test.ts",
+      "-t",
+      "first composite OF THE ACTIVE SCOPE",
+    ],
+  },
+  {
+    id: "legend-scope-follows-mode-not-layer",
+    patch: "tests/faults/legend-scope-follows-mode-not-layer.patch",
+    describe:
+      "layerScope() answers national for every layer of a release that publishes one -- a RAW layer " +
+      '(productivity, a pct_world companion) selected under "Across the nation" gets the "x national avg" ' +
+      "unit, the 100 = national average subtitle and the popup anchor",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/lens/scores/nation.test.ts",
+      "-t",
+      "label follows the layer",
+    ],
+  },
 ];
 
 /** usability B1: a fault whose gate boots a real DuckDB-WASM needs the gitignored extension mirror

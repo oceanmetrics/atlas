@@ -18,6 +18,7 @@ import {
   type AliasLookup,
 } from "./legacy";
 import {
+  COMPARES,
   DEFAULT_SEL,
   LENSES,
   OUTLINES,
@@ -209,6 +210,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     rep: parseEnum(params.get("rep"), REPRESENTATIONS, DEFAULT_SEL.rep),
     us: parseUs(params.get("us")),
     out,
+    cmp: parseEnum(scores("cmp"), COMPARES, DEFAULT_SEL.cmp),
     obis: parseFlag(params.get("obis")),
     sel: parseSelToken(params.get("sel")),
     show: parseList(params.get("show")),
@@ -287,6 +289,7 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.rep !== DEFAULT_SEL.rep) params.set("rep", sel.rep);
   if (sel.us === false) params.set("us", "0");
   if (SCORES_KEYS && sel.out !== defaultOut(sel.lens)) params.set("out", sel.out);
+  if (SCORES_KEYS && sel.cmp !== DEFAULT_SEL.cmp) params.set("cmp", sel.cmp);
   if (sel.obis === true) params.set("obis", "1");
   if (sel.sel) params.set("sel", sel.sel);
   if (sel.show.length > 0) params.set("show", sel.show.join(","));

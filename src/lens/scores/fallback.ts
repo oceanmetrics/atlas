@@ -1,6 +1,7 @@
 // atlas-4 gate: "an unknown `unit`/`lyr` in the URL falls back without a blank map." Pure — the
 // component reads `sel.unit`/`sel.lyr` through these rather than trusting the URL value directly.
-import { defaultLayerKey, layerByKey, primaryUnitType } from "./boot";
+import { layerByKey, primaryUnitType, retargetLayerKey } from "./boot";
+import type { Scope } from "../../lib/analysis/scope";
 
 /** `"cell"`, or the release's own drawable unit type when `unit` names it; anything else (a typo,
  * a retired unit, a unit from a DIFFERENT release reached via a stale link) falls back to `"cell"`
@@ -10,10 +11,12 @@ export function effectiveUnit(unit: string, boot: unknown): string {
   return unit === primaryUnitType(boot) ? unit : "cell";
 }
 
-/** `lyr` when the release actually has that `metric_key`; otherwise the release's own composite
- * (overall score) default — never `undefined` reaching the raster/legend builders, which would
- * otherwise render nothing. */
-export function effectiveLyr(lyr: string | undefined, boot: unknown): string | null {
-  if (lyr && layerByKey(boot, lyr)) return lyr;
-  return defaultLayerKey(boot);
+/** `lyr` when the release actually has that `metric_key` (and, v10 P6, it is in the active `scope`);
+ * otherwise the release's own composite (overall score) default -- the same-category counterpart
+ * when `lyr` is a layer of the OTHER scope (`retargetLayerKey`) -- never `undefined` reaching the
+ * raster/legend builders, which would otherwise render nothing. With no `scope` (a caller before P6)
+ * any scope's layer stands, as before. */
+export function effectiveLyr(lyr: string | undefined, boot: unknown, scope?: Scope): string | null {
+  if (lyr && layerByKey(boot, lyr)) return scope ? retargetLayerKey(boot, lyr, scope) : lyr;
+  return retargetLayerKey(boot, null, scope ?? "ecoregion");
 }

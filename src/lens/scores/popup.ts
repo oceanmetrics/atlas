@@ -28,6 +28,14 @@ import { colorForValue, textColorFor, type PaletteStops } from "../../lib/raster
 import { paLabel } from "../../places/zoneStats";
 import type { ZoneRow } from "./boot";
 import { zoneValuesFor } from "./zoneFill";
+import { NATION_TOOLTIP_SUFFIX, type Scope } from "../../lib/analysis/scope";
+
+/** v10 P6: a national value is a location quotient, meaningless without its anchor -- the value line
+ * says so ("Birds 142 (national avg = 100)"); the ecoregion line is unchanged. */
+function valueLineFor(label: string, value: number | null, scope: Scope | undefined): string {
+  const line = formatValueLine(label, value);
+  return scope === "nation" && value !== null ? `${line} ${NATION_TOOLTIP_SUFFIX}` : line;
+}
 
 export interface CellPopupInput {
   cellId: number;
@@ -49,6 +57,8 @@ export interface CellPopupInput {
    * caller — this module never guesses a ramp). `undefined`/`null` when no palette is available
    * yet (degrades to a grey swatch — never a guessed colour). */
   ramp?: { stops: PaletteStops; min: number; max: number } | null;
+  /** v10 P6: the active scope; `"nation"` anchors the value ("(national avg = 100)"). */
+  scope?: Scope;
 }
 
 /** the swatch colour + text contrast for a cell popup's value, or `null` when there is nothing to
@@ -74,7 +84,9 @@ function cellPopupContent(input: CellPopupInput): ValuePopupContent {
   return {
     subject,
     valueLine:
-      input.value === null ? "No scored cell here" : formatValueLine(input.layerLabel, input.value),
+      input.value === null
+        ? "No scored cell here"
+        : valueLineFor(input.layerLabel, input.value, input.scope),
     swatchColor: swatch?.color ?? null,
     textColor: swatch?.textColor ?? null,
     unitLabel: input.value === null ? null : input.layerLabel,
@@ -127,6 +139,8 @@ export interface ZonePopupInput {
    * caller from the SAME `zoneChoropleth()` call that already builds the fill (`mapInputs.ts`),
    * never a second ramp lookup here. `undefined`/`null` degrades to a grey swatch. */
   stops?: PaletteStops | null;
+  /** v10 P6: the active scope; `"nation"` anchors the value ("(national avg = 100)"). */
+  scope?: Scope;
 }
 
 function zonePopupContent(input: ZonePopupInput): ValuePopupContent {
@@ -141,7 +155,7 @@ function zonePopupContent(input: ZonePopupInput): ValuePopupContent {
   const swatchColor = input.stops ? colorForValue(input.stops, value.value, min, max) : null;
   return {
     subject: formatSubject({ kind: "zone", name }),
-    valueLine: formatValueLine("Score", value.value),
+    valueLine: valueLineFor("Score", value.value, input.scope),
     swatchColor,
     textColor: swatchColor ? textColorFor(swatchColor) : null,
     detailsLink: true, // R4-B

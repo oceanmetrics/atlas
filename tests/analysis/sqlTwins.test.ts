@@ -134,10 +134,11 @@ describe("sql/*.sql placeholders", () => {
     expect([...RAW_ALLOWLIST].sort()).toEqual([...raw].sort());
     const seen = new Set<string>();
     for (const f of TWINS) for (const p of placeholdersOf(text(f))) seen.add(p);
-    // the only names any twin uses: two RAW fragments and three literal parameters
+    // the only names any twin uses: two RAW fragments and four literal parameters
     expect([...seen].sort()).toEqual([
       "cell_id",
       "cols",
+      "include_null_rows",
       "metric_pattern",
       "zone_fld",
       "zone_value",

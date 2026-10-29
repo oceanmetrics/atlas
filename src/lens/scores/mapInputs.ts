@@ -7,7 +7,7 @@ import { rasterBoundsForGrid } from "../../lib/map/layers/raster";
 import type { RasterLayerSpec, SelectionSpec, ZoneUnitSpec } from "../../lib/map/types";
 import { SELECTION_COLOR } from "../../lib/map/colors";
 import { gridFromBoot } from "../../lib/grid/grid";
-import { layerByKey, metricKeyLabel, zoneRows, type BootLayerRow } from "./boot";
+import { layerByKey, layerScope, metricKeyLabel, zoneRows, type BootLayerRow } from "./boot";
 import {
   outsidePraOverlaySpec,
   rasterLegend,
@@ -19,6 +19,7 @@ import type { LegendStop, PaletteName } from "../../lib/raster/ramps";
 import type { Histogram } from "../../lib/map/density";
 import { valueListDistribution } from "../../lib/map/distribution";
 import type { ReleaseCogChoice } from "../../lib/raster/releaseCog";
+import { NATION_UNIT, type Scope } from "../../lib/analysis/scope";
 
 /**
  * The scores lens' floating legend (atlas-4 defect fix: the scores lens had NO floating legend at
@@ -35,6 +36,8 @@ export type ScoresLegend =
       stops: LegendStop[];
       histogram?: Histogram | null;
       marker?: number | null;
+      /** v10 P6: set only for the national scope (a location quotient: "100 = national average"). */
+      scope?: Scope;
     }
   | {
       kind: "zone";
@@ -42,6 +45,7 @@ export type ScoresLegend =
       stops: LegendStop[];
       histogram?: Histogram | null;
       marker?: number | null;
+      scope?: Scope;
     }
   | { kind: "unavailable"; title: string }
   | { kind: "empty"; title: string }
@@ -55,6 +59,12 @@ export type ScoresLegend =
  * without a DOM, per CLAUDE.md. */
 export function formatScoresLegendValue(value: number): string {
   return String(value);
+}
+
+/** the unit a scores legend's values are in: "score" (0-100, within the ecoregion), or v10 P6's
+ * "× national avg" for a national layer. The legend card and the Download menu's footer read it. */
+export function scoresLegendUnit(legend: ScoresLegend | { scope?: Scope } | null): string {
+  return legend && "scope" in legend && legend.scope === "nation" ? NATION_UNIT : "score";
 }
 
 export interface ScoresMapInputs {
@@ -239,6 +249,10 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
   const title = state.lyr
     ? metricKeyLabel(state.lyr, (state.metricLabels ?? {})[state.lyr] ?? layer?.label)
     : "Score";
+  // v10 P6: a legend is national when the SELECTED LAYER is (a location quotient, 100 = the national
+  // average) -- not when the mode is: a raw layer (productivity, a pct_world companion) in the
+  // national mode keeps its plain unit and subtitle
+  const layerIsNational = layerScope(state.boot, state.lyr) === "nation";
   const legend: ScoresLegend = isCellBranch
     ? (() => {
         const rl = rasterLegend(
@@ -254,6 +268,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
               stops: rl.stops,
               histogram: histogram ?? null,
               marker: state.marker ?? null,
+              ...(layerIsNational ? { scope: "nation" as const } : {}),
             };
       })()
     : zoneEmpty
@@ -265,6 +280,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
             stops: zoneLegendStops(zoneLegend),
             histogram: zoneHistogram,
             marker: state.marker ?? null,
+            ...(layerIsNational ? { scope: "nation" as const } : {}),
           }
         : { kind: "unavailable", title };
 

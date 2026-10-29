@@ -1,0 +1,337 @@
+{
+  "schema": 1,
+  "ver": "v10",
+  "id_field": "mdl_key",
+  "grid": {
+    "grid_id": "global05",
+    "nc": 7200,
+    "nr": 3600,
+    "xmin": -180,
+    "ymax": 90,
+    "resx": 0.05,
+    "resy": 0.05,
+    "lon360": false,
+    "tile": {
+      "size": 50
+    }
+  },
+  "study_areas": [
+    {
+      "key": "FULL",
+      "label": "All US waters",
+      "lon": -101.304,
+      "lat": 46.9,
+      "zoom": 2.16
+    }
+  ],
+  "units": [
+    {
+      "zone_type": "programarea",
+      "zone_set_key": "programarea_2026-01",
+      "fld": "programarea_key",
+      "zone_tbl": "ply_programareas_2026_v10",
+      "label": "Program areas",
+      "pmtiles": "https://s3.example/marine-atlas/zones/programarea_2026-01/zones.pmtiles",
+      "source_layer": "programarea",
+      "keys": ["ALA", "GAA"]
+    }
+  ],
+  "layers": [
+    {
+      "metric_key": "primprod",
+      "label": "Primary productivity (VGPM), long description text",
+      "category": "raw",
+      "scope": null,
+      "order": 1,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/primprod.tif",
+          "rescale": [35.1, 11033.7]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_bird_pct_world",
+      "label": "Percent of the world's bird range in the area",
+      "category": "raw",
+      "scope": null,
+      "order": 2,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_bird_pct_world.tif",
+          "rescale": [0, 12.5]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_bird_ecoregion_rescaled",
+      "label": "Bird: ext. risk, ecoregion",
+      "category": "component",
+      "scope": "ecoregion",
+      "order": 10,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_bird_ecoregion_rescaled.tif",
+          "rescale": [0, 100]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_mammal_ecoregion_rescaled",
+      "label": "Mammal: ext. risk, ecoregion",
+      "category": "component",
+      "scope": "ecoregion",
+      "order": 11,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_mammal_ecoregion_rescaled.tif",
+          "rescale": [0, 100]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_turtle_ecoregion_rescaled",
+      "label": "Turtle: ext. risk, ecoregion",
+      "category": "component",
+      "scope": "ecoregion",
+      "order": 12,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_turtle_ecoregion_rescaled.tif",
+          "rescale": [0, 100]
+        }
+      }
+    },
+    {
+      "metric_key": "primprod_ecoregion_rescaled",
+      "label": "Primary production, ecoregion",
+      "category": "component",
+      "scope": "ecoregion",
+      "order": 13,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/primprod_ecoregion_rescaled.tif",
+          "rescale": [0, 100]
+        }
+      }
+    },
+    {
+      "metric_key": "score_extriskspcat_primprod_ecoregionrescaled_equalweights",
+      "label": "Overall score, within ecoregion",
+      "category": "composite",
+      "scope": "ecoregion",
+      "order": 17,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/score_extriskspcat_primprod_ecoregionrescaled_equalweights.tif",
+          "rescale": [0, 96]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_bird_v10_global",
+      "label": "Birds, across the nation",
+      "category": "component",
+      "scope": "nation",
+      "order": 20,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_bird_v10_global.tif",
+          "rescale": [0, 312.4]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_mammal_v10_global",
+      "label": "Mammals, across the nation",
+      "category": "component",
+      "scope": "nation",
+      "order": 21,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_mammal_v10_global.tif",
+          "rescale": [0, 208.9]
+        }
+      }
+    },
+    {
+      "metric_key": "extrisk_turtle_v10_global",
+      "label": "Turtles, across the nation",
+      "category": "component",
+      "scope": "nation",
+      "order": 22,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/extrisk_turtle_v10_global.tif",
+          "rescale": [0, 402.1]
+        }
+      }
+    },
+    {
+      "metric_key": "score_v10_equalweights_global",
+      "label": "Overall score, across the nation",
+      "category": "composite",
+      "scope": "nation",
+      "order": 27,
+      "colormap": "spectral_r",
+      "by_subregion": {
+        "FULL": {
+          "cog": "https://s3.example/marine-atlas/cog/global05/score_v10_equalweights_global.tif",
+          "rescale": [0, 240.6]
+        }
+      }
+    }
+  ],
+  "zones": {
+    "programarea": [
+      {
+        "key": "GAA",
+        "name": "Gulf of America, Eastern",
+        "n_cells": 14256,
+        "area_km2": 356400.0,
+        "n_taxa": 1200,
+        "metrics": {
+          "extrisk_bird_ecoregion_rescaled": 59.09,
+          "extrisk_mammal_ecoregion_rescaled": 41.2,
+          "extrisk_turtle_ecoregion_rescaled": 78.5,
+          "primprod_ecoregion_rescaled": 22.4,
+          "score_extriskspcat_primprod_ecoregionrescaled_equalweights": 50.3,
+          "extrisk_bird_v10_global": 142.7,
+          "extrisk_mammal_v10_global": 63.2,
+          "primprod_v10": 88.0,
+          "score_v10_equalweights_global": 97.97,
+          "extrisk_bird_pct_world": 1.8,
+          "extrisk_mammal_pct_world": 0.42,
+          "extrisk_bird_n_species": 214,
+          "extrisk_turtle_pct_world": 0.0031
+        },
+        "coverage": {
+          "extrisk_bird": 0.93,
+          "extrisk_mammal": 0.88,
+          "primprod": 1.0,
+          "extrisk_turtle": 0.031
+        }
+      },
+      {
+        "key": "ALA",
+        "name": "Aleutian Arc",
+        "n_cells": 9000,
+        "area_km2": 225000.0,
+        "n_taxa": 1200,
+        "metrics": {
+          "extrisk_bird_ecoregion_rescaled": 88.0,
+          "extrisk_mammal_ecoregion_rescaled": 70.1,
+          "extrisk_turtle_ecoregion_rescaled": 9.0,
+          "primprod_ecoregion_rescaled": 30.0,
+          "score_extriskspcat_primprod_ecoregionrescaled_equalweights": 49.3,
+          "extrisk_bird_v10_global": 351.9,
+          "extrisk_mammal_v10_global": 187.0,
+          "extrisk_turtle_v10_global": 12.5,
+          "primprod_v10": 120.3,
+          "score_v10_equalweights_global": 167.9,
+          "extrisk_bird_pct_world": 9.7,
+          "extrisk_mammal_pct_world": 4.5,
+          "extrisk_turtle_pct_world": 0.2
+        },
+        "coverage": {
+          "extrisk_bird": 1.0,
+          "extrisk_mammal": 1.0,
+          "extrisk_turtle": 0.12,
+          "primprod": 1.0
+        }
+      }
+    ],
+    "subregion": [
+      {
+        "key": "FULL",
+        "name": "All US waters",
+        "n_cells": 634000,
+        "area_km2": 15850000.0,
+        "n_taxa": 1200,
+        "metrics": {
+          "extrisk_bird_ecoregion_rescaled": 45.6,
+          "extrisk_mammal_ecoregion_rescaled": 41.7,
+          "extrisk_turtle_ecoregion_rescaled": 38.8,
+          "primprod_ecoregion_rescaled": 10.4,
+          "score_extriskspcat_primprod_ecoregionrescaled_equalweights": 34.1,
+          "extrisk_bird_v10_global": 100.0,
+          "extrisk_mammal_v10_global": 100.0,
+          "extrisk_turtle_v10_global": 100.0,
+          "primprod_v10": 100.0,
+          "score_v10_equalweights_global": 100.0
+        }
+      },
+      {
+        "key": "USA",
+        "name": "All US waters",
+        "n_cells": 634000,
+        "area_km2": 15850000.0,
+        "n_taxa": 1200,
+        "metrics": {
+          "extrisk_bird_ecoregion_rescaled": 45.6,
+          "extrisk_mammal_ecoregion_rescaled": 41.7,
+          "extrisk_turtle_ecoregion_rescaled": 38.8,
+          "primprod_ecoregion_rescaled": 10.4,
+          "score_extriskspcat_primprod_ecoregionrescaled_equalweights": 34.1,
+          "extrisk_bird_v10_global": 100.0,
+          "extrisk_mammal_v10_global": 100.0,
+          "extrisk_turtle_v10_global": 100.0,
+          "primprod_v10": 100.0,
+          "score_v10_equalweights_global": 100.0
+        }
+      }
+    ]
+  },
+  "flower_default": {
+    "FULL": [
+      {
+        "component": "bird",
+        "score": 45.6
+      },
+      {
+        "component": "mammal",
+        "score": 41.7
+      },
+      {
+        "component": "turtle",
+        "score": 38.8
+      },
+      {
+        "component": "primprod",
+        "score": 10.4
+      }
+    ]
+  },
+  "palettes": {
+    "spectral_r": [
+      "#5E4EA1",
+      "#3287BD",
+      "#66C1A5",
+      "#ABDDA4",
+      "#E5F498",
+      "#FFFFBF",
+      "#FEDF8B",
+      "#FDAD60",
+      "#F36C43",
+      "#D43E4E",
+      "#9E0041"
+    ]
+  },
+  "tables": {
+    "taxon": {
+      "href": "https://s3.example/marine-atlas/v10/app/taxon.parquet",
+      "bytes": 1,
+      "digest": "d1"
+    }
+  }
+}
