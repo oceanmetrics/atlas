@@ -38,6 +38,10 @@ export type Tour = "on" | "off";
 /** the zone outline drawn over the map (`out=`): a release capability, read only by an instance that
  * declares `release` (its `boot.units`); `none` everywhere else. */
 export type Outline = "programarea" | "ecoregion" | "none";
+/** v10 P6: what the Scores lens compares (`cmp=`): `region` = the published within-ecoregion score
+ * (default, never written), `nation` = the concentration relative to the national average. Read only
+ * by an instance that builds the Scores lens; a release with no national layers ignores it. */
+export type Compare = "region" | "nation";
 /** the resolved, renderable theme — plan atlas-3's two brand themes. */
 export type ResolvedTheme = "navy" | "paper";
 
@@ -76,6 +80,8 @@ export interface Sel {
   us: boolean;
   /** the zone outline (`out=`); its default is per lens (`defaultOut`). */
   out: Outline;
+  /** the Scores lens' comparison mode (`cmp=`): `"region"` (default, omitted) or `"nation"`. */
+  cmp: Compare;
   obis: boolean;
   /** `place:<n>`: the place list entry highlighted on the map; with the Scores lens also
    * `cell:<id>` | `zone:<unit>:<key>` (a clicked cell or zone). */
@@ -150,6 +156,7 @@ export const QUERY_KEYS = [
   "rep",
   "us",
   "out",
+  "cmp",
   "obis",
   "sel",
   "show",
@@ -184,6 +191,7 @@ export const REPRESENTATIONS: readonly Representation[] = ["native", "model", "0
  * an absent key — see `parseSel`). */
 export const THEMES: readonly Theme[] = ["light", "dark", "auto"];
 export const OUTLINES: readonly Outline[] = ["programarea", "ecoregion", "none"];
+export const COMPARES: readonly Compare[] = ["region", "nation"];
 /** every lens this codebase knows, in the lens switch's order. */
 export const ALL_LENSES: readonly Lens[] = ["collection", "scores", "species"];
 /** the lenses this build carries: the instance's `lenses` (instances/<id>/instance.json), in its
@@ -289,6 +297,7 @@ export const DEFAULT_SEL: Sel = {
   rep: "native",
   us: true,
   out: defaultOut(INSTANCE_LENS),
+  cmp: "region",
   obis: false,
   sel: undefined,
   show: [],

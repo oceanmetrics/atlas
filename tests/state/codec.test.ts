@@ -81,6 +81,14 @@ describe("retired keys (ver, lyr, unit, area, out): ignored, never round-tripped
   });
 });
 
+describe("cmp (the Scores lens' Compare mode): ignored where the lens is not built", () => {
+  it("parse leaves the default and format never writes it", () => {
+    const sel = parseSel({ search: "?cmp=nation&pal=viridis", hash: "" });
+    expect(sel.cmp).toBe(DEFAULT_SEL.cmp);
+    expect(formatSel(sel).search).toBe("?pal=viridis");
+  });
+});
+
 describe("pal: enum, default spectral_r", () => {
   it("accepts every documented value", () => {
     for (const v of ["spectral_r", "viridis", "cividis", "magma"]) {
