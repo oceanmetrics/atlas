@@ -221,12 +221,23 @@ export function meanScore(scores: readonly ComponentScore[]): number {
 export function cellComponents(
   db: SqlRunner,
   t: Templates,
-  opts: { cellId: number; metricKeys: readonly string[]; metricPattern?: string },
+  opts: {
+    cellId: number;
+    metricKeys: readonly string[];
+    metricPattern?: string;
+    /** v10 P6: also return a row (`val` NULL) for a component the cell has no value for, so a national
+     * cell flower draws it as an empty slot like a zone's. Default off: the v1-v9 rows are unchanged. */
+    includeNulls?: boolean;
+  },
 ): Promise<Record<string, unknown>[]> {
   return db.exec(
     renderSql(
       t.cell_components,
-      { cell_id: opts.cellId, metric_pattern: opts.metricPattern ?? METRIC_PATTERN },
+      {
+        cell_id: opts.cellId,
+        metric_pattern: opts.metricPattern ?? METRIC_PATTERN,
+        include_null_rows: opts.includeNulls === true,
+      },
       { raw: { cols: colsOf(opts.metricKeys) } },
     ),
   );

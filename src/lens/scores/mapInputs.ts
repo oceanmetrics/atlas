@@ -7,7 +7,7 @@ import { rasterBoundsForGrid } from "../../lib/map/layers/raster";
 import type { RasterLayerSpec, SelectionSpec, ZoneUnitSpec } from "../../lib/map/types";
 import { SELECTION_COLOR } from "../../lib/map/colors";
 import { gridFromBoot } from "../../lib/grid/grid";
-import { layerByKey, metricKeyLabel, zoneRows, type BootLayerRow } from "./boot";
+import { layerByKey, layerScope, metricKeyLabel, zoneRows, type BootLayerRow } from "./boot";
 import {
   outsidePraOverlaySpec,
   rasterLegend,
@@ -80,8 +80,6 @@ export interface ScoresMapState {
   overlays: readonly ManifestOverlayRow[] | null | undefined;
   unit: string; // "cell" or the release's one drawable unit's type
   lyr: string | null; // resolved metric_key (never undefined at call time — the caller defaults it)
-  /** v10 P6: the scoring scope; `"nation"` marks the legend (100 = national average). Absent = ecoregion. */
-  scope?: Scope;
   palette: PaletteName;
   showOutsidePra: boolean;
   /** R4-A: the Raster-cells layer's WHOLE-layer histogram (`/cog/statistics`, resolved async by the
@@ -251,6 +249,10 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
   const title = state.lyr
     ? metricKeyLabel(state.lyr, (state.metricLabels ?? {})[state.lyr] ?? layer?.label)
     : "Score";
+  // v10 P6: a legend is national when the SELECTED LAYER is (a location quotient, 100 = the national
+  // average) -- not when the mode is: a raw layer (productivity, a pct_world companion) in the
+  // national mode keeps its plain unit and subtitle
+  const layerIsNational = layerScope(state.boot, state.lyr) === "nation";
   const legend: ScoresLegend = isCellBranch
     ? (() => {
         const rl = rasterLegend(
@@ -266,7 +268,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
               stops: rl.stops,
               histogram: histogram ?? null,
               marker: state.marker ?? null,
-              ...(state.scope === "nation" ? { scope: state.scope } : {}),
+              ...(layerIsNational ? { scope: "nation" as const } : {}),
             };
       })()
     : zoneEmpty
@@ -278,7 +280,7 @@ export function scoresMapInputs(state: ScoresMapState): ScoresMapInputs {
             stops: zoneLegendStops(zoneLegend),
             histogram: zoneHistogram,
             marker: state.marker ?? null,
-            ...(state.scope === "nation" ? { scope: state.scope } : {}),
+            ...(layerIsNational ? { scope: "nation" as const } : {}),
           }
         : { kind: "unavailable", title };
 

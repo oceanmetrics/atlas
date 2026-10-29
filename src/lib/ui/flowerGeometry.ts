@@ -64,6 +64,8 @@ export interface FlowerComponentInput {
   color?: string;
   /** why a null score is null, shown beside the empty slot ("(not in AquaMaps)"); absent = "No data". */
   note?: string;
+  /** v10 P6: the component's full label, for the petal's tooltip when `label` is the short form. */
+  fullLabel?: string;
 }
 
 /** the category row a component draws with: the table's row for its key, with the component's own label and
@@ -88,6 +90,10 @@ export interface FlowerPetal {
    * coordinates) -- exposed so a caller/test can compute this petal's on-screen centroid without
    * parsing `path` (see `petalCentroid`). */
   innerRadius: number;
+  /** v10 P6: set only when the score was above `scaleMax` and drawn to the rim: the true value. */
+  clipped?: { actual: number };
+  /** v10 P6: the component's full label (tooltip), when the displayed one is the short form. */
+  fullLabel?: string;
   /** this petal's own OUTER edge radius: `innerRadius` when `score` is 0, the geometry's
    * `outerRadius` option when `score` is 100. */
   radius: number;
@@ -230,8 +236,19 @@ export function petalCentroid(
  * focus regardless of pointer type) and the visible on-tap/on-hover label Flower.svelte draws in
  * the hub area, so the two can never disagree (atlas-4 fix round 3, owner: "values of petal show
  * on click (and for desktop on hover)"). */
-export function petalLabelText(petal: Pick<FlowerPetal, "category" | "score">): string {
-  return `${petal.category.label}: ${formatScore(petal.score)}`;
+export function petalLabelText(
+  petal: Pick<FlowerPetal, "category" | "score"> & Partial<Pick<FlowerPetal, "clipped">>,
+): string {
+  return `${petal.category.label}: ${formatScore(petal.clipped ? petal.clipped.actual : petal.score)}`;
+}
+
+/** the petal's tooltip (`<title>`): the full label when the displayed one is the short form. */
+export function petalTooltipText(
+  petal: Pick<FlowerPetal, "category" | "score" | "fullLabel"> &
+    Partial<Pick<FlowerPetal, "clipped">>,
+): string {
+  const value = formatScore(petal.clipped ? petal.clipped.actual : petal.score);
+  return `${petal.fullLabel ?? petal.category.label}: ${value}`;
 }
 
 /** the reference ring's fallback value (P round, Ben's live review 2026-09-24: "Flower plot...
@@ -279,22 +296,6 @@ export function computeFlowerReferenceRing(
 
 /** the national average, as a location quotient. */
 export const NATION_AVERAGE = 100;
-
-/**
- * v10 P6, PURE: the ceiling of a national flower's petal scale. A national component is a location
- * quotient (100 = the national average), unbounded above, published stretched to [0, p99]
- * (`by_subregion.FULL.rescale`). The flower scales to that p99, or to the largest component of the
- * place being drawn when that is larger (so no petal is cut off at the rim), and never below 100 so
- * the national-average ring always lies inside the plot.
- */
-export function nationFlowerScaleMax(
-  p99: number | null | undefined,
-  scores: readonly (number | null)[],
-): number {
-  const present = scores.filter((v): v is number => v !== null && Number.isFinite(v));
-  const published = p99 !== null && p99 !== undefined && Number.isFinite(p99) ? p99 : 0;
-  return Math.max(NATION_AVERAGE, published, ...present);
-}
 
 export interface FlowerMarkRing {
   /** the value the ring marks (signif3'd for display, like {@link FlowerReferenceRing}). */
@@ -422,6 +423,8 @@ export function computeFlowerGeometry(
       key: c.key,
       category,
       score,
+      ...(c.score > scaleMax ? { clipped: { actual: c.score } } : {}),
+      ...(c.fullLabel ? { fullLabel: c.fullLabel } : {}),
       startAngle,
       endAngle,
       innerRadius,
@@ -507,7 +510,9 @@ export function describeFlowerSummary(title: string, geometry: FlowerGeometry): 
     return `${title}. Composite mean: no data. No data for any component (${absent}).`;
   }
 
-  const parts = petals.map((p) => `${p.category.label} ${formatScore(p.score)}`);
+  const parts = petals.map(
+    (p) => `${p.category.label} ${formatScore(p.clipped ? p.clipped.actual : p.score)}`,
+  );
   let text =
     `${title}. Composite mean ${meanText} across ${n} component${n === 1 ? "" : "s"}: ` +
     `${parts.join(", ")}.`;

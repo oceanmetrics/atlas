@@ -4,13 +4,14 @@
 // v1-v9 bundle on S3) behaves exactly as before.
 import { describe, expect, it } from "vitest";
 import {
+  compareSelPatch,
   defaultLayerKey,
   effectiveScope,
   hasNationScope,
   layerGroups,
   retargetLayerKey,
+  nationFlowerScale,
   scopeComponentKeys,
-  scopeScaleMax,
 } from "../../../src/lens/scores/boot";
 import { effectiveLyr } from "../../../src/lens/scores/fallback";
 import { componentLabel } from "../../../src/lens/scores/flower";
@@ -77,11 +78,11 @@ describe("a v10-shaped bundle: two scopes", () => {
         ?.layers.map((l) => l.metric_key);
     expect(keys("nation", "composite")).toEqual([V10_COMPOSITE_NATION]);
     expect(keys("ecoregion", "composite")).toEqual([V10_COMPOSITE_ECOREGION]);
+    // `primprod_v10` is zone-only on a real v10 bundle: no layer, so the picker never lists it
     expect(keys("nation", "component")).toEqual([
       "extrisk_bird_v10_global",
       "extrisk_mammal_v10_global",
       "extrisk_turtle_v10_global",
-      "primprod_v10",
     ]);
     expect(keys("ecoregion", "component")).toEqual([
       "extrisk_bird_ecoregion_rescaled",
@@ -115,8 +116,9 @@ describe("a v10-shaped bundle: two scopes", () => {
     expect(retargetLayerKey(BOOT_V10, "extrisk_bird_ecoregion_rescaled", "nation")).toBe(
       "extrisk_bird_v10_global",
     );
-    expect(retargetLayerKey(BOOT_V10, "primprod_v10", "ecoregion")).toBe(
-      "primprod_ecoregion_rescaled",
+    // productivity: the national twin is no layer (zone-only), so the composite is the target
+    expect(retargetLayerKey(BOOT_V10, "primprod_ecoregion_rescaled", "nation")).toBe(
+      V10_COMPOSITE_NATION,
     );
     // a raw layer and a layer already in scope stay
     expect(retargetLayerKey(BOOT_V10, "extrisk_bird_pct_world", "nation")).toBe(
@@ -142,6 +144,23 @@ describe("a v10-shaped bundle: two scopes", () => {
     expect(retargetLayerKey(boot, "extrisk_fish_ecoregion_rescaled", "nation")).toBe("s_nat");
   });
 
+  it("the Compare switch writes the mode and the re-targeted layer, but never a scope's default layer", () => {
+    // composite -> the other scope's composite = that scope's default: no lyr=
+    expect(compareSelPatch(BOOT_V10, V10_COMPOSITE_ECOREGION, "nation")).toEqual({
+      cmp: "nation",
+      lyr: undefined,
+    });
+    expect(compareSelPatch(BOOT_V10, V10_COMPOSITE_NATION, "ecoregion")).toEqual({
+      cmp: "region",
+      lyr: undefined,
+    });
+    // a component keeps its twin, which is not a default: it is written
+    expect(compareSelPatch(BOOT_V10, "extrisk_bird_ecoregion_rescaled", "nation")).toEqual({
+      cmp: "nation",
+      lyr: "extrisk_bird_v10_global",
+    });
+  });
+
   it("effectiveLyr resolves a link whose lyr belongs to the other scope", () => {
     expect(effectiveLyr("extrisk_bird_ecoregion_rescaled", BOOT_V10, "nation")).toBe(
       "extrisk_bird_v10_global",
@@ -151,19 +170,27 @@ describe("a v10-shaped bundle: two scopes", () => {
     expect(effectiveLyr("nope", BOOT_V10, "nation")).toBe(V10_COMPOSITE_NATION);
   });
 
-  it("the component keys the flower / table / cell SQL read come from the scope's boot rows", () => {
-    expect(componentMetricKeys(BOOT_V10, "nation")).toEqual(scopeComponentKeys(BOOT_V10, "nation"));
+  it("the cell SQL reads the scope's component LAYERS; the flower and table read the wider SET", () => {
+    expect(componentMetricKeys(BOOT_V10, "nation")).toEqual([
+      "extrisk_bird_v10_global",
+      "extrisk_mammal_v10_global",
+      "extrisk_turtle_v10_global",
+    ]);
     expect(componentMetricKeys(BOOT_V10)).toEqual(componentMetricKeys(BOOT_V10, "ecoregion"));
-    expect(componentMetricKeys(BOOT_V10, "all")).toHaveLength(8);
-    expect(componentMetricKeys(BOOT_V10, "nation")).not.toContain(
-      "extrisk_bird_ecoregion_rescaled",
-    );
+    expect(componentMetricKeys(BOOT_V10, "all")).toHaveLength(7);
+    // the set adds the zone-only productivity, after the layers (a real v10 has no primprod_v10 layer)
+    expect(scopeComponentKeys(BOOT_V10, "nation")).toEqual([
+      "extrisk_bird_v10_global",
+      "extrisk_mammal_v10_global",
+      "extrisk_turtle_v10_global",
+      "primprod_v10",
+    ]);
+    expect(scopeComponentKeys(BOOT_V10, "nation")).not.toContain("extrisk_bird_ecoregion_rescaled");
   });
 
-  it("the national petal scale ceiling is the largest published p99 among the components", () => {
-    expect(scopeScaleMax(BOOT_V10, "nation")).toBe(402.1);
-    expect(scopeScaleMax(BOOT_V10, "ecoregion")).toBe(100);
-    expect(scopeScaleMax(BOOT_V7, "nation")).toBeNull();
+  it("ONE national petal scale per release: niceCeil(max(200, p95 of the zones' component values))", () => {
+    // programarea components: 142.7 63.2 88 351.9 187 12.5 120.3 -> p95 about 330 -> 500
+    expect(nationFlowerScale(BOOT_V10)).toBe(500);
   });
 });
 
@@ -177,6 +204,8 @@ describe("national component keys", () => {
   it("companions are derived from the component key", () => {
     expect(companionKey("extrisk_bird_v10_global", "pct_world")).toBe("extrisk_bird_pct_world");
     expect(companionKey("primprod_v10", "coverage")).toBe("primprod_coverage");
+    // productivity is no species range: no share of the world's
+    expect(companionKey("primprod_v10", "pct_world")).toBeNull();
     expect(companionKey("extrisk_bird_ecoregion_rescaled", "pct_world")).toBeNull();
   });
 });

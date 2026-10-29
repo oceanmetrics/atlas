@@ -65,6 +65,7 @@ import {
   effectiveScope,
   fullSubregion,
   layerByKey,
+  layerScope,
   metricLabelsFromManifest,
   primaryUnitType,
   zoneCacheKey,
@@ -247,6 +248,9 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
   const unit = $derived(effectiveUnit(deps.selStore.sel.unit, deps.boot()));
   const scope = $derived(effectiveScope(deps.selStore.sel.cmp === "nation", deps.boot()));
   const lyr = $derived(effectiveLyr(deps.selStore.sel.lyr, deps.boot(), scope));
+  // v10 P6: the popups anchor a value ("national avg = 100") by the SELECTED LAYER's scope, never the
+  // mode: a raw layer in the national mode is not a location quotient
+  const lyrScope = $derived(layerScope(deps.boot(), lyr));
 
   const selection: ScoresSelection = $derived(parseScoresSelection(deps.selStore.sel.sel));
 
@@ -408,7 +412,6 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
       overlays: manifestOverlays,
       unit,
       lyr,
-      scope,
       palette: deps.selStore.sel.pal,
       showOutsidePra,
       selection: mapSelection,
@@ -491,8 +494,13 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
     const stops = lyr ? paletteStopsWithFallback(bootObj, deps.selStore.sel.pal) : null;
     setMarker(zoneValue);
     return {
-      html: zonePopupText({ zones: zRows, lyr, zone, stops, scope }),
-      announceText: zonePopupAnnounceText({ zones: zRows, lyr, zone, scope }),
+      html: zonePopupText({ zones: zRows, lyr, zone, stops, scope: lyrScope ?? undefined }),
+      announceText: zonePopupAnnounceText({
+        zones: zRows,
+        lyr,
+        zone,
+        scope: lyrScope ?? undefined,
+      }),
     };
   }
 
@@ -547,7 +555,7 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
       layerLabel: label,
       value,
       ramp,
-      scope,
+      scope: lyrScope ?? undefined,
     };
     // D3(a) round 2 (orchestrator, 2026-09-24 -- fixes a regression the FIRST D3 fix introduced):
     // `handleMapClick` below now writes `sel` EAGERLY, synchronously, on click -- exactly the
@@ -808,7 +816,9 @@ export function createScoresLens(deps: ScoresLensDeps): ScoresLens {
       // CI's fully-parallel three-engine job. The retry is a SECOND, later attempt at the exact
       // same resolution (`zoneKnownBounds`), never a different one: `zoneCenterFromBoot` is not
       // re-tried (it reads only `boot`, which does not change between attempts).
-      announce(zonePopupAnnounceText({ zones: zRows, lyr, zone: hit, scope }));
+      announce(
+        zonePopupAnnounceText({ zones: zRows, lyr, zone: hit, scope: lyrScope ?? undefined }),
+      );
       if (handle) void retryZoneFlyAfterIdle(handle, boot, unit, key, hit, zRows);
     },
 

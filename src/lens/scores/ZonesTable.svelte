@@ -7,9 +7,13 @@
   import { SvelteSet } from "svelte/reactivity";
   import { categoryLabel } from "../../lib/ui/categories";
   import { columnWidthPx, totalTableWidthPx } from "../../lib/ui/dataTableCore";
-  import { zonesTableRows, type ZonesTableRow } from "./zonesTable";
+  import { hasWorldShare, zonesTableRows, type ZonesTableRow } from "./zonesTable";
   import type { ZoneRow } from "./boot";
-  import { NATION_SCORE_HEADER, WORLD_SHARE_HEADER } from "../../lib/analysis/scope";
+  import {
+    NATION_SCORE_HEADER,
+    WORLD_SHARE_HEADER,
+    stripScopeSuffix,
+  } from "../../lib/analysis/scope";
 
   // P3 fix (owner-reported, 2026-09-24): the checkbox column's own fixed width, and the pseudo
   // "columns" `columnWidthPx()`/`totalTableWidthPx()` size this table by -- Rank/Score/each
@@ -52,9 +56,17 @@
   const rows = $derived(zonesTableRows(zones, metricKey, componentKeys, { nation }));
 
   // a component's header text: the manifest's label in the national scope, else the category's
-  function headerOf(c: { label: string; key?: string }): string {
+  function fullHeaderOf(c: { label: string; key?: string }): string {
     const shown = nation && c.key ? metricLabels[c.key]?.trim() : "";
     return shown || categoryLabel(c.label);
+  }
+  // inside the national mode the header drops the mode's own words; the full label is its tooltip
+  function headerOf(c: { label: string; key?: string }): string {
+    return nation ? stripScopeSuffix(fullHeaderOf(c)) : fullHeaderOf(c);
+  }
+  // a component with no `pct_world` companion (productivity) has no share column
+  function hasWorld(c: { key?: string }): boolean {
+    return nation && hasWorldShare(c.key);
   }
   // the share of the world's range: one decimal from 10 up, two significant digits below
   function formatShare(v: number | null): string {
@@ -63,8 +75,6 @@
       ? v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : v.toLocaleString("en-US", { maximumSignificantDigits: 2 });
   }
-  // columns per component: 2 national (quotient, share), 1 ecoregion
-  const perComponent = $derived(nation ? 2 : 1);
 
   // a plain Set, not derived from `rows`: the selection is the user's OWN choice and must survive
   // a re-sort/re-rank when the ranked metric changes underneath it (atlas-4's layer picker can
@@ -97,8 +107,8 @@
         NARROW_COLUMN,
         ZONE_COLUMN,
         NARROW_COLUMN,
-        ...(rows[0]?.components ?? []).flatMap(() =>
-          Array.from({ length: perComponent }, () => NARROW_COLUMN),
+        ...(rows[0]?.components ?? []).flatMap((c) =>
+          hasWorld(c) ? [NARROW_COLUMN, NARROW_COLUMN] : [NARROW_COLUMN],
         ),
       ],
       onReportSelected ? CHECKBOX_COLUMN_PX : 0,
@@ -138,7 +148,7 @@
         {#if rows[0]}
           {#each rows[0].components as c (c.label)}
             <col style={`width:${columnWidthPx(NARROW_COLUMN)}px`} />
-            {#if nation}<col style={`width:${columnWidthPx(NARROW_COLUMN)}px`} />{/if}
+            {#if hasWorld(c)}<col style={`width:${columnWidthPx(NARROW_COLUMN)}px`} />{/if}
           {/each}
         {/if}
       </colgroup>
@@ -168,12 +178,18 @@
               {#if nation}
                 <!-- two columns per component: one header row (it stays sticky), the quantity named
                      under the component -->
-                <th scope="col" class="num" data-testid="zones-lq-header"
+                <th scope="col" class="num" data-testid="zones-lq-header" title={fullHeaderOf(c)}
                   >{headerOf(c)}<span class="sub">{NATION_SCORE_HEADER}</span></th
                 >
-                <th scope="col" class="num" data-testid="zones-world-header"
-                  >{headerOf(c)}<span class="sub">{WORLD_SHARE_HEADER}</span></th
-                >
+                {#if hasWorld(c)}
+                  <th
+                    scope="col"
+                    class="num"
+                    data-testid="zones-world-header"
+                    title={fullHeaderOf(c)}
+                    >{headerOf(c)}<span class="sub">{WORLD_SHARE_HEADER}</span></th
+                  >
+                {/if}
               {:else}
                 <th scope="col" class="num">{categoryLabel(c.label)}</th>
               {/if}
@@ -206,14 +222,16 @@
               {#if nation}
                 <td
                   class="num"
-                  title={`${headerOf(c)}, ${NATION_SCORE_HEADER}: ${formatValue(c.score)}`}
+                  title={`${fullHeaderOf(c)}, ${NATION_SCORE_HEADER}: ${formatValue(c.score)}`}
                   >{formatValue(c.score)}</td
                 >
-                <td
-                  class="num"
-                  title={`${headerOf(c)}, ${WORLD_SHARE_HEADER}: ${formatShare(c.world ?? null)}`}
-                  >{formatShare(c.world ?? null)}</td
-                >
+                {#if hasWorld(c)}
+                  <td
+                    class="num"
+                    title={`${fullHeaderOf(c)}, ${WORLD_SHARE_HEADER}: ${formatShare(c.world ?? null)}`}
+                    >{formatShare(c.world ?? null)}</td
+                  >
+                {/if}
               {:else}
                 <td class="num" title={`${categoryLabel(c.label)}: ${formatValue(c.score)}`}
                   >{formatValue(c.score)}</td

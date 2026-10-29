@@ -178,20 +178,6 @@
       }
     },
     {
-      "metric_key": "primprod_v10",
-      "label": "Primary production, across the nation",
-      "category": "component",
-      "scope": "nation",
-      "order": 23,
-      "colormap": "spectral_r",
-      "by_subregion": {
-        "FULL": {
-          "cog": "https://s3.example/marine-atlas/cog/global05/primprod_v10.tif",
-          "rescale": [0, 187.5]
-        }
-      }
-    },
-    {
       "metric_key": "score_v10_equalweights_global",
       "label": "Overall score, across the nation",
       "category": "composite",
@@ -226,12 +212,14 @@
           "score_v10_equalweights_global": 97.97,
           "extrisk_bird_pct_world": 1.8,
           "extrisk_mammal_pct_world": 0.42,
-          "extrisk_bird_coverage": 0.93,
-          "extrisk_mammal_coverage": 0.88,
-          "primprod_coverage": 1.0,
           "extrisk_bird_n_species": 214,
-          "extrisk_turtle_pct_world": 0.0031,
-          "extrisk_turtle_coverage": 0.031
+          "extrisk_turtle_pct_world": 0.0031
+        },
+        "coverage": {
+          "extrisk_bird": 0.93,
+          "extrisk_mammal": 0.88,
+          "primprod": 1.0,
+          "extrisk_turtle": 0.031
         }
       },
       {
@@ -253,11 +241,13 @@
           "score_v10_equalweights_global": 167.9,
           "extrisk_bird_pct_world": 9.7,
           "extrisk_mammal_pct_world": 4.5,
-          "extrisk_turtle_pct_world": 0.2,
-          "extrisk_bird_coverage": 1.0,
-          "extrisk_mammal_coverage": 1.0,
-          "extrisk_turtle_coverage": 0.12,
-          "primprod_coverage": 1.0
+          "extrisk_turtle_pct_world": 0.2
+        },
+        "coverage": {
+          "extrisk_bird": 1.0,
+          "extrisk_mammal": 1.0,
+          "extrisk_turtle": 0.12,
+          "primprod": 1.0
         }
       }
     ],

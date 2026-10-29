@@ -17,6 +17,7 @@
     metricKeyLabel,
     metricLabelsFromManifest,
     primaryUnitType,
+    scopeComponentKeys,
     zoneAllKey,
     zoneRows,
   } from "./boot";
@@ -283,7 +284,11 @@
   }
 
   const currentLayer = $derived(layerByKey(boot, lyr));
-  const componentKeys = $derived(componentMetricKeys(boot, scope));
+  // national: the SAME component set (and `order`) the flower reads -- layers plus the zone-only
+  // components (`primprod_v10` is no layer); ecoregion: unchanged
+  const componentKeys = $derived(
+    scope === "nation" ? scopeComponentKeys(boot, scope) : componentMetricKeys(boot, scope),
+  );
   // v10 P6: the manifest's own wording for a metric (item 5 of the phase: labels come from the
   // manifest when it names them); the national table headers read it, the ecoregion one is unchanged
   const metricLabels = $derived(metricLabelsFromManifest(manifest));

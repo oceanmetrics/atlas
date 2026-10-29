@@ -54,6 +54,7 @@
     flowerViewBox,
     petalCentroid,
     petalLabelText,
+    petalTooltipText,
     type FlowerComponentInput,
     type FlowerPetal,
     type FlowerScaleSpec,
@@ -341,9 +342,52 @@
               if (hoveredKey === p.key) hoveredKey = null;
             }}
           >
-            <title>{petalLabelText(p)}</title>
+            <title>{petalTooltipText(p)}</title>
           </path>
         {/each}
+        {#if scale}
+          {#each geometry.petals as p (p.key)}
+            {#if p.clipped}
+              <!-- v10 P6: a value above the plot's scale is drawn to the rim; this marker (a small
+                   triangle pointing out) and the number say it was cut, never a longer petal. -->
+              {@const mid = (p.startAngle + p.endAngle) / 2}
+              {@const tip = petalCentroid(
+                { startAngle: mid, endAngle: mid, innerRadius: 99, radius: 99 },
+                100,
+                100,
+              )}
+              {@const left = petalCentroid(
+                { startAngle: mid - 4, endAngle: mid - 4, innerRadius: 92, radius: 92 },
+                100,
+                100,
+              )}
+              {@const right = petalCentroid(
+                { startAngle: mid + 4, endAngle: mid + 4, innerRadius: 92, radius: 92 },
+                100,
+                100,
+              )}
+              {@const num = petalCentroid(
+                { startAngle: mid, endAngle: mid, innerRadius: 82, radius: 82 },
+                100,
+                100,
+              )}
+              <path
+                d={`M ${tip.x.toFixed(2)} ${tip.y.toFixed(2)} L ${left.x.toFixed(2)} ${left.y.toFixed(2)} L ${right.x.toFixed(2)} ${right.y.toFixed(2)} Z`}
+                class="clip-marker"
+                data-testid="flower-clip-marker"
+                aria-hidden="true"
+              />
+              <text
+                x={num.x}
+                y={num.y}
+                text-anchor="middle"
+                dy="0.35em"
+                class="clip-number"
+                aria-hidden="true">{formatScore(p.clipped.actual)}</text
+              >
+            {/if}
+          {/each}
+        {/if}
         <circle cx="100" cy="100" r={geometry.innerRadius} class="hub" />
         <!-- P3 fix (Opus eyes-on review, 2026-09-24, phone-07/desktop-07, new with the bigger
              flower): the hub number's own glyph feet used to poke out below the `.petal-label`
@@ -535,6 +579,21 @@
   .reference-ring--mark {
     stroke-dasharray: none;
     opacity: 0.9;
+  }
+
+  .clip-marker {
+    fill: var(--text-primary);
+    stroke: var(--surface-panel);
+    stroke-width: 0.5;
+  }
+
+  .clip-number {
+    fill: var(--text-primary);
+    font-size: 9px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: var(--surface-panel);
+    stroke-width: 2.5px;
   }
 
   .petal-hollow {

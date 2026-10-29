@@ -27,7 +27,9 @@ import { componentLabel } from "./flower";
 import {
   DEFAULT_SCOPE,
   SCOPE_COMPONENT_GROUP_LABEL,
+  nationScaleMax,
   rowScope,
+  scopeComponentSet,
   type Scope,
 } from "../../lib/analysis/scope";
 
@@ -217,33 +219,49 @@ export function retargetLayerKey(
   return defaultLayerKey(boot, scope);
 }
 
-/** the `metric_key`s of `scope`'s components, in the release's own `order` -- what the flower, the
- * zones table and a clicked cell's SQL read (never a hard-coded list). */
-export function scopeComponentKeys(boot: unknown, scope: Scope): string[] {
-  return layerRows(boot)
-    .filter((r) => r.category === "component" && rowScope(r) === scope)
-    .sort((a, b) => a.order - b.order)
-    .map((r) => r.metric_key);
+/**
+ * The `Sel` patch the Compare switch writes: the mode, and the layer re-targeted into the new scope
+ * (`retargetLayerKey`) -- except that the scope's own DEFAULT layer is never written, so `lyr=` stays
+ * out of the URL (`undefined` clears it).
+ */
+export function compareSelPatch(
+  boot: unknown,
+  currentLyr: string | null | undefined,
+  next: Scope,
+): { cmp: "region" | "nation"; lyr: string | undefined } {
+  const target = retargetLayerKey(boot, currentLyr, next);
+  return {
+    cmp: next === "nation" ? "nation" : "region",
+    lyr: target === defaultLayerKey(boot, next) ? undefined : (target ?? undefined),
+  };
 }
 
-/** v10 P6: the ceiling of a national flower's petal scale -- the largest `by_subregion.FULL.rescale`
- * maximum (p99) among the scope's component layers, else the scope's composite's; `null` when the
- * release publishes none. Unbounded scores are stretched to this, not to 100. */
-export function scopeScaleMax(boot: unknown, scope: Scope): number | null {
-  const rows = layerRows(boot).filter((r) => rowScope(r) === scope);
-  const maxima = (cat: string) =>
-    rows
-      .filter((r) => r.category === cat)
-      .map((r) => fullSubregion(r)?.rescale?.[1])
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-  const comp = maxima("component");
-  const pool = comp.length ? comp : maxima("composite");
-  return pool.length ? Math.max(...pool) : null;
+/** the component `metric_key`s a place's flower and the zones table read for `scope`: the boot's
+ * component layers in their `order`, plus (national) the zone-only components found in the zones'
+ * metrics -- `primprod_v10` is no layer on a real v10 bundle. See `scope.ts#scopeComponentSet`. */
+export function scopeComponentKeys(boot: unknown, scope: Scope): string[] {
+  return scopeComponentSet(layerRows(boot), boot, scope);
 }
 
 export function layerByKey(boot: unknown, key: string | undefined | null): BootLayerRow | null {
   if (!key) return null;
   return layerRows(boot).find((r) => r.metric_key === key) ?? null;
+}
+
+/** the scope of the layer `key` (`"nation"` | `"ecoregion"` for a composite/component row, `null` for a
+ * raw layer or an unknown key). The legend, its unit and the popups read THIS -- the selected layer's
+ * scope -- never the mode: a raw layer in the national mode is not a location quotient. */
+export function layerScope(boot: unknown, key: string | null | undefined): Scope | null {
+  return rowScope(layerByKey(boot, key));
+}
+
+/** the release's one national petal scale (`scope.ts#nationScaleMax`), over the drawable unit. */
+export function nationFlowerScale(boot: unknown): number {
+  return nationScaleMax(
+    boot,
+    primaryUnitType(boot) ?? "programarea",
+    scopeComponentKeys(boot, "nation"),
+  );
 }
 
 /**

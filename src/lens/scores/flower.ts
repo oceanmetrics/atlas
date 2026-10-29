@@ -21,7 +21,12 @@
 import { categoryKeyFor } from "../../lib/ui/categories";
 import type { FlowerComponentInput } from "../../lib/ui/flowerGeometry";
 import { formatSubject } from "../../lib/format";
-import { NOT_REPORTABLE_NOTE, isComponentKey, type Scope } from "../../lib/analysis/scope";
+import {
+  NOT_REPORTABLE_NOTE,
+  isComponentKey,
+  stripScopeSuffix,
+  type Scope,
+} from "../../lib/analysis/scope";
 import type { ZoneRow } from "./boot";
 
 /** `metric_key` -> component label: `extrisk_bird_ecoregion_rescaled` -> `"bird"`,
@@ -46,6 +51,10 @@ interface DedupCandidate {
   label?: string;
   /** why a null score is null, shown beside the empty slot. */
   note?: string;
+  /** the full manifest label, for tooltips, when `label` is the short form (national mode). */
+  fullLabel?: string;
+  /** a colour token of its own, for a component that must not share its category's. */
+  color?: string;
 }
 
 /** v10 P6: what a flower needs to read a NATIONAL scope's components -- the scope's component
@@ -55,9 +64,14 @@ export interface FlowerScopeOptions {
   scope: Scope;
   componentKeys: readonly string[];
   metricLabels?: Readonly<Record<string, string>>;
+  /** the national composite's `metric_key`: its value is the flower's centre when the place has one
+   * (the published score; the mean of the petals only when it is absent). */
+  compositeKey?: string;
 }
 
 export interface DedupResult {
+  /** v10 P6: the centre number the data states (the published composite), when it does. */
+  center?: number | null;
   components: FlowerComponentInput[];
   /** the raw label(s) dropped because they collided with an already-kept category — surfaced so
    * the caller (`FlowerPanel.svelte`) can announce it once rather than silently dropping data. */
@@ -71,7 +85,27 @@ export interface DedupResult {
  * anything (several genuinely unrecognized labels is ordinary data, not a caller bug — the same
  * rule `computeFlowerGeometry()` already applied before this fix).
  */
-export function dedupeFlowerComponents(candidates: readonly DedupCandidate[]): DedupResult {
+export function dedupeFlowerComponents(
+  candidates: readonly DedupCandidate[],
+  scope: Scope = "ecoregion",
+): DedupResult {
+  // v10 P6: in the national scope "primprod" (productivity) and "primary producer" (the Flora species
+  // term) are DISTINCT components (`nationalCandidate` gives the second its own key and colour), so
+  // nothing collides and nothing is dropped: a present productivity value is never hidden behind an
+  // absent species one
+  if (scope === "nation") {
+    return {
+      components: candidates.map((c) => ({
+        key: c.key,
+        score: c.score,
+        ...(c.label ? { label: c.label } : {}),
+        ...(c.fullLabel ? { fullLabel: c.fullLabel } : {}),
+        ...(c.color ? { color: c.color } : {}),
+        ...(c.note ? { note: c.note } : {}),
+      })),
+      droppedLabels: [],
+    };
+  }
   const winnerByCategory = new Map<string, DedupCandidate>();
   for (const c of candidates) {
     const catKey = categoryKeyFor(c.key);
@@ -89,6 +123,8 @@ export function dedupeFlowerComponents(candidates: readonly DedupCandidate[]): D
         key: c.key,
         score: c.score,
         ...(c.label ? { label: c.label } : {}),
+        ...(c.fullLabel ? { fullLabel: c.fullLabel } : {}),
+        ...(c.color ? { color: c.color } : {}),
         ...(c.note ? { note: c.note } : {}),
       });
     } else {
@@ -98,29 +134,48 @@ export function dedupeFlowerComponents(candidates: readonly DedupCandidate[]): D
   return { components, droppedLabels };
 }
 
+/** a national component as a flower candidate: the manifest's label without the mode's suffix (the
+ * full label is its tooltip), and the Flora species term (`extrisk_primary_producer_*`) under a key and
+ * colour of its own, never folded into productivity (`primprod_v10`). */
+function nationalCandidate(
+  rawKey: string,
+  score: number | null,
+  labels: Readonly<Record<string, string>> | undefined,
+  absent = false,
+): DedupCandidate {
+  const flora = componentLabel(rawKey) === "primary producer";
+  const full = labels?.[rawKey]?.trim();
+  const short = full ? stripScopeSuffix(full) : undefined;
+  return {
+    key: flora ? "flora" : componentLabel(rawKey),
+    score,
+    preferred: true,
+    ...(short ? { label: short } : {}),
+    ...(full && full !== short ? { fullLabel: full } : {}),
+    ...(flora ? { color: "--cat-mangrove" } : {}),
+    ...(absent ? { note: NOT_REPORTABLE_NOTE } : {}),
+  };
+}
+
 /** every `*_ecoregion_rescaled` metric key present in `metrics`, turned into flower inputs, with
  * `component == "all"` dropped (parity doc §7.2: "all dropping `component == 'all'`"), THEN
  * de-duplicated one slot per category (see this module's header). */
 function fromMetrics(metrics: Record<string, number>, national?: FlowerScopeOptions): DedupResult {
   const candidates: DedupCandidate[] = [];
   if (national && national.scope === "nation") {
-    // one slot per component the release publishes in this scope; a key the zone does not carry
-    // is NOT REPORTABLE there (msens drops it below the 5 % coverage floor) -- absent, never zero
+    // one slot per component of the scope; a key the zone does not carry is NOT REPORTABLE there
+    // (msens drops it below the 5 % coverage floor) -- absent, never zero
     for (const rawKey of national.componentKeys) {
       if (!isComponentKey(rawKey, "nation")) continue;
-      const label = componentLabel(rawKey);
-      if (label === "all") continue;
       const score = metrics[rawKey];
-      const shown = national.metricLabels?.[rawKey]?.trim();
-      candidates.push({
-        key: label,
-        score: Number.isFinite(score) ? score : null,
-        preferred: rawKey.startsWith("extrisk_"),
-        ...(shown ? { label: shown } : {}),
-        ...(Number.isFinite(score) ? {} : { note: NOT_REPORTABLE_NOTE }),
-      });
+      const present = Number.isFinite(score);
+      candidates.push(
+        nationalCandidate(rawKey, present ? score : null, national.metricLabels, !present),
+      );
     }
-    return dedupeFlowerComponents(candidates);
+    const composite = national.compositeKey ? metrics[national.compositeKey] : undefined;
+    const result = dedupeFlowerComponents(candidates, "nation");
+    return Number.isFinite(composite) ? { ...result, center: composite } : result;
   }
   for (const [rawKey, score] of Object.entries(metrics)) {
     if (!/_ecoregion_rescaled$/.test(rawKey)) continue;
@@ -189,20 +244,23 @@ export interface CellComponentRow {
  * de-duplicated the same way as the other two paths. */
 export function cellFlowerComponents(
   rows: readonly CellComponentRow[],
-  national?: Pick<FlowerScopeOptions, "metricLabels">,
+  national?: Pick<FlowerScopeOptions, "metricLabels"> & { center?: number | null },
 ): DedupResult {
   const candidates: DedupCandidate[] = [];
   for (const r of rows) {
     if (r.component === "all") continue;
-    const shown = national?.metricLabels?.[r.metric_key]?.trim();
-    candidates.push({
-      key: r.component,
-      score: typeof r.val === "number" && Number.isFinite(r.val) ? r.val : null,
-      preferred: r.metric_key.startsWith("extrisk_"),
-      ...(national && shown ? { label: shown } : {}),
-    });
+    const score = typeof r.val === "number" && Number.isFinite(r.val) ? r.val : null;
+    candidates.push(
+      national
+        ? nationalCandidate(r.metric_key, score, national.metricLabels)
+        : { key: r.component, score, preferred: r.metric_key.startsWith("extrisk_") },
+    );
   }
-  return dedupeFlowerComponents(candidates);
+  if (!national) return dedupeFlowerComponents(candidates);
+  const result = dedupeFlowerComponents(candidates, "nation");
+  return typeof national.center === "number" && Number.isFinite(national.center)
+    ? { ...result, center: national.center }
+    : result;
 }
 
 /**

@@ -22,6 +22,11 @@
 -- and `primprod_v10` read "bird" and "primprod", like their ecoregion twins); `.component_of()`'s R twin
 -- is unchanged for every v1-v9 key (the suffix is only ever at the end).
 --
+-- v10 P6: UNPIVOT INCLUDE NULLS (the standard form; the short `UNPIVOT tbl ON` form has no such
+-- option) keeps a component the cell has no value for as a row with a NULL `v`; `include_null_rows`
+-- (FALSE for every v1-v9 call) filters those rows back out, so only the national scope sees them (a
+-- hollow slot, like a zone's absent component).
+--
 -- `cols` is the ident()-validated component column list (sql.ts's RAW_ALLOWLIST); a cell_id that is
 -- not in any loaded tile returns zero rows, which is a real answer (off-grid or unscored), not an
 -- error.
@@ -31,9 +36,8 @@ WITH c AS (
    WHERE cell_id = {{cell_id}}
 ),
 long AS (
-  UNPIVOT c
-     ON {{cols}}
-   INTO NAME metric_key VALUE v
+  SELECT * FROM c
+  UNPIVOT INCLUDE NULLS (v FOR metric_key IN ({{cols}}))
 )
 SELECT long.metric_key,
        long.v                                 AS val,
@@ -48,6 +52,7 @@ SELECT long.metric_key,
   FROM long
  CROSS JOIN c
  WHERE regexp_matches(long.metric_key, {{metric_pattern}})
+   AND ({{include_null_rows}} OR long.v IS NOT NULL)
    AND regexp_replace(
          regexp_replace(
            regexp_replace(long.metric_key, 'extrisk_', ''),

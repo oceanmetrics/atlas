@@ -39,16 +39,22 @@
     type LayersUnitToggle,
   } from "../../lib/ui/LayersPanel.svelte";
   import {
+    compareSelPatch,
+    defaultLayerKey,
     hasNationScope,
     layerByKey,
     layerGroups,
     metricKeyLabel,
     metricLabelsFromManifest,
     primaryUnitNote,
-    retargetLayerKey,
     unitOptions,
   } from "./boot";
-  import { COMPONENT_SQL_PATTERN, SCOPE_LABEL, type Scope } from "../../lib/analysis/scope";
+  import {
+    COMPONENT_SQL_PATTERN,
+    SCOPE_LABEL,
+    stripScopeSuffix,
+    type Scope,
+  } from "../../lib/analysis/scope";
   import { isPlacesSelectionEmpty } from "../../lib/state/types";
   import { placesFromHash } from "../../places/model";
   import FlowerPanel from "./FlowerPanel.svelte";
@@ -171,10 +177,7 @@
   // so the map never draws a layer of the old scope under the new mode.
   function onCompareChange(value: string) {
     const next: Scope = value === "nation" ? "nation" : "ecoregion";
-    selStore.set({
-      cmp: next === "nation" ? "nation" : "region",
-      lyr: retargetLayerKey(boot, lens.lyr, next) ?? undefined,
-    });
+    selStore.set(compareSelPatch(boot, lens.lyr, next));
   }
   const compareToggle = $derived<LayersCompareToggle | undefined>(
     hasNationScope(boot)
@@ -193,8 +196,11 @@
   // now routes through `metricKeyLabel()` as its `label` argument -- a curated label that is
   // itself just the bare key ("score") is caught there too, not only an ABSENT one (see that
   // function's own header for why the old `?? metricKeyLabel(key)` tail never saw that case).
-  function metricLabel(l: { metric_key: string; label?: string }): string {
-    return metricKeyLabel(l.metric_key, lens.metricLabels[l.metric_key] ?? l.label);
+  function metricLabel(l: { metric_key: string; label?: string; category?: string }): string {
+    const label = metricKeyLabel(l.metric_key, lens.metricLabels[l.metric_key] ?? l.label);
+    // inside the national mode a component's label loses the mode's own words ("Birds, across the
+    // nation" -> "Birds"); the composite and the raw layers keep theirs
+    return scope === "nation" && l.category === "component" ? stripScopeSuffix(label) : label;
   }
 
   function onLyrChange(value: string) {
@@ -279,6 +285,7 @@
     // read synchronously so the effect re-runs when the mode (or the manifest's labels) change
     const sc = scope;
     const labels = sc === "nation" ? metricLabelsFromManifest(manifest) : undefined;
+    const compositeKey = sc === "nation" ? defaultLayerKey(boot, sc) : null;
     if (s?.kind !== "cell") {
       cellFlowerRows = undefined;
       cellFlowerError = null;
@@ -295,22 +302,32 @@
       const sources = await getAnalysisSources(v, bootObj);
       return exclusive(sources.db, async () => {
         await sources.cellTiles([tile]);
-        const { cellComponents } = await import("../../lib/analysis/queries");
+        const { cellComponents, cellValue } = await import("../../lib/analysis/queries");
         const rows = await cellComponents(sources.db, sources.templates, {
           cellId: s.cellId,
           metricKeys: componentMetricKeys(bootObj, sc),
           metricPattern: COMPONENT_SQL_PATTERN[sc],
+          // national: a component the cell does not carry is an (empty) slot, like a zone's
+          includeNulls: sc === "nation",
         });
+        // the centre of a national cell flower is the cell's own published composite
+        let center: number | null = null;
+        if (compositeKey) {
+          center = await cellValue(sources.db, sources.templates, {
+            cellId: s.cellId,
+            metricKey: compositeKey,
+          }).catch(() => null);
+        }
         // `cellComponents()` is typed as `Promise<Record<string, unknown>[]>` (a generic engine
         // result); `sql/cell_components.sql`'s actual columns are exactly `CellComponentRow`'s.
-        return rows as unknown as CellComponentRow[];
+        return { rows: rows as unknown as CellComponentRow[], center };
       });
     })()
-      .then((rows) => {
+      .then(({ rows, center }) => {
         if (token === cellFlowerToken)
           cellFlowerRows = cellFlowerComponents(
             rows,
-            labels ? { metricLabels: labels } : undefined,
+            labels ? { metricLabels: labels, center } : undefined,
           );
       })
       .catch((err: unknown) => {

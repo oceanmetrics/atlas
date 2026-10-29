@@ -25,6 +25,12 @@ export interface ZonesTableRow {
   }>;
 }
 
+/** does a national component's column pair include the share of the world's range? Not productivity:
+ * it is no species range, so it has no `pct_world` companion. */
+export function hasWorldShare(componentKey: string | undefined): boolean {
+  return !!componentKey && companionKey(componentKey, "pct_world") !== null;
+}
+
 function metricOf(z: ZoneRow, key: string): number | null {
   const v = z.metrics[key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;

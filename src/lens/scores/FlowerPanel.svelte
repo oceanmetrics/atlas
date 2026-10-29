@@ -12,18 +12,15 @@
     type DedupResult,
   } from "./flower";
   import {
+    defaultLayerKey,
     flowerMaxComponentScore,
     metricLabelsFromManifest,
+    nationFlowerScale,
     scopeComponentKeys,
-    scopeScaleMax,
     zoneAllKey,
     zoneRows,
   } from "./boot";
-  import {
-    NATION_AVERAGE,
-    nationFlowerScaleMax,
-    type FlowerScaleSpec,
-  } from "../../lib/ui/flowerGeometry";
+  import { NATION_AVERAGE, type FlowerScaleSpec } from "../../lib/ui/flowerGeometry";
   import {
     DEFAULT_SCOPE,
     NATION_RING_LABEL,
@@ -123,6 +120,7 @@
           scope,
           componentKeys: scopeComponentKeys(boot, scope),
           metricLabels: metricLabelsFromManifest(manifest),
+          compositeKey: defaultLayerKey(boot, scope) ?? undefined,
         }
       : undefined,
   );
@@ -137,15 +135,12 @@
   });
   const components = $derived(result?.components ?? null);
   const droppedLabels = $derived(result?.droppedLabels ?? []);
-  // v10 P6: the national petal scale -- the published p99, or this place's largest component when
-  // larger, never below the national average; a ring at 100; absent components hollow
+  // v10 P6: the national petal scale (one per release), a ring at 100, absent components hollow
   const flowerScale = $derived.by((): FlowerScaleSpec | undefined => {
     if (!national) return undefined;
     return {
-      max: nationFlowerScaleMax(
-        scopeScaleMax(boot, scope),
-        (components ?? []).map((c) => c.score),
-      ),
+      // ONE scale per release (every zone and every cell), so petal lengths compare between places
+      max: nationFlowerScale(boot),
       mark: { value: NATION_AVERAGE, label: NATION_RING_LABEL },
       hollowAbsent: true,
     };
@@ -161,6 +156,7 @@
       {droppedLabels}
       {maxScore}
       scale={flowerScale}
+      center={national ? (result?.center ?? undefined) : undefined}
       scoreHeader={national ? NATION_SCORE_HEADER : undefined}
       size={compactFlower ? FLOWER_SIZE_HALF_DETENT : undefined}
     />
