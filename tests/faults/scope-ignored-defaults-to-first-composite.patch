@@ -1,8 +1,8 @@
 diff --git a/src/lens/scores/boot.ts b/src/lens/scores/boot.ts
-index 9d82095..92d8bfc 100644
+index 20c9f10..061f407 100644
 --- a/src/lens/scores/boot.ts
 +++ b/src/lens/scores/boot.ts
-@@ -185,7 +185,7 @@ export function layerGroups(boot: unknown, scope?: Scope): LayerGroup[] {
+@@ -187,7 +187,7 @@ export function layerGroups(boot: unknown, scope?: Scope): LayerGroup[] {
   */
  export function defaultLayerKey(boot: unknown, scope?: Scope): string | null {
    const composites = layerRows(boot).filter((r) => r.category === "composite");

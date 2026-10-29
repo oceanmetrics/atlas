@@ -30,7 +30,7 @@ measured, 11 to 17 minutes while the machine was busy; every spec builds a softw
 minutes that would justify adding it to `pages.yml`. Playwright-gated seeded faults are still not kept; re-add them with their specs as needed.
 The upstream inventory is in the upstream repository's history.
 
-## Seeded faults wired into `npm run test:faults` (`58` listed here)
+## Seeded faults wired into `npm run test:faults` (`59` listed here)
 
 | id                                          | the fault                                                                                                                                                                                                | gate                                                                                                         |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -94,3 +94,4 @@ The upstream inventory is in the upstream repository's history.
 | `seafloor-proxy-not-copied`                 | withSeaFloor hands the package CARTO's style as it is, the shell's Svelte $state Proxy, which structuredClone refuses: every compose throws                                                              | `tests/map/seaFloor.test.ts -t regression: a CARTO style held`                                               |
 | `seafloor-default-ignores-instance`         | the Bathymetry row's default ignores instance defaults.bathymetry: the oceanmetrics atlas opens without the GEBCO sea floor                                                                              | `tests/map/layerStack.test.ts -t visible but for the Bathymetry row`                                         |
 | `scope-ignored-defaults-to-first-composite` | defaultLayerKey() ignores the active scope and takes the first composite: a v10 release in the national mode opens on the within-ecoregion score                                                         | `tests/lens/scores/scope.test.ts -t first composite OF THE ACTIVE SCOPE`                                     |
+| `legend-scope-follows-mode-not-layer`       | layerScope() answers national for every layer of a release that publishes a national scope: a raw layer under the national mode gets the x national avg unit, subtitle and popup anchor                  | `tests/lens/scores/nation.test.ts -t label follows the layer`                                                |
