@@ -5,6 +5,8 @@ import {
   componentLabel,
   dedupeFlowerComponents,
   defaultFlowerComponents,
+  ecoregionComponentName,
+  ecoregionMetricKey,
   flowerEmptyText,
   flowerTitle,
   zoneFlowerComponents,
@@ -38,39 +40,26 @@ describe("zoneFlowerComponents", () => {
     expect(zoneFlowerComponents(zoneRows(BOOT_V7, "programarea"), "NOPE")).toBeNull();
   });
 
-  // atlas-4 fix round 2: v9's GAA zone publishes BOTH `extrisk_primary_producer_ecoregion_rescaled`
-  // (the ER-weighted species-category term) and `primprod_ecoregion_rescaled` (the bare
-  // environmental twin) -- both fold onto the SAME "primprod" category (categories.ts SYNONYMS),
-  // so `computeFlowerGeometry` would throw on the raw 8-entry list (tests/ui/flowerGeometry.test.ts
-  // pins that throw for exactly this pair). `zoneFlowerComponents` must have already resolved it to
-  // 7, keeping the species-category ("primary producer") term and dropping the bare "primprod" one.
-  describe("v9's GAA zone (real 8-key collision)", () => {
+  // v9's GAA zone publishes BOTH `extrisk_primary_producer_ecoregion_rescaled` (the Flora species
+  // category) and `primprod_ecoregion_rescaled` (productivity, an environmental component). Both
+  // are equal-weight inputs of the composite. atlas 0.9.12-0.6.0 folded them onto one category and
+  // dropped productivity; 0.6.1 draws all 8.
+  describe("v9's GAA zone (Flora and productivity both present)", () => {
     const flower = zoneFlowerComponents(zoneRows(BOOT_V9, "programarea"), "GAA")!;
 
-    it("de-duplicates to exactly 7 components, keeping the extrisk_* (species-category) term", () => {
-      expect(flower.components).toHaveLength(7);
+    it("keeps all 8 components, Flora and productivity each its own", () => {
+      expect(flower.components).toHaveLength(8);
       expect(flower.components.map((c) => c.key)).toContain("primary producer");
-      expect(flower.components.map((c) => c.key)).not.toContain("primprod");
-      expect(flower.droppedLabels).toEqual(["primprod"]);
+      expect(flower.components.map((c) => c.key)).toContain("primprod");
+      expect(flower.droppedLabels).toEqual([]);
     });
 
-    it("computeFlowerGeometry does not throw on the de-duplicated 7 and draws 7 petals", () => {
+    it("computeFlowerGeometry draws 8 petals with centre = round(mean of all 8)", () => {
       const g = computeFlowerGeometry(flower.components);
-      expect(g.petals).toHaveLength(7);
+      expect(g.petals).toHaveLength(8);
       const mean =
         flower.components.reduce((sum, c) => sum + (c.score ?? 0), 0) / flower.components.length;
       expect(Math.round(g.centerValue!)).toBe(Math.round(mean));
-    });
-
-    it("SEEDED FAULT (manual gate, not committed): the raw un-deduplicated 8 still throws", () => {
-      // proves the fix is load-bearing -- `dedupeFlowerComponents` is what stands between this
-      // zone's real data and computeFlowerGeometry's collision guard.
-      const rawEight = zoneRows(BOOT_V9, "programarea").find((z) => z.key === "GAA")!.metrics;
-      const undeduped = Object.entries(rawEight)
-        .filter(([k]) => /_ecoregion_rescaled$/.test(k))
-        .map(([k, score]) => ({ key: componentLabel(k), score }));
-      expect(undeduped).toHaveLength(8);
-      expect(() => computeFlowerGeometry(undeduped)).toThrow(/both resolve to category/);
     });
   });
 });
@@ -95,11 +84,10 @@ describe("defaultFlowerComponents", () => {
 
   // the exact live shape (curl'd from v9/app/boot.json, orchestrator-verified 2026-09-22):
   // flower_default.AK has 8 rows, "primary producer" and "primprod" both present.
-  describe("v9's flower_default.AK (real 8-key collision)", () => {
+  describe("v9's flower_default.AK (Flora and productivity both present)", () => {
     const flower = defaultFlowerComponents(BOOT_V9, "AK")!;
 
-    it("de-duplicates to exactly 7 components, dropping the bare primprod twin", () => {
-      expect(flower.components).toHaveLength(7);
+    it("keeps all 8 components in the published order", () => {
       expect(flower.components.map((c) => c.key)).toEqual([
         "bird",
         "coral",
@@ -108,37 +96,81 @@ describe("defaultFlowerComponents", () => {
         "mammal",
         "primary producer",
         "turtle",
+        "primprod",
       ]);
-      expect(flower.droppedLabels).toEqual(["primprod"]);
+      expect(flower.droppedLabels).toEqual([]);
     });
 
-    it("computeFlowerGeometry draws 7 petals with centre = round(mean of those 7)", () => {
+    it("computeFlowerGeometry draws 8 petals with centre = round(mean of all 8)", () => {
       const g = computeFlowerGeometry(flower.components);
-      expect(g.petals).toHaveLength(7);
-      const mean =
-        flower.components.reduce((sum, c) => sum + (c.score ?? 0), 0) / flower.components.length;
-      expect(Math.round(g.centerValue!)).toBe(Math.round(mean));
-      expect(Math.round(g.centerValue!)).toBe(22); // (31.58+16.73+18.97+22.84+27.91+15.51+18.39)/7 = 21.705...
+      expect(g.petals).toHaveLength(8);
+      // (31.58+16.73+18.97+22.84+27.91+15.51+18.39+5.64)/8 = 19.697...
+      expect(Math.round(g.centerValue!)).toBe(20);
+    });
+  });
+
+  // REGRESSION (atlas 0.6.1, owner-reported 2026-11-12): v11's All US waters drew 7 petals with
+  // "Primary production" 12.4 (actually Flora) and a Mean of 21; productivity (9.21) was dropped.
+  // The published composite (score_extriskspcat_primprod_ecoregionrescaled_equalweights, USA) is
+  // 19.1767 = the mean of these 8 rows. The exact live v11 flower_default.USA, curl'd 2026-11-12.
+  describe("v11 flower_default.USA: productivity is not dropped (the 0.6.1 regression)", () => {
+    const V11_USA = [
+      { component: "bird", score: 25.6280399429547 },
+      { component: "coral", score: 10.1486516349469 },
+      { component: "fish", score: 17.2610465605113 },
+      { component: "invertebrate", score: 14.7572484746423 },
+      { component: "mammal", score: 33.2234728914032 },
+      { component: "primary producer", score: 12.3796504990308 },
+      { component: "turtle", score: 30.8054423603537 },
+      { component: "primprod", score: 9.21030895993716 },
+    ];
+    const flower = defaultFlowerComponents({ flower_default: { USA: V11_USA } }, "USA")!;
+
+    it("draws 8 petals, productivity 9.21 among them", () => {
+      expect(flower.components).toHaveLength(8);
+      expect(flower.droppedLabels).toEqual([]);
+      expect(flower.components.find((c) => c.key === "primprod")?.score).toBeCloseTo(9.2103, 4);
+      const g = computeFlowerGeometry(flower.components);
+      expect(g.petals).toHaveLength(8);
     });
 
-    it("SEEDED FAULT (manual gate, not committed): the raw un-deduplicated 8 rows still throw", () => {
-      const raw = (BOOT_V9.flower_default.AK as { component: string; score: number }[]).map(
-        (r) => ({ key: r.component, score: r.score }),
-      );
-      expect(raw).toHaveLength(8);
-      expect(() => computeFlowerGeometry(raw)).toThrow(/both resolve to category/);
+    it("Flora and productivity draw with different labels and colours", () => {
+      const g = computeFlowerGeometry(flower.components);
+      const fl = g.petals.find((p) => p.key === "primary producer")!;
+      const pp = g.petals.find((p) => p.key === "primprod")!;
+      expect(fl.category.label).not.toBe(pp.category.label);
+      expect(fl.category.color).not.toBe(pp.category.color);
+    });
+
+    it("the centre is the published composite, 19.18 (rounds to 19, not 21)", () => {
+      const g = computeFlowerGeometry(flower.components);
+      expect(g.centerValue!).toBeCloseTo(19.1767, 3);
+      expect(Math.round(g.centerValue!)).toBe(19);
     });
   });
 });
 
 describe("dedupeFlowerComponents", () => {
   it("keeps the `preferred` candidate on a category collision, in original input order", () => {
+    // two spellings of ONE category (flora) still collide
+    const result = dedupeFlowerComponents([
+      { key: "primary producer", score: 15.5, preferred: true },
+      { key: "primary_producer", score: 5.6, preferred: false },
+    ]);
+    expect(result.components).toEqual([{ key: "primary producer", score: 15.5 }]);
+    expect(result.droppedLabels).toEqual(["primary_producer"]);
+  });
+
+  it("never treats Flora and productivity as a collision (the 0.6.1 regression)", () => {
     const result = dedupeFlowerComponents([
       { key: "primary producer", score: 15.5, preferred: true },
       { key: "primprod", score: 5.6, preferred: false },
     ]);
-    expect(result.components).toEqual([{ key: "primary producer", score: 15.5 }]);
-    expect(result.droppedLabels).toEqual(["primprod"]);
+    expect(result.components).toEqual([
+      { key: "primary producer", score: 15.5 },
+      { key: "primprod", score: 5.6 },
+    ]);
+    expect(result.droppedLabels).toEqual([]);
   });
 
   it("never drops a component whose category is unrecognized (several nodata labels is ordinary data)", () => {
@@ -178,7 +210,7 @@ describe("cellFlowerComponents", () => {
     expect(result.droppedLabels).toEqual([]);
   });
 
-  it("v8/v9 cell click: de-duplicates the extrisk_primary_producer/primprod pair the same way", () => {
+  it("v8+ cell click: keeps both extrisk_primary_producer and primprod", () => {
     const rows = [
       { metric_key: "extrisk_bird_ecoregion_rescaled", val: 40, component: "bird" },
       {
@@ -192,8 +224,9 @@ describe("cellFlowerComponents", () => {
     expect(result.components).toEqual([
       { key: "bird", score: 40 },
       { key: "primary producer", score: 17.5 },
+      { key: "primprod", score: 10.8 },
     ]);
-    expect(result.droppedLabels).toEqual(["primprod"]);
+    expect(result.droppedLabels).toEqual([]);
   });
 });
 
@@ -280,10 +313,10 @@ describe("atlas-4 fix round 2: every real component resolves to a defined color 
     assertRealPetals(flower.components, 8);
   });
 
-  it("v9's real flower_default.AK, de-duplicated to 7 (the primprod/primary producer collision)", () => {
+  it("v9's real flower_default.AK: all 8, Flora and productivity each a real petal", () => {
     const flower = defaultFlowerComponents(BOOT_V9, "AK")!;
-    expect(flower.components).toHaveLength(7);
-    assertRealPetals(flower.components, 7);
+    expect(flower.components).toHaveLength(8);
+    assertRealPetals(flower.components, 8);
   });
 
   // manual seeded-fault proof (CLAUDE.md: "a check that cannot fail is not a check"), mirroring the
@@ -328,5 +361,84 @@ describe("owner review item 9: v1's real reptile component never renders as 'No 
     expect(reptile).toBeDefined();
     expect(reptile.category.label).toBe("Reptile");
     expect(reptile.score).toBeCloseTo(15.8720487921304, 6);
+  });
+});
+
+// atlas 0.6.1: the ecoregion flower names its components by the release's own wording
+describe("ecoregion component names from the manifest", () => {
+  it("maps a flower_default component back to its metric key", () => {
+    expect(ecoregionMetricKey("primary producer")).toBe(
+      "extrisk_primary_producer_ecoregion_rescaled",
+    );
+    expect(ecoregionMetricKey("primprod")).toBe("primprod_ecoregion_rescaled");
+    expect(ecoregionMetricKey("bird")).toBe("extrisk_bird_ecoregion_rescaled");
+  });
+
+  it("takes the name before ':' or ' (' when it is a capitalised name", () => {
+    const labels = {
+      extrisk_primary_producer_ecoregion_rescaled: "Flora: extinction risk (ecoregion-rescaled)",
+      primprod_ecoregion_rescaled: "Productivity (ecoregion-rescaled)",
+      extrisk_bird_ecoregion_rescaled: "Seabirds: extinction risk (ecoregion-rescaled)",
+    };
+    expect(ecoregionComponentName("extrisk_primary_producer_ecoregion_rescaled", labels)).toBe(
+      "Flora",
+    );
+    expect(ecoregionComponentName("primprod_ecoregion_rescaled", labels)).toBe("Productivity");
+    expect(ecoregionComponentName("extrisk_bird_ecoregion_rescaled", labels)).toBe("Seabirds");
+  });
+
+  it("rejects a key-fragment label (v7-v10 curation) and a missing one", () => {
+    const labels = {
+      extrisk_bird_ecoregion_rescaled: "bird: ext. risk, ecorgn",
+      primprod_ecoregion_rescaled: "prim prod, ecorgn",
+      extrisk_fish_ecoregion_rescaled: "Fish, ecoregion",
+    };
+    expect(ecoregionComponentName("extrisk_bird_ecoregion_rescaled", labels)).toBeUndefined();
+    expect(ecoregionComponentName("primprod_ecoregion_rescaled", labels)).toBeUndefined();
+    expect(ecoregionComponentName("extrisk_fish_ecoregion_rescaled", labels)).toBeUndefined();
+    expect(ecoregionComponentName("extrisk_coral_ecoregion_rescaled", labels)).toBeUndefined();
+    expect(ecoregionComponentName("extrisk_coral_ecoregion_rescaled", undefined)).toBeUndefined();
+  });
+
+  it("defaultFlowerComponents labels Flora and Productivity from a v11-style manifest", () => {
+    const boot = {
+      flower_default: {
+        USA: [
+          { component: "primary producer", score: 12.38 },
+          { component: "primprod", score: 9.21 },
+          { component: "bird", score: 25.63 },
+        ],
+      },
+    };
+    const labels = {
+      extrisk_primary_producer_ecoregion_rescaled: "Flora: extinction risk (ecoregion-rescaled)",
+      primprod_ecoregion_rescaled: "Productivity (ecoregion-rescaled)",
+      extrisk_bird_ecoregion_rescaled: "bird: ext. risk, ecorgn",
+    };
+    const flower = defaultFlowerComponents(boot, "USA", labels)!;
+    expect(flower.components).toEqual([
+      { key: "primary producer", score: 12.38, label: "Flora" },
+      { key: "primprod", score: 9.21, label: "Productivity" },
+      { key: "bird", score: 25.63 },
+    ]);
+    const g = computeFlowerGeometry(flower.components);
+    expect(g.petals.map((p) => p.category.label)).toEqual(["Flora", "Productivity", "Bird"]);
+  });
+
+  it("zone and cell flowers read the same names", () => {
+    const labels = { primprod_ecoregion_rescaled: "Productivity (ecoregion-rescaled)" };
+    const zone = zoneFlowerComponents(
+      [{ key: "Z", n_taxa: 1, metrics: { primprod_ecoregion_rescaled: 5 } }] as never,
+      "Z",
+      undefined,
+      labels,
+    )!;
+    expect(zone.components).toEqual([{ key: "primprod", score: 5, label: "Productivity" }]);
+    const cell = cellFlowerComponents(
+      [{ metric_key: "primprod_ecoregion_rescaled", val: 5, component: "primprod" }],
+      undefined,
+      labels,
+    );
+    expect(cell.components).toEqual([{ key: "primprod", score: 5, label: "Productivity" }]);
   });
 });

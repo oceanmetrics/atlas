@@ -97,12 +97,13 @@ describe("the national flower's inputs", () => {
     expect(flower.droppedLabels).toEqual([]);
     // and the geometry draws both without a category collision
     expect(() => computeFlowerGeometry(flower.components)).not.toThrow();
-    // the ecoregion rule is unchanged: the two still fold onto one slot
+    // atlas 0.6.1: the ecoregion rule now agrees -- two components, never folded
     const eco = dedupeFlowerComponents([
       { key: "primary producer", score: null, preferred: true },
       { key: "primprod", score: 5, preferred: false },
     ]);
-    expect(eco.components).toHaveLength(1);
+    expect(eco.components).toHaveLength(2);
+    expect(eco.droppedLabels).toEqual([]);
   });
 
   it("a component the zone does not report keeps its slot: score null + the not-reportable note", () => {

@@ -421,8 +421,39 @@ describe("flowers", () => {
   });
 
   it("the centre is the TABLE's Overall, so the ring and the table cannot disagree", () => {
-    // v8/v9 publish `primary producer` AND `primprod`, which collapse to one drawn petal: the
-    // drawn petals' own mean is then 40, while the table's Overall over all four components is 45.
+    // two spellings of ONE category (flora) collapse to one drawn petal: the drawn petals' own mean
+    // is then 40, while the table's Overall over all four components is 45.
+    const m = build({
+      places: [
+        {
+          place: SQUARE,
+          token: "t",
+          name: "P",
+          scores: {
+            components: [
+              comp("bird", 60),
+              {
+                ...comp("primary producer", 20),
+                metric_key: "extrisk_primary_producer_ecoregion_rescaled",
+              },
+              { ...comp("primary_producer", 60), metric_key: "extrisk_primary_producer_x" },
+              comp("fish", 40),
+            ],
+            nCells: 1,
+            areaKm2: 1,
+          },
+        },
+      ],
+    });
+    const f = m.flowers[0];
+    expect(f.droppedLabels).toEqual(["primary_producer"]);
+    expect(f.geometry.petals).toHaveLength(3);
+    expect(f.centreOfDrawnPetals).toBe(40);
+    expect(f.centre).toBe(45);
+    expect(m.scores.rows[0].overall).toBe(45);
+  });
+
+  it("Flora and productivity are two petals, so the ring's mean IS the table's Overall (atlas 0.6.1)", () => {
     const m = build({
       places: [
         {
@@ -446,9 +477,9 @@ describe("flowers", () => {
       ],
     });
     const f = m.flowers[0];
-    expect(f.droppedLabels).toEqual(["primprod"]);
-    expect(f.geometry.petals).toHaveLength(3);
-    expect(f.centreOfDrawnPetals).toBe(40);
+    expect(f.droppedLabels).toEqual([]);
+    expect(f.geometry.petals).toHaveLength(4);
+    expect(f.centreOfDrawnPetals).toBe(45);
     expect(f.centre).toBe(45);
     expect(m.scores.rows[0].overall).toBe(45);
   });

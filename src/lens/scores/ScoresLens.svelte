@@ -285,6 +285,7 @@
     // read synchronously so the effect re-runs when the mode (or the manifest's labels) change
     const sc = scope;
     const labels = sc === "nation" ? metricLabelsFromManifest(manifest) : undefined;
+    const ecoLabels = sc === "nation" ? undefined : metricLabelsFromManifest(manifest);
     const compositeKey = sc === "nation" ? defaultLayerKey(boot, sc) : null;
     if (s?.kind !== "cell") {
       cellFlowerRows = undefined;
@@ -328,6 +329,7 @@
           cellFlowerRows = cellFlowerComponents(
             rows,
             labels ? { metricLabels: labels, center } : undefined,
+            ecoLabels,
           );
       })
       .catch((err: unknown) => {

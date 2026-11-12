@@ -135,11 +135,12 @@ describe("item 1: the four static section narratives", () => {
             geometry: SQUARE.geometry,
             scores: {
               components: [
+                // two spellings of ONE category (flora) -- a real duplicate, unlike flora + primprod
                 {
                   ...comp("primary producer", 10),
                   metric_key: "extrisk_primary_producer_ecoregion_rescaled",
                 },
-                { ...comp("primprod", 90), metric_key: "primprod_ecoregion_rescaled" },
+                { ...comp("primary_producer", 90), metric_key: "extrisk_primary_producer_x" },
               ],
               nCells: 100,
               areaKm2: 10,

@@ -28,12 +28,17 @@ describe("compositionTree (default measure: count, R8)", () => {
   it("folds synonym spellings into the same category (the primary producer bug fix)", () => {
     const tree = compositionTree([
       { sp_cat: "primary_producer", suit_er_area: 4 },
+      { sp_cat: "primary producer", suit_er_area: 6 },
+    ]);
+    expect(tree.children).toEqual([{ name: "Primary producers", categoryKey: "flora", value: 2 }]);
+  });
+
+  it("never folds Flora into productivity (atlas 0.6.1)", () => {
+    const tree = compositionTree([
+      { sp_cat: "primary_producer", suit_er_area: 4 },
       { sp_cat: "primprod", suit_er_area: 6 },
     ]);
-    // owner review item 8 (live 0.10.62): "Primary producer" -> "Primary production".
-    expect(tree.children).toEqual([
-      { name: "Primary production", categoryKey: "primprod", value: 2 },
-    ]);
+    expect((tree.children ?? []).map((c) => c.categoryKey).sort()).toEqual(["flora", "primprod"]);
   });
 
   it("a category with zero rows gets no box (never a zero-size box) -- a row with suit_er_area 0 still counts as one real species", () => {

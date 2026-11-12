@@ -49,8 +49,9 @@ const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ?
 
 /**
  * `rows` grouped by `sp_cat` (normalized through `categories.ts`'s `categoryKeyFor` — the same
- * "primary_producer"/"primary producer"/"primprod" fold the flower already applies, so a category
- * never splits into two boxes over a spelling difference), one leaf per category with a real
+ * spelling fold the flower applies, e.g. "primary_producer"/"primary producer" -> flora, so a
+ * category never splits into two boxes over a spelling difference; flora and productivity
+ * (`primprod`) are two categories since atlas 0.6.1), one leaf per category with a real
  * (positive) measure. A category with none gets no leaf, matching `Treemap.svelte`'s own
  * "value <= 0 is dropped" rule downstream.
  */

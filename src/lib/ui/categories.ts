@@ -16,15 +16,18 @@
 //     spec.md:186-187 both flag this: that petal renders grey/NA in the old app.
 //   - and `msens::sp_cat_from_taxonomy()` (taxa.R:175) emits the taxonomic category itself as
 //     "primary_producer" (underscore), a third spelling of the same thing.
-// All three spellings -- "primprod", "primary producer", "primary_producer" -- are the SAME
-// category and must resolve to the SAME token. That grey petal/slice is the exact bug this module
-// exists to make permanently unrepeatable: `categoryFor()` below normalizes any of them to the
-// `primprod` row.
+// "primary producer" / "primary_producer" (the Flora SPECIES category, `extrisk_primary_producer_*`)
+// and "primprod" (PRIMARY PRODUCTIVITY, an environmental metric: satellite npp, `primprod_*`) are
+// TWO DIFFERENT components that v8+ releases publish side by side, each an equal-weight input of the
+// composite. Until atlas 0.6.1 this table folded both onto `primprod`, and the flower then dropped
+// productivity (7 of 8 petals; v11 All US waters drew a mean of 21 against the published 19.18). They
+// are now two rows -- `flora` and `primprod` -- and must never be folded again (tests/ui/categories.test.ts
+// "flora and primprod are distinct categories").
 import type { IconName } from "./icon-paths";
 
-/** the eight species categories, exactly the names `scales::hue_pal()(8)` fixes in msens (viz.R:757-759). */
+/** the nine component categories: the eight names the names `scales::hue_pal()(8)` fixes in msens (viz.R:757-759), plus `flora` (primary producers), split from `primprod` in 0.6.1. */
 export type CategoryKey =
-  "bird" | "coral" | "fish" | "invertebrate" | "mammal" | "other" | "primprod" | "turtle";
+  "bird" | "coral" | "fish" | "flora" | "invertebrate" | "mammal" | "other" | "primprod" | "turtle";
 
 /** every category key, in the table's own (alphabetical) order -- what a test walks to assert
  * "every category key the parity doc lists has a row". */
@@ -32,6 +35,7 @@ export const CATEGORY_KEYS: readonly CategoryKey[] = [
   "bird",
   "coral",
   "fish",
+  "flora",
   "invertebrate",
   "mammal",
   "other",
@@ -52,20 +56,19 @@ export interface Category {
   color: string;
 }
 
-/** the eight species categories: key, label, icon, color TOKEN (docs/design/spec.md "Data color"). */
+/** the nine component categories: key, label, icon, color TOKEN (docs/design/spec.md "Data color"). */
 export const CATEGORIES: readonly (Category & { key: CategoryKey })[] = [
   { key: "bird", label: "Bird", icon: null, color: "--cat-bird" },
   { key: "coral", label: "Coral", icon: null, color: "--cat-coral" },
   { key: "fish", label: "Fish", icon: null, color: "--cat-fish" },
+  // the Flora species category (primary producers): its own colour, the same `--cat-mangrove` the
+  // national flower already gave it (flower.ts#nationalCandidate), never productivity's
+  { key: "flora", label: "Primary producers", icon: null, color: "--cat-mangrove" },
   { key: "invertebrate", label: "Invertebrate", icon: null, color: "--cat-invertebrate" },
   { key: "mammal", label: "Mammal", icon: null, color: "--cat-mammal" },
   { key: "other", label: "Other", icon: null, color: "--cat-other" },
-  // owner review item 8 (live 0.10.62): renamed to match the docs' own scoring-page wording
-  // (https://preview.marinesensitivity.org/docs/v9/scoring.html#flower-plot) -- "Primary
-  // production", never "Primary producer". The KEY ("primprod") and every underlying datum are
-  // untouched; only this display label changes, everywhere it is read from (categoryFor/
-  // categoryLabel), so the flower, the composition treemap and every score table pick it up.
-  { key: "primprod", label: "Primary production", icon: null, color: "--cat-primprod" },
+  // primary PRODUCTIVITY, the environmental component (not a species category)
+  { key: "primprod", label: "Primary productivity", icon: null, color: "--cat-primprod" },
   { key: "turtle", label: "Turtle", icon: null, color: "--cat-turtle" },
 ];
 
@@ -94,7 +97,11 @@ const SYNONYMS: Readonly<Record<string, CategoryKey>> = {
   other: "other",
   turtle: "turtle",
   primprod: "primprod",
-  "primary producer": "primprod", // v8/v9 flower component label (str_replace("_", " "))
+  productivity: "primprod",
+  "primary productivity": "primprod",
+  "primary producer": "flora", // v8+ flower component label (str_replace("_", " "))
+  "primary producers": "flora",
+  flora: "flora",
 };
 
 function normalize(raw: string): string {
