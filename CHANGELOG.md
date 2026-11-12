@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 (2026-11-12)
+
+- **marinesensitivity budget 472 -> 474 KB gzip**: 0.6.1's Flora / Productivity split sits on the first-paint
+  path and put CI's critical path at 483,387 B against 483,328 B (59 B over), so the publisher's build of v0.6.1
+  failed `scripts/size-budget.mjs`. No code change.
+
 ## 0.6.1 (2026-11-12)
 
 - **Fixed: the Scores flower dropped Productivity on every v8+ release** (owner-reported 2026-11-12, v11 preview, All US waters: 7 petals, a "Primary production" petal of 12.4 that was really Flora, and a Mean of 21 against the published composite 19.18). `categories.ts` folded the Flora species category (`primary producer`, `extrisk_primary_producer_*`) and productivity (`primprod`, an environmental component) onto one `primprod` category, and the ecoregion flower's `dedupeFlowerComponents` then dropped `primprod` (atlas 0.9.12 called it a display collision; both are equal-weight inputs of the composite). They are now two categories: `flora` (label "Primary producers", `--cat-mangrove`, the colour the national flower already gave it; synonyms `primary producer`, `primary producers`, `primary_producer`, `flora`) and `primprod` ("Primary productivity", `--cat-primprod`; synonyms `productivity`, `primary productivity`). Every v8+ ecoregion flower (default, zone, cell) draws all 8 components, its centre is their mean (= the published composite), and the composition treemap, tables and report name them apart. The dedupe still merges two spellings of one category.
