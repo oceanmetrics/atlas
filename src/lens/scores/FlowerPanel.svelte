@@ -124,14 +124,22 @@
         }
       : undefined,
   );
+  // atlas 0.6.1: the ecoregion flower names its components by the release's own wording (v11:
+  // "Flora", "Productivity"), when the manifest's label is a name rather than a key fragment
+  const ecoLabels = $derived(national ? undefined : metricLabelsFromManifest(manifest));
   const result = $derived.by((): DedupResult | null => {
     if (selection?.kind === "zone")
-      return zoneFlowerComponents(zoneRows(boot, selection.unit), selection.key, scopeOptions);
+      return zoneFlowerComponents(
+        zoneRows(boot, selection.unit),
+        selection.key,
+        scopeOptions,
+        ecoLabels,
+      );
     if (selection?.kind === "cell") return cellComponents ?? null;
     // `boot.flower_default` is the ecoregion family only (msens `app_flower_default`); the national
     // default is the all-areas zone's own metrics
     if (national) return zoneFlowerComponents(zoneRows(boot, "subregion"), allKey, scopeOptions);
-    return defaultFlowerComponents(boot, allKey);
+    return defaultFlowerComponents(boot, allKey, ecoLabels);
   });
   const components = $derived(result?.components ?? null);
   const droppedLabels = $derived(result?.droppedLabels ?? []);

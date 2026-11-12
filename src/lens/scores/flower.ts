@@ -4,6 +4,11 @@
 // `sql/cell_components.sql`'s own `regexp_replace` chain and `boot.ts`'s zone metrics — this module
 // is the ONE place both paths turn a raw key into a component label, so they cannot drift apart.
 //
+// atlas 0.6.1: Flora (`primary producer`) and productivity (`primprod`) are TWO categories
+// (categories.ts), so the pair described below no longer collides and nothing is dropped: all 8
+// components draw and the centre is the mean of all 8 (= the published composite). The dedupe
+// below now only merges two spellings of ONE category. History, kept for the record:
+//
 // atlas-4 fix round 2: v8/v9 publish EIGHT `*_ecoregion_rescaled` keys, not seven — a
 // `primary_producer` SPECIES category (`extrisk_primary_producer_ecoregion_rescaled`) alongside
 // the unrelated `primprod_ecoregion_rescaled` environmental metric (raw satellite productivity,
@@ -134,6 +139,34 @@ export function dedupeFlowerComponents(
   return { components, droppedLabels };
 }
 
+/** the `*_ecoregion_rescaled` metric key a `flower_default` component row stands for
+ * (`"primary producer"` -> `extrisk_primary_producer_ecoregion_rescaled`, `"primprod"` ->
+ * `primprod_ecoregion_rescaled`). */
+export function ecoregionMetricKey(component: string): string {
+  return component === "primprod"
+    ? "primprod_ecoregion_rescaled"
+    : `extrisk_${component.trim().replace(/\s+/g, "_")}_ecoregion_rescaled`;
+}
+
+/** atlas 0.6.1: the release's own NAME for an ecoregion component, from the manifest's short metric
+ * label (`metricLabelsFromManifest`): the text before a `:` or ` (` -- v11 "Flora: extinction risk
+ * (ecoregion-rescaled)" -> "Flora", "Productivity (ecoregion-rescaled)" -> "Productivity". A label
+ * that is only the metric-key fragment (v7-v10 curated "bird: ext. risk, ecorgn", "prim prod,
+ * ecorgn": lower-case or comma-separated) is NOT a name, and `undefined` falls back to the
+ * category's own label. */
+export function ecoregionComponentName(
+  metricKey: string,
+  labels: Readonly<Record<string, string>> | undefined,
+): string | undefined {
+  const full = labels?.[metricKey]?.trim();
+  if (!full) return undefined;
+  const name = full.split(/:|\s\(/)[0].trim();
+  if (!name || name.includes(",")) return undefined;
+  const first = name[0];
+  if (first === first.toLowerCase()) return undefined; // not a capitalised name (or not a letter)
+  return name;
+}
+
 /** a national component as a flower candidate: the manifest's label without the mode's suffix (the
  * full label is its tooltip), and the Flora species term (`extrisk_primary_producer_*`) under a key and
  * colour of its own, never folded into productivity (`primprod_v10`). */
@@ -160,7 +193,11 @@ function nationalCandidate(
 /** every `*_ecoregion_rescaled` metric key present in `metrics`, turned into flower inputs, with
  * `component == "all"` dropped (parity doc §7.2: "all dropping `component == 'all'`"), THEN
  * de-duplicated one slot per category (see this module's header). */
-function fromMetrics(metrics: Record<string, number>, national?: FlowerScopeOptions): DedupResult {
+function fromMetrics(
+  metrics: Record<string, number>,
+  national?: FlowerScopeOptions,
+  labels?: Readonly<Record<string, string>>,
+): DedupResult {
   const candidates: DedupCandidate[] = [];
   if (national && national.scope === "nation") {
     // one slot per component of the scope; a key the zone does not carry is NOT REPORTABLE there
@@ -181,10 +218,12 @@ function fromMetrics(metrics: Record<string, number>, national?: FlowerScopeOpti
     if (!/_ecoregion_rescaled$/.test(rawKey)) continue;
     const label = componentLabel(rawKey);
     if (label === "all") continue;
+    const name = ecoregionComponentName(rawKey, labels);
     candidates.push({
       key: label,
       score: Number.isFinite(score) ? score : null,
       preferred: rawKey.startsWith("extrisk_"),
+      ...(name ? { label: name } : {}),
     });
   }
   return dedupeFlowerComponents(candidates);
@@ -196,9 +235,11 @@ export function zoneFlowerComponents(
   zones: readonly ZoneRow[],
   key: string,
   national?: FlowerScopeOptions,
+  /** ecoregion scope: the manifest's `metric_key -> label` map, for the release's own component names */
+  labels?: Readonly<Record<string, string>>,
 ): DedupResult | null {
   const zone = zones.find((z) => z.key === key);
-  return zone ? fromMetrics(zone.metrics, national) : null;
+  return zone ? fromMetrics(zone.metrics, national, labels) : null;
 }
 
 interface FlowerDefaultRow {
@@ -216,7 +257,12 @@ interface FlowerDefaultRow {
  * producer",...}` and `{component:"primprod",...}` as two separate rows for the same release).
  * `null` when the release publishes none (e.g. v1, which predates the cache — parity doc §11
  * gotcha 3/§13.12: this file's fallback is the caller's, never invented data). */
-export function defaultFlowerComponents(boot: unknown, zoneAllKey: string): DedupResult | null {
+export function defaultFlowerComponents(
+  boot: unknown,
+  zoneAllKey: string,
+  /** the manifest's `metric_key -> label` map, for the release's own component names */
+  labels?: Readonly<Record<string, string>>,
+): DedupResult | null {
   const flowerDefault = (boot as { flower_default?: Record<string, unknown> } | null | undefined)
     ?.flower_default;
   const rows =
@@ -226,7 +272,13 @@ export function defaultFlowerComponents(boot: unknown, zoneAllKey: string): Dedu
   for (const r of rows as FlowerDefaultRow[]) {
     if (!r || typeof r.component !== "string" || r.component === "all") continue;
     const score = typeof r.score === "number" ? r.score : null;
-    candidates.push({ key: r.component, score, preferred: r.component !== "primprod" });
+    const name = ecoregionComponentName(ecoregionMetricKey(r.component), labels);
+    candidates.push({
+      key: r.component,
+      score,
+      preferred: r.component !== "primprod",
+      ...(name ? { label: name } : {}),
+    });
   }
   return dedupeFlowerComponents(candidates);
 }
@@ -245,6 +297,8 @@ export interface CellComponentRow {
 export function cellFlowerComponents(
   rows: readonly CellComponentRow[],
   national?: Pick<FlowerScopeOptions, "metricLabels"> & { center?: number | null },
+  /** ecoregion scope: the manifest's `metric_key -> label` map, for the release's own component names */
+  labels?: Readonly<Record<string, string>>,
 ): DedupResult {
   const candidates: DedupCandidate[] = [];
   for (const r of rows) {
@@ -253,7 +307,15 @@ export function cellFlowerComponents(
     candidates.push(
       national
         ? nationalCandidate(r.metric_key, score, national.metricLabels)
-        : { key: r.component, score, preferred: r.metric_key.startsWith("extrisk_") },
+        : (() => {
+            const name = ecoregionComponentName(r.metric_key, labels);
+            return {
+              key: r.component,
+              score,
+              preferred: r.metric_key.startsWith("extrisk_"),
+              ...(name ? { label: name } : {}),
+            };
+          })(),
     );
   }
   if (!national) return dedupeFlowerComponents(candidates);

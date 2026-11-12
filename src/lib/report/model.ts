@@ -26,9 +26,10 @@
 //     master plan D7b bounded ("a traced Program Area still reproduces its published composite
 //     within 0.08 points"), not a defect, and the fixture records both so a reader can see which
 //     kind of place produced which number.
-//  2. The flower DRAWS one petal per resolved category, so v8/v9's `primary producer` and
-//     `primprod` collapse to one slot (`lens/scores/flower.ts`'s header). The Table of Scores keeps
-//     both, because both genuinely feed the composite. The flower's CENTRE is therefore taken from
+//  2. The flower DRAWS one petal per resolved category, so two spellings of one category collapse
+//     to one slot (`lens/scores/flower.ts`'s header). Until atlas 0.6.1 that also folded v8+'s
+//     `primary producer` (Flora) and `primprod` (productivity); they are two categories now and both
+//     draw. The Table of Scores keeps every component. The flower's CENTRE is still taken from
 //     the table's `Overall` (all components), NOT from the drawn petals' own mean: a document whose
 //     flower centre and whose table disagree by 4 points is a defect whatever the reason. The
 //     petals' own mean is still reported, as `centreOfDrawnPetals`, and `droppedLabels` names what

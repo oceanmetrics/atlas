@@ -148,18 +148,26 @@ describe("the mean rule: centre = mean of the non-null components (even weights)
 });
 
 describe("computeFlowerGeometry refuses two components that share one category", () => {
-  // categories.test.ts already proves "primprod" and "primary producer" resolve to the SAME
-  // category (--cat-primprod) -- exactly why they must never BOTH appear as separate flower
-  // components: two petals with the identical color/label is not a rendering choice, it is
-  // caller data that collapsed two distinct slots onto one category (the gallery's own fixture
-  // had this bug: both spellings, listed as if they were different components).
-  it("throws when the two primary-producer spellings both appear", () => {
+  // categories.test.ts proves "primary producer" and "primary_producer" resolve to the SAME
+  // category (flora) -- so they must never BOTH appear as separate flower components: two petals
+  // with the identical color/label is caller data that collapsed two slots onto one category.
+  it("throws when two spellings of the same category both appear", () => {
     expect(() =>
       computeFlowerGeometry([
-        { key: "primprod", score: 50 },
+        { key: "primary_producer", score: 50 },
         { key: "primary producer", score: 50 },
       ]),
-    ).toThrow(/primprod.*primary producer|primary producer.*primprod/);
+    ).toThrow(/primary_producer.*primary producer|primary producer.*primary_producer/);
+  });
+
+  // atlas 0.6.1 regression: productivity and the Flora species term are TWO components
+  it("draws primprod and primary producer as two petals, never a collision", () => {
+    const g = computeFlowerGeometry([
+      { key: "primprod", score: 50 },
+      { key: "primary producer", score: 50 },
+    ]);
+    expect(g.petals).toHaveLength(2);
+    expect(new Set(g.petals.map((p) => p.category.color)).size).toBe(2);
   });
 
   it("throws even when the literal raw key is repeated verbatim", () => {
@@ -296,11 +304,10 @@ describe("petalLabelText (the tap/hover/focus label -- one decimal, the SAME tex
   });
 
   it("uses the category's own label, not the raw input key", () => {
-    // "primary producer" normalizes to the SAME category as "primprod" (categories.ts) -- the
-    // label in the text must be the canonical one ("Primary production", owner review item 8),
-    // not whatever spelling the caller happened to pass in.
-    const petal = computeFlowerGeometry([{ key: "primary producer", score: 5 }]).petals[0];
-    expect(petalLabelText(petal)).toBe(`${categoryFor("primprod").label}: 5.0`);
+    // "primary_producer" normalizes to the flora category (categories.ts) -- the label in the text
+    // must be the canonical one, not whatever spelling the caller happened to pass in.
+    const petal = computeFlowerGeometry([{ key: "primary_producer", score: 5 }]).petals[0];
+    expect(petalLabelText(petal)).toBe(`${categoryFor("flora").label}: 5.0`);
   });
 });
 

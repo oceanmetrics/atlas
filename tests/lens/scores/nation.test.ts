@@ -97,12 +97,13 @@ describe("the national flower's inputs", () => {
     expect(flower.droppedLabels).toEqual([]);
     // and the geometry draws both without a category collision
     expect(() => computeFlowerGeometry(flower.components)).not.toThrow();
-    // the ecoregion rule is unchanged: the two still fold onto one slot
+    // atlas 0.6.1: the ecoregion rule now agrees -- two components, never folded
     const eco = dedupeFlowerComponents([
       { key: "primary producer", score: null, preferred: true },
       { key: "primprod", score: 5, preferred: false },
     ]);
-    expect(eco.components).toHaveLength(1);
+    expect(eco.components).toHaveLength(2);
+    expect(eco.droppedLabels).toEqual([]);
   });
 
   it("a component the zone does not report keeps its slot: score null + the not-reportable note", () => {
@@ -227,6 +228,16 @@ describe("the national flower's geometry", () => {
     expect(stripScopeSuffix("Primary production, across the nation")).toBe("Primary production");
     expect(stripScopeSuffix("Overall score")).toBe("Overall score");
     expect(stripScopeSuffix("Across the nation")).toBe("Across the nation"); // never to nothing
+    // the published v10/v11 manifests' own wording (msens .metric_short_label)
+    expect(stripScopeSuffix("Seabirds: across the nation (global range)")).toBe("Seabirds");
+    expect(stripScopeSuffix("Flora: across the nation (global range)")).toBe("Flora");
+    expect(stripScopeSuffix("Productivity, across the nation")).toBe("Productivity");
+    expect(stripScopeSuffix("Overall score, across the nation (global range)")).toBe(
+      "Overall score",
+    );
+    expect(stripScopeSuffix("Seabirds: share of range (global range)")).toBe(
+      "Seabirds: share of range (global range)",
+    );
   });
 
   it("a score above 100 (below the scale) is drawn at its true radius, not clamped to the ecoregion 0-100 flower", () => {
