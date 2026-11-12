@@ -165,8 +165,13 @@ export function nationScaleMax(
 }
 
 /** v10 P6: a national label inside its own mode loses the scope's suffix ("Birds, across the nation" ->
- * "Birds"); the full label stays in tooltips. The suffix is the toggle's own words. */
-const SCOPE_SUFFIX_RE = new RegExp(`,?\\s*${SCOPE_LABEL.nation.toLowerCase()}\\s*$`, "i");
+ * "Birds"); the full label stays in tooltips. The suffix is the toggle's own words, after a comma or a
+ * colon, with the denominator msens appends in parentheses (the published manifests' wording:
+ * "Seabirds: across the nation (global range)", "Productivity, across the nation"). */
+const SCOPE_SUFFIX_RE = new RegExp(
+  `[,:]?\\s*${SCOPE_LABEL.nation.toLowerCase()}(?:\\s*\\([^)]*\\))?\\s*$`,
+  "i",
+);
 export function stripScopeSuffix(label: string): string {
   const out = label.replace(SCOPE_SUFFIX_RE, "").trim();
   return out || label;

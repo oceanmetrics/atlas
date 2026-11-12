@@ -228,6 +228,16 @@ describe("the national flower's geometry", () => {
     expect(stripScopeSuffix("Primary production, across the nation")).toBe("Primary production");
     expect(stripScopeSuffix("Overall score")).toBe("Overall score");
     expect(stripScopeSuffix("Across the nation")).toBe("Across the nation"); // never to nothing
+    // the published v10/v11 manifests' own wording (msens .metric_short_label)
+    expect(stripScopeSuffix("Seabirds: across the nation (global range)")).toBe("Seabirds");
+    expect(stripScopeSuffix("Flora: across the nation (global range)")).toBe("Flora");
+    expect(stripScopeSuffix("Productivity, across the nation")).toBe("Productivity");
+    expect(stripScopeSuffix("Overall score, across the nation (global range)")).toBe(
+      "Overall score",
+    );
+    expect(stripScopeSuffix("Seabirds: share of range (global range)")).toBe(
+      "Seabirds: share of range (global range)",
+    );
   });
 
   it("a score above 100 (below the scale) is drawn at its true radius, not clamped to the ecoregion 0-100 flower", () => {
