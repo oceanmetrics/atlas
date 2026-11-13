@@ -198,11 +198,15 @@ describe("a select: All, an option, and following the map", () => {
   });
   it("an option: ['==', ['get', field], value], with the option's own type", () => {
     const [s] = view({ species: "1576133" });
-    expect(filterExpression(s)).toEqual(["==", ["get", "aphia_id"], 1576133]);
+    expect(filterExpression(s)).toEqual(["==", ["to-number", ["get", "aphia_id"]], 1576133]);
     expect(keep(filterExpression(s), { aphia_id: 1576133 })).toBe(true);
     expect(keep(filterExpression(s), { aphia_id: 137098 })).toBe(false);
     const [str] = view({ species: "unid_dolphin" });
-    expect(filterExpression(str)).toEqual(["==", ["get", "aphia_id"], "unid_dolphin"]);
+    expect(filterExpression(str)).toEqual([
+      "==",
+      ["to-string", ["get", "aphia_id"]],
+      "unid_dolphin",
+    ]);
   });
   it("an unknown value is the default, never an error", () => {
     expect(view({ species: "999" })[0].choice).toEqual({ kind: "all" });
@@ -211,7 +215,7 @@ describe("a select: All, an option, and following the map", () => {
     const m = view({}, { month: "07", layer: "rices_whale" })[1];
     expect(m.choice).toEqual({ kind: "follow", option: month.options[6] });
     expect(m.followLabel).toBe("Follow the map (July)");
-    expect(filterExpression(m)).toEqual(["==", ["get", "month"], 7]);
+    expect(filterExpression(m)).toEqual(["==", ["to-number", ["get", "month"]], 7]);
   });
   it("follow_dim: an Item value no option has (annual) filters nothing", () => {
     const m = view({}, { month: "annual" })[1];
@@ -224,7 +228,7 @@ describe("a select: All, an option, and following the map", () => {
     expect(view({ month: "all" }, { month: "07" })[1].active).toBe(false);
     const m = view({ month: "3" }, { month: "07" })[1];
     expect(m.choice).toEqual({ kind: "option", option: month.options[2] });
-    expect(filterExpression(m)).toEqual(["==", ["get", "month"], 3]);
+    expect(filterExpression(m)).toEqual(["==", ["to-number", ["get", "month"]], 3]);
   });
 });
 
@@ -238,7 +242,12 @@ describe("a range: inclusive, swapped, the whole range is no filter", () => {
   });
   it("both bounds are inclusive", () => {
     const f = filterExpression(y("2017-2018"));
-    expect(f).toEqual(["all", [">=", ["get", "year"], 2017], ["<=", ["get", "year"], 2018]]);
+    expect(f).toEqual([
+      "all",
+      ["has", "year"],
+      [">=", ["to-number", ["get", "year"]], 2017],
+      ["<=", ["to-number", ["get", "year"]], 2018],
+    ]);
     expect(keep(f, { year: 2017 })).toBe(true);
     expect(keep(f, { year: 2018 })).toBe(true);
     expect(keep(f, { year: 2016 })).toBe(false);
@@ -247,6 +256,34 @@ describe("a range: inclusive, swapped, the whole range is no filter", () => {
   it("from > to is swapped; a bound outside [min, max] is clamped", () => {
     expect(y("2018-2017").choice).toEqual({ kind: "range", from: 2017, to: 2018 });
     expect(y("1990-2010").choice).toEqual({ kind: "range", from: 2003, to: 2010 });
+  });
+});
+
+// Regression 0.7.0 (the real SEFSC tiles, 2026-11-13): `month`, `year` and `aphia_id` arrive in the tiles as
+// STRINGS ("7", "2018", "1576133") while the filter options give numbers, and MapLibre's `==` never equates
+// "7" with 7: every filter kept nothing. The property is compared as the option's type.
+describe("regression 0.7.0: a number the tile carries as a string still matches", () => {
+  it("a select option, a followed month and a range keep string-typed numbers", () => {
+    const [sp, m, y] = view({ species: "1576133", year: "2017-2018" }, { month: "07" });
+    expect(keep(filterExpression(sp), { aphia_id: "1576133" })).toBe(true);
+    expect(keep(filterExpression(sp), { aphia_id: "137098" })).toBe(false);
+    expect(keep(filterExpression(m), { month: "7" })).toBe(true);
+    expect(keep(filterExpression(m), { month: "8" })).toBe(false);
+    expect(keep(filterExpression(y), { year: "2018" })).toBe(true);
+    expect(keep(filterExpression(y), { year: "2019" })).toBe(false);
+  });
+  it("a string option matches a number the tile carries as a number", () => {
+    const specs = parseOverlayFilters(
+      collection([{ ...FILTERS[0], options: [{ value: "42", label: "x" }] }]),
+    )!;
+    const [s] = resolveFeatureFilters(specs, { species: "42" }, {});
+    expect(keep(filterExpression(s), { aphia_id: 42 })).toBe(true);
+  });
+  it("a range never keeps a feature without the property (to-number would read it as 0)", () => {
+    const y = parseOverlayFilters(collection([{ ...FILTERS[2], min: -10, max: 10 }]))!;
+    const [v] = resolveFeatureFilters(y, { year: "-1-1" }, {});
+    expect(keep(filterExpression(v), { year: "0" })).toBe(true);
+    expect(keep(filterExpression(v), {})).toBe(false);
   });
 });
 
@@ -290,11 +327,9 @@ describe("an overlay's effective filter: every active filter listing it AND the 
   });
   it("one part is that part alone; none is no filter", () => {
     const one = filtersByOverlay(view({ year: "2010-2011" }));
-    expect(composedFilter(overlay("effort_vessel"), null, one.get("effort_vessel"))).toEqual([
-      "all",
-      [">=", ["get", "year"], 2010],
-      ["<=", ["get", "year"], 2011],
-    ]);
+    expect(composedFilter(overlay("effort_vessel"), null, one.get("effort_vessel"))).toEqual(
+      filterExpression(view({ year: "2010-2011" })[2]),
+    );
     expect(composedFilter(overlay("effort_vessel"), null, [])).toBeNull();
   });
   it("reaches the composed style: the layers carry it", () => {

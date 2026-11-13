@@ -4,9 +4,10 @@
 //
 //   select     `cff=<id>:all` = no filter; `cff=<id>:<option value>` = that option; absent (or an unknown value)
 //              = the default: with `follow_dim`, the option whose `dim_value` is the Item's `atlas:dims[follow_dim]`
-//              (none matches, e.g. "annual": no filter), else no filter. Filter: ["==", ["get", field], value].
+//              (none matches, e.g. "annual": no filter), else no filter. Filter: the property == the value, as
+//              the value's type (a tile may carry 7 as "7").
 //   range      `cff=<id>:<from>-<to>`, inclusive, swapped when from > to, clamped to [min, max]; absent, invalid or
-//              the whole range = no filter. Filter: [">=", get, from] AND ["<=", get, to].
+//              the whole range = no filter. Filter: has the property AND from <= it (as a number) <= to.
 //   overlays   an overlay's filters are every ACTIVE filter that lists it (`filtersByOverlay`); the layer builder
 //              ANDs them with the "Only features matching the selected layer" token filter.
 import type { FilterSpecification } from "maplibre-gl";
@@ -83,16 +84,32 @@ export function resolveFeatureFilters(
   return specs.map((s) => resolveOne(s, cff?.[s.id], dims ?? {}));
 }
 
-/** the MapLibre filter one view adds, or null when it narrows nothing. */
+/**
+ * The MapLibre filter one view adds, or null when it narrows nothing. The property is compared AS THE OPTION'S
+ * TYPE (`to-number` for a number, `to-string` for a string): a vector tile may carry a number as a string (the
+ * SEFSC tiles' `month`, `year` and `aphia_id` arrive as "7", "2018", "1576133"), and MapLibre's `==` never
+ * equates "7" with 7. A range needs the property (`has`; a missing one would read as 0).
+ */
 export function filterExpression(view: FeatureFilterView): FilterSpecification | null {
   if (!view.active) return null;
-  const get = ["get", view.spec.field];
+  const field = view.spec.field;
   const c = view.choice;
   if (c.kind === "range") {
-    return ["all", [">=", get, c.from], ["<=", get, c.to]] as unknown as FilterSpecification;
+    const n = ["to-number", ["get", field]];
+    return [
+      "all",
+      ["has", field],
+      [">=", n, c.from],
+      ["<=", n, c.to],
+    ] as unknown as FilterSpecification;
   }
   const option = c.kind === "option" || c.kind === "follow" ? c.option : null;
-  return option ? (["==", get, option.value] as unknown as FilterSpecification) : null;
+  if (!option) return null;
+  const typed =
+    typeof option.value === "number"
+      ? ["to-number", ["get", field]]
+      : ["to-string", ["get", field]];
+  return ["==", typed, option.value] as unknown as FilterSpecification;
 }
 
 /** overlay id -> the filters that apply to it (every active view that lists it), in the collection's order. */

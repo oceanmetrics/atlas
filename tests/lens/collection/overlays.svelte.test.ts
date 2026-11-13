@@ -299,15 +299,19 @@ describe("the lens draws a collection's own overlays", () => {
       ).filter;
     // fish_risk: the metric filter follows `risk` -> option 1, on the two overlays it lists
     expect(lens.featureFilters[1].followLabel).toBe("Follow the map (Risk)");
-    expect(filterOf("cov-effort_vessel-line")).toEqual(["==", ["get", "metric_code"], 1]);
+    expect(filterOf("cov-effort_vessel-line")).toEqual([
+      "==",
+      ["to-number", ["get", "metric_code"]],
+      1,
+    ]);
     lens.chooseFeatureFilter("species", 137209);
     lens.chooseFeatureFilter("year", { from: 2018, to: 2017 });
     flushSync();
     expect(selStore.sel.cff).toEqual({ species: "137209", year: "2017-2018" });
     expect(filterOf("cov-sightings_vessel-circle")).toEqual([
       "all",
-      ["==", ["get", "aphia_id"], 137209],
-      ["==", ["get", "metric_code"], 1],
+      ["==", ["to-number", ["get", "aphia_id"]], 137209],
+      ["==", ["to-number", ["get", "metric_code"]], 1],
     ]);
     // choosing a species never changes the layer
     expect(lens.item?.id).toBe("fish_risk");
