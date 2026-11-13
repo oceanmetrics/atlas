@@ -658,6 +658,21 @@ export const FAULTS = [
     ],
   },
   {
+    id: "item-index-resolves-against-index-url",
+    patch: "tests/faults/item-index-resolves-against-index-url.patch",
+    describe:
+      "loadItems() records an indexed Item at the index's URL instead of its item link's -- every relative " +
+      "href in it (`../values.parquet`) resolves outside the collection",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/catalog/itemIndex.test.ts",
+      "-t",
+      "resolves every relative href",
+    ],
+  },
+  {
     id: "cog-tile-url-drops-band",
     patch: "tests/faults/cog-tile-url-drops-band.patch",
     describe:

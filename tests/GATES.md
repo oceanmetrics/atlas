@@ -30,7 +30,7 @@ measured, 11 to 17 minutes while the machine was busy; every spec builds a softw
 minutes that would justify adding it to `pages.yml`. Playwright-gated seeded faults are still not kept; re-add them with their specs as needed.
 The upstream inventory is in the upstream repository's history.
 
-## Seeded faults wired into `npm run test:faults` (`63` listed here)
+## Seeded faults wired into `npm run test:faults` (`64` listed here)
 
 | id                                          | the fault                                                                                                                                                                                                | gate                                                                                                         |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -99,3 +99,4 @@ The upstream inventory is in the upstream repository's history.
 | `cov-draw-order-unreversed`                 | collectionOverlayStyle() emits the overlays bottom first in the collection's order: its FIRST entry is drawn at the bottom                                                                               | `tests/map/collectionOverlays.test.ts -t first entry on top`                                                 |
 | `overlay-popup-unescaped`                   | the overlay card writes a property value as markup: a feature carrying `<img src=x onerror=...>` runs it on click                                                                                        | `tests/lens/collection/overlayPopup.test.ts -t escapes every value`                                          |
 | `overlay-point-query-plain-object`          | the place layers' hit test passes a plain `{x, y}`, which MapLibre reads as the whole viewport: any feature in view answers every hover and click (regression 0.7.0)                                     | `tests/places/overlayInteraction.test.ts -t regression 0.7.0`                                                |
+| `item-index-resolves-against-index-url`     | loadItems() records an indexed Item at the index's URL instead of its item link's: every relative href in it (`../values.parquet`) resolves outside the collection                                       | `tests/catalog/itemIndex.test.ts -t resolves every relative href`                                            |
