@@ -393,11 +393,69 @@ async function pool<T, R>(
   return out;
 }
 
+/** the link of a collection's one-file item index: a GeoJSON FeatureCollection of its Item JSONs. */
+export const ITEM_INDEX_REL = "items";
+
+/** the name an item link is matched to its index feature by: the link's own `id` when it carries one, else
+ * the item file's basename without `.json` (`./items/rices_whale_annual_density.json`). */
+function itemKeys(link: StacLink, url: string): string[] {
+  const keys: string[] = [];
+  if (typeof link.id === "string" && link.id) keys.push(link.id);
+  const file = new URL(url).pathname.split("/").pop() ?? "";
+  let base = file;
+  try {
+    base = decodeURIComponent(file);
+  } catch {
+    // a malformed escape: the raw name
+  }
+  base = base.replace(/\.json$/i, "");
+  if (base && !keys.includes(base)) keys.push(base);
+  return keys;
+}
+
 /**
- * The items of `entry`'s collection (every `item` link, fetched a few at a time), cached per
- * collection. An unavailable collection -> `ok: false`. A collection with no item links -> an empty
- * set. Items that fail are listed in `failed` and skipped; only when EVERY listed item failed is the
- * whole result `ok: false`.
+ * The collection's item index (`rel: "items"`), fetched once through the cache: id -> feature, or a
+ * `LoadError` saying why it cannot be used (a failed fetch, not JSON, not a FeatureCollection), or null
+ * when the collection has none. Features without a string id are skipped; a repeated id keeps its first.
+ */
+async function itemIndexOf(
+  entry: CollectionEntry & { collection: StacCollection },
+  cache: CatalogCache,
+  opts: LoadOptions,
+): Promise<{ url: string; byId: Map<string, unknown> } | LoadError | null> {
+  const link = entry.collection.links.find((l) => l.rel === ITEM_INDEX_REL);
+  if (!link) return null;
+  const url = resolveHref(entry.href, link.href);
+  if (!url) {
+    return {
+      kind: "schema",
+      url: entry.href,
+      message: `item index href "${link.href}" cannot be resolved`,
+    };
+  }
+  const raw = await cached(cache, `itemindex:${url}`, () => fetchJson(url, opts));
+  if (!raw.ok) return raw.error;
+  const doc = raw.value;
+  if (!isRecord(doc) || doc.type !== "FeatureCollection" || !Array.isArray(doc.features)) {
+    return { kind: "schema", url, message: "the item index is not a GeoJSON FeatureCollection" };
+  }
+  const byId = new Map<string, unknown>();
+  for (const f of doc.features) {
+    if (isRecord(f) && typeof f.id === "string" && !byId.has(f.id)) byId.set(f.id, f);
+  }
+  return { url, byId };
+}
+
+/**
+ * The items of `entry`'s collection (every `item` link), cached per collection. An unavailable collection ->
+ * `ok: false`. A collection with no item links -> an empty set. Items that fail are listed in `failed` and
+ * skipped; only when EVERY listed item failed is the whole result `ok: false`.
+ *
+ * The item index (`rel: "items"`): when the collection links one, it is fetched ONCE and each `item` link takes
+ * the index feature with its id (the link's `id`, else its file's basename) AS IF it had been fetched from that
+ * link's own URL, so every relative href inside it resolves exactly as from the item file. An item the index
+ * lacks, or a whole index that cannot be read (failed, malformed, not a FeatureCollection), falls back to the
+ * per-item fetch, a few at a time; the index's own problem is listed in `failed` as a warning (never fatal).
  */
 export function loadItems(
   entry: CollectionEntry,
@@ -416,6 +474,11 @@ export function loadItems(
       };
     }
     const links = entry.collection.links.filter((l) => l.rel === "item");
+    const index = links.length
+      ? await itemIndexOf(entry as CollectionEntry & { collection: StacCollection }, cache, opts)
+      : null;
+    const byId = index && "byId" in index ? index.byId : null;
+    let missing = 0;
     const results = await pool(links, opts.concurrency ?? DEFAULT_CONCURRENCY, async (link) => {
       const url = resolveHref(entry.href, link.href);
       if (!url) {
@@ -425,6 +488,12 @@ export function loadItems(
           message: `item href "${link.href}" cannot be resolved`,
         };
         return { ok: false, error } as Loaded<StacItem>;
+      }
+      if (byId) {
+        const key = itemKeys(link, url).find((k) => byId.has(k));
+        // the index feature stands for the item FILE: it resolves against the item link's URL, never the index's
+        if (key !== undefined) return asItem(byId.get(key), url);
+        missing++;
       }
       const raw = await cached(cache, `item:${url}`, () => fetchJson(url, opts));
       return raw.ok ? asItem(raw.value, url) : (raw as Loaded<StacItem>);
@@ -443,6 +512,16 @@ export function loadItems(
           message: `none of the ${failed.length} items could be loaded (${failed[0].message})`,
         },
       };
+    }
+    // the index's own problem, after the items' (a warning: every item it could not give was fetched alone)
+    if (index && !("byId" in index)) {
+      failed.push({ ...index, message: `item index not used: ${index.message}` });
+    } else if (index && missing > 0) {
+      failed.push({
+        kind: "schema",
+        url: index.url,
+        message: `the item index lacks ${missing} of ${links.length} items (fetched one by one)`,
+      });
     }
     return { ok: true, value: { items, failed } };
   });

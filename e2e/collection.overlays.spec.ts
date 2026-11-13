@@ -97,6 +97,10 @@ test("two overlays on at once, a click on a sighting lists every attribute in ON
     };
     (window as unknown as { __pushes: () => number }).__pushes = () => pushes;
   });
+  const requested: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().startsWith(ORIGIN)) requested.push(r.url().slice(ORIGIN.length));
+  });
   // `cov=` (empty): none of the collection's overlays on, whatever its defaults
   await boot(page, "map=-89.45,27.5,9&cov=");
   const list = page.getByTestId("collection-layers");
@@ -179,6 +183,9 @@ test("two overlays on at once, a click on a sighting lists every attribute in ON
 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("overlay-popup")).toHaveCount(0);
+  // the items came from the one-file index (rel: items), never one request per item
+  expect(requested.filter((u) => u === "items.json")).toHaveLength(1);
+  expect(requested.filter((u) => u.startsWith("items/"))).toEqual([]);
   expect(
     await page.evaluate(() => (window as unknown as { __pushes: () => number }).__pushes()),
   ).toBe(0);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebuilds the tiny collection-overlays fixture (tests/fixtures/overlays/): the hand-written GeoJSON under
 # src/ -> PMTiles (tippecanoe) and the Item values -> Parquet (duckdb). The outputs are committed; run this
-# only after editing src/*.geojson. Needs tippecanoe (>= 2.17, writes .pmtiles) and the duckdb CLI.
+# only after editing src/*.geojson. Needs tippecanoe (>= 2.17, writes .pmtiles), the duckdb CLI and jq.
 set -euo pipefail
 cd "$(dirname "$0")"
 out=sefsc_fixture
@@ -13,4 +13,8 @@ tip "$out/overlays/effort_vessel.pmtiles" effort_vessel src/effort_vessel.geojso
 duckdb -no-agent -c "COPY (SELECT FID::BIGINT AS FID, rices_whale::DOUBLE AS rices_whale_density,
   bottlenose::DOUBLE AS bottlenose_dolphin_density FROM (VALUES (1, 0.82, 0.35), (2, 0.07, 0.91))
   t(FID, rices_whale, bottlenose)) TO '$out/values.parquet' (FORMAT parquet)"
+# the one-file item index (rel: items): exactly the item files' objects, in the collection's link order
+jq -s '{type: "FeatureCollection", features: .}' \
+  $(jq -r '.links[] | select(.rel == "item") | .href' "$out/collection.json" | sed "s#^\./#$out/#") \
+  > "$out/items.json"
 ls -la "$out" "$out/overlays"

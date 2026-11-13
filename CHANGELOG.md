@@ -15,6 +15,12 @@
   disabled with its reason on an Item without one. A click on a feature still selects the hex cell or raster
   point under it, but leaves the panel where it is (the Layers list stays; on a phone the sheet does not rise
   over the card). The rules, the card and its hover are a lazy chunk loaded only for a collection with overlays.
+- **A collection's items from one file** (`rel: "items"`): a collection may link a GeoJSON FeatureCollection of
+  exactly its Item JSONs; the loader fetches it once and gives each `item` link the feature with its id (the
+  link's `id`, else its file's basename) as if fetched from that link's URL, so every relative href resolves as
+  before. An item the index lacks, or an index that cannot be read, falls back to the per-item fetch with a
+  warning in `failed`. The SEFSC review collection's 578 Items were 578 requests (~16 s before the first hex
+  drew).
 - **A collection's version** (STAC version extension): the credits say "Version 2", mark a deprecated one
   "superseded", and link "Previous version" / "Newer version" / "Latest version"; a link to this app opens in
   the same tab, in the deployment being viewed.
@@ -30,7 +36,8 @@
   escaping, the cap), version links, the lens through the runes project, and `e2e/collection.overlays.spec.ts`
   on the new fixture (`tests/fixtures/overlays/`, tippecanoe PMTiles); seeded faults
   `cov-filter-partial-token`, `cov-draw-order-unreversed`, `overlay-popup-unescaped`,
-  `overlay-point-query-plain-object`.
+  `overlay-point-query-plain-object`, `item-index-resolves-against-index-url`. The e2e spec runs in CI with the
+  OBIS one (`pages.yml` e2e-obis).
 
 ## 0.6.2 (2026-11-12)
 

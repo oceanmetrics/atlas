@@ -147,6 +147,12 @@
       "type": "application/json"
     },
     {
+      "rel": "items",
+      "href": "./items.json",
+      "type": "application/geo+json",
+      "title": "Every item of the collection, in one file"
+    },
+    {
       "rel": "item",
       "href": "./items/rices_whale.json",
       "type": "application/geo+json",

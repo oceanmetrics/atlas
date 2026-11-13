@@ -111,6 +111,11 @@ uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only 
 - The STAC version extension on a Collection: `version`, `deprecated`, and links `predecessor-version` /
   `successor-version` / `latest-version` (`href`, `title`) are the credits strip's "Version" row
   (`src/lib/catalog/versionLinks.ts`); a link to this app (`og.siteUrl` or the page itself) opens in the same tab.
+- `rel: "items"` on a Collection links its one-file item index: a GeoJSON FeatureCollection of exactly its Item
+  JSONs (the item files' own objects, relative hrefs unchanged). `loadItems` fetches it once and gives each `item`
+  link the feature with its id (the link's `id`, else the file's basename) with `atlas:url` = THAT LINK'S URL, so
+  `../values.parquet` resolves as from the item file; an item it lacks, or an unreadable index, is fetched on its
+  own, with a warning in `failed`.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
 ## Profiles (checked at build time)
