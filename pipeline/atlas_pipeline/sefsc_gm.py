@@ -180,24 +180,37 @@ TIME_OVERLAYS = ["sightings_vessel", "sightings_aerial", "effort_vessel", "effor
 
 def species_options(sightings: dict[str, pd.DataFrame], cube_layers: set[str] | None = None) -> list[dict]:
   """the species select of `atlas:overlay_filters`: one option per AphiaID over every sightings layer
-  (`sightings`: overlay id -> its table with aphia_id, accepted_name, models and the layer's common-name field),
-  labelled "<most frequent common name> (<accepted name>)" (the accepted name alone when they are the same), with the
-  number of sightings and the density models (`layers`, the union of the `|token|`s, kept to `cube_layers` when given)
-  its sightings belong to; sorted by label. Raises on a sighting without an AphiaID."""
+  (`sightings`: overlay id -> its table with aphia_id, accepted_name, rank, models and the layer's common-name field),
+  with the number of sightings, sorted by label. Rules:
+  - label: a species is "<its most frequent common name> (<accepted name>)"; a higher taxon carries a common name only
+    when all its sightings share ONE (a genus or family pools several delivered names, e.g. "Cetacean (large)" and
+    "Cetacean (small)" under Cetacea, which no single one describes), else the accepted name alone; the accepted name
+    alone when the common name is the same text.
+  - `layers`: the density models EVERY sighting of the taxon belongs to (the intersection of their `|token|`s, kept to
+    `cube_layers` when given), so a taxon links to a model only when all its sightings do: Delphinidae, whose few
+    Peponocephala/Feresa combinations belong to blackfish while the rest belong to no model, links to none.
+  Raises on a sighting without an AphiaID."""
   rows = []
   for oid, df in sightings.items():
     if df["aphia_id"].isna().any():
       raise ValueError(f"{oid}: {int(df['aphia_id'].isna().sum())} sighting(s) without an aphia_id")
     rows.append(pd.DataFrame({"aphia_id": df["aphia_id"].astype("int64"), "accepted_name": df["accepted_name"],
+                              "rank": df["rank"] if "rank" in df else None,
                               "common": df[SIGHTING_COMMON[oid]], "models": df["models"].fillna("")}))
   d = pd.concat(rows, ignore_index=True)
   out = []
   for aid, g in d.groupby("aphia_id", sort=False):
     acc = g["accepted_name"].mode().iloc[0]
-    com = g["common"].dropna()
-    com = com.mode().iloc[0] if len(com) else None
-    label = acc if not com or str(com).strip().casefold() == str(acc).strip().casefold() else f"{com} ({acc})"
-    toks = sorted({t for m in g["models"] for t in str(m).split("|") if t and (cube_layers is None or t in cube_layers)})
+    names = g["common"].dropna().astype(str).str.strip()
+    names = names[names != ""]
+    is_species = g["rank"].notna().all() and (g["rank"] == "Species").all()
+    if is_species:
+      com = names.mode().iloc[0] if len(names) else None
+    else:
+      com = names.iloc[0] if names.nunique() == 1 else None
+    label = acc if not com or com.casefold() == str(acc).strip().casefold() else f"{com} ({acc})"
+    sets = [{t for t in str(m).split("|") if t and (cube_layers is None or t in cube_layers)} for m in g["models"]]
+    toks = sorted(set.intersection(*sets)) if sets else []
     o = {"value": int(aid), "label": label, "count": int(len(g))}
     if toks:
       o["layers"] = toks
@@ -412,7 +425,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
     ovl_bytes[o["id"]] = pm.stat().st_size
     log(f"{pm.name}: {pm.stat().st_size:,} B, {len(have)} attributes")
   overlays = overlays_block(fields)
-  sig_cols = lambda oid: ["aphia_id", "accepted_name", "models", SIGHTING_COMMON[oid]]
+  sig_cols = lambda oid: ["aphia_id", "accepted_name", "rank", "models", SIGHTING_COMMON[oid]]
   filters = filters_block({oid: pd.read_parquet(src / f"{oid}.parquet", columns=sig_cols(oid)) for oid in SIGHTING_COMMON},
                           {oid: pd.read_parquet(src / f"{oid}.parquet", columns=["year"])["year"] for oid in TIME_OVERLAYS},
                           fields, {"layer": {r["layer"] for r in layers}, "month": {r["month"] for r in layers}})

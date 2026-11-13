@@ -394,19 +394,32 @@ def test_item_index_holds_exactly_the_item_files_and_the_check_catches_drift(tmp
   assert any("rel=items" in m for m in sefsc_gm.check_collection(dest, nolink, prefix))
 
 
-def test_species_options_one_per_aphia_id_labelled_counted_with_their_models():
-  sv = pd.DataFrame({"aphia_id": [1576133, 1576133, 136980, 137108], "accepted_name": ["Balaenoptera ricei"] * 2 +
-                     ["Delphinidae", "Stenella frontalis"], "vernacularName": ["Rice's whale", "Rice's whale", "Delphinidae", None],
-                     "models": ["|rices_whale|", "|rices_whale|", "", "|oceanic_atlantic_spotted_dolphin|shelf_atlantic_spotted_dolphin|"]})
-  sa = pd.DataFrame({"aphia_id": [137108], "accepted_name": ["Stenella frontalis"], "Common.Name": ["Atlantic spotted dolphin"],
-                     "models": ["|shelf_atlantic_spotted_dolphin|"]})
-  o = sefsc_gm.species_options({"sightings_vessel": sv, "sightings_aerial": sa})
-  assert [x["label"] for x in o] == ["Atlantic spotted dolphin (Stenella frontalis)", "Delphinidae", "Rice's whale (Balaenoptera ricei)"]
-  assert [x["count"] for x in o] == [2, 1, 2]
-  assert o[0]["layers"] == ["oceanic_atlantic_spotted_dolphin", "shelf_atlantic_spotted_dolphin"]
-  assert "layers" not in o[1] and o[2]["layers"] == ["rices_whale"] and o[2]["value"] == 1576133
+def test_species_options_one_per_aphia_id_labelled_counted_with_the_models_all_their_sightings_share():
+  sv = pd.DataFrame({"aphia_id": [1576133, 1576133, 136980, 136980, 137108, 2688],
+                     "accepted_name": ["Balaenoptera ricei"] * 2 + ["Delphinidae"] * 2 + ["Stenella frontalis", "Cetacea"],
+                     "rank": ["Species"] * 2 + ["Family"] * 2 + ["Species", "Infraorder"],
+                     "vernacularName": ["Rice's whale", "Rice's whale", "Delphinidae", "unid. dolphin", None, "Cetacean (large)"],
+                     "models": ["|rices_whale|", "|rices_whale|", "|blackfish|", "",
+                                "|oceanic_atlantic_spotted_dolphin|shelf_atlantic_spotted_dolphin|", ""]})
+  sa = pd.DataFrame({"aphia_id": [137108, 2688], "accepted_name": ["Stenella frontalis", "Cetacea"], "rank": ["Species", "Infraorder"],
+                     "Common.Name": ["Atlantic spotted dolphin", "Cetacean (small)"],
+                     "models": ["|oceanic_atlantic_spotted_dolphin|shelf_atlantic_spotted_dolphin|", ""]})
+  o = {x["value"]: x for x in sefsc_gm.species_options({"sightings_vessel": sv, "sightings_aerial": sa})}
+  # labels: a species takes its common name; a higher taxon only one its sightings all share
+  assert o[137108]["label"] == "Atlantic spotted dolphin (Stenella frontalis)" and o[137108]["count"] == 2
+  assert o[2688]["label"] == "Cetacea" and o[136980]["label"] == "Delphinidae"
+  assert o[1576133]["label"] == "Rice's whale (Balaenoptera ricei)" and o[1576133]["count"] == 2
+  # layers: the models EVERY sighting shares (regression: Delphinidae linked to blackfish through 1 of its sightings)
+  assert o[137108]["layers"] == ["oceanic_atlantic_spotted_dolphin", "shelf_atlantic_spotted_dolphin"]
+  assert o[1576133]["layers"] == ["rices_whale"]
+  assert "layers" not in o[136980] and "layers" not in o[2688]
+  # kept to the cube
+  o2 = {x["value"]: x for x in sefsc_gm.species_options({"sightings_vessel": sv}, cube_layers={"rices_whale"})}
+  assert "layers" not in o2[137108] and o2[1576133]["layers"] == ["rices_whale"]
+  assert [x["label"] for x in sefsc_gm.species_options({"sightings_vessel": sv})] == sorted(
+    [x["label"] for x in sefsc_gm.species_options({"sightings_vessel": sv})], key=str.casefold)
   with pytest.raises(ValueError, match="without an aphia_id"):
-    sefsc_gm.species_options({"sightings_vessel": sv.assign(aphia_id=[None, 1, 2, 3])})
+    sefsc_gm.species_options({"sightings_vessel": sv.assign(aphia_id=[None, 1, 2, 3, 4, 5])})
 
 
 def test_filters_block_species_month_follows_the_cube_year_range_and_refuses_a_missing_field():
