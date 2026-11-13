@@ -17,6 +17,7 @@ import {
   type HexInteractionMap,
 } from "../../src/lib/map/layers/hex";
 import { overlayCardLines, overlayFeatureInfo } from "../../src/places/overlayInteraction";
+import { maplibreLikeQuery } from "./maplibreQuery";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -150,6 +151,27 @@ describe("the hex layer beside an overlay", () => {
       point: { x: 1, y: 1 },
     } as never);
     expect(clicks).toEqual([{ fid: 12, value: 0.42, lngLat: [-70, 42] }]);
+    hex.destroy();
+  });
+});
+
+describe("regression 0.7.0: the hex cell line names the cell UNDER the point", () => {
+  it("asks MapLibre with an array (a plain {x, y} would be the whole viewport: the first cell in view)", () => {
+    const listeners = new Map<string, (e: never) => void>();
+    const map: HexInteractionMap = {
+      on: (type, _layer, l) => void listeners.set(type, l),
+      off: (type) => void listeners.delete(type),
+      getCanvas: () => ({ style: { cursor: "" } }),
+      queryRenderedFeatures: (g, o) =>
+        maplibreLikeQuery([
+          { layer: HEX_FILL_ID, rect: [0, 0, 100, 100], properties: {}, id: 11 },
+          { layer: HEX_FILL_ID, rect: [100, 0, 200, 100], properties: {}, id: 12 },
+        ])(g, o),
+    };
+    const hex = installHexInteraction(map, { valueOf: () => 0.5, onClick: () => {} });
+    expect(cellLineAt({ x: 150, y: 50 })).toBe("Cell 12: 0.5");
+    expect(cellLineAt({ x: 50, y: 50 })).toBe("Cell 11: 0.5");
+    expect(cellLineAt({ x: 500, y: 50 })).toBeNull();
     hex.destroy();
   });
 });

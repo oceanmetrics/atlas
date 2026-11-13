@@ -5,8 +5,17 @@
    inside the card (never the page), and the card is never wider than a phone screen (CARD_MAX_WIDTH). */
 
 .atlas-popup.atlas-popup--overlays .maplibregl-popup-content {
+  position: relative;
   padding: var(--space-2) var(--space-3);
   min-width: 240px;
+}
+
+/* MapLibre appends its close button AFTER the content (setHTML), and popup.css puts it in the flow: here
+   it would land under a long list, so it is pinned to the card's top-right corner beside the first heading */
+.atlas-popup.atlas-popup--overlays .maplibregl-popup-close-button {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
 }
 
 .atlas-popup .atlas-popup-ov {
@@ -19,7 +28,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: min(55vh, 420px);
+  /* short enough that the whole card fits above or below a click in the middle of the map */
+  max-height: min(36vh, 300px);
   overflow: auto;
   overscroll-behavior: contain;
   /* room for the scrollbar, and for the close button beside the first heading */

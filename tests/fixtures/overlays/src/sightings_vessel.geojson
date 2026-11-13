@@ -1,0 +1,85 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "sightid": 20140612003,
+        "survey": "GU1402",
+        "date": "2014-06-12",
+        "vernacularName": "Rice's whale",
+        "scientificName": "Balaenoptera ricei",
+        "group.size": 2,
+        "beaufort": 2.5,
+        "lat": 27.51234,
+        "lon": -89.61234,
+        "models": "|rices_whale|",
+        "comments": "<img src=x onerror=alert(1)>"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-89.61234, 27.51234]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "sightid": 20180704011,
+        "survey": "GU1803",
+        "date": "2018-07-04",
+        "vernacularName": "Common bottlenose dolphin",
+        "scientificName": "Tursiops truncatus",
+        "group.size": 15,
+        "beaufort": null,
+        "lat": 27.4,
+        "lon": -89.25,
+        "models": "|bottlenose_dolphin|",
+        "comments": ""
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-89.25, 27.4]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "sightid": 20180704012,
+        "survey": "GU1803",
+        "date": "2018-07-04",
+        "vernacularName": "Pantropical spotted dolphin",
+        "scientificName": "Stenella attenuata",
+        "group.size": 40,
+        "beaufort": 3,
+        "lat": 27.4,
+        "lon": -89.25,
+        "models": "|pantropical_spotted_dolphin|stenella_spp|",
+        "comments": "mixed group"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-89.25, 27.4]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "sightid": 20210815002,
+        "survey": "PC2104",
+        "date": "2021-08-15",
+        "vernacularName": "Sperm whale",
+        "scientificName": "Physeter macrocephalus",
+        "group.size": 4,
+        "beaufort": 1,
+        "lat": 27.2,
+        "lon": -89.9,
+        "models": "|sperm_whale|",
+        "comments": "fluke-up dive"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-89.9, 27.2]
+      }
+    }
+  ]
+}

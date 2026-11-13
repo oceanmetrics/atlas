@@ -1,0 +1,42 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "segid": 5501,
+        "survey": "GU1402",
+        "date": "2014-06-12",
+        "effort_km": 38.42,
+        "beaufort": 2.5,
+        "platform": "NOAA Ship Gordon Gunter"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-89.95, 27.51234],
+          [-89.61234, 27.51234],
+          [-89.0, 27.51234]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "segid": 7702,
+        "survey": "GU1803",
+        "date": "2018-07-04",
+        "effort_km": 51.7,
+        "beaufort": 3,
+        "platform": "NOAA Ship Gordon Gunter"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-89.25, 27.1],
+          [-89.25, 27.9]
+        ]
+      }
+    }
+  ]
+}

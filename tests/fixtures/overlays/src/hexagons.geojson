@@ -1,0 +1,55 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "FID": 1,
+        "hex_id": "GOMX-000123",
+        "area_km2": 40.0,
+        "depth_m": -212.37,
+        "n_segments": 14,
+        "models": "|rices_whale|bottlenose_dolphin|"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-89.40835, 27.5],
+            [-89.50417, 27.64722],
+            [-89.69583, 27.64722],
+            [-89.79165, 27.5],
+            [-89.69583, 27.35278],
+            [-89.50417, 27.35278],
+            [-89.40835, 27.5]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "FID": 2,
+        "hex_id": "GOMX-000124",
+        "area_km2": 40.0,
+        "depth_m": -1843.9,
+        "n_segments": 3,
+        "models": "|bottlenose_dolphin|"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-89.10835, 27.5],
+            [-89.20417, 27.64722],
+            [-89.39583, 27.64722],
+            [-89.49165, 27.5],
+            [-89.39583, 27.35278],
+            [-89.20417, 27.35278],
+            [-89.10835, 27.5]
+          ]
+        ]
+      }
+    }
+  ]
+}

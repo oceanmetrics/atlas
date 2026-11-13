@@ -6,6 +6,7 @@ import {
   overlayFeatureInfo,
   overlayHoverText,
 } from "../../src/places/overlayInteraction";
+import { maplibreLikeQuery } from "../map/maplibreQuery";
 
 describe("what an overlay feature says", () => {
   it("name and status make the hover line; no status, just the name", () => {
@@ -51,7 +52,8 @@ describe("overlayFeatureAt: only layers that exist, with a little slack", () => 
     };
     const info = overlayFeatureAt(map, { x: 10, y: 20 }, ["ov-a-fill", "ov-gone-fill"], 3);
     expect(info).toMatchObject({ name: "A", placeId: "A:1", isArea: true });
-    expect(calls).toEqual([[{ x: 10, y: 20 }, ["ov-a-fill"]]]);
+    // the point as an array (a plain {x, y} is the whole viewport to MapLibre, regression 0.7.0 below)
+    expect(calls).toEqual([[[10, 20], ["ov-a-fill"]]]);
   });
   it("nothing at the point: a small box around it catches a 1-px line", () => {
     const calls: unknown[] = [];
@@ -59,12 +61,13 @@ describe("overlayFeatureAt: only layers that exist, with a little slack", () => 
       getLayer: () => ({}),
       queryRenderedFeatures: (geometry: unknown) => {
         calls.push(geometry);
-        return Array.isArray(geometry) ? [feature] : [];
+        // a box ([[x0, y0], [x1, y1]]) catches the line; the bare point misses it
+        return Array.isArray((geometry as unknown[])[0]) ? [feature] : [];
       },
     };
     expect(overlayFeatureAt(map, { x: 10, y: 20 }, ["ov-a-line"], 3)).toMatchObject({ name: "A" });
     expect(calls).toEqual([
-      { x: 10, y: 20 },
+      [10, 20],
       [
         [7, 17],
         [13, 23],
@@ -88,5 +91,32 @@ describe("overlayFeatureAt: only layers that exist, with a little slack", () => 
   it("no feature under the point is a miss", () => {
     const map = { getLayer: () => ({}), queryRenderedFeatures: () => [] };
     expect(overlayFeatureAt(map, { x: 1, y: 1 }, ["ov-a-fill"])).toBeNull();
+  });
+});
+
+// Regression 0.7.0: the hit test passed the point as a plain `{x, y}`, which MapLibre does not take as a
+// query geometry (only a `Point` instance or an array is one): it queried the WHOLE viewport, so as soon as
+// any feature of a place layer was in view, every hover and click "hit" it -- a hover over empty sea named a
+// far-away sanctuary, the hex hover stayed quiet everywhere, a raster click opened the place's card.
+describe("regression 0.7.0: a hover or click hits only the feature UNDER the pointer", () => {
+  const map = {
+    getLayer: () => ({}),
+    queryRenderedFeatures: maplibreLikeQuery([
+      { layer: "ov-a-fill", rect: [100, 100, 200, 200], properties: { name: "Sanctuary" } },
+    ]),
+  };
+  it("a point inside the polygon hits it", () => {
+    expect(overlayFeatureAt(map, { x: 150, y: 150 }, ["ov-a-fill"])).toMatchObject({
+      name: "Sanctuary",
+    });
+  });
+  it("a point far from it, the polygon still in view, hits nothing", () => {
+    expect(overlayFeatureAt(map, { x: 400, y: 400 }, ["ov-a-fill"])).toBeNull();
+    expect(overlayFeatureAt(map, { x: 10, y: 150 }, ["ov-a-fill"], 3)).toBeNull();
+  });
+  it("the slack box still catches a point just beside it", () => {
+    expect(overlayFeatureAt(map, { x: 202, y: 150 }, ["ov-a-fill"], 3)).toMatchObject({
+      name: "Sanctuary",
+    });
   });
 });

@@ -41,7 +41,7 @@ interface RenderedFeature {
 export interface OverlayMapLike {
   getLayer(id: string): unknown;
   queryRenderedFeatures(
-    geometry: [[number, number], [number, number]] | { x: number; y: number },
+    geometry: [[number, number], [number, number]] | [number, number],
     options: { layers: string[] },
   ): readonly RenderedFeature[];
   on(type: string, listener: (e: never) => void): unknown;
@@ -67,7 +67,7 @@ export function overlayHitsAt(
   const thin = present.filter((id) => byLayer.get(id)!.geometry !== "polygon");
   const found: RenderedFeature[] = [];
   try {
-    // a plain `{x, y}` (an event's own Point instance answers nothing on MapLibre 6.10, overlayInteraction.ts)
+    // arrays, never a plain `{x, y}`: MapLibre reads that as no geometry, the whole viewport
     if (thin.length) {
       found.push(
         ...map.queryRenderedFeatures(
@@ -80,7 +80,7 @@ export function overlayHitsAt(
       );
     }
     if (areas.length) {
-      found.push(...map.queryRenderedFeatures({ x: point.x, y: point.y }, { layers: areas }));
+      found.push(...map.queryRenderedFeatures([point.x, point.y], { layers: areas }));
     }
   } catch {
     return [];

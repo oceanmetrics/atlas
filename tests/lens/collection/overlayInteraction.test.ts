@@ -11,6 +11,7 @@ import {
   type OverlayMapLike,
 } from "../../../src/lens/collection/overlayInteraction";
 import { lensOverlayAt, overlayAt, registerOverlayProbe } from "../../../src/lib/map/clickInfo";
+import { maplibreLikeQuery } from "../../map/maplibreQuery";
 import {
   installOverlayInteraction,
   type OverlayMapLike as PlaceMapLike,
@@ -96,7 +97,7 @@ describe("overlayHitsAt", () => {
         ],
         layers: ["cov-sightings_vessel-circle", "cov-effort_vessel-line"],
       },
-      { geometry: { x: 50, y: 50 }, layers: ["cov-hexagons-fill"] },
+      { geometry: [50, 50], layers: ["cov-hexagons-fill"] },
     ]);
     expect(HIT_SLACK_PX).toBeGreaterThanOrEqual(5);
     expect(HIT_SLACK_PX).toBeLessThanOrEqual(8);
@@ -116,6 +117,33 @@ describe("overlayHitsAt", () => {
   it("a query racing a style swap is no hit", () => {
     const { map } = fakeMap(layers, { throws: true });
     expect(overlayHitsAt(map, { x: 0, y: 0 }, TOP_FIRST)).toEqual([]);
+  });
+});
+
+describe("regression 0.7.0: only the features UNDER the click (a plain {x, y} is the whole viewport)", () => {
+  // MapLibre's own reading of the query argument (tests/map/maplibreQuery.ts): two hexagons side by side,
+  // a sighting in the first
+  const map = {
+    getLayer: () => ({}),
+    queryRenderedFeatures: maplibreLikeQuery([
+      { layer: "cov-hexagons-fill", rect: [0, 0, 100, 100], properties: { FID: 1 } },
+      { layer: "cov-hexagons-fill", rect: [100, 0, 200, 100], properties: { FID: 2 } },
+      { layer: "cov-sightings_vessel-circle", rect: [46, 46, 54, 54], properties: { sightid: 7 } },
+    ]),
+  };
+  it("a click in the second hexagon lists that hexagon alone", () => {
+    expect(overlayHitsAt(map, { x: 150, y: 50 }, TOP_FIRST).map((h) => h.properties)).toEqual([
+      { FID: 2 },
+    ]);
+  });
+  it("a click on the sighting lists it over its own hexagon, never the neighbour", () => {
+    expect(overlayHitsAt(map, { x: 50, y: 50 }, TOP_FIRST).map((h) => h.properties)).toEqual([
+      { sightid: 7 },
+      { FID: 1 },
+    ]);
+  });
+  it("a click outside every feature hits nothing", () => {
+    expect(overlayHitsAt(map, { x: 500, y: 500 }, TOP_FIRST)).toEqual([]);
   });
 });
 
