@@ -7,6 +7,7 @@ are in the repo's [`CLAUDE.md`](../CLAUDE.md); the profiles are in the repo [REA
 ```sh
 cd pipeline && uv run --group dev pytest -q                       # one test per rule; needs GDAL on the PATH
 uv run pipeline/build.py build --collection swfsc_cce_becker2020b   # from the repo root
+uv run pipeline/build.py build --collection sefsc_gm                # from the repo root; input = workflows ingest_sefsc_gm-surveys.qmd
 uv run pipeline/build.py check
 uv run pipeline/build.py cog-assets <item.json>... <tif>          # the browser COG assets of Items written elsewhere
 uv run pipeline/build.py cog-3857-batch --release v7 --out <dir>  # the 3857 copies + side table of a MST release
@@ -20,6 +21,30 @@ this repo): both stores, R2 then S3, never a delete; dry run is `--dry-run`, a r
 `atlas-restricted/<ULID>/<name>` behind the ULID guard, `collection.json` last. `atlas/<collection>/**/v<N>/**` is edge-immutable (the
 storage Worker caches it for a year): re-publishing `atlas/aquamaps_native/registry/v<N>/` with other bytes exits 3 by design (a dry run too);
 publish a new `registry/v<N+1>/` and repoint `collection.json` with `--only aquamaps_native`.
+
+## `sefsc_gm` version 2 (restricted): Gulf surveys and density models on one hexagon grid
+
+Input: `ATLAS_SEFSC_SRC` (default `~/_big/msens/derived/preview/sefsc_gm/`), written by MarineSensitivity/workflows
+`ingest_sefsc_gm-surveys.qmd` from Lance Garrison's 2026-11-12 SEFSC delivery (vessel 2003-2024 and aerial 2011-2018
+effort + sightings, the 40 km2 hexagons) and the 19 NCEI 0256800 v2.2 density shapefiles. `sefsc_gm.build` refuses to
+stage while the notebook's `DONE` is missing, older than a file, or lists a file whose md5 differs, then:
+
+- gates `values.parquet` (`values_problems`: the `{layer}__{month}__{variable}` names against `layers.csv`, no `-9999`
+  or negative value left in, every annual density equal to the day-weighted mean of its months with an unmodelled
+  month as 0, no surveyed hexagon with a NULL count) and restages it keyed `FID` (= `HEXID`, int64) in one row group;
+- writes `hex.pmtiles` (layer `hex`, `FID` only, `grid.TIPPECANOE_FLAGS`) and one overlay PMTiles per vector layer
+  from its FlatGeobuf with every attribute (`overlay_tippecanoe_cmd`: z0-z12, `-r1`, no feature or tile-size limit;
+  booleans stay MVT booleans), and refuses a PMTiles that lost a field;
+- writes `atlas:overlays` (`OVERLAYS` + `overlays_block`, the contract the app implements: array order = panel and draw
+  order, first on top; `fields` = popup order; `filter_field` = the `|token|` property a density-model Item's
+  `atlas:overlay_filter` matches), one Item per values column (`stac.sefsc_items`), the collection (`stac.sefsc_collection`,
+  `version: "2"`, a `predecessor-version` link to v1 `?c=msens-v8-gm` and no successor link anywhere public), the
+  GeoParquet downloads, the tables, `README.md` (`docs.sefsc_readme`) and a thumbnail.
+
+`check` runs `sefsc_gm.check_collection` (restricted, ULID prefix, no email, every href staged, every overlay field in
+its tiles, every Item's dims in the cube, each density-model Item filtering on its own model). Publish with
+`pipeline/publish.sh --only sefsc_gm [--really]` (prefix in `restricted_prefix_sefsc_gm.txt`, git-ignored; never linked
+from `catalog.json`). The share link is `https://oceanmetrics.io/atlas/?collection=<url-encoded S3 collection.json URL>`.
 
 ## COGs for the browser renderer (build week 2)
 

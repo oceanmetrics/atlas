@@ -807,6 +807,236 @@ def cce_items(rows: list[dict], bbox: list[float] | dict[int, list[float]], base
   return items
 
 
+# ---- sefsc_gm v2 (restricted): Gulf line-transect surveys + density models on one hexagon grid ----
+# Shared by an unlisted link for review with the provider first: its OWN unlisted prefix
+# (pipeline/restricted_prefix_sefsc_gm.txt, git-ignored), never linked from catalog.json. Version 1 is the MST v8
+# external collection msens-v8-gm; v2 links back to it (predecessor-version) and nothing public links forward.
+
+SEFSC_ID = "sefsc_gm"
+SEFSC_VERSION = "2"
+SEFSC_V1_URL = "https://oceanmetrics.io/atlas/?c=msens-v8-gm"
+SEFSC_PREDECESSOR = {"rel": "predecessor-version", "href": SEFSC_V1_URL, "type": "text/html",
+                     "title": "Version 1: NCEI 0256800 v2.2 annual densities as a 0-100 index on the 0.05° grid "
+                              "(MarineSensitivity v8)"}
+SEFSC_NCEI = "https://www.ncei.noaa.gov/archive/accession/0256800"
+SEFSC_NCEI_ISO = "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:256800"
+# the density models' citation: authors = the "Dataset Author List" of the accession's documentation (NOAA SEFSC Cetacean
+# and Sea Turtle Spatial Density Models for the Gulf of Mexico.docx); year = the ISO 19115-2 dateStamp (2022-07-27) of v2.2;
+# the ISO record names no DOI for the accession itself
+SEFSC_CITATION = (
+  "Litz, J., Aichinger Dias, L., Rappucci, G., Martinez, A., Soldevilla, M., Garrison, L., Mullin, K., Barry, K., & "
+  "Foster, M. (2022). NOAA SEFSC Cetacean and Sea Turtle Spatial Density Models for the Gulf of Mexico (NCEI Accession "
+  "0256800, version 2.2). NOAA National Centers for Environmental Information. " + SEFSC_NCEI)
+SEFSC_SURVEY_CITATION = (
+  "NOAA Southeast Fisheries Science Center, Marine Mammal and Turtle Division (2026). Gulf broadscale vessel "
+  "(2003-2024) and aerial (2011-2018) line-transect survey effort and marine mammal sightings, delivered to the Marine "
+  "Minerals Administration (formerly BOEM) on 12 November 2026 (L. Garrison).")
+SEFSC_LICENSE_TITLE = "Public domain: a US Government work, 17 U.S.C. § 105 (to check with the provider)"
+SEFSC_NOTE = (
+  "Under review: shared by link for review with the provider (NOAA SEFSC) first; not for distribution. Survey effort, "
+  "sightings and density models as delivered, on the models' own 40 km² hexagons; not used in any score.")
+SEFSC_ACK = ("Related funding agencies of the density models (NCEI 0256800): U.S. Department of the Interior, Bureau of "
+             "Ocean Energy Management; NOAA NMFS Southeast Fisheries Science Center; NOAA Office of Response and "
+             "Restoration; U.S. Navy; NOAA RESTORE Science Program.")
+# no email for anyone (the collection is shared by link)
+SEFSC_CONTACTS = [
+  {"name": "Lance Garrison", "organization": "NOAA Southeast Fisheries Science Center, Marine Mammal and Turtle Division",
+   "roles": ["producer", "point of contact"]},
+]
+SEFSC_PROVIDERS = [
+  {"name": "NOAA Southeast Fisheries Science Center (SEFSC), Marine Mammal and Turtle Division", "roles": ["producer", "licensor"],
+   "url": "https://www.fisheries.noaa.gov/about/southeast-fisheries-science-center",
+   "description": "line-transect surveys (vessel 2003-2024, aerial 2011-2018), sightings and the GoMMAPPS spatial density models"},
+  {"name": "NOAA National Centers for Environmental Information (NCEI)", "roles": ["host"], "url": SEFSC_NCEI,
+   "description": "archive of the density models (accession 0256800, version 2.2)"},
+  {"name": "Ocean Metrics", "roles": ["processor", "host"], "url": "https://oceanmetrics.io",
+   "description": "survey layers, sighting crosswalk and per-hexagon tables (MarineSensitivity/workflows ingest_sefsc_gm-surveys.qmd)"},
+]
+SEFSC_SURVEY_LAYERS = ["survey_all", "survey_vessel", "survey_aerial"]
+SEFSC_SURVEY_LABELS = {"survey_all": "Surveys, vessel + aerial", "survey_vessel": "Vessel surveys, 2003–2024",
+                       "survey_aerial": "Aerial surveys, 2011–2018"}
+SEFSC_MONTHS = ["annual"] + [f"{m:02d}" for m in range(1, 13)]
+SEFSC_MONTH_LABELS = {"annual": "Annual (surveys: all months)",
+                      **{f"{m:02d}": datetime.date(2000, m, 1).strftime("%B") for m in range(1, 13)}}
+SEFSC_VARIABLES = ["effort_km", "groups", "individuals", "density", "cv"]
+SEFSC_VARIABLE_LABELS = {"effort_km": "Survey effort (km)", "groups": "Sightings (groups)", "individuals": "Individuals sighted",
+                         "density": "Density (animals per km²)", "cv": "Coefficient of variation"}
+SEFSC_UNITS = {"effort_km": "km", "groups": "count", "individuals": "count", "density": "animals/km2", "cv": "unitless"}
+SEFSC_CV_RANGE = [0, 2]    # a fixed 0-2 like the CCE cv, so models compare
+SEFSC_MODEL_INTERVAL = ("2003-01-01T00:00:00Z", "2019-12-31T23:59:59Z")   # the surveys the models were fit to (NCEI abstract)
+SEFSC_METHOD_DETAIL = (
+  "Generalized additive model spatial density models (NOAA SEFSC, GoMMAPPS) of vessel and aerial line-transect "
+  "surveys 2003-2019 with monthly averaged oceanographic covariates (2015-2019), predicted per month on 40 km² "
+  "hexagons (NCEI 0256800 v2.2): density = abundance per hexagon / Area_km2 and its CV as delivered; annual = the "
+  "day-weighted mean of the twelve months, an unmodelled month counting as 0. Survey layers: on-effort length, "
+  "sightings and individuals per hexagon and month from the delivered effort segments and sightings.")
+
+
+def sefsc_layer_order(models: list[dict]) -> list[str]:
+  """the layer dimension: the three survey layers, then the models alphabetically by their label."""
+  return SEFSC_SURVEY_LAYERS + [m["layer"] for m in sorted(models, key=lambda r: r["label"].lower())]
+
+
+def sefsc_item_id(layer: str, month: str, variable: str) -> str:
+  return f"{layer}_{month}_{variable}"
+
+
+def sefsc_value_range(row: dict) -> list[float]:
+  """[0, p98] to 3 significant figures (the max when p98 is not positive; 1 when nothing is); cv a fixed [0, 2]."""
+  if row["variable"] == "cv":
+    return list(SEFSC_CV_RANGE)
+  for k in ("p98", "max"):
+    hi = float(row[k])
+    if hi > 0:
+      return [0, float(f"{hi:.3g}")]
+  return [0, 1]
+
+
+def _sefsc_taxon(m: dict) -> dict:
+  group = "turtle" if "sea_turtle" in m["layer"] else "mammal"
+  return {"scientific_name": m["scientific_name"], "common_name": m["label"],
+          "authorities": {"worms": int(float(m["aphia_id"]))}, "group": group}
+
+
+def sefsc_collection(models: list[dict], layers: list[dict], bbox: list[float], interval: tuple[str, str],
+                     assets: dict, overlays: list[dict]) -> dict:
+  """the restricted collection: layer x month x variable over the hexagon grid (values.parquet), the survey overlays
+  (`atlas:overlays`, PMTiles assets) and the downloads. `layers` are layers.csv rows (one per values column)."""
+  order = sefsc_layer_order(models)
+  labels = {**SEFSC_SURVEY_LABELS, **{m["layer"]: m["label"] for m in models}}
+  present = {r["layer"] for r in layers}
+  if set(order) != present:
+    raise ValueError(f"layers.csv layers {sorted(present ^ set(order))} differ from the survey layers + models.csv")
+  months = [m for m in SEFSC_MONTHS if any(r["month"] == m for r in layers)]
+  variables = [v for v in SEFSC_VARIABLES if any(r["variable"] == v for r in layers)]
+  ids = [sefsc_item_id(r["layer"], r["month"], r["variable"]) for r in layers]
+  if len(set(ids)) != len(ids):
+    raise ValueError("duplicate layer x month x variable in layers.csv")
+  for o in overlays:
+    if o["asset"] not in assets:
+      raise ValueError(f"overlay {o['id']}: asset {o['asset']} is not a collection asset")
+  return {
+    "type": "Collection",
+    "stac_version": STAC_VERSION,
+    "stac_extensions": [EXT["sdm"], EXT["scientific"], EXT["table"], EXT["datacube"], EXT["contacts"],
+                        EXT["version"], EXT["file"]],
+    "id": SEFSC_ID,
+    "updated": now_rfc3339(),
+    "title": "Gulf line-transect surveys and density models, NOAA SEFSC (version 2, under review)",
+    "description": (
+      "NOAA SEFSC broadscale vessel (2003-2024) and aerial (2011-2018) line-transect survey effort and marine mammal "
+      "sightings in the Gulf, with the 19 cetacean and sea turtle spatial density models (NCEI 0256800 v2.2) on their "
+      "own 40 km² hexagons. Pick a layer (the surveys, or a density model), a month and a variable to paint the "
+      f"hexagons; the sightings, effort lines and hexagons are layers of their own over it ({len(models)} models, "
+      f"{len(layers)} hexagon surfaces). UNDER REVIEW: shared by link for review with the provider; not for "
+      "distribution. Version 2 of the atlas' SEFSC Gulf layer (version 1: the annual densities as a 0-100 index). "
+      "Methods, checks and questions for the provider: README.md."),
+    "license": CCE_LICENSE,
+    "version": SEFSC_VERSION,
+    "deprecated": False,
+    "sci:citation": SEFSC_CITATION,
+    "contacts": SEFSC_CONTACTS,
+    "providers": SEFSC_PROVIDERS,
+    "atlas:funders": [],
+    "atlas:acknowledgement": SEFSC_ACK,
+    "atlas:status": "review",
+    "atlas:access": "restricted",
+    "atlas:note": SEFSC_NOTE,
+    "atlas:survey_citation": SEFSC_SURVEY_CITATION,
+    "extent": {"spatial": {"bbox": [bbox]}, "temporal": {"interval": [list(interval)]}},
+    "sdm:response_type": "mixed",
+    "sdm:method": "density_surface_model",
+    "sdm:method_detail": SEFSC_METHOD_DETAIL,
+    "sdm:source_authority": "NOAA SEFSC",
+    "sdm:temporal_interval": "monthly",
+    "cube:dimensions": {
+      "layer": {"type": "other", "title": "Layer", "atlas:taxon_dim": True,
+                "description": "the survey layers (vessel + aerial, vessel, aerial), then the 19 density models",
+                "values": order, "atlas:labels": {k: labels[k] for k in order}},
+      "month": {"type": "other", "title": "Month",
+                "description": "annual (density models: the day-weighted mean of the 12 months; surveys: all months) or a month",
+                "values": months, "atlas:labels": {k: SEFSC_MONTH_LABELS[k] for k in months}},
+      "variable": {"type": "other", "title": "Variable",
+                   "description": "surveys: effort_km, groups, individuals; density models: density, cv",
+                   "values": variables, "atlas:labels": {k: SEFSC_VARIABLE_LABELS[k] for k in variables}},
+    },
+    "summaries": {"layer": order, "month": months, "variable": variables,
+                  "sdm:response_type": ["density", "uncertainty", "mixed"]},
+    "atlas:overlays": overlays,
+    "assets": dict(assets),
+    "links": [
+      {"rel": "root", "href": "./collection.json", "type": JSON_T},
+      {"rel": "self", "href": "./collection.json", "type": JSON_T},
+      *[{"rel": "item", "href": f"./items/{i}.json", "type": "application/geo+json", "title": r["title"]}
+        for i, r in zip(ids, layers)],
+      {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods, checks, questions for the provider, credits"},
+      dict(SEFSC_PREDECESSOR),
+      {"rel": "via", "href": SEFSC_NCEI, "type": "text/html", "title": "NCEI accession 0256800 (the density models)"},
+      {"rel": "describedby", "href": SEFSC_NCEI_ISO, "type": "text/html", "title": "NCEI 0256800 metadata (ISO 19115-2)"},
+      {"rel": "license", "href": CCE_LICENSE_URL, "type": "text/html", "title": SEFSC_LICENSE_TITLE},
+    ],
+  }
+
+
+def sefsc_items(models: list[dict], layers: list[dict], bbox: list[float],
+                intervals: dict[str, tuple[str, str]]) -> dict[str, dict]:
+  """one Item per values column (layers.csv row), id {layer}_{month}_{variable}, painted from ../values.parquet by FID.
+  `intervals` maps each survey layer to its (start, end); the models take SEFSC_MODEL_INTERVAL. A density-model Item
+  carries `atlas:overlay_filter` (the sightings whose `models` holds |<layer>|)."""
+  by_layer = {m["layer"]: m for m in models}
+  items = {}
+  for r in layers:
+    lyr, mon, var, col = r["layer"], r["month"], r["variable"], r["column"]
+    iid = sefsc_item_id(lyr, mon, var)
+    survey = lyr in SEFSC_SURVEY_LAYERS
+    m = by_layer.get(lyr)
+    if not survey and m is None:
+      raise ValueError(f"{col}: layer {lyr} is neither a survey layer nor in models.csv")
+    start, end = intervals[lyr] if survey else SEFSC_MODEL_INTERVAL
+    props = {
+      "title": r["title"],
+      "description": r["description"] + " Under review.",
+      "datetime": None, "start_datetime": start, "end_datetime": end,
+      "atlas:dims": {"layer": lyr, "month": mon, "variable": var},
+      "atlas:metric": var,
+      "atlas:value_range": sefsc_value_range(r),
+      "atlas:n_hex": int(float(r["n_hex"])),
+      "atlas:p98": float(f"{float(r['p98']):.6g}"),
+      "sdm:response_type": "mixed" if survey else ("density" if var == "density" else "uncertainty"),
+      "sdm:method": "line_transect_survey" if survey else "density_surface_model",
+      "sdm:source_authority": "NOAA SEFSC",
+      "sdm:temporal_interval": "annual" if mon == "annual" else "monthly",
+      "sdm:climatological": not survey,
+      "sdm:value_unit": SEFSC_UNITS[var],
+      "sdm:value_range": [float(f"{float(r['min']):.6g}"), float(f"{float(r['max']):.6g}")],
+    }
+    if not survey:
+      props["sdm:taxon"] = _sefsc_taxon(m)
+      props["atlas:overlay_filter"] = {"field": "models", "token": lyr}
+    items[iid] = {
+      "type": "Feature",
+      "stac_version": STAC_VERSION,
+      "stac_extensions": [EXT["sdm"], EXT["table"]],
+      "id": iid,
+      "bbox": bbox,
+      "geometry": bbox_polygon(bbox),
+      "properties": props,
+      "links": [
+        {"rel": "root",       "href": "../collection.json", "type": JSON_T},
+        {"rel": "parent",     "href": "../collection.json", "type": JSON_T},
+        {"rel": "collection", "href": "../collection.json", "type": JSON_T},
+        {"rel": "self",       "href": f"./{iid}.json", "type": "application/geo+json"},
+      ],
+      "assets": {
+        "values": {"href": "../values.parquet", "type": PARQUET, "roles": ["data"], "title": f"{col} by FID",
+                   "atlas:key_column": "FID", "atlas:value_column": col,
+                   "table:columns": [{"name": "FID", "type": "int64"}, {"name": col, "type": "double"}]},
+      },
+      "collection": SEFSC_ID,
+    }
+  return items
+
+
 # ---- root catalog ----
 
 # the AquaMaps EOV share product: staged and uploaded by oceanmetrics/workflows/aquamaps_eov.qmd; only the root

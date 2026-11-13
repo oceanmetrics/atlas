@@ -4,6 +4,7 @@
 #   pipeline/publish.sh            # om-publish --dry-run (read-only listings of both stores)
 #   pipeline/publish.sh --really   # real upload (R2 keys: ~/.config/oceanmetrics/r2.env; AWS: the host's profile)
 #   pipeline/publish.sh --only swfsc_cce_becker2020b [--really]   # ONE restricted collection (+ its COGs), nothing else
+#   pipeline/publish.sh --only sefsc_gm [--really]   # ONE restricted collection (+ its PMTiles, Parquet, tables), nothing else
 #   pipeline/publish.sh --only aquamaps_eov [--really]   # the EOV score + density COGs, their _3857 copies, Items, collection.json; no delete
 #   pipeline/publish.sh --only aquamaps_native [--really]   # ONLY aquamaps_native/collection.json (repointed at registry/v2); nothing else, no delete
 #   pipeline/publish.sh --only catalog [--really]   # ONLY catalog.json (the root; no-cache); nothing else, no delete
@@ -30,7 +31,7 @@ while [ $# -gt 0 ]; do
     --dry-run|--dryrun) mode="--dry-run" ;;
     --only) [ $# -ge 2 ] || { echo "--only needs a collection name" >&2; exit 2; }; only="$2"; shift ;;
     --only=*) only="${1#--only=}" ;;
-    -h|--help) sed -n "2,16p" "$0"; exit 0 ;;
+    -h|--help) sed -n "2,17p" "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -113,11 +114,12 @@ fi
 only_prefix_file() {
   case "$1" in
     swfsc_cce_becker2020b) echo "$prefix_dir/restricted_prefix_swfsc_cce.txt" ;;
+    sefsc_gm) echo "$prefix_dir/restricted_prefix_sefsc_gm.txt" ;;
     *) return 1 ;;
   esac
 }
 if [ -n "$only" ]; then
-  pf="$(only_prefix_file "$only")" || { echo "--only: unknown collection '$only' (known: swfsc_cce_becker2020b, aquamaps_eov, aquamaps_native, catalog)" >&2; exit 2; }
+  pf="$(only_prefix_file "$only")" || { echo "--only: unknown collection '$only' (known: swfsc_cce_becker2020b, sefsc_gm, aquamaps_eov, aquamaps_native, catalog)" >&2; exit 2; }
   src="$stage/$only"
   [ -f "$src/collection.json" ] || { echo "nothing staged at $src (run: uv run pipeline/build.py build --collection $only)" >&2; exit 1; }
   [ -f "$pf" ] || { echo "missing $pf (the build creates it)" >&2; exit 1; }

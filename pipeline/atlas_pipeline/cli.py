@@ -18,15 +18,18 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import biotrack as bt
-from . import aquamaps, cog, cog3857, docs, grid, profiles, stac, swfsc_cce, taxa, thumbs
+from . import aquamaps, cog, cog3857, docs, grid, profiles, sefsc_gm, stac, swfsc_cce, taxa, thumbs
 
 PIPE_DIR   = Path(__file__).resolve().parent.parent
 REPO_DIR   = PIPE_DIR.parent
 RAW_DIR    = Path("~/My Drive/projects/oceanmetrics/data/raw/couto.thiagoba@gmail.com_indicators").expanduser()
 STAGING    = REPO_DIR / "catalog" / "staging"
 COLLECTIONS = ["biotrack_indicators", "biotrack_species", "aquamaps_native", "catalog"]
-# built on its own (`--collection swfsc_cce_becker2020b`), never by `all`: its input is another repo's ingest output
-EXTRA_COLLECTIONS = [stac.CCE_ID]
+# built on their own (`--collection swfsc_cce_becker2020b`, `--collection sefsc_gm`), never by `all`: their input is
+# another repo's notebook output
+EXTRA_COLLECTIONS = [stac.CCE_ID, stac.SEFSC_ID]
+# the --src default of each
+SRC_DEFAULTS = {stac.CCE_ID: swfsc_cce.SRC_DEFAULT, stac.SEFSC_ID: sefsc_gm.SRC_DEFAULT}
 CROCKFORD  = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 H3_DECIMALS = 4
 
@@ -292,7 +295,7 @@ def check_staging(out: Path = STAGING) -> list[str]:
     return [f"{cat} missing"]
   c = load_json(cat)
   bad += [f"catalog: {m}" for m in stac.check_stac_required({**c, "type": "Catalog"}) if m.startswith("missing") and "extent" not in m]
-  if any(k in json.dumps(c) for k in ("biotrack_species", stac.CCE_ID, "atlas-restricted")):
+  if any(k in json.dumps(c) for k in ("biotrack_species", stac.CCE_ID, stac.SEFSC_ID, "atlas-restricted")):
     bad.append("catalog.json links the restricted collection")
   # the atlas' AquaMaps entry is aquamaps_native: neither the v7 parent (it lists am_0.05) nor an MST AquaMaps child
   for l in c.get("links", []):
@@ -342,6 +345,10 @@ def check_staging(out: Path = STAGING) -> list[str]:
       pf = swfsc_cce.PREFIX_FILE
       prefix = pf.read_text().strip() if pf.exists() else None
       bad += [f"{stac.CCE_ID}: {m}" for m in swfsc_cce.check_collection(coll_dir, coll, prefix)]
+    if coll_dir.name == stac.SEFSC_ID:
+      pf = sefsc_gm.PREFIX_FILE
+      prefix = pf.read_text().strip() if pf.exists() else None
+      bad += [f"{stac.SEFSC_ID}: {m}" for m in sefsc_gm.check_collection(coll_dir, coll, prefix)]
     if coll_dir.name == "biotrack_indicators":
       hx = coll_dir / "hex.pmtiles"
       if hx.exists() and grid.pmtiles_attribute_names(hx) != ["FID"]:
@@ -408,7 +415,8 @@ def main(argv=None) -> int:
   sub = ap.add_subparsers(dest="cmd", required=True)
   b = sub.add_parser("build", help="build one collection into catalog/staging/")
   b.add_argument("--collection", choices=COLLECTIONS + EXTRA_COLLECTIONS + ["all"], required=True)
-  b.add_argument("--src", type=Path, default=swfsc_cce.SRC_DEFAULT, help="ingest output (swfsc_cce_becker2020b only)")
+  b.add_argument("--src", type=Path, default=None,
+                 help="the notebook output of swfsc_cce_becker2020b (ATLAS_CCE_SRC) or sefsc_gm (ATLAS_SEFSC_SRC)")
   b.add_argument("--raw", type=Path, default=RAW_DIR)
   b.add_argument("--out", type=Path, default=STAGING)
   b.add_argument("--skip-tiles", action="store_true", help="reuse an existing hex.pmtiles")
@@ -491,8 +499,12 @@ def main(argv=None) -> int:
         r = aquamaps.build(a.out, log=log)
         log(f"done: {r['stats']['n_taxa']:,} taxa, registry {r['registry_bytes']:,} B")
       elif slug == stac.CCE_ID:
-        r = swfsc_cce.build(a.src, a.out, log=log)
+        r = swfsc_cce.build(a.src or SRC_DEFAULTS[slug], a.out, log=log)
         log(f"done: {r['species']} species, {r['items']} items, bbox {r['bbox']}; prefix in {r['prefix_file'].name}")
+      elif slug == stac.SEFSC_ID:
+        r = sefsc_gm.build(a.src or SRC_DEFAULTS[slug], a.out, log=log)
+        log(f"done: {r['models']} models, {r['items']} items ({r['columns']} values columns), bbox {r['bbox']}; "
+            f"prefix in {r['prefix_file'].name}")
       elif slug == "biotrack_species":
         r = build_species(a.raw, a.out)
         log(f"done: {r['species']} species, {r['items']} items, cell_species {r['cell_rows']:,} rows, {r['cell_bytes']/1e6:.1f} MB")

@@ -448,3 +448,157 @@ Density in animals per km2. The WoRMS id is the one delivered.{worms_note}
   density min / p98 / max, cv median) from the ingest.
 - `thumbnail.png`, `thumbnail-sm.png`: a 2x2 panel of four Summer-Fall density surfaces.
 """
+
+
+def sefsc_readme(models: list[dict], layers: list[dict], checks: list[dict], taxa: list[dict], questions_md: str,
+                 provider_readme: str, overlays: list[dict]) -> str:
+  """README.md (describedby) of the restricted sefsc_gm v2 collection: methods, the provider's field dictionary
+  verbatim, the derived fields, the checks with their numbers, the questions for the provider, credits. No email, no
+  URL of the unlisted prefix (the README sits under it already)."""
+  from . import stac
+  model_table = "\n".join(
+    f"| {m['label']} | `{m['layer']}` | *{m['scientific_name']}* | {m['aphia_id']} | {m['months_modelled']} | "
+    f"{float(m['abundance_annual']):,.0f} | {float(m['density_p98_annual']):.3g} |" for m in models)
+  check_table = "\n".join(f"| {c['group']} | {c['check']} | {c['value']} | {c['note']} |" for c in checks)
+  unresolved = [t for t in taxa if not t["models"]]
+  n_unres = sum(int(t["n"]) for t in unresolved)
+  taxa_table = "\n".join(
+    f"| {t['platform']} | {t['name']} | {t['n']} | {t['name_resolved']} | {t['aphia_id']} | {t['rank']} | "
+    f"{t['id_certain']} | `{t['models'] or '-'}` |" for t in taxa)
+  overlay_list = "\n".join(f"- **{o['title']}** (`{o['id']}`, {o['geometry']}, {'on' if o['default'] else 'off'} by default)"
+                           for o in overlays)
+  questions = questions_md.split("\n", 1)[1].strip() if questions_md.startswith("#") else questions_md.strip()
+  n_by_var = {}
+  for r in layers:
+    n_by_var[r["variable"]] = n_by_var.get(r["variable"], 0) + 1
+  return f"""\
+# Gulf line-transect surveys and density models, NOAA SEFSC: version 2, UNDER REVIEW
+
+> {stac.SEFSC_NOTE}
+
+This collection is not linked from the public `catalog.json`; it sits under an unlisted prefix and is shared by link
+only, for review with the provider first. Do not share the link or redistribute the data.
+
+**Version 2** of the atlas' NOAA SEFSC Gulf layer. Version 1 ({stac.SEFSC_V1_URL}) is the Marine Sensitivity v8
+collection: the annual densities of the same 19 models as a 0-100 index on the 0.05 degree grid. Version 2 adds the
+survey effort and sightings behind the models and keeps everything on the models' own hexagons, as delivered.
+
+## What it is
+
+- **Survey effort and sightings** (NOAA SEFSC, delivered 12 November 2026 by Lance Garrison): the broadscale vessel
+  surveys 2003-2024 (including the 2023 and 2024 surveys) and aerial surveys 2011-2018 that the GoMMAPPS spatial
+  density models were fit to, as line-transect effort segments and marine mammal sightings.
+- **The 40 km² model hexagons** (`GoMex_Hexagons_40km.shp`, 42,908 hexagons, `HEXID`).
+- **The 19 spatial density models** of NCEI accession 0256800 v2.2 ({len(models)} shapefiles, monthly abundance per
+  hexagon with its standard error and CV), on the same 42,908 `HEXID`s: no regridding anywhere.
+
+On the map, pick a **layer** (the surveys or a density model), a **month** and a **variable** to paint the hexagons
+(`values.parquet`); over that, the vector layers:
+
+{overlay_list}
+
+Click any of them for all its attributes. Choosing a density model filters the sightings to those that belong to it
+(`atlas:overlay_filter` on the model's Items: the sightings whose `models` holds `|<model key>|`).
+
+## The hexagon values (`values.parquet`, `layers.csv`)
+
+One row per hexagon (`FID` = `HEXID`), one double column per layer x month x variable, named
+`{{layer}}__{{month}}__{{variable}}` ({len(layers)} columns: {', '.join(f'{n} {k}' for k, n in n_by_var.items())}).
+
+- Density models: `density` = `{{Mon}}_n / Area_km2` (animals per km², `Area_km2` the nominal 40 km²) and `cv` as
+  delivered (`{{Mon}}_cv`), for every month the model covers; `-9999` is NULL. `annual__density` is the
+  **day-weighted** mean of the twelve monthly densities, a month the model does not cover counting as 0 (the annual
+  of the Marine Sensitivity ingest, `msens::density_annual()` with `month_day_weights()`); there is no annual CV. The
+  pygmy and dwarf sperm whale model covers April-November only, so its annual is 244/365 of its April-November mean.
+- Surveys (`survey_vessel`, `survey_aerial`, `survey_all`): `effort_km` = the sum of the segments' delivered length
+  field / 1000 by the segment's `HEXID`; `groups` = the number of sightings by the sighting's `HEXID`;
+  `individuals` = the sum of `group.size`; per month of the segment or sighting, and `annual` = all months. A
+  hexagon with no effort is NULL (not surveyed), not 0; `groups` and `individuals` are 0 where `effort_km` > 0. A
+  sighting whose hexagon has no effort that month still counts (see the checks).
+- The map draws each surface from 0 to its 98th percentile (`p98` in `layers.csv`, 3 significant figures); the CV
+  on a fixed 0-2, the same for every model.
+
+## Density models (`models.csv`)
+
+| model | key | scientific name (spp_gmx) | AphiaID | months | annual abundance | annual density p98 |
+|---|---|---|---:|---|---:|---:|
+{model_table}
+
+Annual abundance = the sum over hexagons of annual density x `Area_km2`. The two Atlantic spotted and the two common
+bottlenose dolphin models are separate stocks (oceanic, shelf), kept as separate layers.
+
+## Effort and sightings: delivered and derived fields
+
+Every delivered field keeps its delivered `.rds` name (the shapefiles of the same names abbreviate them). The
+provider's field dictionary, verbatim (`SEFSC_Line_Transect_Survey_Data_ReadMe.txt`):
+
+```text
+{provider_readme.strip()}
+```
+
+Two differences from it: the aerial effort length field is `seg.len.m` in the file (the ReadMe says `seg.length.m`),
+and the hexagon field is `USA_EEZ` (the ReadMe says `USA_EZZ`). Dates are ISO strings as delivered: vessel effort
+`s.date` / `e.date` in UTC and vessel sightings `date.time` in GMT (as the `.rds` states them), aerial sightings
+`date.time` without a time zone, aerial effort `date` a date only (local, EST/EDT). All layers are EPSG:4326 here
+(the vessel effort and the hexagons were delivered in USA Contiguous Lambert Conformal Conic, ESRI:102004).
+
+Derived fields (snake_case):
+
+- effort: `platform` (vessel / aerial), `year`, `month` (of `s.date` / `date`), `length_km` (the length field / 1000),
+  `n_sightings` (the sightings linked to the segment).
+- sightings: `platform`, `year`, `month` (of `date.time`), `lon`, `lat` (vessel; the aerial file carries its own),
+  `name_resolved`, `aphia_id`, `accepted_name`, `rank` (WoRMS, offline snapshot), `id_certain` (FALSE for a
+  combination such as "X or Y"), `models` (the density models the sighting belongs to, `|key|key|`, empty for none),
+  `segment_found` (its `survey` + `segment.id`, or `unique.seg.id`, is in the effort file), `in_own_hex` (the point
+  lies in the hexagon its `HEXID` names), `dist_to_segment_m` (geodesic distance to its own segment), and the joined
+  segment's `trackline`, `s.date`, `e.date` (vessel) or `date` (aerial).
+- hexagons: `vessel_km`, `aerial_km`, `vessel_groups`, `aerial_groups`, `vessel_individuals`, `aerial_individuals`,
+  `vessel_surveys`, `aerial_surveys` (distinct surveys with effort), `vessel_years`, `aerial_years` (first-last year
+  with effort); NULL where not surveyed.
+
+## Sighting to model crosswalk (`sefsc_gm_sighting_taxa.csv`)
+
+A sighting belongs to every model whose species set contains every candidate of its identification: Ziphius,
+Mesoplodon and Ziphiidae to the beaked whales; Orcinus, Peponocephala, Feresa, Pseudorca and their combinations to
+blackfish; Globicephala to pilot whales; Kogia to the pygmy and dwarf sperm whales; *Stenella frontalis* to both
+Atlantic spotted stocks; *Tursiops truncatus* and "Standard Tursiops" to both bottlenose stocks. A higher taxon
+(Delphinidae, Odontoceti, Stenella sp., Cetacea, Mysticeti, unidentified dolphin), a combination across models, and a
+species no model covers (rough-toothed and Fraser's dolphins, the manatee) belong to none. One deliberate exception:
+the *Balaenoptera* combinations ("B. borealis/ricei" and the like) go to the Rice's whale model with `id_certain`
+FALSE. {len(unresolved)} names ({n_unres} sightings) belong to no model.
+
+| platform | name as delivered | n | resolved | AphiaID | rank | id certain | models |
+|---|---|---:|---|---:|---|---|---|
+{taxa_table}
+
+## Checks (`checks.csv`)
+
+| group | check | value | note |
+|---|---|---|---|
+{check_table}
+
+## Questions for the provider
+
+{questions}
+
+## Credits
+
+- Survey effort and sightings: {stac.SEFSC_SURVEY_CITATION}
+- Density models: {stac.SEFSC_CITATION}
+- Producer and point of contact: NOAA Southeast Fisheries Science Center, Marine Mammal and Turtle Division (Lance
+  Garrison). Archive of the density models: NOAA NCEI, accession 0256800 ({stac.SEFSC_NCEI}).
+- {stac.SEFSC_ACK}
+- Processing and hosting: Ocean Metrics (MarineSensitivity/workflows `ingest_sefsc_gm-surveys.qmd`, oceanmetrics/atlas
+  `pipeline/atlas_pipeline/sefsc_gm.py`).
+- License: public domain as a US Government work, 17 U.S.C. § 105 (to check with the provider).
+
+## Files
+
+- `items/`: {len(layers)} Items `{{layer}}_{{month}}_{{variable}}`, one per `values.parquet` column.
+- `values.parquet`, `hex.pmtiles` (geometry + `FID` only): the painted hexagons.
+- `sightings_vessel.pmtiles`, `sightings_aerial.pmtiles`, `effort_vessel.pmtiles`, `effort_aerial.pmtiles`,
+  `hexagons.pmtiles`: the vector layers with every attribute (z0-z12, no feature dropped).
+- `hexagons.parquet`, `effort_vessel.parquet`, `effort_aerial.parquet`, `sightings_vessel.parquet`,
+  `sightings_aerial.parquet`: the downloads (GeoParquet 1.1, EPSG:4326).
+- `layers.csv`, `models.csv`, `sefsc_gm_sighting_taxa.csv`, `checks.csv`, `SEFSC_Line_Transect_Survey_Data_ReadMe.txt`.
+"""
