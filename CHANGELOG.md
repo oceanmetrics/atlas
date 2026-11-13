@@ -12,8 +12,9 @@
   never rounded, values as text), at most 25, with the Item's hex or raster value under the list, in ONE
   card (Escape closes it); a hover names the feature. "Only features matching the selected layer" (`covf=1`)
   keeps the features whose `|`-delimited `filter_field` holds the Item's `atlas:overlay_filter` token, and is
-  disabled with its reason on an Item without one. The rules, the card and its hover are a lazy chunk loaded
-  only for a collection with overlays.
+  disabled with its reason on an Item without one. A click on a feature still selects the hex cell or raster
+  point under it, but leaves the panel where it is (the Layers list stays; on a phone the sheet does not rise
+  over the card). The rules, the card and its hover are a lazy chunk loaded only for a collection with overlays.
 - **A collection's version** (STAC version extension): the credits say "Version 2", mark a deprecated one
   "superseded", and link "Previous version" / "Newer version" / "Latest version"; a link to this app opens in
   the same tab, in the deployment being viewed.
