@@ -499,7 +499,10 @@ On the map, pick a **layer** (the surveys or a density model), a **month** and a
 
 Click any of them for all its attributes. With a density model selected, ticking "Only features matching the selected
 layer" keeps only the sightings that belong to that model (`atlas:overlay_filter` on the model's Items: the sightings
-whose `models` holds `|<model key>|`); it is off by default, so every sighting shows.
+whose `models` holds `|<model key>|`); it is off by default, so every sighting shows. The **Filter features** block
+under the layers (`atlas:overlay_filters`) narrows the sightings to one species (with a link to its density model where
+it has one), the effort and sightings to a month (by default the month the hexagons show; none for annual) and to a
+range of years. Every choice is kept in the page's URL, so a view can be shared by its link.
 
 ## The hexagon values (`values.parquet`, `layers.csv`)
 

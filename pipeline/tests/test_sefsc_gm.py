@@ -394,6 +394,55 @@ def test_item_index_holds_exactly_the_item_files_and_the_check_catches_drift(tmp
   assert any("rel=items" in m for m in sefsc_gm.check_collection(dest, nolink, prefix))
 
 
+def test_species_options_one_per_aphia_id_labelled_counted_with_their_models():
+  sv = pd.DataFrame({"aphia_id": [1576133, 1576133, 136980, 137108], "accepted_name": ["Balaenoptera ricei"] * 2 +
+                     ["Delphinidae", "Stenella frontalis"], "vernacularName": ["Rice's whale", "Rice's whale", "Delphinidae", None],
+                     "models": ["|rices_whale|", "|rices_whale|", "", "|oceanic_atlantic_spotted_dolphin|shelf_atlantic_spotted_dolphin|"]})
+  sa = pd.DataFrame({"aphia_id": [137108], "accepted_name": ["Stenella frontalis"], "Common.Name": ["Atlantic spotted dolphin"],
+                     "models": ["|shelf_atlantic_spotted_dolphin|"]})
+  o = sefsc_gm.species_options({"sightings_vessel": sv, "sightings_aerial": sa})
+  assert [x["label"] for x in o] == ["Atlantic spotted dolphin (Stenella frontalis)", "Delphinidae", "Rice's whale (Balaenoptera ricei)"]
+  assert [x["count"] for x in o] == [2, 1, 2]
+  assert o[0]["layers"] == ["oceanic_atlantic_spotted_dolphin", "shelf_atlantic_spotted_dolphin"]
+  assert "layers" not in o[1] and o[2]["layers"] == ["rices_whale"] and o[2]["value"] == 1576133
+  with pytest.raises(ValueError, match="without an aphia_id"):
+    sefsc_gm.species_options({"sightings_vessel": sv.assign(aphia_id=[None, 1, 2, 3])})
+
+
+def test_filters_block_species_month_follows_the_cube_year_range_and_refuses_a_missing_field():
+  sv = pd.DataFrame({"aphia_id": [1576133], "accepted_name": ["Balaenoptera ricei"], "vernacularName": ["Rice's whale"],
+                     "models": ["|rices_whale|"]})
+  fields = {o: ["aphia_id", "month", "year"] for o in sefsc_gm.TIME_OVERLAYS}
+  yrs = {"effort_vessel": pd.Series([2003, 2024]), "effort_aerial": pd.Series([2011, 2018])}
+  b = {f["id"]: f for f in sefsc_gm.filters_block({"sightings_vessel": sv}, yrs, fields)}
+  assert list(b) == ["species", "month", "year"]
+  assert b["species"]["overlays"] == ["sightings_vessel"] and b["species"]["field"] == "aphia_id"
+  assert b["month"]["follow_dim"] == "month" and b["month"]["options"][6] == {"value": 7, "label": "July", "dim_value": "07"}
+  assert b["month"]["overlays"] == sefsc_gm.TIME_OVERLAYS
+  assert (b["year"]["type"], b["year"]["min"], b["year"]["max"]) == ("range", 2003, 2024)
+  with pytest.raises(ValueError, match="field month not in overlay effort_aerial"):
+    sefsc_gm.filters_block({"sightings_vessel": sv}, yrs, dict(fields, effort_aerial=["year"]))
+
+
+def test_staged_filters_pass_the_check_and_a_bad_layer_or_field_is_caught(tmp_path):
+  src = make_src(tmp_path / "src")
+  pf = tmp_path / "restricted_prefix_sefsc_gm.txt"
+  dest = sefsc_gm.build(src, tmp_path / "out", prefix_file=pf, thumbnail=False, log=lambda *_: None)["dest"]
+  coll = json.loads((dest / "collection.json").read_text())
+  prefix = pf.read_text().strip()
+  assert [f["id"] for f in coll["atlas:overlay_filters"]] == ["species", "month", "year"]
+  assert sefsc_gm.check_collection(dest, coll, prefix) == []
+  bad = json.loads(json.dumps(coll))
+  bad["atlas:overlay_filters"][0]["options"][0]["layers"] = ["no_such_model"]
+  assert any("names a layer not in the cube" in m for m in sefsc_gm.check_collection(dest, bad, prefix))
+  bad = json.loads(json.dumps(coll))
+  bad["atlas:overlay_filters"][2]["field"] = "no_such_field"
+  assert any("field no_such_field not in" in m for m in sefsc_gm.check_collection(dest, bad, prefix))
+  bad = json.loads(json.dumps(coll))
+  bad["atlas:overlay_filters"][1]["options"][0]["dim_value"] = "13"
+  assert any("dim_value not in month" in m for m in sefsc_gm.check_collection(dest, bad, prefix))
+
+
 def test_item_index_refuses_duplicate_ids():
   with pytest.raises(ValueError, match="duplicate"):
     stac.item_index([{"id": "a"}, {"id": "a"}])

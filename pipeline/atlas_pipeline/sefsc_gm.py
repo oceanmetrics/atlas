@@ -174,6 +174,62 @@ def values_problems(values: pd.DataFrame, layers: list[dict], key: str = "HEXID"
   return bad
 
 
+SIGHTING_COMMON = {"sightings_vessel": "vernacularName", "sightings_aerial": "Common.Name"}
+TIME_OVERLAYS = ["sightings_vessel", "sightings_aerial", "effort_vessel", "effort_aerial"]
+
+
+def species_options(sightings: dict[str, pd.DataFrame], cube_layers: set[str] | None = None) -> list[dict]:
+  """the species select of `atlas:overlay_filters`: one option per AphiaID over every sightings layer
+  (`sightings`: overlay id -> its table with aphia_id, accepted_name, models and the layer's common-name field),
+  labelled "<most frequent common name> (<accepted name>)" (the accepted name alone when they are the same), with the
+  number of sightings and the density models (`layers`, the union of the `|token|`s, kept to `cube_layers` when given)
+  its sightings belong to; sorted by label. Raises on a sighting without an AphiaID."""
+  rows = []
+  for oid, df in sightings.items():
+    if df["aphia_id"].isna().any():
+      raise ValueError(f"{oid}: {int(df['aphia_id'].isna().sum())} sighting(s) without an aphia_id")
+    rows.append(pd.DataFrame({"aphia_id": df["aphia_id"].astype("int64"), "accepted_name": df["accepted_name"],
+                              "common": df[SIGHTING_COMMON[oid]], "models": df["models"].fillna("")}))
+  d = pd.concat(rows, ignore_index=True)
+  out = []
+  for aid, g in d.groupby("aphia_id", sort=False):
+    acc = g["accepted_name"].mode().iloc[0]
+    com = g["common"].dropna()
+    com = com.mode().iloc[0] if len(com) else None
+    label = acc if not com or str(com).strip().casefold() == str(acc).strip().casefold() else f"{com} ({acc})"
+    toks = sorted({t for m in g["models"] for t in str(m).split("|") if t and (cube_layers is None or t in cube_layers)})
+    o = {"value": int(aid), "label": label, "count": int(len(g))}
+    if toks:
+      o["layers"] = toks
+    out.append(o)
+  return sorted(out, key=lambda o: o["label"].casefold())
+
+
+def filters_block(sightings: dict[str, pd.DataFrame], years: dict[str, pd.Series],
+                  fields: dict[str, list[str]], cube: dict[str, set[str]] | None = None) -> list[dict]:
+  """`atlas:overlay_filters` (the contract the atlas app implements beside atlas:overlays): the sightings' species
+  (`aphia_id`), the month (follows the cube's month dimension: "01".."12"; annual = no filter) and the year range of
+  the effort and sightings layers. `cube` (dimension -> its values) keeps the species' layers and the months'
+  `dim_value` to what the cube holds. Raises when a filter names a field an overlay's tiles lack."""
+  yr = pd.concat([pd.Series(v) for v in years.values()]).dropna().astype("int64")
+  block = [
+    {"id": "species", "title": "Species (sightings)", "type": "select", "field": "aphia_id",
+     "overlays": list(sightings), "options": species_options(sightings, (cube or {}).get("layer"))},
+    {"id": "month", "title": "Month", "type": "select", "field": "month", "overlays": list(TIME_OVERLAYS),
+     "options": [{"value": i + 1, "label": stac.SEFSC_MONTH_LABELS[f"{i + 1:02d}"],
+                  **({"dim_value": f"{i + 1:02d}"} if cube is None or f"{i + 1:02d}" in cube.get("month", set()) else {})}
+                 for i in range(12)],
+     "follow_dim": "month"},
+    {"id": "year", "title": "Year", "type": "range", "field": "year", "overlays": list(TIME_OVERLAYS),
+     "min": int(yr.min()), "max": int(yr.max())},
+  ]
+  for f in block:
+    for oid in f["overlays"]:
+      if f["field"] not in fields.get(oid, []):
+        raise ValueError(f"filter {f['id']}: field {f['field']} not in overlay {oid}")
+  return block
+
+
 def overlays_block(fields: dict[str, list[str]], overlays: list[dict] = OVERLAYS) -> list[dict]:
   """`atlas:overlays`: OVERLAYS with each popup list completed by the file's other fields (`fields`: layer -> the
   attribute names of its PMTiles, in file order) and the labels of those fields. Raises when a named field is not in
@@ -356,6 +412,10 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
     ovl_bytes[o["id"]] = pm.stat().st_size
     log(f"{pm.name}: {pm.stat().st_size:,} B, {len(have)} attributes")
   overlays = overlays_block(fields)
+  sig_cols = lambda oid: ["aphia_id", "accepted_name", "models", SIGHTING_COMMON[oid]]
+  filters = filters_block({oid: pd.read_parquet(src / f"{oid}.parquet", columns=sig_cols(oid)) for oid in SIGHTING_COMMON},
+                          {oid: pd.read_parquet(src / f"{oid}.parquet", columns=["year"])["year"] for oid in TIME_OVERLAYS},
+                          fields, {"layer": {r["layer"] for r in layers}, "month": {r["month"] for r in layers}})
 
   # downloads and tables
   for n in GEO_LAYERS:
@@ -433,7 +493,7 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   (dest / "README.md").write_text(docs.sefsc_readme(models, layers, read_csv(src / "checks.csv"), read_csv(src / "taxa.csv"),
                                                     (src / "questions.md").read_text(),
                                                     (src / "SEFSC_Line_Transect_Survey_Data_ReadMe.txt").read_text(), overlays))
-  coll = stac.sefsc_collection(models, layers, bbox, coll_interval, assets, overlays)
+  coll = stac.sefsc_collection(models, layers, bbox, coll_interval, assets, overlays, filters)
   if thumbnail:
     coll["links"].append(stac.PREVIEW_LINK)
   stac.write_json(dest / "collection.json", stac.add_file_info(coll, dest, fcache))
@@ -505,6 +565,30 @@ def check_collection(coll_dir: Path, coll: dict, prefix: str | None) -> list[str
     for k, a in it["assets"].items():
       if a["href"].startswith("http") or not (p.parent / a["href"]).resolve().exists():
         bad.append(f"{p.name}: asset {k} -> {a['href']} not staged")
+  # the feature filters: known overlays whose tiles hold the field; species layers are cube layer values; the month
+  # follows the cube's month dimension; a year range in order
+  ov_ids = {o.get("id") for o in coll.get("atlas:overlays", [])}
+  for flt in coll.get("atlas:overlay_filters", []):
+    for oid in flt.get("overlays", []):
+      a = assets.get(oid)
+      if oid not in ov_ids or a is None:
+        bad.append(f"filter {flt.get('id')}: overlay {oid} is not an overlay of this collection")
+      elif (coll_dir / a["href"]).exists() and flt.get("field") not in pmtiles_fields(coll_dir / a["href"], oid):
+        bad.append(f"filter {flt.get('id')}: field {flt.get('field')} not in {a['href']}")
+    if flt.get("type") == "select":
+      vals = [o.get("value") for o in flt.get("options", [])]
+      if not vals or len(set(vals)) != len(vals):
+        bad.append(f"filter {flt.get('id')}: options empty or values repeated")
+      for o in flt.get("options", []):
+        if any(l not in dims.get("layer", set()) for l in o.get("layers", [])):
+          bad.append(f"filter {flt.get('id')}: option {o.get('value')} names a layer not in the cube")
+        if flt.get("follow_dim") and "dim_value" in o and o["dim_value"] not in dims.get(flt["follow_dim"], set()):
+          bad.append(f"filter {flt.get('id')}: option {o.get('value')} dim_value not in {flt['follow_dim']}")
+    elif flt.get("type") == "range":
+      if not (isinstance(flt.get("min"), int) and isinstance(flt.get("max"), int) and flt["min"] <= flt["max"]):
+        bad.append(f"filter {flt.get('id')}: range min/max not ordered integers")
+    else:
+      bad.append(f"filter {flt.get('id')}: unknown type {flt.get('type')!r}")
   # the item index (rel=items) holds exactly the item files' objects, one per rel=item link
   idx_links = [l for l in coll.get("links", []) if l.get("rel") == "items"]
   idx = coll_dir / "items.json"

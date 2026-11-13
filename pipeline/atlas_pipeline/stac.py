@@ -909,7 +909,7 @@ def _sefsc_taxon(m: dict) -> dict:
 
 
 def sefsc_collection(models: list[dict], layers: list[dict], bbox: list[float], interval: tuple[str, str],
-                     assets: dict, overlays: list[dict]) -> dict:
+                     assets: dict, overlays: list[dict], filters: list[dict] | None = None) -> dict:
   """the restricted collection: layer x month x variable over the hexagon grid (values.parquet), the survey overlays
   (`atlas:overlays`, PMTiles assets) and the downloads. `layers` are layers.csv rows (one per values column)."""
   order = sefsc_layer_order(models)
@@ -973,6 +973,7 @@ def sefsc_collection(models: list[dict], layers: list[dict], bbox: list[float], 
     "summaries": {"layer": order, "month": months, "variable": variables,
                   "sdm:response_type": ["density", "uncertainty", "mixed"]},
     "atlas:overlays": overlays,
+    **({"atlas:overlay_filters": filters} if filters else {}),
     "assets": dict(assets),
     "links": [
       {"rel": "root", "href": "./collection.json", "type": JSON_T},
