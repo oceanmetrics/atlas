@@ -368,6 +368,37 @@ def test_build_stages_a_collection_that_passes_its_checks_and_the_profiles(tmp_p
   assert any("email" in m for m in sefsc_gm.check_collection(dest, coll, prefix))
 
 
+def test_item_index_holds_exactly_the_item_files_and_the_check_catches_drift(tmp_path):
+  src = make_src(tmp_path / "src")
+  pf = tmp_path / "restricted_prefix_sefsc_gm.txt"
+  dest = sefsc_gm.build(src, tmp_path / "out", prefix_file=pf, thumbnail=False, log=lambda *_: None)["dest"]
+  coll = json.loads((dest / "collection.json").read_text())
+  prefix = pf.read_text().strip()
+  idx = json.loads((dest / "items.json").read_text())
+  linked = [Path(l["href"]).stem for l in coll["links"] if l["rel"] == "item"]
+  # one rel=items link; the index = the item files' objects, in link order, relative hrefs unchanged
+  assert [l["href"] for l in coll["links"] if l["rel"] == "items"] == ["./items.json"]
+  assert idx["type"] == "FeatureCollection" and [f["id"] for f in idx["features"]] == linked
+  for f in idx["features"]:
+    assert f == json.loads((dest / "items" / f"{f['id']}.json").read_text())
+    assert all(not a["href"].startswith("http") for a in f["assets"].values())
+  assert sefsc_gm.check_collection(dest, coll, prefix) == []
+  # seeded faults: a stale index (an item edited after), a missing index, a dropped link
+  it = json.loads((dest / "items" / f"{linked[0]}.json").read_text())
+  it["properties"]["title"] = "edited after the index"
+  (dest / "items" / f"{linked[0]}.json").write_text(json.dumps(it))
+  assert any("differs from its items" in m for m in sefsc_gm.check_collection(dest, coll, prefix))
+  (dest / "items.json").unlink()
+  assert any("item index) not staged" in m for m in sefsc_gm.check_collection(dest, coll, prefix))
+  nolink = dict(coll, links=[l for l in coll["links"] if l["rel"] != "items"])
+  assert any("rel=items" in m for m in sefsc_gm.check_collection(dest, nolink, prefix))
+
+
+def test_item_index_refuses_duplicate_ids():
+  with pytest.raises(ValueError, match="duplicate"):
+    stac.item_index([{"id": "a"}, {"id": "a"}])
+
+
 # ---- publish.sh --only sefsc_gm: the restricted destination guard ----
 
 def test_publish_only_sefsc_gm_goes_to_its_ulid_prefix_with_collection_json_last(tmp_path):
@@ -383,6 +414,21 @@ def test_publish_only_sefsc_gm_goes_to_its_ulid_prefix_with_collection_json_last
   r, calls, _ = run_publish(tmp_path, d, "--only", "sefsc_gm", "--really", prefix_files=pf)
   assert calls == [f"--really --exclude collection.json {src} {dest}", f"--really --cache-control no-cache {src}/collection.json {dest}"]
   assert not any("--delete" in c for c in calls)
+
+
+def test_publish_only_sefsc_gm_uploads_the_item_index_gzip_encoded_before_collection_json(tmp_path):
+  d = tmp_path / "stage"
+  (d / "sefsc_gm" / "items").mkdir(parents=True)
+  (d / "sefsc_gm" / "collection.json").write_text("{}")
+  (d / "sefsc_gm" / "items.json").write_text('{"type": "FeatureCollection", "features": []}')
+  pf = {"restricted_prefix_sefsc_gm.txt": ULID}
+  src, dest = f"{d}/sefsc_gm", f"atlas-restricted/{ULID}/sefsc_gm"
+  r, calls, _ = run_publish(tmp_path, d, "--only", "sefsc_gm", "--really", prefix_files=pf)
+  assert r.returncode == 0, r.stderr
+  assert calls[0] == f"--really --exclude collection.json --exclude items.json {src} {dest}"
+  assert calls[1].startswith("--really --content-encoding gzip --cache-control no-cache ") and calls[1].endswith(f"/items.json {dest}")
+  assert calls[2] == f"--really --cache-control no-cache {src}/collection.json {dest}"
+  assert len(calls) == 3
 
 
 def test_publish_only_sefsc_gm_refuses_a_prefix_that_is_not_a_ulid_or_another_collections_file(tmp_path):

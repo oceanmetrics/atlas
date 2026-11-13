@@ -497,8 +497,9 @@ On the map, pick a **layer** (the surveys or a density model), a **month** and a
 
 {overlay_list}
 
-Click any of them for all its attributes. Choosing a density model filters the sightings to those that belong to it
-(`atlas:overlay_filter` on the model's Items: the sightings whose `models` holds `|<model key>|`).
+Click any of them for all its attributes. With a density model selected, ticking "Only features matching the selected
+layer" keeps only the sightings that belong to that model (`atlas:overlay_filter` on the model's Items: the sightings
+whose `models` holds `|<model key>|`); it is off by default, so every sighting shows.
 
 ## The hexagon values (`values.parquet`, `layers.csv`)
 

@@ -421,8 +421,15 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   base = stac.restricted_base_url(prefix, stac.SEFSC_ID)
   fcache: dict = {}
   items = stac.sefsc_items(models, layers, bbox, intervals)
+  written = []
   for iid, it in items.items():
-    stac.write_json(dest / "items" / f"{iid}.json", stac.add_file_info(it, dest / "items", fcache))
+    it = stac.add_file_info(it, dest / "items", fcache)
+    stac.write_json(dest / "items" / f"{iid}.json", it)
+    written.append(it)
+  # the one-file item index (collection link rel=items): the SAME objects as items/*.json, so the app reads every Item
+  # in one request; their relative hrefs stay relative to items/<id>.json (the app resolves them there). publish.sh
+  # uploads it gzip-encoded.
+  stac.write_json(dest / "items.json", stac.item_index(written))
   (dest / "README.md").write_text(docs.sefsc_readme(models, layers, read_csv(src / "checks.csv"), read_csv(src / "taxa.csv"),
                                                     (src / "questions.md").read_text(),
                                                     (src / "SEFSC_Line_Transect_Survey_Data_ReadMe.txt").read_text(), overlays))
@@ -498,6 +505,21 @@ def check_collection(coll_dir: Path, coll: dict, prefix: str | None) -> list[str
     for k, a in it["assets"].items():
       if a["href"].startswith("http") or not (p.parent / a["href"]).resolve().exists():
         bad.append(f"{p.name}: asset {k} -> {a['href']} not staged")
+  # the item index (rel=items) holds exactly the item files' objects, one per rel=item link
+  idx_links = [l for l in coll.get("links", []) if l.get("rel") == "items"]
+  idx = coll_dir / "items.json"
+  if len(idx_links) != 1 or idx_links[0].get("href") != "./items.json":
+    bad.append("no single rel=items link to ./items.json")
+  elif not idx.exists():
+    bad.append("items.json (the item index) not staged")
+  else:
+    feats = json.loads(idx.read_text()).get("features", [])
+    files = {p.stem: json.loads(p.read_text()) for p in (coll_dir / "items").glob("*.json")}
+    linked = [Path(l["href"]).stem for l in coll.get("links", []) if l.get("rel") == "item"]
+    if [f.get("id") for f in feats] != linked:
+      bad.append("items.json: feature ids are not the rel=item links in order")
+    elif any(f != files.get(f["id"]) for f in feats):
+      bad.append("items.json: a feature differs from its items/<id>.json")
   if any(EMAIL_RE.search(t) for t in texts):
     bad.append("an email address is in the collection, an item or the README")
   if any("atlas-restricted/" in t for t in texts):

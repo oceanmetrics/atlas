@@ -107,6 +107,16 @@ def write_json(path: Path, obj: dict) -> None:
   path.write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
 
 
+def item_index(items: list[dict]) -> dict:
+  """the one-file item index of a collection (its link rel=items): a FeatureCollection of the Item objects exactly as
+  written to items/<id>.json, in link order. An Item's relative hrefs stay relative to its own items/<id>.json (the
+  app resolves each feature against the rel=item link of the same id), so the index adds no second href rule."""
+  ids = [it["id"] for it in items]
+  if len(set(ids)) != len(ids):
+    raise ValueError("item index: duplicate item ids")
+  return {"type": "FeatureCollection", "features": list(items)}
+
+
 def bbox_polygon(bbox: list[float]) -> dict:
   w, s, e, n = bbox
   return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
@@ -969,6 +979,8 @@ def sefsc_collection(models: list[dict], layers: list[dict], bbox: list[float], 
       {"rel": "self", "href": "./collection.json", "type": JSON_T},
       *[{"rel": "item", "href": f"./items/{i}.json", "type": "application/geo+json", "title": r["title"]}
         for i, r in zip(ids, layers)],
+      {"rel": "items", "href": "./items.json", "type": "application/geo+json",
+       "title": f"All {len(ids)} Items in one FeatureCollection (the same objects as items/*.json)"},
       {"rel": "describedby", "href": "./README.md", "type": MD_T, "title": "Methods, checks, questions for the provider, credits"},
       dict(SEFSC_PREDECESSOR),
       {"rel": "via", "href": SEFSC_NCEI, "type": "text/html", "title": "NCEI accession 0256800 (the density models)"},

@@ -60,7 +60,19 @@ restricted_dest() {   # restricted_dest <prefix> <name> -> the key prefix on std
 # visitor never gets a collection whose items or COGs are not there yet
 publish_restricted() {   # publish_restricted <source folder> <key prefix>
   [ -f "$1/collection.json" ] || { echo "nothing staged at $1 (no collection.json)" >&2; exit 1; }
-  "$P" "$mode" --exclude collection.json "$1" "$2"
+  # the item index (rel=items), when staged, is left out of the folder copy and uploaded as a gzip -9 -n copy (no name,
+  # no time: the same bytes every run) with Content-Encoding gzip and no-cache, before collection.json, which links it
+  if [ -f "$1/items.json" ]; then
+    "$P" "$mode" --exclude collection.json --exclude items.json "$1" "$2"
+  else
+    "$P" "$mode" --exclude collection.json "$1" "$2"
+  fi
+  if [ -f "$1/items.json" ]; then
+    local tmp; tmp="$(mktemp -d)"
+    gzip -9 -n -c "$1/items.json" > "$tmp/items.json"
+    "$P" "$mode" --content-encoding gzip --cache-control no-cache "$tmp/items.json" "$2"
+    rm -rf "$tmp"
+  fi
   "$P" "$mode" --cache-control no-cache "$1/collection.json" "$2"
   echo "restricted collection: $2/collection.json (do not share publicly)"
 }
