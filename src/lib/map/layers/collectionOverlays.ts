@@ -7,20 +7,32 @@
 //                last overlay first), all under the one role "collection-overlay", whose stable sort in
 //                `style.ts#orderLayers` keeps this order. The role sits at the top of the `data-raster`
 //                group: above the Item (hex, raster), below the place layers and the selection highlight.
-//   geometry     point: a circle in the overlay's colour with a white ring; line: the colour, 1.5 px;
+//   geometry     point: a circle in the overlay's colour with a white ring (both by zoom); line: 1.5 px;
 //                polygon: an outline in the colour over a very faint fill (the Item under it stays
 //                readable), and the fill is what a click hits.
 //   filter       "Only features matching the selected layer": an overlay whose `filter_field` is the Item's
 //                `atlas:overlay_filter.field` keeps the features whose `|`-delimited property holds
 //                `|<token>|` (the delimiters are part of the needle, so `rice` never matches `rices_whale`).
-import type { FilterSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
 import type { CollectionOverlaySpec, OverlayFilter } from "../../catalog/overlays";
 import { COLLECTION_OVERLAY_HALO } from "../colors";
 import type { CollectionOverlayParts, LayerSpecification } from "../types";
 
 export const COLLECTION_OVERLAY_ROLE = "collection-overlay";
-export const COV_CIRCLE_RADIUS = 4.5;
-export const COV_CIRCLE_STROKE_WIDTH = 1.25;
+/** a point's radius and ring by zoom: ~4-5 px at survey zooms, smaller when a whole sea is in view, where
+ * thousands of white rings would otherwise merge into one white cloud. */
+export const COV_CIRCLE_RADIUS = ["interpolate", ["linear"], ["zoom"], 3, 2, 7, 4, 10, 5];
+export const COV_CIRCLE_STROKE_WIDTH = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  3,
+  0.25,
+  7,
+  1,
+  10,
+  1.25,
+];
 export const COV_LINE_WIDTH = 1.5;
 /** a whisper of fill: the outline carries the shape, the fill only takes the click. */
 export const COV_FILL_OPACITY = 0.06;
@@ -69,9 +81,9 @@ export function overlayLayersOf(
         ...base,
         paint: {
           "circle-color": spec.color,
-          "circle-radius": COV_CIRCLE_RADIUS,
+          "circle-radius": COV_CIRCLE_RADIUS as ExpressionSpecification,
           "circle-stroke-color": COLLECTION_OVERLAY_HALO,
-          "circle-stroke-width": COV_CIRCLE_STROKE_WIDTH,
+          "circle-stroke-width": COV_CIRCLE_STROKE_WIDTH as ExpressionSpecification,
         },
       },
     ];

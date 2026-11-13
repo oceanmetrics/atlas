@@ -221,6 +221,8 @@ export function installCollectionOverlayInteraction(
   const unregisterProbe = registerOverlayProbe((point) => hits(point).length > 0, { lens: true });
   map.on("mousemove", onMove as never);
   map.on("mouseout", hideHover as never);
+  // a tooltip names what is under a resting pointer: when the map moves under it (a fly-to), it goes
+  map.on("movestart", hideHover as never);
   map.on("click", onClick as never);
   return {
     destroy() {
@@ -228,6 +230,7 @@ export function installCollectionOverlayInteraction(
       unregisterSink();
       map.off("mousemove", onMove as never);
       map.off("mouseout", hideHover as never);
+      map.off("movestart", hideHover as never);
       map.off("click", onClick as never);
       hideHover();
       card.remove();

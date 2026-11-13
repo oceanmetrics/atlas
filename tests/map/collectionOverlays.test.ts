@@ -78,8 +78,14 @@ describe("style specs per geometry", () => {
     const p = paintOf(circle);
     expect(p["circle-color"]).toBe("#c51b7d");
     expect(p["circle-stroke-color"]).toBe(COLLECTION_OVERLAY_HALO);
-    expect(p["circle-radius"]).toBeGreaterThanOrEqual(4);
-    expect(p["circle-radius"]).toBeLessThanOrEqual(5);
+    // by zoom: ~4-5 px at survey zooms (7 and beyond), smaller over a whole sea
+    const radius = p["circle-radius"] as unknown[];
+    expect(radius.slice(0, 3)).toEqual(["interpolate", ["linear"], ["zoom"]]);
+    const stops = radius.slice(3) as number[];
+    const at = (z: number) => stops[stops.indexOf(z) + 1];
+    expect(at(7)).toBeGreaterThanOrEqual(4);
+    expect(at(10)).toBeLessThanOrEqual(5);
+    expect(at(3)).toBeLessThan(at(7));
   });
   it("a line is its colour at ~1.5 px", () => {
     const layers = overlayLayersOf(EFFORT);
