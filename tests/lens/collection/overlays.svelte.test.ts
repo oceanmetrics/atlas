@@ -7,15 +7,21 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { flushSync } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { CollectionLens } from "../../../src/lens/collection/state.svelte";
 import type { CollectionOverlayInteractionOptions } from "../../../src/lens/collection/overlayInteraction";
 import type { MapHandle } from "../../../src/lib/map/map";
+import type { RasterInteractionOptions } from "../../../src/lib/map/layers/rasterValue";
+import { registerOverlayProbe } from "../../../src/lib/map/clickInfo";
 import { FIXTURE_BASE, fakeFetch, jsonResponse } from "../../catalog/support";
 
+const raster: { opts: RasterInteractionOptions | null } = { opts: null };
 vi.mock("../../../src/lib/map/layers/rasterValue", async (orig) => ({
   ...(await orig<typeof import("../../../src/lib/map/layers/rasterValue")>()),
-  installRasterInteraction: () => ({ destroy: () => undefined }),
+  installRasterInteraction: (_map: unknown, opts: RasterInteractionOptions) => {
+    raster.opts = opts;
+    return { destroy: () => void (raster.opts = null) };
+  },
 }));
 const installed: { opts: CollectionOverlayInteractionOptions | null; count: number } = {
   opts: null,
@@ -91,6 +97,7 @@ function override(url: string): Response | undefined {
 let lens: CollectionLens;
 let selStore: ReturnType<typeof createSelStore>;
 let stop: () => void;
+let onCellClick: Mock<() => void>;
 const settle = (check: () => void) =>
   vi.waitFor(() => {
     flushSync();
@@ -101,6 +108,7 @@ beforeEach(async () => {
   vi.stubGlobal("history", { state: null, replaceState: () => undefined });
   installed.opts = null;
   installed.count = 0;
+  onCellClick = vi.fn<() => void>();
   // a map that answers every call the hex painter and interaction make with nothing
   const map = {
     on: () => undefined,
@@ -109,6 +117,7 @@ beforeEach(async () => {
     setFeatureState: () => undefined,
     getCanvas: () => ({ style: { cursor: "" } }),
     queryRenderedFeatures: () => [],
+    project: ([lon, lat]: [number, number]) => ({ x: lon, y: lat }),
   };
   const handle = {
     map,
@@ -131,6 +140,7 @@ beforeEach(async () => {
       histogram: { get: async () => null, size: 0, clear: () => undefined },
       rescale: { get: async () => null, size: 0, clear: () => undefined },
       storage: null,
+      onCellClick,
     });
   });
   await settle(() => {
@@ -219,5 +229,27 @@ describe("the lens draws a collection's own overlays", () => {
     expect(selStore.sel.covf).toBeUndefined();
     expect(lens.overlays).toEqual([]);
     expect(lens.mapInputs.overlays ?? null).toBeNull();
+  });
+
+  it("a click on an overlay feature selects the point but leaves the panel where it is", async () => {
+    await settle(() => expect(raster.opts).not.toBeNull());
+    // no overlay feature under the click: the panel opens Details, as before
+    raster.opts!.onClickStart([-88, 27]);
+    expect(onCellClick).toHaveBeenCalledTimes(1);
+    // a sighting under the click (the overlay's own LENS probe answers): its card answers instead
+    const off = registerOverlayProbe((p) => p.x === -86.5, { lens: true });
+    raster.opts!.onClickStart([-86.5, 28.9]);
+    expect(onCellClick).toHaveBeenCalledTimes(1);
+    expect(lens.point?.lngLat).toEqual([-86.5, 28.9]);
+    off();
+  });
+
+  it("following a link to another collection drops cov and covf", async () => {
+    lens.toggleOverlay("hexagons", true);
+    lens.setOverlayFilter(true);
+    flushSync();
+    lens.followLink({ c: "biotrack_indicators", i: undefined });
+    expect(selStore.sel.cov).toBeUndefined();
+    expect(selStore.sel.covf).toBeUndefined();
   });
 });

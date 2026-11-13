@@ -88,6 +88,7 @@ import {
   type RasterInteractionMap,
 } from "../../lib/map/layers/rasterValue";
 import { announce } from "../../lib/ui/announcer";
+import { lensOverlayAt } from "../../lib/map/clickInfo";
 import {
   createCogExtentCache,
   itemSourceBounds,
@@ -1142,6 +1143,17 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       : { ...inputs, overlays };
   });
 
+  // a click on one of the collection's own overlay features is answered by its card (`./overlayInteraction.ts`):
+  // the cell under it is still selected, but the panel stays where it is (a reviewer ticking layers and
+  // clicking sightings keeps the Layers list, and on a phone the sheet does not rise over the card)
+  function onOverlayFeature(lngLat: [number, number]): boolean {
+    if (!untrack(() => anyOverlayOn)) return false;
+    const map = deps.mapHandle()?.map as
+      { project?(ll: [number, number]): { x: number; y: number } } | undefined;
+    const p = map?.project?.(lngLat);
+    return !!p && lensOverlayAt(p);
+  }
+
   // --- the live map: painter + hover/click ---------------------------------------------------------
   const sourceLayer = $derived(mapInputs.hex?.sourceLayer ?? null);
   $effect(() => {
@@ -1184,7 +1196,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         const it = untrack(() => item);
         if (!e || !it) return;
         store.set({ collection: e.id, item: it.id, fid, value, lngLat });
-        deps.onCellClick?.();
+        if (!onOverlayFeature(lngLat)) deps.onCellClick?.();
       },
     });
     return () => interaction.destroy();
@@ -1233,7 +1245,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           bands: null,
           bandsUrl: null,
         };
-        deps.onCellClick?.();
+        if (!onOverlayFeature(ll)) deps.onCellClick?.();
       },
       onClickValue: setPointValue,
       announce,
@@ -1262,7 +1274,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       target: patch.c ?? e?.id ?? "",
     });
     carry = rasterPoint ? { fromKey: cogKey } : null;
-    selStore.set(patch);
+    // another collection opens on its own overlays' defaults
+    selStore.set(
+      patch.c !== undefined && patch.c !== e?.id
+        ? { cov: undefined, covf: undefined, ...patch }
+        : patch,
+    );
   }
   function goBack(): void {
     const back = returnTo;

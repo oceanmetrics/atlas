@@ -95,6 +95,22 @@ uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only 
   "Back to ..." button (`goBack`), and the camera follows the global auto-zoom preference (the panel's checkbox and the
   Layers panel's "Auto-zoom to layer" are the same `lens.autoZoom`). Rules: `src/lens/collection/returnTo.ts`. Tiles are Parquet sorted by key with small row groups (hyparquet prunes by
   statistics); a missing tile is an empty cell. Hex collections keep the single `cell_species` table of `species.ts`.
+- `atlas:overlays` on a Collection (`src/lib/catalog/overlays.ts`) is the collection-overlays hook, a list of
+  overlays: `id`, `title`, `asset`, `source_layer`, `geometry` (`point|line|polygon`), `color`, `default`,
+  `label_field`, `fields`, `field_labels`, `filter_field`; `asset` a key of `collection.assets` (a PMTiles, href
+  relative to the collection.json). Array order
+  is the panel order and the draw order, the FIRST entry on top; all draw in one role, `collection-overlay`, at the
+  top of `data-raster` (over the Item, under the place layers and the selection). `cov=a,b` says which are on
+  (absent = the `default: true` ones, `cov=` = none, unknown ids ignored); a click lists every feature of every
+  visible overlay under it, top first, all properties (`fields` first, a listed one the tile lacks as "—"), at most 25,
+  with the Item's value line, in ONE card (`lib/map/clickInfo.ts`: a LENS probe; the place layers yield to it).
+  `atlas:overlay_filter {field, token}` on an Item: with `covf=1`, an overlay whose `filter_field` is `field` keeps
+  the features whose `|`-delimited property holds `|token|` (`layers/collectionOverlays.ts#overlayTokenFilter`).
+  The rules, the style parts and the card are the lazy `lens/collection/overlayRuntime.ts`. A point query passes an
+  ARRAY: MapLibre reads a plain `{x, y}` as the whole viewport.
+- The STAC version extension on a Collection: `version`, `deprecated`, and links `predecessor-version` /
+  `successor-version` / `latest-version` (`href`, `title`) are the credits strip's "Version" row
+  (`src/lib/catalog/versionLinks.ts`); a link to this app (`og.siteUrl` or the page itself) opens in the same tab.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
 ## Profiles (checked at build time)

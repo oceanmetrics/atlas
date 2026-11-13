@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.7.0 (2026-11-13)
+
+- **A collection's own vector layers** (`atlas:overlays`, for vetting NOAA SEFSC's Gulf surveys with the
+  provider): a collection may list vector layers among its PMTiles assets (sightings, effort tracklines, the
+  model hexagons) that draw over its Item and under the place layers and the selection, the first entry on
+  top. The Layers panel lists them under the Data row ("Collection layers", one checkbox each with a swatch in
+  its colour and shape; several at once), the legend names the ones that are on, and `cov=` keeps them in the
+  link (absent = the collection's defaults, `cov=` = none; `replaceState`). A click lists EVERY feature under
+  it, top layer first, each with all its attributes (the overlay's field order and labels, missing as "—", ids
+  never rounded, values as text), at most 25, with the Item's hex or raster value under the list, in ONE
+  card (Escape closes it); a hover names the feature. "Only features matching the selected layer" (`covf=1`)
+  keeps the features whose `|`-delimited `filter_field` holds the Item's `atlas:overlay_filter` token, and is
+  disabled with its reason on an Item without one. The rules, the card and its hover are a lazy chunk loaded
+  only for a collection with overlays.
+- **A collection's version** (STAC version extension): the credits say "Version 2", mark a deprecated one
+  "superseded", and link "Previous version" / "Newer version" / "Latest version"; a link to this app opens in
+  the same tab, in the deployment being viewed.
+- **Fixed: a place layer answered every hover and click once any of its features was in view**: the hit test
+  passed the point as a plain `{x, y}`, which MapLibre reads as no geometry (the whole viewport), so a hover
+  over empty sea named a far-away place, the hex hover stayed quiet, and a raster click opened a place card.
+  The point is an array now (place layers, collection overlays, the hex cell line); regression tests against a
+  fake that reads the argument as MapLibre does.
+- Gazetteer place layers leave a click on a collection's own feature to that feature's card (one card per
+  click); the overlay probes and late card lines of `lib/map/clickInfo.ts` are sets.
+- Tests: the hook, the specs and draw order, the filter evaluated with MapLibre's own expression engine
+  (`|rice|` never matches `|rices_whale|`), the `cov`/`covf` codec, the card (field order, labels, numbers,
+  escaping, the cap), version links, the lens through the runes project, and `e2e/collection.overlays.spec.ts`
+  on the new fixture (`tests/fixtures/overlays/`, tippecanoe PMTiles); seeded faults
+  `cov-filter-partial-token`, `cov-draw-order-unreversed`, `overlay-popup-unescaped`,
+  `overlay-point-query-plain-object`.
+
 ## 0.6.2 (2026-11-12)
 
 - **marinesensitivity budget 472 -> 474 KB gzip**: 0.6.1's Flora / Productivity split sits on the first-paint
