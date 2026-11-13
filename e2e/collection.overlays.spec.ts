@@ -177,6 +177,9 @@ test("two overlays on at once, a click on a sighting lists every attribute in ON
     "lon",
     "models",
     "comments",
+    "aphia_id",
+    "year",
+    "month",
   ]);
   // the hex Item's value under the same point, in the same card
   await expect(card.locator(".atlas-popup-ov-cell")).toHaveText("Cell 1: 0.82");
@@ -234,6 +237,69 @@ test("'Only features matching the selected layer' filters the sightings by the I
     /names no matching features/,
   );
   await expect.poll(async () => (await rendered()).length, { timeout: 20_000 }).toBe(4);
+});
+
+test("Filter features: a species, a year range, and Show model", async ({ page }) => {
+  await boot(page, "map=-89.45,27.5,9&c=sefsc_fixture&i=sperm_whale");
+  const rendered = (layer: string, key: string) =>
+    page.evaluate(
+      ([id, k]) => {
+        const map = (
+          window as unknown as {
+            __atlasMap: {
+              handle: {
+                map: {
+                  queryRenderedFeatures(o: {
+                    layers: string[];
+                  }): { properties: Record<string, number> }[];
+                };
+              };
+            };
+          }
+        ).__atlasMap.handle.map;
+        return [
+          ...new Set(map.queryRenderedFeatures({ layers: [id] }).map((f) => f.properties[k])),
+        ].sort();
+      },
+      [layer, key] as const,
+    );
+  const block = page.getByTestId("feature-filters");
+  await expect(block).toBeVisible();
+  // the month follows the map; this Item has no month, so it filters nothing
+  await expect(block.getByRole("combobox", { name: "Month" })).toHaveValue("__follow");
+  await expect(block.getByRole("combobox", { name: "Month" }).locator("option").first()).toHaveText(
+    "Follow the map (all)",
+  );
+  await expect
+    .poll(() => rendered("cov-sightings_vessel-circle", "sightid"), { timeout: 20_000 })
+    .toHaveLength(4);
+
+  await block.getByRole("combobox", { name: "Species (sightings)" }).selectOption("1576133");
+  await expect.poll(() => new URL(page.url()).searchParams.get("cff")).toBe("species:1576133");
+  await expect
+    .poll(() => rendered("cov-sightings_vessel-circle", "sightid"))
+    .toEqual([20140612003]);
+  // the species filter lists the sightings only: the effort is untouched
+  await expect.poll(() => rendered("cov-effort_vessel-line", "segid")).toEqual([5501, 7702]);
+  // choosing a species never changes the layer; "Show model" does
+  expect(new URL(page.url()).searchParams.get("i")).toBe("sperm_whale");
+  await block.getByTestId("show-model").getByRole("button", { name: "Rice's whale" }).click();
+  // (the Rice's whale Item is the collection's first, its default: `i=` leaves the URL)
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("i"), { timeout: 10_000 })
+    .not.toBe("sperm_whale");
+  await expect(
+    page.getByTestId("collection-field").getByRole("combobox", { name: "Species", exact: true }),
+  ).toHaveValue("rices_whale");
+
+  await block.getByRole("combobox", { name: "Species (sightings)" }).selectOption("__all");
+  await block.getByRole("combobox", { name: "Year from" }).selectOption("2018");
+  await block.getByRole("combobox", { name: "Year to" }).selectOption("2018");
+  await expect.poll(() => new URL(page.url()).searchParams.get("cff")).toBe("year:2018-2018");
+  await expect
+    .poll(() => rendered("cov-sightings_vessel-circle", "sightid"))
+    .toEqual([20180704011, 20180704012]);
+  await expect.poll(() => rendered("cov-effort_vessel-line", "segid")).toEqual([7702]);
 });
 
 test("the credits say Version 2 and link the previous version in this app", async ({ page }) => {

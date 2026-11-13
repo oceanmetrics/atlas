@@ -11,6 +11,7 @@ import {
   hooksOf,
   unknownHooks,
 } from "../../src/lib/catalog/hooks";
+import { OVERLAY_FILTERS_HOOK } from "../../src/lib/catalog/featureFilters";
 import { OVERLAYS_HOOK } from "../../src/lib/catalog/overlays";
 import { TAXA_REGISTRY_HOOK } from "../../src/lib/catalog/registry/ref";
 import type { StacCollection } from "../../src/lib/catalog/types";
@@ -59,6 +60,7 @@ describe("HOOKS: the registry names hook -> module, and only there", () => {
       TAXA_REGISTRY_HOOK,
       "h3",
       OVERLAYS_HOOK,
+      OVERLAY_FILTERS_HOOK,
     ]);
     expect(HOOK_NAMES).toEqual([
       "atlas:flower",
@@ -66,6 +68,7 @@ describe("HOOKS: the registry names hook -> module, and only there", () => {
       "atlas:taxa_registry",
       "h3",
       "atlas:overlays",
+      "atlas:overlay_filters",
     ]);
   });
 

@@ -14,7 +14,10 @@
         "lat": 27.51234,
         "lon": -89.61234,
         "models": "|rices_whale|",
-        "comments": "<img src=x onerror=alert(1)>"
+        "comments": "<img src=x onerror=alert(1)>",
+        "aphia_id": 1576133,
+        "year": 2014,
+        "month": 6
       },
       "geometry": {
         "type": "Point",
@@ -34,7 +37,10 @@
         "lat": 27.4,
         "lon": -89.25,
         "models": "|bottlenose_dolphin|",
-        "comments": ""
+        "comments": "",
+        "aphia_id": 137111,
+        "year": 2018,
+        "month": 7
       },
       "geometry": {
         "type": "Point",
@@ -54,7 +60,10 @@
         "lat": 27.4,
         "lon": -89.25,
         "models": "|pantropical_spotted_dolphin|stenella_spp|",
-        "comments": "mixed group"
+        "comments": "mixed group",
+        "aphia_id": 137110,
+        "year": 2018,
+        "month": 7
       },
       "geometry": {
         "type": "Point",
@@ -74,7 +83,10 @@
         "lat": 27.2,
         "lon": -89.9,
         "models": "|sperm_whale|",
-        "comments": "fluke-up dive"
+        "comments": "fluke-up dive",
+        "aphia_id": 137119,
+        "year": 2021,
+        "month": 8
       },
       "geometry": {
         "type": "Point",

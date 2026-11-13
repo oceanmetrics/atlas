@@ -18,6 +18,7 @@
 import { CELL_SPECIES_HOOK, parseCellSpecies } from "./cellSpecies";
 import { FLOWER_HOOK, flowerSpecOf } from "./flower";
 import { H3_HOOK, parseH3 } from "./h3";
+import { OVERLAY_FILTERS_HOOK, parseOverlayFilters } from "./featureFilters";
 import { OVERLAYS_HOOK, parseOverlays } from "./overlays";
 import { TAXA_REGISTRY_HOOK, registryRefOf } from "./registry/ref";
 import type { StacCollection } from "./types";
@@ -32,6 +33,8 @@ export const HOOKS = {
   [H3_HOOK]: { parse: parseH3 },
   // extra vector layers over the Item (sightings, tracklines), each a PMTiles asset of the collection
   [OVERLAYS_HOOK]: { parse: parseOverlays },
+  // filters of those overlays' features by a property (species, month, year), `atlas:overlays`' companion
+  [OVERLAY_FILTERS_HOOK]: { parse: parseOverlayFilters },
 } as const satisfies Record<string, { parse(collection: Collection): unknown }>;
 
 export type HookName = keyof typeof HOOKS;

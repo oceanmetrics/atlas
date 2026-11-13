@@ -13,6 +13,8 @@
 //   filter       "Only features matching the selected layer": an overlay whose `filter_field` is the Item's
 //                `atlas:overlay_filter.field` keeps the features whose `|`-delimited property holds
 //                `|<token>|` (the delimiters are part of the needle, so `rice` never matches `rices_whale`).
+//                The feature filters (`atlas:overlay_filters`: species, month, year) that list an overlay are
+//                ANDed with it: one `["all", ...]` filter per layer, or the single one, or none.
 import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
 import type { CollectionOverlaySpec, OverlayFilter } from "../../catalog/overlays";
 import { COLLECTION_OVERLAY_HALO } from "../colors";
@@ -61,17 +63,34 @@ export function overlayTokenFilter(field: string, token: string): FilterSpecific
   ] as unknown as FilterSpecification;
 }
 
+/** an overlay's whole filter: the token filter (when its `filter_field` matches) AND every feature filter
+ * listing it; `null` for none. */
+export function composedFilter(
+  spec: CollectionOverlaySpec,
+  filter: OverlayFilter | null,
+  extra: readonly FilterSpecification[] = [],
+): FilterSpecification | null {
+  const parts: FilterSpecification[] = [
+    ...(filter && spec.filterField === filter.field
+      ? [overlayTokenFilter(filter.field, filter.token)]
+      : []),
+    ...extra,
+  ];
+  if (parts.length === 0) return null;
+  return parts.length === 1 ? parts[0] : (["all", ...parts] as unknown as FilterSpecification);
+}
+
 /** the layers of one overlay, bottom first (a polygon's fill under its outline). */
 export function overlayLayersOf(
   spec: CollectionOverlaySpec,
   filter: OverlayFilter | null = null,
+  extra: readonly FilterSpecification[] = [],
 ): LayerSpecification[] {
+  const composed = composedFilter(spec, filter, extra);
   const base = {
     source: covSourceId(spec.asset),
     "source-layer": spec.sourceLayer,
-    ...(filter && spec.filterField === filter.field
-      ? { filter: overlayTokenFilter(filter.field, filter.token) }
-      : {}),
+    ...(composed ? { filter: composed } : {}),
   };
   if (spec.geometry === "point") {
     return [
@@ -125,6 +144,7 @@ export function collectionOverlayStyle(
   specs: readonly CollectionOverlaySpec[],
   visibleIds: readonly string[],
   filter: OverlayFilter | null = null,
+  featureFilters: ReadonlyMap<string, readonly FilterSpecification[]> = new Map(),
 ): CollectionOverlayParts | null {
   const on = specs.filter((s) => visibleIds.includes(s.id));
   if (on.length === 0) return null;
@@ -132,7 +152,7 @@ export function collectionOverlayStyle(
   const layers: { role: "collection-overlay"; layer: LayerSpecification }[] = [];
   for (const spec of [...on].reverse()) {
     sources[covSourceId(spec.asset)] = { type: "vector", url: `pmtiles://${spec.url}` };
-    for (const layer of overlayLayersOf(spec, filter)) {
+    for (const layer of overlayLayersOf(spec, filter, featureFilters.get(spec.id) ?? [])) {
       layers.push({ role: COLLECTION_OVERLAY_ROLE, layer });
     }
   }

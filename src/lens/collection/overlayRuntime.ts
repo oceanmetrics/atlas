@@ -3,6 +3,13 @@
 // collection that declares overlays opens, so the static path carries only the hook's parser
 // (`lib/catalog/overlays.ts`) and a collection without overlays never loads this.
 import { overlayFilterState, toggledCov, visibleOverlayIds } from "../../lib/catalog/overlayState";
+import {
+  cffWith,
+  filtersByOverlay,
+  optionToken,
+  rangeToken,
+  resolveFeatureFilters,
+} from "../../lib/catalog/featureFilterState";
 import { collectionOverlayStyle, covHitLayerIds } from "../../lib/map/layers/collectionOverlays";
 import { installCollectionOverlayInteraction } from "./overlayInteraction";
 
@@ -12,6 +19,11 @@ export const runtime = {
   overlayFilterState,
   collectionOverlayStyle,
   covHitLayerIds,
+  resolveFeatureFilters,
+  filtersByOverlay,
+  cffWith,
+  optionToken,
+  rangeToken,
   install: installCollectionOverlayInteraction,
 };
 

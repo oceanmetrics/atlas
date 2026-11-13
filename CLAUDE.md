@@ -108,6 +108,14 @@ uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only 
   the features whose `|`-delimited property holds `|token|` (`layers/collectionOverlays.ts#overlayTokenFilter`).
   The rules, the style parts and the card are the lazy `lens/collection/overlayRuntime.ts`. A point query passes an
   ARRAY: MapLibre reads a plain `{x, y}` as the whole viewport.
+- `atlas:overlay_filters` on a Collection (`src/lib/catalog/featureFilters.ts`, `atlas:overlays`' companion): filters
+  of the overlays' features, each `{id, title, type, field, overlays}` plus, for `type: "select"`, `options`
+  (`value`, `label`, `count?`, `layers?` = taxon-dimension values for "Show model", `dim_value?`) and `follow_dim?`
+  (the default follows the Item's `atlas:dims[follow_dim]` to the option with that `dim_value`; none matches = no
+  filter), for `type: "range"`, `min`/`max` (inclusive `from`-`to`, default the whole span). A filter applies only to
+  the overlays it lists; an overlay's filters (every active one, and the `covf` token) are ANDed
+  (`featureFilterState.ts`, `layers/collectionOverlays.ts#composedFilter`). URL: `cff=<id>:<value>;...` (an option's
+  value, `all`, or `<from>-<to>`), absent pair = default, reset with `cov`/`covf` on a collection switch.
 - The STAC version extension on a Collection: `version`, `deprecated`, and links `predecessor-version` /
   `successor-version` / `latest-version` (`href`, `title`) are the credits strip's "Version" row
   (`src/lib/catalog/versionLinks.ts`); a link to this app (`og.siteUrl` or the page itself) opens in the same tab.

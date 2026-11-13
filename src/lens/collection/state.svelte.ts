@@ -22,6 +22,8 @@ import { bandValueOf, flowerPetalsFor, type FlowerView } from "../../lib/catalog
 import { hookSpec, hooksOf } from "../../lib/catalog/hooks";
 import type { CollectionOverlaySpec } from "../../lib/catalog/overlays";
 import type { OverlayFilterState } from "../../lib/catalog/overlayState";
+import type { FilterValue } from "../../lib/catalog/featureFilters";
+import type { FeatureFilterView } from "../../lib/catalog/featureFilterState";
 import type { OverlayRuntime } from "./overlayRuntime";
 import {
   itemDims,
@@ -287,6 +289,17 @@ export interface CollectionLens {
   /** switch one overlay on or off (`cov=`; back to absent when the result is the collection's defaults). */
   toggleOverlay(id: string, on: boolean): void;
   setOverlayFilter(on: boolean): void;
+  /** the overlay feature filters (`atlas:overlay_filters`), each with its current choice (`cff=`). */
+  readonly featureFilters: readonly FeatureFilterView[];
+  /** a select: "follow" (its default with `follow_dim`), "all", or an option's value; a range: `{from, to}`. */
+  chooseFeatureFilter(
+    id: string,
+    choice: "follow" | "all" | FilterValue | { from: number; to: number },
+  ): void;
+  /** the collection's taxon dimension (`atlas:taxon_dim`), whose values a species option's `layers` name. */
+  readonly taxonDimension: DimSpec | null;
+  /** "Show model": switch the taxon dimension to `layer` (never done by choosing a species). */
+  showModel(layer: string): void;
   /** the active item's taxon identifiers (WoRMS / BOTW / GBIF ids, Red List, ESA), as rows. */
   readonly taxonFacts: TaxonFact[];
   /** a sentence to show instead of the layer (an MST taxon with no model here, a failed lookup). */
@@ -1069,9 +1082,21 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       ? overlayRt.overlayFilterState(overlaySpecs, item, selStore.sel.covf === true)
       : NO_OVERLAY_FILTER,
   );
+  // the feature filters (`atlas:overlay_filters`: species, month, year): `cff=`, a month that follows the Item
+  const filterSpecs = $derived(hookSpec(entry?.collection, "atlas:overlay_filters") ?? []);
+  const filterViews = $derived(
+    overlayRt && filterSpecs.length > 0
+      ? overlayRt.resolveFeatureFilters(filterSpecs, selStore.sel.cff, item ? itemDims(item) : null)
+      : [],
+  );
   const overlayStyle = $derived(
     overlayRt
-      ? overlayRt.collectionOverlayStyle(overlaySpecs, overlayOn, overlayFilter.active)
+      ? overlayRt.collectionOverlayStyle(
+          overlaySpecs,
+          overlayOn,
+          overlayFilter.active,
+          overlayRt.filtersByOverlay(filterViews),
+        )
       : null,
   );
   const anyOverlayOn = $derived(
@@ -1277,7 +1302,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     // another collection opens on its own overlays' defaults
     selStore.set(
       patch.c !== undefined && patch.c !== e?.id
-        ? { cov: undefined, covf: undefined, ...patch }
+        ? { cov: undefined, covf: undefined, cff: undefined, ...patch }
         : patch,
     );
   }
@@ -1310,7 +1335,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     // the taxon neither travels into it nor out of it; `rep=005` belongs to it alone
     const rep = selStore.sel.rep === "005" ? { rep: "native" as const } : {};
     // a collection's overlays are its own: the next one opens on its own defaults
-    const overlays = { cov: undefined, covf: undefined };
+    const overlays = { cov: undefined, covf: undefined, cff: undefined };
     selStore.set(
       taxon
         ? {
@@ -1455,6 +1480,40 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     setOverlayFilter(on) {
       selStore.set({ covf: on ? true : undefined });
+    },
+    get featureFilters() {
+      return filterViews;
+    },
+    chooseFeatureFilter(id, choice) {
+      const rt = overlayRt;
+      const spec = filterSpecs.find((f) => f.id === id);
+      if (!rt || !spec) return;
+      let token: string | undefined;
+      if (spec.type === "range") {
+        if (typeof choice === "object" && choice !== null) {
+          const full =
+            Math.min(choice.from, choice.to) <= spec.min &&
+            Math.max(choice.from, choice.to) >= spec.max;
+          token = full
+            ? undefined
+            : rt.rangeToken(Math.min(choice.from, choice.to), Math.max(choice.from, choice.to));
+        }
+      } else if (choice === "follow") token = undefined;
+      else if (choice === "all") token = spec.followDim ? "all" : undefined;
+      else if (typeof choice !== "object") {
+        const option = spec.options.find((o) => String(o.value) === String(choice));
+        token = option ? rt.optionToken(option) : undefined;
+      }
+      selStore.set({ cff: rt.cffWith(selStore.sel.cff, id, token) });
+    },
+    get taxonDimension() {
+      return view.dims.find((d) => d.taxon) ?? null;
+    },
+    showModel(layer) {
+      // the taxon dimension to that layer, snapped to the nearest existing Item (the other dimensions kept where
+      // they exist: the current month; else the first such Item, in the collection's order)
+      const dim = view.dims.find((d) => d.taxon);
+      if (dim) selectDim(dim.key, layer);
     },
     get notice() {
       return isTaxon ? mst.notice : isRegistry ? registry.notice : switchNotice;

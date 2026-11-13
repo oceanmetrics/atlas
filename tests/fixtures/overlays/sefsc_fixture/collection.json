@@ -45,7 +45,8 @@
         "rices_whale": "Rice's whale",
         "bottlenose_dolphin": "Common bottlenose dolphin",
         "sperm_whale": "Sperm whale"
-      }
+      },
+      "atlas:taxon_dim": true
     }
   },
   "atlas:overlays": [
@@ -179,6 +180,119 @@
     {
       "rel": "license",
       "href": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ],
+  "atlas:overlay_filters": [
+    {
+      "id": "species",
+      "title": "Species (sightings)",
+      "type": "select",
+      "field": "aphia_id",
+      "overlays": ["sightings_vessel"],
+      "options": [
+        {
+          "value": 1576133,
+          "label": "Rice's whale (Balaenoptera ricei)",
+          "count": 1,
+          "layers": ["rices_whale"]
+        },
+        {
+          "value": 137111,
+          "label": "Common bottlenose dolphin (Tursiops truncatus)",
+          "count": 1,
+          "layers": ["bottlenose_dolphin"]
+        },
+        {
+          "value": 137110,
+          "label": "Pantropical spotted dolphin (Stenella attenuata)",
+          "count": 1
+        },
+        {
+          "value": 137119,
+          "label": "Sperm whale (Physeter macrocephalus)",
+          "count": 1,
+          "layers": ["sperm_whale"]
+        }
+      ]
+    },
+    {
+      "id": "month",
+      "title": "Month",
+      "type": "select",
+      "field": "month",
+      "overlays": ["sightings_vessel", "effort_vessel"],
+      "options": [
+        {
+          "value": 1,
+          "label": "January",
+          "dim_value": "01"
+        },
+        {
+          "value": 2,
+          "label": "February",
+          "dim_value": "02"
+        },
+        {
+          "value": 3,
+          "label": "March",
+          "dim_value": "03"
+        },
+        {
+          "value": 4,
+          "label": "April",
+          "dim_value": "04"
+        },
+        {
+          "value": 5,
+          "label": "May",
+          "dim_value": "05"
+        },
+        {
+          "value": 6,
+          "label": "June",
+          "dim_value": "06"
+        },
+        {
+          "value": 7,
+          "label": "July",
+          "dim_value": "07"
+        },
+        {
+          "value": 8,
+          "label": "August",
+          "dim_value": "08"
+        },
+        {
+          "value": 9,
+          "label": "September",
+          "dim_value": "09"
+        },
+        {
+          "value": 10,
+          "label": "October",
+          "dim_value": "10"
+        },
+        {
+          "value": 11,
+          "label": "November",
+          "dim_value": "11"
+        },
+        {
+          "value": 12,
+          "label": "December",
+          "dim_value": "12"
+        }
+      ],
+      "follow_dim": "month"
+    },
+    {
+      "id": "year",
+      "title": "Year",
+      "type": "range",
+      "field": "year",
+      "overlays": ["sightings_vessel", "effort_vessel"],
+      "min": 2014,
+      "max": 2021
     }
   ]
 }

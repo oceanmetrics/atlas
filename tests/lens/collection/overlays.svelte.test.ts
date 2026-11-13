@@ -74,10 +74,45 @@ const OVERLAYS = [
   },
 ];
 
+// a species select (with the models it has) and a select that follows the Item's `metric`
+const FILTERS = [
+  {
+    id: "species",
+    title: "Species",
+    type: "select",
+    field: "aphia_id",
+    overlays: ["sightings_vessel"],
+    options: [{ value: 137209, label: "Loggerhead", count: 3, layers: ["seaTurtles"] }],
+  },
+  {
+    id: "metric",
+    title: "Metric",
+    type: "select",
+    field: "metric_code",
+    overlays: ["sightings_vessel", "effort_vessel"],
+    options: [
+      { value: 1, label: "Risk", dim_value: "risk" },
+      { value: 2, label: "Share", dim_value: "share" },
+    ],
+    follow_dim: "metric",
+  },
+  {
+    id: "year",
+    title: "Year",
+    type: "range",
+    field: "year",
+    overlays: ["effort_vessel"],
+    min: 2003,
+    max: 2024,
+  },
+];
+
 function override(url: string): Response | undefined {
   if (url === `${FIXTURE_BASE}aquamaps_eov/collection.json`) {
     const c = readJson("aquamaps_eov/collection.json");
     c["atlas:overlays"] = OVERLAYS;
+    c["atlas:overlay_filters"] = FILTERS;
+    c["cube:dimensions"].eov["atlas:taxon_dim"] = true;
     c.assets = {
       ...c.assets,
       sightings_vessel: { href: "./overlays/sightings_vessel.pmtiles", type: PM },
@@ -198,7 +233,8 @@ describe("the lens draws a collection's own overlays", () => {
         }
       ).filter;
     expect(JSON.stringify(filterOf("cov-sightings_vessel-circle"))).toContain("|rices_whale|");
-    expect(filterOf("cov-effort_vessel-line")).toBeUndefined();
+    // the effort declares no filter_field: no token (its only filter is the metric the Item follows)
+    expect(JSON.stringify(filterOf("cov-effort_vessel-line"))).not.toContain("rices_whale");
     lens.setOverlayFilter(false);
     flushSync();
     expect(selStore.sel.covf).toBeUndefined();
@@ -251,5 +287,56 @@ describe("the lens draws a collection's own overlays", () => {
     lens.followLink({ c: "biotrack_indicators", i: undefined });
     expect(selStore.sel.cov).toBeUndefined();
     expect(selStore.sel.covf).toBeUndefined();
+  });
+
+  it("the feature filters: the metric follows the Item, a choice writes cff=, the layers carry them", async () => {
+    await settle(() => expect(lens.featureFilters).toHaveLength(3));
+    const filterOf = (id: string) =>
+      (
+        lens.mapInputs.overlays!.layers.find((l) => l.layer.id === id)!.layer as {
+          filter?: unknown;
+        }
+      ).filter;
+    // fish_risk: the metric filter follows `risk` -> option 1, on the two overlays it lists
+    expect(lens.featureFilters[1].followLabel).toBe("Follow the map (Risk)");
+    expect(filterOf("cov-effort_vessel-line")).toEqual(["==", ["get", "metric_code"], 1]);
+    lens.chooseFeatureFilter("species", 137209);
+    lens.chooseFeatureFilter("year", { from: 2018, to: 2017 });
+    flushSync();
+    expect(selStore.sel.cff).toEqual({ species: "137209", year: "2017-2018" });
+    expect(filterOf("cov-sightings_vessel-circle")).toEqual([
+      "all",
+      ["==", ["get", "aphia_id"], 137209],
+      ["==", ["get", "metric_code"], 1],
+    ]);
+    // choosing a species never changes the layer
+    expect(lens.item?.id).toBe("fish_risk");
+    // All overrides the map; the whole range and "follow" are absent again
+    lens.chooseFeatureFilter("metric", "all");
+    lens.chooseFeatureFilter("year", { from: 2003, to: 2024 });
+    flushSync();
+    expect(selStore.sel.cff).toEqual({ species: "137209", metric: "all" });
+    lens.chooseFeatureFilter("metric", "follow");
+    flushSync();
+    expect(selStore.sel.cff).toEqual({ species: "137209" });
+  });
+
+  it("Show model switches the taxon dimension to that layer (the other dimensions kept)", async () => {
+    await settle(() => expect(lens.featureFilters).toHaveLength(3));
+    expect(lens.taxonDimension?.key).toBe("eov");
+    lens.showModel("seaTurtles");
+    await settle(() => expect(lens.item?.id).toBe("seaTurtles_risk"));
+    // and the metric filter now follows the new Item's metric too
+    lens.selectDim("metric", "share");
+    await settle(() => expect(lens.featureFilters[1].followLabel).toBe("Follow the map (Share)"));
+  });
+
+  it("another collection drops cff with cov and covf", async () => {
+    lens.chooseFeatureFilter("year", { from: 2010, to: 2011 });
+    flushSync();
+    expect(selStore.sel.cff).toEqual({ year: "2010-2011" });
+    lens.selectCollection("biotrack_indicators");
+    await settle(() => expect(lens.entry?.id).toBe("biotrack_indicators"));
+    expect(selStore.sel.cff).toBeUndefined();
   });
 });

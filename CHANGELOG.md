@@ -15,6 +15,16 @@
   disabled with its reason on an Item without one. A click on a feature still selects the hex cell or raster
   point under it, but leaves the panel where it is (the Layers list stays; on a phone the sheet does not rise
   over the card). The rules, the card and its hover are a lazy chunk loaded only for a collection with overlays.
+- **Filter a collection's overlay features** (`atlas:overlay_filters`, Ben: pick sightings by species, see that
+  species' model, by month and by year, from the one link): a "Filter features" block under the Collection
+  layers. A select ("All", or an option shown "label (count)") filters the overlays it lists by
+  `["==", ["get", field], value]`; one with `follow_dim` defaults to "Follow the map (July)", the option whose
+  `dim_value` is the selected Item's month (none for "annual"), and All or an option overrides it. A range ("from"
+  / "to", inclusive, swapped when reversed) defaults to the whole span. Every active filter that lists an overlay
+  is ANDed with the others and with the `covf=1` token filter. A species option with `layers` offers "Show model:"
+  links that switch the taxon dimension to that model (choosing a species never does). `cff=` keeps them in the
+  link (`cff=month:all;species:1576133;year:2017-2018`, sorted; an absent pair is the default); another
+  collection starts from its defaults.
 - **A collection's items from one file** (`rel: "items"`): a collection may link a GeoJSON FeatureCollection of
   exactly its Item JSONs; the loader fetches it once and gives each `item` link the feature with its id (the
   link's `id`, else its file's basename) as if fetched from that link's URL, so every relative href resolves as
@@ -36,7 +46,7 @@
   escaping, the cap), version links, the lens through the runes project, and `e2e/collection.overlays.spec.ts`
   on the new fixture (`tests/fixtures/overlays/`, tippecanoe PMTiles); seeded faults
   `cov-filter-partial-token`, `cov-draw-order-unreversed`, `overlay-popup-unescaped`,
-  `overlay-point-query-plain-object`, `item-index-resolves-against-index-url`. The e2e spec runs in CI with the
+  `overlay-point-query-plain-object`, `item-index-resolves-against-index-url`, `feature-filter-range-exclusive`. The e2e spec runs in CI with the
   OBIS one (`pages.yml` e2e-obis).
 
 ## 0.6.2 (2026-11-12)

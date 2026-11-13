@@ -131,6 +131,9 @@ export interface Sel {
   cov?: readonly string[];
   /** `?covf=1`: "Only features matching the selected layer" (the Item's `atlas:overlay_filter`); `undefined` = off. */
   covf?: true;
+  /** `?cff=species:1576133;month:7;year:2017-2018`: the collection's overlay feature filters
+   * (`atlas:overlay_filters`), filter id -> value; an absent id is that filter's default; `undefined` = all defaults. */
+  cff?: Readonly<Record<string, string>>;
   /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list; on an h3 layer
    * `?filter=coll:<slug>` keeps the hexagons of a whole gazetteer polygon collection (H3 membership). */
   filter?: PlaceFilter;
@@ -329,6 +332,7 @@ export const DEFAULT_SEL: Sel = {
   ov: undefined,
   cov: undefined,
   covf: undefined,
+  cff: undefined,
   filter: undefined,
   zl: true,
   pl: undefined,

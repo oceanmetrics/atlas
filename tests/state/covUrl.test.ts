@@ -4,7 +4,7 @@
 // dropped here, nothing throws. An instance without the Collections lens neither reads nor writes them.
 import { describe, expect, it } from "vitest";
 import { formatSel, parseSel } from "../../src/lib/state/codec";
-import { formatCov, parseCov } from "../../src/lib/gazetteer/overlayUrl";
+import { formatCff, formatCov, parseCff, parseCov } from "../../src/lib/gazetteer/overlayUrl";
 import { COLLECTION_KEYS, DEFAULT_SEL, type Sel } from "../../src/lib/state/types";
 
 const url = (search: string) => ({ search, hash: "" });
@@ -85,3 +85,47 @@ describe.runIf(!COLLECTION_KEYS)(
     });
   },
 );
+
+describe("parseCff / formatCff: `cff=` (the overlay feature filters)", () => {
+  it("`;`-separated id:value pairs; absent, empty or nothing valid is undefined", () => {
+    expect(parseCff("species:1576133;month:7;year:2017-2018")).toEqual({
+      species: "1576133",
+      month: "7",
+      year: "2017-2018",
+    });
+    expect(parseCff("month:all")).toEqual({ month: "all" });
+    expect(parseCff(null)).toBeUndefined();
+    expect(parseCff("")).toBeUndefined();
+    expect(parseCff(";;:x;novalue;bad id:1")).toBeUndefined();
+  });
+  it("drops a malformed pair, keeps the first of a repeated id, never throws", () => {
+    expect(parseCff("species:1;species:2;year:<b>;constructor:3")).toEqual({
+      species: "1",
+      constructor: "3",
+    });
+  });
+  it("writes the pairs sorted by id (a stable link); nothing for none", () => {
+    expect(formatCff({ year: "2017-2018", month: "7", species: "1576133" })).toBe(
+      "month:7;species:1576133;year:2017-2018",
+    );
+    expect(formatCff(undefined)).toBeNull();
+    expect(formatCff({})).toBeNull();
+    expect(formatCff({ "a;b": "1" })).toBeNull();
+  });
+});
+
+describe.runIf(COLLECTION_KEYS)("the codec: cff (an instance with the Collections lens)", () => {
+  it("round-trips, with `;` and `:` readable in the address bar", () => {
+    const sel = { ...DEFAULT_SEL, cff: { species: "1576133", month: "all", year: "2017-2018" } };
+    const { search } = formatSel(sel);
+    expect(search).toContain("cff=month:all;species:1576133;year:2017-2018");
+    expect(roundTrip(sel).cff).toEqual(sel.cff);
+    expect(roundTrip({ ...DEFAULT_SEL }).cff).toBeUndefined();
+  });
+  it("an encoded `;` (a pasted link) reads the same", () => {
+    expect(parseSel(url("?cff=month%3A7%3Byear%3A2010-2012")).cff).toEqual({
+      month: "7",
+      year: "2010-2012",
+    });
+  });
+});

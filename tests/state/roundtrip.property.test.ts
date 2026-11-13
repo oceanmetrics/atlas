@@ -114,6 +114,21 @@ function randomSel(rng: Rng): Sel {
       0.4,
     ),
     covf: rng.maybe(() => true as const, 0.3),
+    // the overlay feature filters: id -> an option value, `all`, or a range
+    cff: rng.maybe(
+      () =>
+        Object.fromEntries(
+          Array.from({ length: rng.int(1, 3) }, (_, i) => [
+            `f${i}`,
+            rng.pick([
+              "all",
+              String(rng.int(1, 12)),
+              `${rng.int(2003, 2010)}-${rng.int(2011, 2024)}`,
+            ]),
+          ]),
+        ),
+      0.3,
+    ),
     pl: rng.maybe(() => `g1.${rng.token(1, 6)}.${rng.token(4, 40)}`, 0.4),
     t: rng.maybe(() => rng.token(3, 30), 0.3),
   };

@@ -9,7 +9,9 @@
         "date": "2014-06-12",
         "effort_km": 38.42,
         "beaufort": 2.5,
-        "platform": "NOAA Ship Gordon Gunter"
+        "platform": "NOAA Ship Gordon Gunter",
+        "year": 2014,
+        "month": 6
       },
       "geometry": {
         "type": "LineString",
@@ -28,7 +30,9 @@
         "date": "2018-07-04",
         "effort_km": 51.7,
         "beaufort": 3,
-        "platform": "NOAA Ship Gordon Gunter"
+        "platform": "NOAA Ship Gordon Gunter",
+        "year": 2018,
+        "month": 7
       },
       "geometry": {
         "type": "LineString",
