@@ -1,0 +1,15 @@
+diff --git a/src/lib/catalog/featureFilterState.ts b/src/lib/catalog/featureFilterState.ts
+index a73d372..0a3fa41 100644
+--- a/src/lib/catalog/featureFilterState.ts
++++ b/src/lib/catalog/featureFilterState.ts
+@@ -89,7 +89,9 @@ export function filterExpression(view: FeatureFilterView): FilterSpecification |
+   const get = ["get", view.spec.field];
+   const c = view.choice;
+   if (c.kind === "range") {
+-    return ["all", [">=", get, c.from], ["<=", get, c.to]] as unknown as FilterSpecification;
++    // SEEDED FAULT (tests/faults/feature-filter-range-exclusive.patch): the bounds turn exclusive, so a
++    // "2018 to 2018" range keeps nothing and "2017 to 2018" loses both end years
++    return ["all", [">", get, c.from], ["<", get, c.to]] as unknown as FilterSpecification;
+   }
+   const option = c.kind === "option" || c.kind === "follow" ? c.option : null;
+   return option ? (["==", get, option.value] as unknown as FilterSpecification) : null;

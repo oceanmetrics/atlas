@@ -673,6 +673,14 @@ export const FAULTS = [
     ],
   },
   {
+    id: "feature-filter-range-exclusive",
+    patch: "tests/faults/feature-filter-range-exclusive.patch",
+    describe:
+      "a feature filter's range turns exclusive -- 'Year 2018 to 2018' keeps nothing and '2017 to 2018' " +
+      "loses both end years",
+    gate: ["npx", "vitest", "run", "tests/catalog/featureFilters.test.ts", "-t", "inclusive"],
+  },
+  {
     id: "cog-tile-url-drops-band",
     patch: "tests/faults/cog-tile-url-drops-band.patch",
     describe:
