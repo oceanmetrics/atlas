@@ -1,8 +1,8 @@
 diff --git a/src/lib/map/layers/collectionOverlays.ts b/src/lib/map/layers/collectionOverlays.ts
-index 08bff85..0815b23 100644
+index 13dfc5f..57d5f66 100644
 --- a/src/lib/map/layers/collectionOverlays.ts
 +++ b/src/lib/map/layers/collectionOverlays.ts
-@@ -130,7 +130,9 @@ export function collectionOverlayStyle(
+@@ -150,7 +150,9 @@ export function collectionOverlayStyle(
    if (on.length === 0) return null;
    const sources: CollectionOverlayParts["sources"] = {};
    const layers: { role: "collection-overlay"; layer: LayerSpecification }[] = [];
@@ -11,5 +11,5 @@ index 08bff85..0815b23 100644
 +  // order, bottom first, so its FIRST overlay is drawn at the bottom (the hexagons over the sightings)
 +  for (const spec of [...on]) {
      sources[covSourceId(spec.asset)] = { type: "vector", url: `pmtiles://${spec.url}` };
-     for (const layer of overlayLayersOf(spec, filter)) {
+     for (const layer of overlayLayersOf(spec, filter, featureFilters.get(spec.id) ?? [])) {
        layers.push({ role: COLLECTION_OVERLAY_ROLE, layer });
