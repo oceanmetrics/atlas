@@ -1,0 +1,1 @@
+var e=`#0b1635`,t=`#eaeef3`,n=`#ff00aa`,r=`#ffffff`,i=`#0b1020`,a=`#3388ff`,o=`#3388ff`,s=`#ffffff`;export{e as a,n as c,i,o as n,t as o,r,a as s,s as t};

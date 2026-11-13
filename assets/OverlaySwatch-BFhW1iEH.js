@@ -1,0 +1,1 @@
+import{ct as e,jt as t,st as n,xt as r,yt as i}from"./licenses-CtXcRr0Z.js";var a=r(`<span aria-hidden="true"></span>`);function o(r,o){var s=a();let c;t(()=>{e(s,1,`ov-swatch ov-swatch--${o.geometry??``}`,`svelte-e8777l`),c=n(s,``,c,{"--ov-color":o.color})}),i(r,s)}export{o as t};
