@@ -1,0 +1,61 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "id": "rices_whale",
+  "collection": "sefsc_fixture",
+  "bbox": [-90.2, 27.0, -88.9, 28.0],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-90.2, 27.0],
+        [-88.9, 27.0],
+        [-88.9, 28.0],
+        [-90.2, 28.0],
+        [-90.2, 27.0]
+      ]
+    ]
+  },
+  "properties": {
+    "title": "Rice's whale, density (fixture)",
+    "datetime": null,
+    "atlas:dims": {
+      "species": "rices_whale"
+    },
+    "atlas:value_range": [0, 1],
+    "sdm:value_unit": "unitless",
+    "atlas:overlay_filter": {
+      "field": "models",
+      "token": "rices_whale"
+    }
+  },
+  "assets": {
+    "values": {
+      "href": "../values.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "atlas:key_column": "FID",
+      "atlas:value_column": "rices_whale_density",
+      "table:columns": [
+        {
+          "name": "FID",
+          "type": "int64"
+        },
+        {
+          "name": "rices_whale_density",
+          "type": "double"
+        }
+      ]
+    }
+  },
+  "links": [
+    {
+      "rel": "collection",
+      "href": "../collection.json"
+    },
+    {
+      "rel": "self",
+      "href": "./rices_whale.json"
+    }
+  ]
+}

@@ -24,6 +24,8 @@
   import CellSpeciesPanel from "./CellSpeciesPanel.svelte";
   import RasterCellSpeciesPanel from "./RasterCellSpeciesPanel.svelte";
   import CreditsStrip from "./CreditsStrip.svelte";
+  import CollectionOverlayList from "./CollectionOverlayList.svelte";
+  import { versionInfoOf } from "../../lib/catalog/versionLinks";
   import { formatCellValue } from "./mapInputs";
   import MstDetails from "./MstDetails.svelte";
   import TaxonField from "./TaxonField.svelte";
@@ -137,6 +139,8 @@
     if (!H3CellPaneComp && part === "details")
       void import("./h3/H3CellPane.svelte").then((m) => (H3CellPaneComp = m.default));
   });
+  // the STAC version extension: "Version 2", the versions before and after it
+  const versionInfo = $derived(versionInfoOf(lens.entry?.collection));
   const sourceAuthority = $derived.by(() => {
     const a = lens.entry?.collection?.["sdm:source_authority"];
     return typeof a === "string" && a.trim() ? a.trim() : null;
@@ -270,6 +274,10 @@
   {#if overlays}<PlaceLayerList {overlays} />{/if}
 {/snippet}
 
+{#snippet collectionLayers()}
+  <CollectionOverlayList {lens} />
+{/snippet}
+
 {#if part === "details"}
   {@render detailsContent()}
 {:else}
@@ -282,6 +290,7 @@
     {expandedRow}
     {onExpandedRowChange}
     placeLayers={overlays ? placeLayers : undefined}
+    collectionLayers={lens.overlays.length > 0 ? collectionLayers : undefined}
     zoom={{
       disabled: !lens.canZoomToLayer,
       onZoom: () => lens.zoomToLayer(),
@@ -395,7 +404,7 @@
             {/if}
           {/if}
 
-          <CreditsStrip credits={lens.credits} />
+          <CreditsStrip credits={lens.credits} version={versionInfo} />
         {/if}
       </div>
     {/snippet}

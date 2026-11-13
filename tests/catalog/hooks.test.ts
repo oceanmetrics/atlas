@@ -11,6 +11,8 @@ import {
   hooksOf,
   unknownHooks,
 } from "../../src/lib/catalog/hooks";
+import { OVERLAY_FILTERS_HOOK } from "../../src/lib/catalog/featureFilters";
+import { OVERLAYS_HOOK } from "../../src/lib/catalog/overlays";
 import { TAXA_REGISTRY_HOOK } from "../../src/lib/catalog/registry/ref";
 import type { StacCollection } from "../../src/lib/catalog/types";
 
@@ -52,8 +54,22 @@ const cellSpeciesCollection = () =>
 
 describe("HOOKS: the registry names hook -> module, and only there", () => {
   it("its keys are exactly the modules' own hook names, in registry order", () => {
-    expect(Object.keys(HOOKS)).toEqual([FLOWER_HOOK, CELL_SPECIES_HOOK, TAXA_REGISTRY_HOOK, "h3"]);
-    expect(HOOK_NAMES).toEqual(["atlas:flower", "atlas:cell_species", "atlas:taxa_registry", "h3"]);
+    expect(Object.keys(HOOKS)).toEqual([
+      FLOWER_HOOK,
+      CELL_SPECIES_HOOK,
+      TAXA_REGISTRY_HOOK,
+      "h3",
+      OVERLAYS_HOOK,
+      OVERLAY_FILTERS_HOOK,
+    ]);
+    expect(HOOK_NAMES).toEqual([
+      "atlas:flower",
+      "atlas:cell_species",
+      "atlas:taxa_registry",
+      "h3",
+      "atlas:overlays",
+      "atlas:overlay_filters",
+    ]);
   });
 
   it("no registered hook is also listed as a data field", () => {

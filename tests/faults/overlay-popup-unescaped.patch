@@ -1,0 +1,15 @@
+diff --git a/src/lens/collection/overlayPopup.ts b/src/lens/collection/overlayPopup.ts
+index 15bf82a..b67d45a 100644
+--- a/src/lens/collection/overlayPopup.ts
++++ b/src/lens/collection/overlayPopup.ts
+@@ -101,7 +101,9 @@ function featureHtml(hit: OverlayHit): string {
+     `</div>`;
+   const rows = overlayRows(hit.spec, hit.properties)
+     .map(
+-      (r) => `<tr><th scope="row">${escapeHtml(r.label)}</th><td>${escapeHtml(r.value)}</td></tr>`,
++      // SEEDED FAULT (tests/faults/overlay-popup-unescaped.patch): a property VALUE goes into the card as
++      // markup, so a feature carrying `<img src=x onerror=...>` runs it on click
++      (r) => `<tr><th scope="row">${escapeHtml(r.label)}</th><td>${r.value}</td></tr>`,
+     )
+     .join("");
+   return `<section class="atlas-popup-ov-feature">${head}<table class="atlas-popup-ov-table"><tbody>${rows}</tbody></table></section>`;

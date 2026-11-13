@@ -55,6 +55,62 @@ export function toggledOv(
   return sameSet(next, DEFAULT_OVERLAYS) ? undefined : next;
 }
 
+// `?cov=` -- which of a collection's own overlays (`atlas:overlays`, lib/catalog/overlays.ts) are on. The same
+// grammar as `ov=` with one difference: the default set belongs to the collection, so absent (`undefined`) is
+// "its defaults" and any list that is present is written back as it is (`cov=` = none). The Collections lens
+// collapses a toggle back to `undefined` when it lands on the defaults (`catalog/overlays.ts#toggledCov`).
+/** an overlay id: a URL token (no `,`), the one rule `catalog/overlays.ts` parses `atlas:overlays` ids with. */
+export const COV_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/** `cov=` value -> list (malformed ids dropped, duplicates once); `null` (key absent) -> `undefined`. */
+export function parseCov(v: string | null): string[] | undefined {
+  if (v === null) return undefined;
+  const seen = new Set<string>();
+  for (const part of v.split(",")) {
+    const id = part.trim();
+    if (COV_ID_RE.test(id)) seen.add(id);
+    if (seen.size >= MAX_OVERLAYS) break;
+  }
+  return [...seen];
+}
+
+/** the value to write, or `null` for "write nothing" (`undefined`: the collection's defaults). */
+export function formatCov(cov: readonly string[] | undefined): string | null {
+  return cov === undefined ? null : cov.filter((id) => COV_ID_RE.test(id)).join(",");
+}
+
+// `?cff=` -- a collection's overlay feature filters (`atlas:overlay_filters`, lib/catalog/featureFilters.ts): one
+// key, `;`-separated `<filter id>:<value>` pairs (`cff=species:1576133;month:7;year:2017-2018`, `month:all`). An
+// absent pair is that filter's default (follow the map / all / the whole range); a malformed pair is dropped here,
+// an unknown id or a value no option has is the lens' to ignore. Written sorted by id, so a link is stable.
+
+/** a filter value a URL carries: an option's value, `all`, or a range `<from>-<to>` (never `;` or `:`). */
+export const FILTER_VALUE_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+/** `cff=` value -> {id: value}; `null` (absent), empty or nothing valid -> `undefined`. */
+export function parseCff(v: string | null): Record<string, string> | undefined {
+  if (v === null) return undefined;
+  const out: Record<string, string> = {};
+  for (const pair of v.split(";")) {
+    const i = pair.indexOf(":");
+    if (i <= 0) continue;
+    const id = pair.slice(0, i).trim();
+    const value = pair.slice(i + 1).trim();
+    if (COV_ID_RE.test(id) && FILTER_VALUE_RE.test(value) && !Object.hasOwn(out, id))
+      out[id] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** the value to write, or `null` for none (every filter at its default). */
+export function formatCff(cff: Readonly<Record<string, string>> | undefined): string | null {
+  if (!cff) return null;
+  const pairs = Object.entries(cff)
+    .filter(([id, value]) => COV_ID_RE.test(id) && FILTER_VALUE_RE.test(value))
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+  return pairs.length > 0 ? pairs.map(([id, value]) => `${id}:${value}`).join(";") : null;
+}
+
 // `?filter=places` -- dim the hex cells outside the selected places. `?filter=coll:<slug>` (an h3 layer only) keeps
 // the hexagons of a whole gazetteer polygon collection, by the collection's H3 membership (obis-hex `f=<coll>`).
 export type PlaceFilter = "places" | `coll:${string}`;

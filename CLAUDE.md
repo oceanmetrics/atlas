@@ -95,6 +95,35 @@ uv run pipeline/build.py build --collection catalog; pipeline/publish.sh --only 
   "Back to ..." button (`goBack`), and the camera follows the global auto-zoom preference (the panel's checkbox and the
   Layers panel's "Auto-zoom to layer" are the same `lens.autoZoom`). Rules: `src/lens/collection/returnTo.ts`. Tiles are Parquet sorted by key with small row groups (hyparquet prunes by
   statistics); a missing tile is an empty cell. Hex collections keep the single `cell_species` table of `species.ts`.
+- `atlas:overlays` on a Collection (`src/lib/catalog/overlays.ts`) is the collection-overlays hook, a list of
+  overlays: `id`, `title`, `asset`, `source_layer`, `geometry` (`point|line|polygon`), `color`, `default`,
+  `label_field`, `fields`, `field_labels`, `filter_field`; `asset` a key of `collection.assets` (a PMTiles, href
+  relative to the collection.json). Array order
+  is the panel order and the draw order, the FIRST entry on top; all draw in one role, `collection-overlay`, at the
+  top of `data-raster` (over the Item, under the place layers and the selection). `cov=a,b` says which are on
+  (absent = the `default: true` ones, `cov=` = none, unknown ids ignored); a click lists every feature of every
+  visible overlay under it, top first, all properties (`fields` first, a listed one the tile lacks as "—"), at most 25,
+  with the Item's value line, in ONE card (`lib/map/clickInfo.ts`: a LENS probe; the place layers yield to it).
+  `atlas:overlay_filter {field, token}` on an Item: with `covf=1`, an overlay whose `filter_field` is `field` keeps
+  the features whose `|`-delimited property holds `|token|` (`layers/collectionOverlays.ts#overlayTokenFilter`).
+  The rules, the style parts and the card are the lazy `lens/collection/overlayRuntime.ts`. A point query passes an
+  ARRAY: MapLibre reads a plain `{x, y}` as the whole viewport.
+- `atlas:overlay_filters` on a Collection (`src/lib/catalog/featureFilters.ts`, `atlas:overlays`' companion): filters
+  of the overlays' features, each `{id, title, type, field, overlays}` plus, for `type: "select"`, `options`
+  (`value`, `label`, `count?`, `layers?` = taxon-dimension values for "Show model", `dim_value?`) and `follow_dim?`
+  (the default follows the Item's `atlas:dims[follow_dim]` to the option with that `dim_value`; none matches = no
+  filter), for `type: "range"`, `min`/`max` (inclusive `from`-`to`, default the whole span). A filter applies only to
+  the overlays it lists; an overlay's filters (every active one, and the `covf` token) are ANDed
+  (`featureFilterState.ts`, `layers/collectionOverlays.ts#composedFilter`). URL: `cff=<id>:<value>;...` (an option's
+  value, `all`, or `<from>-<to>`), absent pair = default, reset with `cov`/`covf` on a collection switch.
+- The STAC version extension on a Collection: `version`, `deprecated`, and links `predecessor-version` /
+  `successor-version` / `latest-version` (`href`, `title`) are the credits strip's "Version" row
+  (`src/lib/catalog/versionLinks.ts`); a link to this app (`og.siteUrl` or the page itself) opens in the same tab.
+- `rel: "items"` on a Collection links its one-file item index: a GeoJSON FeatureCollection of exactly its Item
+  JSONs (the item files' own objects, relative hrefs unchanged). `loadItems` fetches it once and gives each `item`
+  link the feature with its id (the link's `id`, else the file's basename) with `atlas:url` = THAT LINK'S URL, so
+  `../values.parquet` resolves as from the item file; an item it lacks, or an unreadable index, is fetched on its
+  own, with a warning in `failed`.
 - Restricted collections live under an unlisted prefix and are not linked from `catalog.json`.
 
 ## Profiles (checked at build time)

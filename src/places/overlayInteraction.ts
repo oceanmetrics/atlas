@@ -6,7 +6,12 @@
 // on the MAP (not per layer) and asks `queryRenderedFeatures` for whichever overlay layers exist at
 // that moment. The pure rules (what a feature says, which layers to ask, the button label) are
 // exported and unit-tested; the MapLibre popup is the only thing that is not.
-import { cellLineAt, registerCardLineSink, registerOverlayProbe } from "../lib/map/clickInfo";
+import {
+  cellLineAt,
+  lensOverlayAt,
+  registerCardLineSink,
+  registerOverlayProbe,
+} from "../lib/map/clickInfo";
 import { createPopup } from "../lib/map/popup";
 
 /** what one tile feature of an overlay tells us. */
@@ -84,7 +89,7 @@ export function overlayCardLines(
 export interface OverlayMapLike {
   getLayer(id: string): unknown;
   queryRenderedFeatures(
-    geometry: [[number, number], [number, number]] | { x: number; y: number },
+    geometry: [[number, number], [number, number]] | [number, number],
     options: { layers: string[] },
   ): readonly {
     properties?: Record<string, unknown> | null;
@@ -108,10 +113,11 @@ export function overlayFeatureAt(
   let features: ReturnType<OverlayMapLike["queryRenderedFeatures"]>;
   try {
     // the exact point first (a polygon fill is hit anywhere inside it; MapLibre's box query can miss a
-    // polygon that contains the whole box), then a small box for a 1-px line or a point marker. A
-    // plain `{x, y}`: measured on MapLibre 6.10, an event's own `Point` instance answers 0 where the
-    // same coordinates as a plain object answer the feature.
-    features = map.queryRenderedFeatures({ x: point.x, y: point.y }, { layers });
+    // polygon that contains the whole box), then a small box for a 1-px line or a point marker. The point
+    // as an ARRAY: MapLibre takes only a `Point` instance or an array as a query geometry, and reads a
+    // plain `{x, y}` as no geometry at all, i.e. the WHOLE viewport (regression 0.7.0: any overlay
+    // feature in view answered every hover and click, so a hover over empty sea named a far-away place).
+    features = map.queryRenderedFeatures([point.x, point.y], { layers });
     if (!features.length && slack > 0) {
       features = map.queryRenderedFeatures(
         [
@@ -163,7 +169,8 @@ export function installOverlayInteraction(
   };
 
   const onMove = (e: { point: { x: number; y: number }; lngLat: { lng: number; lat: number } }) => {
-    if (opts.isOwned?.()) return hideHover();
+    // a collection's own overlay feature (a sighting) under the pointer: its tooltip, not this one
+    if (opts.isOwned?.() || lensOverlayAt(e.point)) return hideHover();
     const info = overlayFeatureAt(map, e.point, opts.hitLayerIds());
     if (!info) return hideHover();
     map.getCanvas().style.cursor = "pointer";
@@ -192,7 +199,8 @@ export function installOverlayInteraction(
     point: { x: number; y: number };
     lngLat: { lng: number; lat: number };
   }) => {
-    if (opts.isOwned?.()) return;
+    // a collection's own overlay feature under the click opens ITS card (one card per click)
+    if (opts.isOwned?.() || lensOverlayAt(e.point)) return;
     const info = overlayFeatureAt(map, e.point, opts.hitLayerIds());
     if (!info) return;
     hideHover();

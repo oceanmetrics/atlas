@@ -4,14 +4,18 @@
   // the methods README. Pure presentation of `lib/catalog/credits.ts#creditsOf`; a collection that
   // publishes none of it renders nothing. Never shows an e-mail address.
   import type { Credits } from "../../lib/catalog/credits";
+  import type { VersionInfo } from "../../lib/catalog/versionLinks";
   import DocModal from "../../lib/ui/DocModal.svelte";
   import LicenseModal from "../../lib/ui/LicenseModal.svelte";
   import NoteChip from "../../lib/ui/NoteChip.svelte";
 
   interface Props {
     credits: Credits;
+    /** the collection's version and its links to the versions before and after it (STAC version
+     * extension, `lib/catalog/versionLinks.ts`); `null`/absent for a collection that states none. */
+    version?: VersionInfo | null;
   }
-  let { credits }: Props = $props();
+  let { credits, version = null }: Props = $props();
 
   // "Methods" and "License" open as dialogs (the README rendered, the license explained), not as raw
   // files in a new tab; each dialog carries its own link to the raw file / the license text
@@ -27,7 +31,8 @@
       people.length > 0 ||
       credits.funders.length > 0 ||
       !!credits.acknowledgement ||
-      !!credits.methodsUrl,
+      !!credits.methodsUrl ||
+      !!version,
   );
 </script>
 
@@ -87,6 +92,30 @@
       <div class="row">
         <dt>Data</dt>
         <dd data-testid="credits-acknowledgement">{credits.acknowledgement}</dd>
+      </div>
+    {/if}
+    {#if version}
+      <div class="row" data-testid="credits-version">
+        <dt>Version</dt>
+        <dd>
+          {#if version.version}<span data-testid="credits-version-number">{version.version}</span
+            >{/if}
+          {#if version.deprecated}<span class="superseded" data-testid="credits-superseded"
+              >superseded</span
+            >{/if}
+          {#each version.links as link (link.rel)}
+            <span class="version-link"
+              >{link.label}:
+              {#if link.sameApp}
+                <a href={link.href} data-rel={link.rel}>{link.title}</a>
+              {:else}
+                <a href={link.href} target="_blank" rel="noopener" data-rel={link.rel}
+                  >{link.title}</a
+                >
+              {/if}
+            </span>
+          {/each}
+        </dd>
       </div>
     {/if}
     {#if credits.methodsUrl}
@@ -160,6 +189,16 @@
   .linkish:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+  .version-link {
+    display: block;
+  }
+  .superseded {
+    margin-left: var(--space-1);
+    padding: 0 var(--space-1);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-pill);
+    color: var(--text-secondary);
   }
   dt {
     flex: none;

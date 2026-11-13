@@ -206,6 +206,10 @@
      * credits). A snippet, so this lib component never imports `src/places/`; omitted = the row is
      * just its visible/opacity/reorder controls. */
     placeLayers?: Snippet;
+    /** a collection's own vector overlays (`atlas:overlays`: sightings, tracklines), listed under the "Data"
+     * row whether or not it is expanded (they draw as part of the lens's data). A snippet, so this lib
+     * component never imports the lens; omitted = no list. */
+    collectionLayers?: Snippet;
     /** WP14: "Zoom to layer" and "Auto-zoom to layer" for the Data row (the lens owns the camera and the
      * saved choice). Omitted = the row has neither. */
     zoom?: ZoomToLayerControl;
@@ -226,6 +230,7 @@
     expandedRow,
     onExpandedRowChange,
     placeLayers,
+    collectionLayers,
     zoom,
   }: Props = $props();
 
@@ -576,6 +581,12 @@
                 </span>
               </label>
             </div>
+          </div>
+        {/if}
+
+        {#if entry.id === DATA_ROW_ID && collectionLayers}
+          <div class="row-body" data-testid="collection-layers-body">
+            {@render collectionLayers()}
           </div>
         {/if}
       </li>

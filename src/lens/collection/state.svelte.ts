@@ -20,6 +20,11 @@ import { creditsOf, type Credits } from "../../lib/catalog/credits";
 import { resolveCatalogBase } from "../../lib/catalog/base";
 import { bandValueOf, flowerPetalsFor, type FlowerView } from "../../lib/catalog/flower";
 import { hookSpec, hooksOf } from "../../lib/catalog/hooks";
+import type { CollectionOverlaySpec } from "../../lib/catalog/overlays";
+import type { OverlayFilterState } from "../../lib/catalog/overlayState";
+import type { FilterValue } from "../../lib/catalog/featureFilters";
+import type { FeatureFilterView } from "../../lib/catalog/featureFilterState";
+import type { OverlayRuntime } from "./overlayRuntime";
 import {
   itemDims,
   itemTitleOf,
@@ -85,6 +90,7 @@ import {
   type RasterInteractionMap,
 } from "../../lib/map/layers/rasterValue";
 import { announce } from "../../lib/ui/announcer";
+import { lensOverlayAt } from "../../lib/map/clickInfo";
 import {
   createCogExtentCache,
   itemSourceBounds,
@@ -129,6 +135,14 @@ import {
 } from "./mapInputs";
 
 export type Phase = "loading" | "ready" | "error";
+
+/** the overlay filter state before the overlays' chunk has loaded (or for a collection without overlays). */
+const NO_OVERLAY_FILTER: OverlayFilterState = {
+  offered: false,
+  enabled: false,
+  reason: null,
+  active: null,
+};
 
 export interface CollectionLensDeps {
   selStore: SelStore;
@@ -200,6 +214,13 @@ export interface RasterPoint {
   flower: FlowerView | null;
 }
 
+/** one of the collection's own overlays (`atlas:overlays`), as the Layers panel lists it. */
+export interface CollectionOverlayView {
+  spec: CollectionOverlaySpec;
+  /** drawn right now (`cov=`, else the overlay's `default`). */
+  on: boolean;
+}
+
 /** one value of the item's `metric` dimension at the clicked cell (richness / uncertainty ...). */
 export interface SiblingValue {
   /** the metric's label ("Richness"). */
@@ -260,6 +281,25 @@ export interface CollectionLens {
   /** the credit line the map attribution adds while this lens draws a layer that needs one
    * (AquaMaps' CC BY-NC); `null` otherwise. */
   readonly attribution: string | null;
+  /** the collection's own vector overlays (`atlas:overlays`), in its order (the draw order, top first);
+   * empty when it declares none. */
+  readonly overlays: readonly CollectionOverlayView[];
+  /** "Only features matching the selected layer" (`covf=1`): offered, enabled, why not, and on. */
+  readonly overlayFilter: OverlayFilterState & { on: boolean };
+  /** switch one overlay on or off (`cov=`; back to absent when the result is the collection's defaults). */
+  toggleOverlay(id: string, on: boolean): void;
+  setOverlayFilter(on: boolean): void;
+  /** the overlay feature filters (`atlas:overlay_filters`), each with its current choice (`cff=`). */
+  readonly featureFilters: readonly FeatureFilterView[];
+  /** a select: "follow" (its default with `follow_dim`), "all", or an option's value; a range: `{from, to}`. */
+  chooseFeatureFilter(
+    id: string,
+    choice: "follow" | "all" | FilterValue | { from: number; to: number },
+  ): void;
+  /** the collection's taxon dimension (`atlas:taxon_dim`), whose values a species option's `layers` name. */
+  readonly taxonDimension: DimSpec | null;
+  /** "Show model": switch the taxon dimension to `layer` (never done by choosing a species). */
+  showModel(layer: string): void;
   /** the active item's taxon identifiers (WoRMS / BOTW / GBIF ids, Red List, ESA), as rows. */
   readonly taxonFacts: TaxonFact[];
   /** a sentence to show instead of the layer (an MST taxon with no model here, a failed lookup). */
@@ -1018,6 +1058,66 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     });
   });
 
+  // --- a collection's own vector overlays (`atlas:overlays`): sightings over tracklines over hexagons ---------
+  // which are on is the URL (`cov=`, else each overlay's `default`); "Only features matching the selected
+  // layer" (`covf=1`) filters the ones whose `filter_field` is the Item's `atlas:overlay_filter.field`. Every
+  // rule, the style parts and the hover/click card are a lazy chunk (`./overlayRuntime.ts`), loaded once a
+  // collection that declares overlays opens: until it arrives the collection simply shows none.
+  const overlaySpecs = $derived(hookSpec(entry?.collection, "atlas:overlays") ?? []);
+  let overlayRt = $state.raw<OverlayRuntime | null>(null);
+  let overlayRtLoading = false;
+  $effect(() => {
+    if (overlaySpecs.length === 0 || overlayRt || overlayRtLoading) return;
+    overlayRtLoading = true;
+    void import("./overlayRuntime").then(
+      (m) => (overlayRt = m.runtime),
+      () => (overlayRtLoading = false),
+    );
+  });
+  const overlayOn = $derived(
+    overlayRt ? overlayRt.visibleOverlayIds(overlaySpecs, selStore.sel.cov) : [],
+  );
+  const overlayFilter = $derived(
+    overlayRt
+      ? overlayRt.overlayFilterState(overlaySpecs, item, selStore.sel.covf === true)
+      : NO_OVERLAY_FILTER,
+  );
+  // the feature filters (`atlas:overlay_filters`: species, month, year): `cff=`, a month that follows the Item
+  const filterSpecs = $derived(hookSpec(entry?.collection, "atlas:overlay_filters") ?? []);
+  const filterViews = $derived(
+    overlayRt && filterSpecs.length > 0
+      ? overlayRt.resolveFeatureFilters(filterSpecs, selStore.sel.cff, item ? itemDims(item) : null)
+      : [],
+  );
+  const overlayStyle = $derived(
+    overlayRt
+      ? overlayRt.collectionOverlayStyle(
+          overlaySpecs,
+          overlayOn,
+          overlayFilter.active,
+          overlayRt.filtersByOverlay(filterViews),
+        )
+      : null,
+  );
+  const anyOverlayOn = $derived(
+    selStore.sel.lens === "collection" && overlayStyle !== null && !h3Spec,
+  );
+  $effect(() => {
+    const handle = deps.mapHandle();
+    const rt = overlayRt;
+    if (!handle || !rt || !anyOverlayOn) return;
+    const interaction = rt.install(
+      handle.map as unknown as import("./overlayInteraction").OverlayMapLike,
+      {
+        overlays: () => untrack(() => overlaySpecs.filter((sp) => overlayOn.includes(sp.id))),
+        isOwned: () =>
+          deps.isOwned?.() === true || untrack(() => selStore.sel.lens) !== "collection",
+        announce,
+      },
+    );
+    return () => interaction.destroy();
+  });
+
   // --- what the map draws ------------------------------------------------------------------------
   // the cell grid of the layer on screen: the collection's own (`atlas:cell_species.grid`) or, for the
   // AquaMaps registry, its surface (0.5 degree native, 0.05 degree downscaled); `null` = ring alone
@@ -1058,11 +1158,26 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       cogBounds: bboxBounds ?? (extent && extent.url === extentUrl ? extent.bounds : null),
       point,
     });
+    const overlays = overlayStyle;
     // an h3 collection is drawn by the H3 layer (its slot's source and fill, its legend from stats.parquet)
-    if (h3Spec) return { ...inputs, h3: h3Layer?.style ?? null, legend: h3Layer?.legend ?? null };
+    if (h3Spec)
+      return { ...inputs, h3: h3Layer?.style ?? null, legend: h3Layer?.legend ?? null, overlays };
     // a raster is held back until its footprint is known (the legend and the summaries stay)
-    return extentPending && inputs.raster ? { ...inputs, raster: null } : inputs;
+    return extentPending && inputs.raster
+      ? { ...inputs, raster: null, overlays }
+      : { ...inputs, overlays };
   });
+
+  // a click on one of the collection's own overlay features is answered by its card (`./overlayInteraction.ts`):
+  // the cell under it is still selected, but the panel stays where it is (a reviewer ticking layers and
+  // clicking sightings keeps the Layers list, and on a phone the sheet does not rise over the card)
+  function onOverlayFeature(lngLat: [number, number]): boolean {
+    if (!untrack(() => anyOverlayOn)) return false;
+    const map = deps.mapHandle()?.map as
+      { project?(ll: [number, number]): { x: number; y: number } } | undefined;
+    const p = map?.project?.(lngLat);
+    return !!p && lensOverlayAt(p);
+  }
 
   // --- the live map: painter + hover/click ---------------------------------------------------------
   const sourceLayer = $derived(mapInputs.hex?.sourceLayer ?? null);
@@ -1106,7 +1221,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
         const it = untrack(() => item);
         if (!e || !it) return;
         store.set({ collection: e.id, item: it.id, fid, value, lngLat });
-        deps.onCellClick?.();
+        if (!onOverlayFeature(lngLat)) deps.onCellClick?.();
       },
     });
     return () => interaction.destroy();
@@ -1155,7 +1270,7 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
           bands: null,
           bandsUrl: null,
         };
-        deps.onCellClick?.();
+        if (!onOverlayFeature(ll)) deps.onCellClick?.();
       },
       onClickValue: setPointValue,
       announce,
@@ -1184,7 +1299,12 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
       target: patch.c ?? e?.id ?? "",
     });
     carry = rasterPoint ? { fromKey: cogKey } : null;
-    selStore.set(patch);
+    // another collection opens on its own overlays' defaults
+    selStore.set(
+      patch.c !== undefined && patch.c !== e?.id
+        ? { cov: undefined, covf: undefined, cff: undefined, ...patch }
+        : patch,
+    );
   }
   function goBack(): void {
     const back = returnTo;
@@ -1214,15 +1334,18 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     // a registry collection keys its taxa by its own registry (an AquaMaps key, not a v7 merged key), so
     // the taxon neither travels into it nor out of it; `rep=005` belongs to it alone
     const rep = selStore.sel.rep === "005" ? { rep: "native" as const } : {};
+    // a collection's overlays are its own: the next one opens on its own defaults
+    const overlays = { cov: undefined, covf: undefined, cff: undefined };
     selStore.set(
       taxon
         ? {
             ...patch,
+            ...overlays,
             ...rep,
             c: e.id,
             sp: isRegistry ? mst.remembered : (selStore.sel.sp ?? mst.remembered),
           }
-        : { ...patch, ...rep, sp: undefined },
+        : { ...patch, ...overlays, ...rep, sp: undefined },
     );
   }
 
@@ -1343,6 +1466,54 @@ export function createCollectionLens(deps: CollectionLensDeps): CollectionLens {
     },
     get taxonFacts() {
       return isRegistry ? registryFacts(item) : taxonFacts(item);
+    },
+    get overlays() {
+      if (!overlayRt) return [];
+      return overlaySpecs.map((spec) => ({ spec, on: overlayOn.includes(spec.id) }));
+    },
+    get overlayFilter() {
+      return { ...overlayFilter, on: selStore.sel.covf === true };
+    },
+    toggleOverlay(id, on) {
+      if (!overlayRt) return;
+      selStore.set({ cov: overlayRt.toggledCov(overlaySpecs, selStore.sel.cov, id, on) });
+    },
+    setOverlayFilter(on) {
+      selStore.set({ covf: on ? true : undefined });
+    },
+    get featureFilters() {
+      return filterViews;
+    },
+    chooseFeatureFilter(id, choice) {
+      const rt = overlayRt;
+      const spec = filterSpecs.find((f) => f.id === id);
+      if (!rt || !spec) return;
+      let token: string | undefined;
+      if (spec.type === "range") {
+        if (typeof choice === "object" && choice !== null) {
+          const full =
+            Math.min(choice.from, choice.to) <= spec.min &&
+            Math.max(choice.from, choice.to) >= spec.max;
+          token = full
+            ? undefined
+            : rt.rangeToken(Math.min(choice.from, choice.to), Math.max(choice.from, choice.to));
+        }
+      } else if (choice === "follow") token = undefined;
+      else if (choice === "all") token = spec.followDim ? "all" : undefined;
+      else if (typeof choice !== "object") {
+        const option = spec.options.find((o) => String(o.value) === String(choice));
+        token = option ? rt.optionToken(option) : undefined;
+      }
+      selStore.set({ cff: rt.cffWith(selStore.sel.cff, id, token) });
+    },
+    get taxonDimension() {
+      return view.dims.find((d) => d.taxon) ?? null;
+    },
+    showModel(layer) {
+      // the taxon dimension to that layer, snapped to the nearest existing Item (the other dimensions kept where
+      // they exist: the current month; else the first such Item, in the collection's order)
+      const dim = view.dims.find((d) => d.taxon);
+      if (dim) selectDim(dim.key, layer);
     },
     get notice() {
       return isTaxon ? mst.notice : isRegistry ? registry.notice : switchNotice;

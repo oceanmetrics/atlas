@@ -1,0 +1,17 @@
+diff --git a/src/lib/catalog/load.ts b/src/lib/catalog/load.ts
+index 5449ae3..7b87140 100644
+--- a/src/lib/catalog/load.ts
++++ b/src/lib/catalog/load.ts
+@@ -491,8 +491,10 @@ export function loadItems(
+       }
+       if (byId) {
+         const key = itemKeys(link, url).find((k) => byId.has(k));
+-        // the index feature stands for the item FILE: it resolves against the item link's URL, never the index's
+-        if (key !== undefined) return asItem(byId.get(key), url);
++        // SEEDED FAULT (tests/faults/item-index-resolves-against-index-url.patch): the index feature is taken as a
++        // document AT THE INDEX's URL, so `../values.parquet` (written for `items/<id>.json`) resolves one level
++        // too high, outside the collection
++        if (key !== undefined) return asItem(byId.get(key), (index as { url: string }).url);
+         missing++;
+       }
+       const raw = await cached(cache, `item:${url}`, () => fetchJson(url, opts));

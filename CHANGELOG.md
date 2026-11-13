@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.7.0 (2026-11-13)
+
+- **A collection's own vector layers** (`atlas:overlays`, for vetting NOAA SEFSC's Gulf surveys with the
+  provider): a collection may list vector layers among its PMTiles assets (sightings, effort tracklines, the
+  model hexagons) that draw over its Item and under the place layers and the selection, the first entry on
+  top. The Layers panel lists them under the Data row ("Collection layers", one checkbox each with a swatch in
+  its colour and shape; several at once), the legend names the ones that are on, and `cov=` keeps them in the
+  link (absent = the collection's defaults, `cov=` = none; `replaceState`). A click lists EVERY feature under
+  it, top layer first, each with all its attributes (the overlay's field order and labels, missing as "—", ids
+  never rounded, values as text), at most 25, with the Item's hex or raster value under the list, in ONE
+  card (Escape closes it); a hover names the feature. "Only features matching the selected layer" (`covf=1`)
+  keeps the features whose `|`-delimited `filter_field` holds the Item's `atlas:overlay_filter` token, and is
+  disabled with its reason on an Item without one. A click on a feature still selects the hex cell or raster
+  point under it, but leaves the panel where it is (the Layers list stays; on a phone the sheet does not rise
+  over the card). The rules, the card and its hover are a lazy chunk loaded only for a collection with overlays.
+- **Filter a collection's overlay features** (`atlas:overlay_filters`, Ben: pick sightings by species, see that
+  species' model, by month and by year, from the one link): a "Filter features" block under the Collection
+  layers. A select ("All", or an option shown "label (count)") filters the overlays it lists by
+  `["==", ["get", field], value]`; one with `follow_dim` defaults to "Follow the map (July)", the option whose
+  `dim_value` is the selected Item's month (none for "annual"), and All or an option overrides it. A range ("from"
+  / "to", inclusive, swapped when reversed) defaults to the whole span. Every active filter that lists an overlay
+  is ANDed with the others and with the `covf=1` token filter. A species option with `layers` offers "Show model:"
+  links that switch the taxon dimension to that model (choosing a species never does). `cff=` keeps them in the
+  link (`cff=month:all;species:1576133;year:2017-2018`, sorted; an absent pair is the default); another
+  collection starts from its defaults.
+- **A collection's items from one file** (`rel: "items"`): a collection may link a GeoJSON FeatureCollection of
+  exactly its Item JSONs; the loader fetches it once and gives each `item` link the feature with its id (the
+  link's `id`, else its file's basename) as if fetched from that link's URL, so every relative href resolves as
+  before. An item the index lacks, or an index that cannot be read, falls back to the per-item fetch with a
+  warning in `failed`. The SEFSC review collection's 578 Items were 578 requests (~16 s before the first hex
+  drew).
+- **A collection's version** (STAC version extension): the credits say "Version 2", mark a deprecated one
+  "superseded", and link "Previous version" / "Newer version" / "Latest version"; a link to this app opens in
+  the same tab, in the deployment being viewed.
+- **Fixed: a place layer answered every hover and click once any of its features was in view**: the hit test
+  passed the point as a plain `{x, y}`, which MapLibre reads as no geometry (the whole viewport), so a hover
+  over empty sea named a far-away place, the hex hover stayed quiet, and a raster click opened a place card.
+  The point is an array now (place layers, collection overlays, the hex cell line); regression tests against a
+  fake that reads the argument as MapLibre does.
+- Gazetteer place layers leave a click on a collection's own feature to that feature's card (one card per
+  click); the overlay probes and late card lines of `lib/map/clickInfo.ts` are sets.
+- Tests: the hook, the specs and draw order, the filter evaluated with MapLibre's own expression engine
+  (`|rice|` never matches `|rices_whale|`), the `cov`/`covf` codec, the card (field order, labels, numbers,
+  escaping, the cap), version links, the lens through the runes project, and `e2e/collection.overlays.spec.ts`
+  on the new fixture (`tests/fixtures/overlays/`, tippecanoe PMTiles); seeded faults
+  `cov-filter-partial-token`, `cov-draw-order-unreversed`, `overlay-popup-unescaped`,
+  `overlay-point-query-plain-object`, `item-index-resolves-against-index-url`, `feature-filter-range-exclusive`. The e2e spec runs in CI with the
+  OBIS one (`pages.yml` e2e-obis).
+
 ## 0.6.2 (2026-11-12)
 
 - **marinesensitivity budget 472 -> 474 KB gzip**: 0.6.1's Flora / Productivity split sits on the first-paint

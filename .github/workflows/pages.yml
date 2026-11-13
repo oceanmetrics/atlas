@@ -150,7 +150,7 @@ jobs:
       - run: npm run duckdb:fetch-ext && npm run e2e:engine
 
   e2e-obis:
-    name: e2e (OBIS layer, hermetic over the fixture release)
+    name: e2e (OBIS layer and collection overlays, hermetic over fixtures)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -171,8 +171,9 @@ jobs:
 
       # e2e/obis.spec.ts: 12 tests over tests/fixtures/obis_h3/ (the storage host routed onto it); the config's
       # webServer builds and previews the app. The subtree test computes in DuckDB-WASM, whose parquet extension is
-      # the same-origin mirror (`duckdb:fetch-ext`, as the engine jobs).
-      - run: npm run duckdb:fetch-ext && npx playwright test --project=chromium e2e/obis.spec.ts
+      # the same-origin mirror (`duckdb:fetch-ext`, as the engine jobs). e2e/collection.overlays.spec.ts: a
+      # collection's own vector overlays over tests/fixtures/overlays/ (`?collection=` under a routed origin).
+      - run: npm run duckdb:fetch-ext && npx playwright test --project=chromium e2e/obis.spec.ts e2e/collection.overlays.spec.ts
 
   e2e-opfs:
     name: e2e (OPFS store tier, fallback matrix)

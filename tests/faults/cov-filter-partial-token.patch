@@ -1,0 +1,15 @@
+diff --git a/src/lib/map/layers/collectionOverlays.ts b/src/lib/map/layers/collectionOverlays.ts
+index 08bff85..3bd5e6a 100644
+--- a/src/lib/map/layers/collectionOverlays.ts
++++ b/src/lib/map/layers/collectionOverlays.ts
+@@ -56,7 +56,9 @@ export function covHitLayerId(spec: Pick<CollectionOverlaySpec, "id" | "geometry
+ export function overlayTokenFilter(field: string, token: string): FilterSpecification {
+   return [
+     ">=",
+-    ["index-of", `|${token}|`, ["to-string", ["coalesce", ["get", field], ""]]],
++    // SEEDED FAULT (tests/faults/cov-filter-partial-token.patch): the needle loses its `|` delimiters, so
++    // the token `rice` keeps every `|rices_whale|` feature (a partial-token false positive)
++    ["index-of", token, ["to-string", ["coalesce", ["get", field], ""]]],
+     0,
+   ] as unknown as FilterSpecification;
+ }

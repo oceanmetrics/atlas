@@ -8,7 +8,15 @@
 // (`../map/layerStack.ts`), not duplicated here — this module just calls them, exactly like every
 // other field's parser.
 import { validateCatalogBase, validateCollectionUrl } from "../catalog/base";
-import { formatOv, parseFilter, parseOv } from "../gazetteer/overlayUrl";
+import {
+  formatCff,
+  formatCov,
+  formatOv,
+  parseCff,
+  parseCov,
+  parseFilter,
+  parseOv,
+} from "../gazetteer/overlayUrl";
 import { formatLayerStack, parseLayerStack } from "../map/layerStack";
 import { isVersionLabel } from "../release/version";
 import {
@@ -18,6 +26,7 @@ import {
   type AliasLookup,
 } from "./legacy";
 import {
+  COLLECTION_KEYS,
   COMPARES,
   DEFAULT_SEL,
   LENSES,
@@ -42,14 +51,19 @@ export interface UrlLike {
 
 // --- shared write-side helper: readable, paste-able values (§4) --------------------------------
 
-/** un-escape `%2C` -> `,`, `%3A` -> `:` and `%2F` -> `/` AFTER `URLSearchParams` serializes — all
- * three are legal, unreserved-enough in a query/fragment that no server or parser needs them escaped
- * (`/` appears in the `catalog=` URL), and a
+/** un-escape `%2C` -> `,`, `%3A` -> `:`, `%2F` -> `/` and `%3B` -> `;` AFTER `URLSearchParams` serializes —
+ * all four are legal, unreserved-enough in a query/fragment that no server or parser needs them escaped
+ * (`/` appears in the `catalog=` URL, `;` separates the `cff=` pairs), and a
  * link a person reads and pastes keeps them raw (same call CalCOFI Explorer made, §4). Parsing needs
  * no matching "re-escape" step: `URLSearchParams` reads a literal `,`/`:` in a value identically to
  * its percent-encoded form, since neither is a `&`/`=` delimiter. */
 export function prettyEncode(params: URLSearchParams): string {
-  return params.toString().replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%2F/g, "/");
+  return params
+    .toString()
+    .replace(/%2C/g, ",")
+    .replace(/%3A/g, ":")
+    .replace(/%2F/g, "/")
+    .replace(/%3B/g, ";");
 }
 
 // --- per-field parsers: each returns a clamped value, never throws -----------------------------
@@ -194,6 +208,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
   // (`SCORES_KEYS`, `RELEASE_KEYS`); elsewhere they stay at their defaults and are never written
   const scores = (k: string) => (SCORES_KEYS ? params.get(k) : null);
   const release = (k: string) => (RELEASE_KEYS ? params.get(k) : null);
+  const coll = (k: string) => (COLLECTION_KEYS ? params.get(k) : null);
   const out = parseEnum(scores("out"), OUTLINES, defaultOut(lens));
 
   return {
@@ -229,6 +244,9 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     collection: validateCollectionUrl(params.get("collection")) ?? undefined,
     ov: parseOv(params.get("ov")),
+    cov: parseCov(coll("cov")),
+    covf: coll("covf") === "1" ? true : undefined,
+    cff: parseCff(coll("cff")),
     filter: parseFilter(params.get("filter")),
     pl: cleanString(hashParams.get("pl")),
     t: cleanString(hashParams.get("t")),
@@ -313,6 +331,11 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.collection) params.set("collection", sel.collection);
   const ovToken = formatOv(sel.ov);
   if (ovToken !== null) params.set("ov", ovToken);
+  const covToken = COLLECTION_KEYS ? formatCov(sel.cov) : null;
+  if (covToken !== null) params.set("cov", covToken);
+  if (COLLECTION_KEYS && sel.covf === true) params.set("covf", "1");
+  const cffToken = COLLECTION_KEYS ? formatCff(sel.cff) : null;
+  if (cffToken !== null) params.set("cff", cffToken);
   if (sel.filter !== undefined && parseFilter(sel.filter) === sel.filter)
     params.set("filter", sel.filter);
 

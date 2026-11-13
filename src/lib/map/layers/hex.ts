@@ -291,7 +291,7 @@ export interface HexInteractionMap {
   getCanvas(): { style: { cursor: string } };
   /** lets the cell's data line be offered to an overlay popup that sits over the same point. */
   queryRenderedFeatures?(
-    geometry: { x: number; y: number },
+    geometry: [number, number],
     options: { layers: string[] },
   ): readonly { id?: string | number | null }[];
 }
@@ -365,7 +365,10 @@ export function installHexInteraction(
   // the cell's data line, for an overlay popup over the same point (the hover text, so the two agree)
   const unregister = registerCellLine((point) => {
     if (opts.isOwned?.() || !map.queryRenderedFeatures) return null;
-    const fid = fidOfFeatures(map.queryRenderedFeatures(point, { layers: [HEX_FILL_ID] }));
+    // an array, never the caller's object: MapLibre reads a plain `{x, y}` as the whole viewport
+    const fid = fidOfFeatures(
+      map.queryRenderedFeatures([point.x, point.y], { layers: [HEX_FILL_ID] }),
+    );
     return fid === null
       ? null
       : hexHoverText(fid, opts.valueOf(fid), opts.format, opts.extra?.(fid));

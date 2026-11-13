@@ -51,6 +51,7 @@ import {
 } from "./layerStack";
 import type {
   BasemapSpec,
+  CollectionOverlayParts,
   GazetteerLayerSpec,
   H3LayerSpec,
   HighlightSpec,
@@ -179,6 +180,10 @@ export const LAYER_ORDER = [
   // CHOROPLETH fill (real computed values) is "the lens's data" (`data-raster`); the invisible query
   // fill every unit carries (pick-mode's hit-test), the outline and the labels are `data-zones`
   "choropleth",
+  // a collection's own vector overlays (`atlas:overlays`: sightings over tracklines over hexagons), at the
+  // top of the lens's data: over the Item, under the place layers and the selection highlight. One role;
+  // `layers/collectionOverlays.ts` emits them in draw order (the collection's first entry on top).
+  "collection-overlay",
   "zone-fill",
   "zone-line",
   "zone-label",
@@ -223,6 +228,7 @@ const ROLE_GROUP: Partial<Record<LayerRole, LayerGroupId>> = {
   h3: "data-raster",
   "h3-selected": "data-raster",
   choropleth: "data-raster",
+  "collection-overlay": "data-raster",
   "zone-fill": "data-zones",
   "zone-line": "data-zones",
   "zone-label": "data-zones",
@@ -255,6 +261,7 @@ const GROUP_ROLES: Record<LayerGroupId, readonly LayerRole[]> = {
     "range",
     "overlay",
     "choropleth",
+    "collection-overlay",
   ],
   "data-zones": ["zone-fill", "zone-line", "zone-label"],
   "data-overlays": ["place-overlay-fill", "place-overlay-line", "place-overlay-circle"],
@@ -344,6 +351,9 @@ export interface ComposeStyleInput {
   highlight?: HighlightSpec | null;
   /** the gazetteer collections toggled on in the "Place layers" group (WP4) -- absent for none. */
   placeOverlays?: readonly PlaceOverlaySpec[];
+  /** a collection's own overlays that are on (`atlas:overlays`), already built by
+   * `layers/collectionOverlays.ts#collectionOverlayStyle`; absent/`null` for none. */
+  collectionOverlays?: CollectionOverlayParts | null;
   /** the gazetteer collection shown for "Pick from gazetteer" -- `null`/absent for none. */
   gazetteer?: GazetteerLayerSpec | null;
   /** override only in a test: the glyph endpoint used when a label layer exists. */
@@ -526,6 +536,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   if (input.zoneStyle) {
     Object.assign(sources, input.zoneStyle.sources);
     roled.push(...input.zoneStyle.layers);
+  }
+
+  if (input.collectionOverlays) {
+    Object.assign(sources, input.collectionOverlays.sources);
+    roled.push(...input.collectionOverlays.layers);
   }
 
   for (const spec of input.placeOverlays ?? []) {

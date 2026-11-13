@@ -1,0 +1,25 @@
+{
+  "type": "Catalog",
+  "stac_version": "1.1.0",
+  "id": "overlays-fixture",
+  "title": "Collection overlays (fixture)",
+  "description": "local development catalog for the collection-overlays fixture (VITE_CATALOG_BASE)",
+  "links": [
+    {
+      "rel": "root",
+      "href": "./catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "self",
+      "href": "./catalog.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "child",
+      "href": "./sefsc_fixture/collection.json",
+      "type": "application/json",
+      "title": "SEFSC Gulf of America marine mammals (fixture)"
+    }
+  ]
+}

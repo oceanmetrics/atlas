@@ -107,6 +107,28 @@ function randomSel(rng: Rng): Sel {
     theme: rng.pick(THEMES),
     tour: rng.pick(["on", "off"] as const),
     zl: rng.bool(0.8), // skew toward the default (true), same as `us` above
+    // a collection's own overlays: absent (its defaults), none (`cov=`) or a list of ids
+    cov: rng.maybe(
+      // ids are URL tokens (`[A-Za-z0-9][A-Za-z0-9_.-]*`), unique within the list
+      () => Array.from({ length: rng.int(0, 3) }, (_, i) => `ov${rng.int(0, 999)}.v-${i}`),
+      0.4,
+    ),
+    covf: rng.maybe(() => true as const, 0.3),
+    // the overlay feature filters: id -> an option value, `all`, or a range
+    cff: rng.maybe(
+      () =>
+        Object.fromEntries(
+          Array.from({ length: rng.int(1, 3) }, (_, i) => [
+            `f${i}`,
+            rng.pick([
+              "all",
+              String(rng.int(1, 12)),
+              `${rng.int(2003, 2010)}-${rng.int(2011, 2024)}`,
+            ]),
+          ]),
+        ),
+      0.3,
+    ),
     pl: rng.maybe(() => `g1.${rng.token(1, 6)}.${rng.token(4, 40)}`, 0.4),
     t: rng.maybe(() => rng.token(3, 30), 0.3),
   };

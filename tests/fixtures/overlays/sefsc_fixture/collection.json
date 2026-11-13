@@ -1,0 +1,298 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": ["https://stac-extensions.github.io/version/v1.2.0/schema.json"],
+  "id": "sefsc_fixture",
+  "title": "SEFSC Gulf of America marine mammals (fixture)",
+  "description": "A tiny synthetic stand-in for an unlisted, versioned hex-valued density collection with its own vector overlays (atlas:overlays): vessel sightings over vessel effort over the model hexagons.",
+  "version": "2",
+  "license": "CC-BY-4.0",
+  "sci:citation": "Garrison, L.P. et al. (fixture). Synthetic citation.",
+  "contacts": [
+    {
+      "name": "Pat Provider",
+      "organization": "NOAA SEFSC (fixture)",
+      "roles": ["principal investigator"]
+    }
+  ],
+  "providers": [
+    {
+      "name": "NOAA SEFSC (fixture)",
+      "roles": ["producer"]
+    },
+    {
+      "name": "OceanMetrics",
+      "roles": ["processor", "host"],
+      "url": "https://oceanmetrics.io"
+    }
+  ],
+  "sdm:response_type": "abundance",
+  "sdm:value_unit": "unitless",
+  "extent": {
+    "spatial": {
+      "bbox": [[-90.2, 27.0, -88.9, 28.0]]
+    },
+    "temporal": {
+      "interval": [["2003-01-01T00:00:00Z", "2024-12-31T00:00:00Z"]]
+    }
+  },
+  "cube:dimensions": {
+    "species": {
+      "type": "other",
+      "title": "Species",
+      "values": ["rices_whale", "bottlenose_dolphin", "sperm_whale"],
+      "atlas:labels": {
+        "rices_whale": "Rice's whale",
+        "bottlenose_dolphin": "Common bottlenose dolphin",
+        "sperm_whale": "Sperm whale"
+      },
+      "atlas:taxon_dim": true
+    }
+  },
+  "atlas:overlays": [
+    {
+      "id": "sightings_vessel",
+      "title": "Vessel sightings, 2003–2024",
+      "asset": "sightings_vessel",
+      "source_layer": "sightings_vessel",
+      "geometry": "point",
+      "color": "#c51b7d",
+      "default": true,
+      "label_field": "vernacularName",
+      "fields": [
+        "sightid",
+        "date",
+        "survey",
+        "vernacularName",
+        "scientificName",
+        "group.size",
+        "beaufort",
+        "lat",
+        "lon",
+        "models",
+        "comments"
+      ],
+      "field_labels": {
+        "group.size": "Group size",
+        "vernacularName": "Common name",
+        "scientificName": "Scientific name"
+      },
+      "filter_field": "models"
+    },
+    {
+      "id": "effort_vessel",
+      "title": "Vessel effort, 2003–2024",
+      "asset": "effort_vessel",
+      "source_layer": "effort_vessel",
+      "geometry": "line",
+      "color": "#2c7fb8",
+      "default": true,
+      "label_field": "platform",
+      "fields": ["segid", "survey", "date", "effort_km", "beaufort", "platform"],
+      "field_labels": {
+        "effort_km": "Effort (km)"
+      }
+    },
+    {
+      "id": "hexagons",
+      "title": "Model hexagons (40 km²)",
+      "asset": "hexagons",
+      "source_layer": "hexagons",
+      "geometry": "polygon",
+      "color": "#636363",
+      "default": false,
+      "label_field": "hex_id",
+      "filter_field": "models"
+    }
+  ],
+  "assets": {
+    "hex": {
+      "href": "./hex.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "pmtiles:layers": ["hex"],
+      "atlas:id_field": "FID"
+    },
+    "values": {
+      "href": "./values.parquet",
+      "type": "application/vnd.apache.parquet",
+      "roles": ["data"],
+      "atlas:key_column": "FID"
+    },
+    "sightings_vessel": {
+      "href": "./overlays/sightings_vessel.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "title": "Vessel sightings",
+      "pmtiles:layers": ["sightings_vessel"]
+    },
+    "effort_vessel": {
+      "href": "./overlays/effort_vessel.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "title": "Vessel effort",
+      "pmtiles:layers": ["effort_vessel"]
+    },
+    "hexagons": {
+      "href": "./overlays/hexagons.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "roles": ["data"],
+      "title": "Model hexagons",
+      "pmtiles:layers": ["hexagons"]
+    }
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "./collection.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "items",
+      "href": "./items.json",
+      "type": "application/geo+json",
+      "title": "Every item of the collection, in one file"
+    },
+    {
+      "rel": "item",
+      "href": "./items/rices_whale.json",
+      "type": "application/geo+json",
+      "title": "Rice's whale"
+    },
+    {
+      "rel": "item",
+      "href": "./items/bottlenose_dolphin.json",
+      "type": "application/geo+json",
+      "title": "Common bottlenose dolphin"
+    },
+    {
+      "rel": "item",
+      "href": "./items/sperm_whale.json",
+      "type": "application/geo+json",
+      "title": "Sperm whale"
+    },
+    {
+      "rel": "predecessor-version",
+      "href": "https://oceanmetrics.io/atlas/?c=msens-v8-gm",
+      "type": "text/html",
+      "title": "MarineSensitivity v8: NOAA SEFSC density (v1)"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ],
+  "atlas:overlay_filters": [
+    {
+      "id": "species",
+      "title": "Species (sightings)",
+      "type": "select",
+      "field": "aphia_id",
+      "overlays": ["sightings_vessel"],
+      "options": [
+        {
+          "value": 1576133,
+          "label": "Rice's whale (Balaenoptera ricei)",
+          "count": 1,
+          "layers": ["rices_whale"]
+        },
+        {
+          "value": 137111,
+          "label": "Common bottlenose dolphin (Tursiops truncatus)",
+          "count": 1,
+          "layers": ["bottlenose_dolphin"]
+        },
+        {
+          "value": 137110,
+          "label": "Pantropical spotted dolphin (Stenella attenuata)",
+          "count": 1
+        },
+        {
+          "value": 137119,
+          "label": "Sperm whale (Physeter macrocephalus)",
+          "count": 1,
+          "layers": ["sperm_whale"]
+        }
+      ]
+    },
+    {
+      "id": "month",
+      "title": "Month",
+      "type": "select",
+      "field": "month",
+      "overlays": ["sightings_vessel", "effort_vessel"],
+      "options": [
+        {
+          "value": 1,
+          "label": "January",
+          "dim_value": "01"
+        },
+        {
+          "value": 2,
+          "label": "February",
+          "dim_value": "02"
+        },
+        {
+          "value": 3,
+          "label": "March",
+          "dim_value": "03"
+        },
+        {
+          "value": 4,
+          "label": "April",
+          "dim_value": "04"
+        },
+        {
+          "value": 5,
+          "label": "May",
+          "dim_value": "05"
+        },
+        {
+          "value": 6,
+          "label": "June",
+          "dim_value": "06"
+        },
+        {
+          "value": 7,
+          "label": "July",
+          "dim_value": "07"
+        },
+        {
+          "value": 8,
+          "label": "August",
+          "dim_value": "08"
+        },
+        {
+          "value": 9,
+          "label": "September",
+          "dim_value": "09"
+        },
+        {
+          "value": 10,
+          "label": "October",
+          "dim_value": "10"
+        },
+        {
+          "value": 11,
+          "label": "November",
+          "dim_value": "11"
+        },
+        {
+          "value": 12,
+          "label": "December",
+          "dim_value": "12"
+        }
+      ],
+      "follow_dim": "month"
+    },
+    {
+      "id": "year",
+      "title": "Year",
+      "type": "range",
+      "field": "year",
+      "overlays": ["sightings_vessel", "effort_vessel"],
+      "min": 2014,
+      "max": 2021
+    }
+  ]
+}

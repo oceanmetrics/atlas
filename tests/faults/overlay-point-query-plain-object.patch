@@ -1,0 +1,15 @@
+diff --git a/src/places/overlayInteraction.ts b/src/places/overlayInteraction.ts
+index 1783f77..f6e202f 100644
+--- a/src/places/overlayInteraction.ts
++++ b/src/places/overlayInteraction.ts
+@@ -117,7 +117,9 @@ export function overlayFeatureAt(
+     // as an ARRAY: MapLibre takes only a `Point` instance or an array as a query geometry, and reads a
+     // plain `{x, y}` as no geometry at all, i.e. the WHOLE viewport (regression 0.7.0: any overlay
+     // feature in view answered every hover and click, so a hover over empty sea named a far-away place).
+-    features = map.queryRenderedFeatures([point.x, point.y], { layers });
++    // SEEDED FAULT (tests/faults/overlay-point-query-plain-object.patch): the point as a plain `{x, y}`
++    // again, which MapLibre reads as the whole viewport (regression 0.7.0)
++    features = map.queryRenderedFeatures({ x: point.x, y: point.y } as never, { layers });
+     if (!features.length && slack > 0) {
+       features = map.queryRenderedFeatures(
+         [

@@ -1,7 +1,7 @@
 // The hook registry (vision doc 2026-10-21, "The atlas, one codebase with skins"): everything a
 // collection needs to render beyond the generic lens is declared in its STAC as an `atlas:*` hook,
 // and this file is the ONE place that maps a hook name to the module that reads it. Each module keeps
-// its own code and exports its own name (`FLOWER_HOOK`, `CELL_SPECIES_HOOK`, `TAXA_REGISTRY_HOOK`, and `H3_HOOK`,
+// its own code and exports its own name (`FLOWER_HOOK`, `CELL_SPECIES_HOOK`, `TAXA_REGISTRY_HOOK`, `OVERLAYS_HOOK`, and `H3_HOOK`,
 // the one hook named by a platform profile rather than an `atlas:*` field: `h3` -> `catalog/h3.ts`);
 // the registry only names hook -> parser. Never a collection id: the hook is the field.
 //
@@ -18,6 +18,8 @@
 import { CELL_SPECIES_HOOK, parseCellSpecies } from "./cellSpecies";
 import { FLOWER_HOOK, flowerSpecOf } from "./flower";
 import { H3_HOOK, parseH3 } from "./h3";
+import { OVERLAY_FILTERS_HOOK, parseOverlayFilters } from "./featureFilters";
+import { OVERLAYS_HOOK, parseOverlays } from "./overlays";
 import { TAXA_REGISTRY_HOOK, registryRefOf } from "./registry/ref";
 import type { StacCollection } from "./types";
 
@@ -29,6 +31,10 @@ export const HOOKS = {
   [TAXA_REGISTRY_HOOK]: { parse: registryRefOf },
   // a collection of the platform `h3` profile: hexagons from its own Parquet (`h3ReleaseSlot`, lazy)
   [H3_HOOK]: { parse: parseH3 },
+  // extra vector layers over the Item (sightings, tracklines), each a PMTiles asset of the collection
+  [OVERLAYS_HOOK]: { parse: parseOverlays },
+  // filters of those overlays' features by a property (species, month, year), `atlas:overlays`' companion
+  [OVERLAY_FILTERS_HOOK]: { parse: parseOverlayFilters },
 } as const satisfies Record<string, { parse(collection: Collection): unknown }>;
 
 export type HookName = keyof typeof HOOKS;
@@ -62,6 +68,8 @@ export const DATA_FIELDS: ReadonlySet<string> = new Set([
   "atlas:labels",
   "atlas:metric",
   "atlas:note",
+  // an Item's filter for "Only features matching the selected layer" (`atlas:overlays`' companion)
+  "atlas:overlay_filter",
   "atlas:representation",
   "atlas:rescale",
   "atlas:status",

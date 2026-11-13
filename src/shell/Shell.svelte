@@ -1539,6 +1539,11 @@
     overlays: __LENS_SCORES__ && sel.lens === "scores" ? (scoresLens?.mapExtra.overlays ?? []) : [],
     // WP4: the gazetteer collections toggled in the "Place layers" group
     placeOverlays: placesMap.overlays.specs,
+    // a collection's own vector overlays (`atlas:overlays`: sightings, tracklines), over its Item
+    collectionOverlays:
+      __LENS_COLLECTION__ && sel.lens === "collection"
+        ? (collectionLens?.mapInputs.overlays ?? null)
+        : null,
     selection:
       placesSelection ??
       (__LENS_SCORES__ && sel.lens === "scores" ? (scoresLens?.mapExtra.selection ?? null) : null),
@@ -2419,6 +2424,7 @@
             isRaster={!!collectionLens.mapInputs.raster}
             onZoom={() => collectionLens.zoomToLayer()}
             zoomDisabled={!collectionLens.canZoomToLayer}
+            overlays={collectionLens.overlays}
           />
         {:else if __LENS_SCORES__ && sel.lens === "scores" && ScoresLegendComp}
           {@const Comp = ScoresLegendComp}
@@ -2668,6 +2674,7 @@
         isRaster={!!collectionLens.mapInputs.raster}
         onZoom={() => collectionLens.zoomToLayer()}
         zoomDisabled={!collectionLens.canZoomToLayer}
+        overlays={collectionLens.overlays}
       />
     </div>
   {/if}

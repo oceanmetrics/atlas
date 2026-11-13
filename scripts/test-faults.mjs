@@ -596,6 +596,90 @@ export const FAULTS = [
       "stack (the gate: a hover over an overlay builds no hex popup)",
     gate: ["npx", "vitest", "run", "tests/map/clickInfo.test.ts"],
   },
+  // --- 0.7.0: a collection's own vector overlays (atlas:overlays) --------------------------------------
+  {
+    id: "cov-filter-partial-token",
+    patch: "tests/faults/cov-filter-partial-token.patch",
+    describe:
+      "the 'Only features matching the selected layer' needle loses its | delimiters -- the token `rice` " +
+      "keeps every |rices_whale| feature (a partial-token false positive)",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/map/collectionOverlays.test.ts",
+      "-t",
+      "no partial-token",
+    ],
+  },
+  {
+    id: "cov-draw-order-unreversed",
+    patch: "tests/faults/cov-draw-order-unreversed.patch",
+    describe:
+      "collectionOverlayStyle() emits the overlays in the collection's order, bottom first -- its FIRST " +
+      "entry is drawn at the bottom (the hexagons over the sightings)",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/map/collectionOverlays.test.ts",
+      "-t",
+      "first entry on top",
+    ],
+  },
+  {
+    id: "overlay-popup-unescaped",
+    patch: "tests/faults/overlay-popup-unescaped.patch",
+    describe:
+      "the overlay card writes a property VALUE as markup -- a feature carrying <img src=x onerror=...> " +
+      "runs it on click",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/lens/collection/overlayPopup.test.ts",
+      "-t",
+      "escapes every value",
+    ],
+  },
+  {
+    id: "overlay-point-query-plain-object",
+    patch: "tests/faults/overlay-point-query-plain-object.patch",
+    describe:
+      "the place layers' hit test passes the point as a plain {x, y} again, which MapLibre reads as the " +
+      "whole viewport -- any feature in view answers every hover and click (regression 0.7.0)",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/places/overlayInteraction.test.ts",
+      "-t",
+      "regression 0.7.0",
+    ],
+  },
+  {
+    id: "item-index-resolves-against-index-url",
+    patch: "tests/faults/item-index-resolves-against-index-url.patch",
+    describe:
+      "loadItems() records an indexed Item at the index's URL instead of its item link's -- every relative " +
+      "href in it (`../values.parquet`) resolves outside the collection",
+    gate: [
+      "npx",
+      "vitest",
+      "run",
+      "tests/catalog/itemIndex.test.ts",
+      "-t",
+      "resolves every relative href",
+    ],
+  },
+  {
+    id: "feature-filter-range-exclusive",
+    patch: "tests/faults/feature-filter-range-exclusive.patch",
+    describe:
+      "a feature filter's range turns exclusive -- 'Year 2018 to 2018' keeps nothing and '2017 to 2018' " +
+      "loses both end years",
+    gate: ["npx", "vitest", "run", "tests/catalog/featureFilters.test.ts", "-t", "inclusive"],
+  },
   {
     id: "cog-tile-url-drops-band",
     patch: "tests/faults/cog-tile-url-drops-band.patch",

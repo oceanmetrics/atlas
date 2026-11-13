@@ -139,6 +139,17 @@ describe("searchForAccess: a restricted view's page link never carries the share
   it("leaves a public view's search untouched", () => {
     expect(searchForAccess(SEARCH, "public")).toBe(SEARCH);
   });
+  it("a collection's overlay keys (cov, covf) carry ids only: the page link keeps them, never the share link", () => {
+    const out = searchForAccess(
+      `${SEARCH}&cov=sightings_vessel,effort_vessel&covf=1`,
+      "restricted",
+    );
+    expect(out).not.toContain("collection=");
+    expect(out).not.toContain("atlas-restricted");
+    expect(out).not.toContain(encodeURIComponent(SHARE));
+    expect(new URLSearchParams(out).get("cov")).toBe("sightings_vessel,effort_vessel");
+    expect(new URLSearchParams(out).get("covf")).toBe("1");
+  });
   it("returns an empty string when nothing is left", () => {
     expect(searchForAccess(`?collection=${encodeURIComponent(SHARE)}`, "restricted")).toBe("");
   });
