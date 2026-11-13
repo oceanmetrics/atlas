@@ -347,6 +347,15 @@ def test_build_stages_a_collection_that_passes_its_checks_and_the_profiles(tmp_p
   # every attribute of every overlay survives tippecanoe, booleans as booleans
   f = sefsc_gm.pmtiles_fields(dest / "sightings_vessel.pmtiles", "sightings_vessel")
   assert f["id_certain"] == "Boolean" and f["models"] == "String" and "dist_to_segment_m" in f
+  # regression (published v2, 2026-11-13): int32 columns came out "Mixed", so the month/year/species filters matched
+  # nothing; every numeric attribute is a Number in the tiles, none is Mixed
+  for oid in sefsc_gm.OVERLAYS:
+    ff = sefsc_gm.pmtiles_fields(dest / f"{oid['id']}.pmtiles", oid["id"])
+    assert "Mixed" not in ff.values(), (oid["id"], ff)
+  for oid in sefsc_gm.TIME_OVERLAYS:
+    ff = sefsc_gm.pmtiles_fields(dest / f"{oid}.pmtiles", oid)
+    assert ff["month"] == "Number" and ff["year"] == "Number", (oid, ff)
+  assert f["aphia_id"] == "Number"
   assert sefsc_gm.pmtiles_fields(dest / "hex.pmtiles", "hex") == {"FID": "Number"}
   for o in coll["atlas:overlays"]:
     assert coll["assets"][o["asset"]]["href"] == f"./{o['id']}.pmtiles"
@@ -454,6 +463,15 @@ def test_staged_filters_pass_the_check_and_a_bad_layer_or_field_is_caught(tmp_pa
   bad = json.loads(json.dumps(coll))
   bad["atlas:overlay_filters"][1]["options"][0]["dim_value"] = "13"
   assert any("dim_value not in month" in m for m in sefsc_gm.check_collection(dest, bad, prefix))
+
+
+def test_tippecanoe_types_from_the_parquet_schema():
+  import pyarrow as pa
+  sch = pa.schema([("month", pa.int32()), ("aphia_id", pa.int64()), ("dist", pa.float64()), ("ok", pa.bool_()),
+                   ("survey", pa.string()), ("geometry", pa.binary())])
+  assert sefsc_gm.tippecanoe_types(sch) == {"month": "int", "aphia_id": "int", "dist": "float", "ok": "bool"}
+  cmd = sefsc_gm.overlay_tippecanoe_cmd(Path("a.fgb"), Path("a.pmtiles"), "a", "point", types={"month": "int"})
+  assert cmd[cmd.index("-T") + 1] == "month:int" and cmd[-1] == "a.fgb"
 
 
 def test_item_index_refuses_duplicate_ids():

@@ -264,11 +264,33 @@ def overlays_block(fields: dict[str, list[str]], overlays: list[dict] = OVERLAYS
   return out
 
 
-def overlay_tippecanoe_cmd(src: Path, out: Path, layer: str, geometry: str, zoom=OVERLAY_ZOOM) -> list[str]:
+def tippecanoe_types(schema) -> dict[str, str]:
+  """{field: int|float|bool} for every numeric or boolean column of a (Geo)Parquet schema (pyarrow), the `-T` types
+  tippecanoe must be told: read from FlatGeobuf, its int32 columns come out "Mixed" (numbers in some features, strings
+  in others), so a map filter `==` on `month` matched nothing (seen on the published v2, 2026-11-13). Strings, dates
+  and the geometry are left to tippecanoe."""
+  import pyarrow as pa
+  out = {}
+  for f in schema:
+    if f.name == "geometry":
+      continue
+    if pa.types.is_integer(f.type):
+      out[f.name] = "int"
+    elif pa.types.is_floating(f.type):
+      out[f.name] = "float"
+    elif pa.types.is_boolean(f.type):
+      out[f.name] = "bool"
+  return out
+
+
+def overlay_tippecanoe_cmd(src: Path, out: Path, layer: str, geometry: str, zoom=OVERLAY_ZOOM,
+                           types: dict[str, str] | None = None) -> list[str]:
   """tippecanoe for one overlay: every attribute, no feature dropped at any zoom (-r1, no feature or tile-size limit),
-  polygons not reduced, shared hexagon borders kept."""
+  polygons not reduced, shared hexagon borders kept, each numeric/boolean attribute typed (`types`, `-T name:type`)."""
   cmd = ["tippecanoe", "-o", str(out), "-l", layer, f"-Z{zoom[0]}", f"-z{zoom[1]}", "-r1", "--no-feature-limit",
          "--no-tile-size-limit", "--force", f"--attribution={ATTRIBUTION}"]
+  for name, t in (types or {}).items():
+    cmd += ["-T", f"{name}:{t}"]
   if geometry == "polygon":
     cmd += ["--no-tiny-polygon-reduction", "--detect-shared-borders", "--no-simplification-of-shared-nodes"]
   return cmd + [str(src)]
@@ -415,8 +437,16 @@ def build(src: Path = SRC_DEFAULT, out: Path | None = None, prefix_file: Path = 
   for o in OVERLAYS:
     fgb = src / f"{o['id']}.fgb"
     pm = dest / f"{o['id']}.pmtiles"
-    subprocess.run(overlay_tippecanoe_cmd(fgb, pm, o["id"], o["geometry"]), check=True, capture_output=True, text=True)
+    types = tippecanoe_types(pq.read_schema(src / f"{o['id']}.parquet"))
+    subprocess.run(overlay_tippecanoe_cmd(fgb, pm, o["id"], o["geometry"], types=types), check=True, capture_output=True,
+                   text=True)
     have = pmtiles_fields(pm, o["id"])
+    mixed = [f for f, t in have.items() if t == "Mixed"]
+    if mixed:
+      raise ValueError(f"{pm.name}: attributes of mixed type {mixed} (a map filter would compare numbers to strings)")
+    untyped = [f for f, t in types.items() if t in ("int", "float") and have.get(f) != "Number"]
+    if untyped:
+      raise ValueError(f"{pm.name}: numeric attributes not Number in the tiles: {untyped}")
     want = [f.name for f in pq.read_schema(src / f"{o['id']}.parquet") if f.name != "geometry"]
     lost = [f for f in want if f not in have]
     if lost:
