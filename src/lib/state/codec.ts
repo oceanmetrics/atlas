@@ -8,7 +8,7 @@
 // (`../map/layerStack.ts`), not duplicated here — this module just calls them, exactly like every
 // other field's parser.
 import { validateCatalogBase, validateCollectionUrl } from "../catalog/base";
-import { formatOv, parseFilter, parseOv } from "../gazetteer/overlayUrl";
+import { formatCov, formatOv, parseCov, parseFilter, parseOv } from "../gazetteer/overlayUrl";
 import { formatLayerStack, parseLayerStack } from "../map/layerStack";
 import { isVersionLabel } from "../release/version";
 import {
@@ -18,6 +18,7 @@ import {
   type AliasLookup,
 } from "./legacy";
 import {
+  COLLECTION_KEYS,
   COMPARES,
   DEFAULT_SEL,
   LENSES,
@@ -194,6 +195,7 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
   // (`SCORES_KEYS`, `RELEASE_KEYS`); elsewhere they stay at their defaults and are never written
   const scores = (k: string) => (SCORES_KEYS ? params.get(k) : null);
   const release = (k: string) => (RELEASE_KEYS ? params.get(k) : null);
+  const coll = (k: string) => (COLLECTION_KEYS ? params.get(k) : null);
   const out = parseEnum(scores("out"), OUTLINES, defaultOut(lens));
 
   return {
@@ -229,6 +231,8 @@ function parseSelUnsafe(loc: UrlLike, alias: AliasLookup): Sel {
     catalog: validateCatalogBase(params.get("catalog")) ?? undefined,
     collection: validateCollectionUrl(params.get("collection")) ?? undefined,
     ov: parseOv(params.get("ov")),
+    cov: parseCov(coll("cov")),
+    covf: coll("covf") === "1" ? true : undefined,
     filter: parseFilter(params.get("filter")),
     pl: cleanString(hashParams.get("pl")),
     t: cleanString(hashParams.get("t")),
@@ -313,6 +317,9 @@ export function formatSel(input: Sel): { search: string; hash: string } {
   if (sel.collection) params.set("collection", sel.collection);
   const ovToken = formatOv(sel.ov);
   if (ovToken !== null) params.set("ov", ovToken);
+  const covToken = COLLECTION_KEYS ? formatCov(sel.cov) : null;
+  if (covToken !== null) params.set("cov", covToken);
+  if (COLLECTION_KEYS && sel.covf === true) params.set("covf", "1");
   if (sel.filter !== undefined && parseFilter(sel.filter) === sel.filter)
     params.set("filter", sel.filter);
 

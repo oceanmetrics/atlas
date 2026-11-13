@@ -1,0 +1,120 @@
+/* The card of a click on a collection's own vector overlays (overlayInteraction.ts, overlayPopup.ts): every
+   feature under the click, each a heading over a two-column table of its properties. A lazy stylesheet,
+   loaded with that chunk; the card itself is the ONE themed popup (lib/map/popup.css: the glass surface,
+   the text colours of both themes), and every rule here reads custom properties only. The list scrolls
+   inside the card (never the page), and the card is never wider than a phone screen (CARD_MAX_WIDTH). */
+
+.atlas-popup.atlas-popup--overlays .maplibregl-popup-content {
+  padding: var(--space-2) var(--space-3);
+  min-width: 240px;
+}
+
+.atlas-popup .atlas-popup-ov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.atlas-popup .atlas-popup-ov-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: min(55vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* room for the scrollbar, and for the close button beside the first heading */
+  padding-right: var(--space-2);
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.atlas-popup .atlas-popup-ov-feature + .atlas-popup-ov-feature {
+  border-top: 1px solid var(--divider);
+  padding-top: var(--space-2);
+}
+
+.atlas-popup .atlas-popup-ov-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  margin: 0 0 var(--space-1);
+  padding-right: var(--space-5, 24px);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight, 1.25);
+}
+
+.atlas-popup .atlas-popup-ov-title {
+  color: var(--text-secondary);
+}
+
+.atlas-popup .atlas-popup-ov-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.atlas-popup .atlas-popup-ov-swatch {
+  flex: none;
+  align-self: center;
+  display: inline-block;
+  background: var(--ov-color);
+}
+
+.atlas-popup .atlas-popup-ov-swatch--point {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border-control);
+}
+
+.atlas-popup .atlas-popup-ov-swatch--line {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.atlas-popup .atlas-popup-ov-swatch--polygon {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--ov-color);
+  background: color-mix(in srgb, var(--ov-color) 20%, transparent);
+  border-radius: 2px;
+}
+
+.atlas-popup .atlas-popup-ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-popup .atlas-popup-ov-table th {
+  padding: 1px var(--space-2) 1px 0;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.atlas-popup .atlas-popup-ov-table td {
+  padding: 1px 0;
+  vertical-align: top;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.atlas-popup .atlas-popup-ov-more,
+.atlas-popup .atlas-popup-ov-cell {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.atlas-popup .atlas-popup-ov-cell {
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--divider);
+}
+
+.atlas-popup .atlas-popup-ov-cell[hidden] {
+  display: none;
+}

@@ -20,6 +20,7 @@ import { binValues, type Histogram } from "../../lib/map/density";
 import { legendTitle } from "../../lib/map/legendTitle";
 import { RANGE_FILL_COLOR, RANGE_FILL_OPACITY } from "../../lib/map/layers/ranges";
 import type {
+  CollectionOverlayParts,
   H3LayerSpec,
   HighlightSpec,
   RangeLayerSpec,
@@ -69,6 +70,9 @@ export interface CollectionMapInputs {
   rasterBackend: RasterBackend | null;
   /** the clicked raster position (a ring, plus the cell's square when the grid is known); `null` for none. */
   highlight: HighlightSpec | null;
+  /** the collection's own vector overlays that are on (`atlas:overlays`), drawn over the Item whatever it is;
+   * the lens adds them (`state.svelte.ts`), so `collectionMapInputs` itself always says `null`. */
+  overlays?: CollectionOverlayParts | null;
 }
 
 export const EMPTY_COLLECTION_INPUTS: CollectionMapInputs = {

@@ -86,3 +86,8 @@ export const RANGE_FILL_COLOR = "#3388ff";
  * gazetteer layer with (#3388ff, its published style `places-fill`), here a fainter fill under a
  * solid outline so the basemap stays readable while a person hunts for a polygon to click. */
 export const GAZETTEER_COLOR = "#3388ff";
+
+/** the ring around a collection overlay's point (`layers/collectionOverlays.ts`): white, so a stacked
+ * sighting stands apart from its neighbours and from any ramp colour of the Item under it, in both themes
+ * (the point's own fill colour carries it against a light basemap). */
+export const COLLECTION_OVERLAY_HALO = "#ffffff";

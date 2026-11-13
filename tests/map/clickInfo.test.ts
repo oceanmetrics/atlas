@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cellLineAt,
+  lensOverlayAt,
   overlayAt,
   pushCardLine,
   registerCardLineSink,
@@ -161,16 +162,48 @@ describe("WP14: a raster value that arrives after the click joins the overlay ca
     expect(pushCardLine([1, 2], "87%")).toBe(true);
     expect(got).toEqual([[[1, 2], "87%"]]);
   });
-  it("a stale unregister never removes a newer sink; a sink that throws is a miss", () => {
+  it("a stale unregister never removes a newer sink", () => {
     const off1 = registerCardLineSink(() => {});
     cleanups.push(registerCardLineSink(() => {}));
     off1();
     expect(pushCardLine([0, 0], "x")).toBe(true);
+  });
+  it("a sink that throws is a miss", () => {
     cleanups.push(
       registerCardLineSink(() => {
         throw new Error("card closed");
       }),
     );
     expect(pushCardLine([0, 0], "x")).toBe(false);
+  });
+  it("two cards (a place card, a collection overlay card) both get the line; each keeps its own", () => {
+    const a: string[] = [];
+    const b: string[] = [];
+    cleanups.push(registerCardLineSink((_ll, t) => a.push(t)));
+    const offB = registerCardLineSink((_ll, t) => b.push(t));
+    expect(pushCardLine([0, 0], "87%")).toBe(true);
+    offB();
+    expect(pushCardLine([0, 0], "12%")).toBe(true);
+    expect(a).toEqual(["87%", "12%"]);
+    expect(b).toEqual(["87%"]);
+  });
+});
+
+describe("a collection's own overlays: a LENS probe", () => {
+  it("answers overlayAt (the hex and raster stay away) and lensOverlayAt (the place layers do)", () => {
+    cleanups.push(registerOverlayProbe((p) => p.x === 5, { lens: true }));
+    expect(overlayAt({ x: 5, y: 0 })).toBe(true);
+    expect(lensOverlayAt({ x: 5, y: 0 })).toBe(true);
+    expect(lensOverlayAt({ x: 6, y: 0 })).toBe(false);
+  });
+  it("a gazetteer probe is not a lens probe, and both can be registered at once", () => {
+    cleanups.push(registerOverlayProbe((p) => p.x === 1));
+    const offLens = registerOverlayProbe((p) => p.x === 2, { lens: true });
+    expect(overlayAt({ x: 1, y: 0 })).toBe(true);
+    expect(lensOverlayAt({ x: 1, y: 0 })).toBe(false);
+    expect(overlayAt({ x: 2, y: 0 })).toBe(true);
+    offLens();
+    expect(overlayAt({ x: 2, y: 0 })).toBe(false);
+    expect(overlayAt({ x: 1, y: 0 })).toBe(true); // unregistering one never removes the other
   });
 });

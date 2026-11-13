@@ -126,6 +126,11 @@ export interface Sel {
    * the default set (none since 2026-10-15), never written; `[]` = none (`ov=`).
    * `../gazetteer/overlayUrl.ts`. */
   ov?: readonly string[];
+  /** a collection's own overlays that are on (`?cov=a,b`, ids of its `atlas:overlays`); `undefined` = the
+   * collection's `default: true` ones (never written); `[]` = none (`cov=`). An unknown id is ignored. */
+  cov?: readonly string[];
+  /** `?covf=1`: "Only features matching the selected layer" (the Item's `atlas:overlay_filter`); `undefined` = off. */
+  covf?: true;
   /** WP4: `?filter=places` dims hex cells whose centroid lies outside every place in the list; on an h3 layer
    * `?filter=coll:<slug>` keeps the hexagons of a whole gazetteer polygon collection (H3 membership). */
   filter?: PlaceFilter;
@@ -206,6 +211,8 @@ export const LENSES: readonly Lens[] = INSTANCE.lenses.filter((l): l is Lens =>
  * ignored, as before the MarineSensitivity instance moved in). */
 export const SCORES_KEYS = LENSES.includes("scores");
 export const RELEASE_KEYS = INSTANCE.release !== undefined;
+/** the Collections lens' overlay keys (`cov`, `covf`), read and written only by an instance that builds it. */
+export const COLLECTION_KEYS = LENSES.includes("collection");
 
 /** the instance's own default for a key (`defaults` in instances/<id>/instance.json) when it is a
  * member of `allowed`, else `fallback`: an instance can choose among the values this build knows,
@@ -320,6 +327,8 @@ export const DEFAULT_SEL: Sel = {
   catalog: undefined,
   collection: undefined,
   ov: undefined,
+  cov: undefined,
+  covf: undefined,
   filter: undefined,
   zl: true,
   pl: undefined,

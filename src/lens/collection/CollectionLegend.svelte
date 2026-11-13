@@ -6,6 +6,8 @@
   import Legend from "../../lib/ui/Legend.svelte";
   import { uid } from "../../lib/ui/uid";
   import { formatCollectionValue, type CollectionLegend } from "./mapInputs";
+  import OverlaySwatch from "./OverlaySwatch.svelte";
+  import type { CollectionOverlayView } from "./state.svelte";
 
   interface Props {
     legend: CollectionLegend;
@@ -17,6 +19,8 @@
     /** WP14: fly the camera to the layer (the button sits in the card's header); omitted = no button. */
     onZoom?: () => void;
     zoomDisabled?: boolean;
+    /** the collection's own overlays (`atlas:overlays`): the ones on get a chip under the ramp. */
+    overlays?: readonly CollectionOverlayView[];
   }
   let {
     legend,
@@ -24,9 +28,25 @@
     isRaster = false,
     onZoom,
     zoomDisabled = false,
+    overlays = [],
   }: Props = $props();
   const titleId = uid("collection-legend-down");
+  const shownOverlays = $derived(overlays.filter((o) => o.on));
 </script>
+
+{#snippet overlayChips()}
+  {#if shownOverlays.length}
+    <ul
+      class="overlay-chips"
+      aria-label="Collection layers on the map"
+      data-testid="legend-overlays"
+    >
+      {#each shownOverlays as o (o.spec.id)}
+        <li><OverlaySwatch geometry={o.spec.geometry} color={o.spec.color} />{o.spec.title}</li>
+      {/each}
+    </ul>
+  {/if}
+{/snippet}
 
 {#if isRaster && tilesDown}
   <div
@@ -51,6 +71,7 @@
       <span class="swatch" style="background:{legend.swatch}"></span>
       <span>range (presence)</span>
     </div>
+    {@render overlayChips()}
   </div>
 {:else}
   <div class="collection-legend" data-testid="collection-legend">
@@ -77,6 +98,7 @@
       marker={legend.marker}
       ticks={legend.ticks ?? 2}
     />
+    {@render overlayChips()}
   </div>
 {/if}
 
@@ -145,6 +167,23 @@
     align-items: center;
     gap: var(--space-2);
     font-size: var(--text-sm);
+  }
+  .overlay-chips {
+    list-style: none;
+    margin: var(--space-2) 0 0;
+    padding: var(--space-1) 0 0;
+    border-top: 1px solid var(--divider);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 260px;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .overlay-chips li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
   .swatch {
     width: 18px;

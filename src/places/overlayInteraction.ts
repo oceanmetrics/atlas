@@ -6,7 +6,12 @@
 // on the MAP (not per layer) and asks `queryRenderedFeatures` for whichever overlay layers exist at
 // that moment. The pure rules (what a feature says, which layers to ask, the button label) are
 // exported and unit-tested; the MapLibre popup is the only thing that is not.
-import { cellLineAt, registerCardLineSink, registerOverlayProbe } from "../lib/map/clickInfo";
+import {
+  cellLineAt,
+  lensOverlayAt,
+  registerCardLineSink,
+  registerOverlayProbe,
+} from "../lib/map/clickInfo";
 import { createPopup } from "../lib/map/popup";
 
 /** what one tile feature of an overlay tells us. */
@@ -163,7 +168,8 @@ export function installOverlayInteraction(
   };
 
   const onMove = (e: { point: { x: number; y: number }; lngLat: { lng: number; lat: number } }) => {
-    if (opts.isOwned?.()) return hideHover();
+    // a collection's own overlay feature (a sighting) under the pointer: its tooltip, not this one
+    if (opts.isOwned?.() || lensOverlayAt(e.point)) return hideHover();
     const info = overlayFeatureAt(map, e.point, opts.hitLayerIds());
     if (!info) return hideHover();
     map.getCanvas().style.cursor = "pointer";
@@ -192,7 +198,8 @@ export function installOverlayInteraction(
     point: { x: number; y: number };
     lngLat: { lng: number; lat: number };
   }) => {
-    if (opts.isOwned?.()) return;
+    // a collection's own overlay feature under the click opens ITS card (one card per click)
+    if (opts.isOwned?.() || lensOverlayAt(e.point)) return;
     const info = overlayFeatureAt(map, e.point, opts.hitLayerIds());
     if (!info) return;
     hideHover();

@@ -77,6 +77,14 @@ export interface ZoneStyleParts {
   glyphs: boolean;
 }
 
+/** a collection's `atlas:overlays` that are on, already turned into sources and roled layers by
+ * `layers/collectionOverlays.ts#collectionOverlayStyle` (reached only from the Collections lens, so an
+ * instance without that lens carries none of that module). The layers are in draw order, bottom first. */
+export interface CollectionOverlayParts {
+  sources: Record<string, SourceSpecification>;
+  layers: ReadonlyArray<{ role: "collection-overlay"; layer: LayerSpecification }>;
+}
+
 /** a raster: the score COG, or an overlay such as `_outside_pra` (atlas-4 §6.2), drawn from titiler tiles or,
  * for an item with an EPSG:3857 COG asset, from `cog://` tiles (`raster/cog.ts`). */
 export interface RasterLayerSpec {

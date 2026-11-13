@@ -112,7 +112,10 @@ export interface StacCatalog extends StacBase {
 export interface StacCollection extends StacBase {
   type: "Collection";
   license?: string;
+  /** the STAC version extension: this collection's version, and whether a newer one supersedes it (its
+   * `predecessor-version` / `successor-version` / `latest-version` links say which, `catalog/versionLinks.ts`). */
   version?: string;
+  deprecated?: boolean;
   providers?: StacProvider[];
   contacts?: StacContact[];
   "sci:citation"?: string;

@@ -55,6 +55,30 @@ export function toggledOv(
   return sameSet(next, DEFAULT_OVERLAYS) ? undefined : next;
 }
 
+// `?cov=` -- which of a collection's own overlays (`atlas:overlays`, lib/catalog/overlays.ts) are on. The same
+// grammar as `ov=` with one difference: the default set belongs to the collection, so absent (`undefined`) is
+// "its defaults" and any list that is present is written back as it is (`cov=` = none). The Collections lens
+// collapses a toggle back to `undefined` when it lands on the defaults (`catalog/overlays.ts#toggledCov`).
+/** an overlay id: a URL token (no `,`), the one rule `catalog/overlays.ts` parses `atlas:overlays` ids with. */
+export const COV_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/** `cov=` value -> list (malformed ids dropped, duplicates once); `null` (key absent) -> `undefined`. */
+export function parseCov(v: string | null): string[] | undefined {
+  if (v === null) return undefined;
+  const seen = new Set<string>();
+  for (const part of v.split(",")) {
+    const id = part.trim();
+    if (COV_ID_RE.test(id)) seen.add(id);
+    if (seen.size >= MAX_OVERLAYS) break;
+  }
+  return [...seen];
+}
+
+/** the value to write, or `null` for "write nothing" (`undefined`: the collection's defaults). */
+export function formatCov(cov: readonly string[] | undefined): string | null {
+  return cov === undefined ? null : cov.filter((id) => COV_ID_RE.test(id)).join(",");
+}
+
 // `?filter=places` -- dim the hex cells outside the selected places. `?filter=coll:<slug>` (an h3 layer only) keeps
 // the hexagons of a whole gazetteer polygon collection, by the collection's H3 membership (obis-hex `f=<coll>`).
 export type PlaceFilter = "places" | `coll:${string}`;
